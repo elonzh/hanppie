@@ -22,6 +22,10 @@ link="$(pwd)/robomaster/current"
 rm -vf "${link}"
 ln -sf "$(realpath "${basedir}")" "${link}"
 
+# TODO 修改代码中默认的读取路径
+sudo mkdir -p /system/etc/
+sudo ln -s "$(pwd)/robomaster/current/system/etc/dji.json" /system/etc/dji.json
+
 echo "add these paths to your PYTHONPATH:"
 echo "$(pwd)/robomaster/current/system/firm/dji_scratch/lib"
 echo "$(pwd)/robomaster/current/system/firm/dji_scratch/src/robomaster"

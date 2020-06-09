@@ -1,6 +1,14 @@
+## hanppie(憨皮)
 
+RoboMaster S1　不提供官方的 SDK，尝试着通过代理的方式在机器上执行命令
 
+## 一些信息
 
+- 上传的代码位置在 `/data/script/file/` 
+- 录音文件在 `/data/audio_files`, 格式为 wav, 其中有一个 `rm_audio_setting.json` 文件, `interconn_audio_id` 为上传的音频文件时间戳
+- 内部设备通信使用 socket 文件, 且为 UDP 协议 `socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)`
+- 整个脚本执行由 `/data/python_files/bin/python /data/python_files/bin/python/data/dji_scratch/bin/dji_scratch.py` 控制 
+- 目前最新版固件　`00.06.0100`　RoboMaster S1 没有集成 sdk_manager 模块  
 
 ## RoboMaster S1 机器信息
 
@@ -303,22 +311,6 @@ root      31067 2     0      0     c00831a8 00000000 S kworker/u10:1
 root      31629 2     0      0     c00831a8 00000000 S kworker/0:0
 root      32465 2     0      0     c00831a8 00000000 S kworker/u10:3
 ```
-- 上传的代码位置在 `/data/script/file/` 
-- 录音文件在 `/data/audio_files`, 格式为 wav, 其中有一个 `rm_audio_setting.json` 文件, `interconn_audio_id` 为上传的音频文件时间戳
-- 内部设备通信使用 socket 文件, 且为 UDP 协议 `socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)`
-
-## Hack 思路
-
-编写一个 server, 开机自启, 将命令代理到 robomaster
-
-0.5.100 
-S1 没有集成 sdk_manager 模块  
-
-### 任务清单
-
-1. 视频流, 音频流读取(s1 SDK 没有提供视频流)
-2. 通信协议分析`
-3. 代理验证
 
 ## Reference
 

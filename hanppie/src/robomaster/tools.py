@@ -1,39 +1,37 @@
-import binascii
-import hashlib
-import inspect
-import json
 import random
 import struct
 
+import binascii
 import collections
 import ctypes
+import hashlib
+import inspect
+import json
+import rm_define
 import subprocess
-import threading
 import time
 from threading import Timer
-
-from . import rm_define
 
 
 def to_uint8(data):
     data = int(round(data))
-    return data & 0xFF
+    return data & 0xff
 
 
 def to_uint16(data):
     data = int(round(data))
-    return data & 0xFFFF
+    return data & 0xffff
 
 
 def to_uint32(data):
     data = int(round(data))
-    return data & 0xFFFFFFFF
+    return data & 0xffffffff
 
 
 def to_int8(data):
     data = int(round(data))
     if data >> 7 == 1:
-        return -(0xFF + 1 - data)
+        return -(0xff + 1 - data)
     else:
         return data
 
@@ -41,7 +39,7 @@ def to_int8(data):
 def to_int16(data):
     data = int(round(data))
     if data >> 15 == 1:
-        return -(0xFFFF + 1 - data)
+        return -(0xffff + 1 - data)
     else:
         return data
 
@@ -49,7 +47,7 @@ def to_int16(data):
 def to_int32(data):
     data = int(round(data))
     if data >> 31 == 1:
-        return -(0xFFFFFFFF + 1 - data)
+        return -(0xffffffff + 1 - data)
     else:
         return data
 
@@ -63,6 +61,14 @@ def pack_to_byte(data):
 # socket_bin_data to host_list_data unpack
 def unpack_to_hex(data):
     return list(struct.unpack("%dB" % (len(data)), data))
+
+
+def byte2hex(bins):
+    return ''.join(["%02x" % x for x in bins]).strip()
+
+
+def byte2HEX(bins):
+    return ''.join(["%02X" % x for x in bins]).strip()
 
 
 def list_hex2str(list_data):
@@ -100,17 +106,17 @@ def int8_to_byte(data):
 
 def int16_to_byte(data):
     data = to_int16(data)
-    data_l = data & 0xFF
-    data_h = (data >> 8) & 0xFF
+    data_l = data & 0xff
+    data_h = (data >> 8) & 0xff
     return [data_l, data_h]
 
 
 def int32_to_byte(data):
     data = to_int32(data)
-    data_l0 = data & 0xFF
-    data_l1 = (data >> 8) & 0xFF
-    data_h0 = (data >> 16) & 0xFF
-    data_h1 = (data >> 24) & 0xFF
+    data_l0 = data & 0xff
+    data_l1 = (data >> 8) & 0xff
+    data_h0 = (data >> 16) & 0xff
+    data_h1 = (data >> 24) & 0xff
     return [data_l0, data_l1, data_h0, data_h1]
 
 
@@ -121,17 +127,17 @@ def uint8_to_byte(data):
 
 def uint16_to_byte(data):
     data = to_uint16(data)
-    data_l = data & 0xFF
-    data_h = (data >> 8) & 0xFF
+    data_l = data & 0xff
+    data_h = (data >> 8) & 0xff
     return [data_l, data_h]
 
 
 def uint32_to_byte(data):
     data = to_uint32(data)
-    data_l0 = data & 0xFF
-    data_l1 = (data >> 8) & 0xFF
-    data_h0 = (data >> 16) & 0xFF
-    data_h1 = (data >> 24) & 0xFF
+    data_l0 = data & 0xff
+    data_l1 = (data >> 8) & 0xff
+    data_h0 = (data >> 16) & 0xff
+    data_h1 = (data >> 24) & 0xff
     return [data_l0, data_l1, data_h0, data_h1]
 
 
@@ -139,9 +145,9 @@ def uint32_to_byte(data):
 def float_to_byte(data):
     data = float(data)
     out = []
-    data = binascii.hexlify(struct.pack(">f", data)).decode("utf-8")
+    data = binascii.hexlify(struct.pack('>f', data)).decode('utf-8')
     for i in [6, 4, 2, 0]:
-        out.append(int(data[i : i + 2], 16))
+        out.append(int(data[i:i + 2], 16))
     return out
 
 
@@ -186,15 +192,15 @@ def byte_to_int32(data):
 
 
 def byte_to_float(data):
-    b0 = struct.pack("B", to_uint8(data[0]))
-    b1 = struct.pack("B", to_uint8(data[1]))
-    b2 = struct.pack("B", to_uint8(data[2]))
-    b3 = struct.pack("B", to_uint8(data[3]))
-    return struct.unpack("f", b0 + b1 + b2 + b3)[0]
+    b0 = struct.pack('B', to_uint8(data[0]))
+    b1 = struct.pack('B', to_uint8(data[1]))
+    b2 = struct.pack('B', to_uint8(data[2]))
+    b3 = struct.pack('B', to_uint8(data[3]))
+    return struct.unpack('f', b0 + b1 + b2 + b3)[0]
 
 
 def byte_to_string(data):
-    out = ""
+    out = ''
     for ch in data:
         out = out + chr(ch)
     return out
@@ -215,63 +221,52 @@ def wait(ms):
 def md5_check(string_hex_list, md5_hex_list):
     string = pack_to_byte(string_hex_list)
     md5_byte = pack_to_byte(md5_hex_list)
-    md5_str = md5_byte.decode("utf-8")
+    md5_str = md5_byte.decode('utf-8')
     md5_obj = hashlib.md5()
     md5_obj.update(string)
-    return md5_str == md5_obj.hexdigest()[8:-8]
+    return (md5_str == md5_obj.hexdigest()[8:-8])
     # if log file size more than 1M, remove it
 
 
 def load_route_table(json_file, service_name, client_name):
     def read_route_file(json_file):
-        file_fd = open(json_file, "r")
+        file_fd = open(json_file, 'r')
         json_str = file_fd.read()
         route_table = json.loads(json_str)
         return route_table
 
     def get_host_device(route_table):
-        host_name = route_table["host"]
-        host_index = route_table["index"]
-        route_table.pop("host")
-        route_table.pop("index")
+        host_name = route_table['host']
+        host_index = route_table['index']
+        route_table.pop('host')
+        route_table.pop('index')
         return route_table, host_name, host_index
 
     def get_local_V1_route(route_table):
-        client_name = {
-            "camera": rm_define.camera_id,
-            "mvision": rm_define.vision_id,
-            "vt_air": rm_define.hdvt_uav_id,
-            "ve_air": rm_define.system_scratch_id,
-        }
+        client_name = {'camera': rm_define.camera_id,
+                       'mvision': rm_define.vision_id,
+                       'vt_air': rm_define.hdvt_uav_id,
+                       've_air': rm_define.system_scratch_id,
+                       }
 
         n_route_table = {}
         for device_index in route_table.keys():
-            target = route_table[device_index]["target"]
-            status = route_table[device_index]["status"]
-            channel = route_table[device_index]["channel"]
-            protocol = route_table[device_index]["protocol"]
-            if (
-                status == 1
-                and channel == "local"
-                and protocol == "v1"
-                and target in client_name.keys()
-            ):
-                direct_route = route_table[device_index]["local"]
-                target_host = direct_route["direct_host"]
-                target_index = direct_route["index"]
+            target = route_table[device_index]['target']
+            status = route_table[device_index]['status']
+            channel = route_table[device_index]['channel']
+            protocol = route_table[device_index]['protocol']
+            if status == 1 and channel == 'local' and protocol == 'v1' and target in client_name.keys():
+                direct_route = route_table[device_index]['local']
+                target_host = direct_route['direct_host']
+                target_index = direct_route['index']
                 if target_host in client_name.keys():
-                    target_address = "\0/duss/mb/" + senderid2hostid(
-                        client_name[target_host]
-                    )
-                    n_route_table[client_name[target]] = {
-                        "target_address": target_address,
-                        "channel": channel,
-                        "protocol": protocol,
-                    }
+                    target_address = '\0/duss/mb/' + senderid2hostid(client_name[target_host])
+                    n_route_table[client_name[target]] = {'target_address': target_address, 'channel': channel,
+                                                          'protocol': protocol}
         return n_route_table
 
     route_table = read_route_file(json_file)
-    route_table = route_table[service_name]["mb_route_table"][client_name]
+    route_table = route_table[service_name]['mb_route_table'][client_name]
     route_table, host_name, host_index = get_host_device(route_table)
     target_table = get_local_V1_route(route_table)
 
@@ -299,9 +294,7 @@ class UnitTimer(object):
 
     def add_timer(self, timer_obj):
         if timer_obj not in self.unit_timer_dict.keys():
-            self.unit_timer_dict[timer_obj] = int(
-                timer_obj.get_freq() / self.unit_timer_t
-            )
+            self.unit_timer_dict[timer_obj] = int(timer_obj.get_freq() / self.unit_timer_t)
 
         if self.timer_obj == None and len(self.unit_timer_dict) != 0:
             self.timer_obj = Timer(self.unit_timer_t, self.process_timer, ())
@@ -389,14 +382,14 @@ def mutex():
 
 
 def cur_time():
-    print("time_stamp:", time.time())
+    print('time_stamp:', time.time())
     print(time.asctime(time.localtime(time.time())))
 
 
 def check_and_retry(func, condi, times):
     i = times
-    while (i != 0) and (func != condi):
-        i = i - 1
+    while ((i != 0) and (func != condi)):
+        i = i - 1;
     if i == 0:
         return False
     else:
@@ -427,7 +420,7 @@ hostid2receiverid = hostid2senderid
 def senderid2hostid(sender_id):
     host = int(sender_id / 100)
     index = sender_id % 100
-    return hex((host << 8) + (index & 0xFF))
+    return hex((host << 8) + (index & 0xff))
 
 
 receiverid2hostid = senderid2hostid
@@ -435,7 +428,7 @@ receiverid2hostid = senderid2hostid
 
 def task_id_generate():
     random.seed(time.time())
-    task_id = random.randint(0, 0xFF)
+    task_id = random.randint(0, 0xff)
     return task_id
 
 
@@ -444,21 +437,21 @@ def create_order_dict():
 
 
 def get_fatal_code(fatal_msg):
-    if "division" in fatal_msg and "zero" in fatal_msg:
+    if 'division' in fatal_msg and 'zero' in fatal_msg:
         return rm_define.FAT_DIV_ZERO
-    elif "index out of range" in fatal_msg:
+    elif 'index out of range' in fatal_msg:
         return rm_define.FAT_LIST_OUT_OF_RANGE
-    elif "has no attribute" in fatal_msg or "is not defined" in fatal_msg:
+    elif 'has no attribute' in fatal_msg or 'is not defined' in fatal_msg:
         return rm_define.FAT_DEVICE_NOT_SUPPORT
-    elif "not in list" in fatal_msg or "from empty list" in fatal_msg:
+    elif 'not in list' in fatal_msg or 'from empty list' in fatal_msg:
         return rm_define.FAT_LIST_FIND_FAILUE
-    elif "maximun recursion depth exceeded" in fatal_msg:
+    elif 'maximun recursion depth exceeded' in fatal_msg:
         return rm_define.FAT_STACK_OVERFLOW
-    elif "Variable value type error" in fatal_msg:
+    elif 'Variable value type error' in fatal_msg:
         return rm_define.BLOCK_ERR_VALUE_TYPE
-    elif "Variable value range error" in fatal_msg:
+    elif 'Variable value range error' in fatal_msg:
         return rm_define.BLOCK_ERR_VALUE_RANGE
-    elif "Exit" in fatal_msg:
+    elif 'Exit' in fatal_msg:
         return rm_define.BLOCK_RUN_SUCCESS
     else:
         return rm_define.FAT_OTHER
@@ -466,23 +459,25 @@ def get_fatal_code(fatal_msg):
 
 err_code_dict = {
     rm_define.camera_id: {
-        0xE4: rm_define.BLOCK_ERR_STORAGE_SDCARD,
-        0xE8: rm_define.BLOCK_ERR_NO_SDCARD,
-        0xE9: rm_define.BLOCK_ERR_FULL_SDCARD,
+        0xe4: rm_define.BLOCK_ERR_STORAGE_SDCARD,
+        0xe8: rm_define.BLOCK_ERR_NO_SDCARD,
+        0xe9: rm_define.BLOCK_ERR_FULL_SDCARD,
     },
-    rm_define.chassis_id: {},
-    rm_define.mobile_id: {},
-    rm_define.gun_id: {},
-    rm_define.vision_id: {},
-    rm_define.gimbal_id: {},
+    rm_define.chassis_id: {
+    },
+    rm_define.mobile_id: {
+    },
+    rm_define.gun_id: {
+    },
+    rm_define.vision_id: {
+    },
+    rm_define.gimbal_id: {
+    },
 }
 
 
 def get_block_err_code(module_id, err_code):
-    if (
-        module_id in err_code_dict.keys()
-        and err_code in err_code_dict[module_id].keys()
-    ):
+    if module_id in err_code_dict.keys() and err_code in err_code_dict[module_id].keys():
         return err_code_dict[module_id][err_code]
     else:
         return err_code
@@ -492,10 +487,7 @@ def check_value_type(value, *type_args):
     for t in type_args:
         if isinstance(value, t):
             return
-    raise Exception(
-        "Variable value type error. TargetTypeTuple: %s, CurType: %s"
-        % (type_args, type(value))
-    )
+    raise Exception('Variable value type error. TargetTypeTuple: %s, CurType: %s' % (type_args, type(value)))
 
 
 def check_value_range(value, min_value, max_value):
@@ -503,9 +495,7 @@ def check_value_range(value, min_value, max_value):
         return
     else:
         raise Exception(
-            "Variable value range error. TargetRange: %s ~ %s, CurValue: %s"
-            % (min_value, max_value, value)
-        )
+            'Variable value range error. TargetRange: %s ~ %s, CurValue: %s' % (min_value, max_value, value))
 
 
 def check_value_in_enum_list(value, **value_enum_dict):
@@ -514,9 +504,7 @@ def check_value_in_enum_list(value, **value_enum_dict):
         return
     else:
         raise Exception(
-            "Variable value enum error. TargetEnum: %s, CurValue: %s"
-            % (tuple(value_enum_dict.keys()), value)
-        )
+            'Variable value enum error. TargetEnum: %s, CurValue: %s' % (tuple(value_enum_dict.keys()), value))
 
 
 def check_value_range_and_type(value, min_value, max_value, *type_args):
@@ -525,11 +513,10 @@ def check_value_range_and_type(value, min_value, max_value, *type_args):
 
 
 def get_ip_by_dev_name(dev_name):
-    ifconfig_pipe = subprocess.Popen(
-        ["busybox", "ifconfig", dev_name],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    ifconfig_pipe = subprocess.Popen(['busybox', 'ifconfig', dev_name],
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE,
+                                     )
     ifconfig_info, error = ifconfig_pipe.communicate()
     ifconfig_pipe.kill()
 
@@ -537,20 +524,21 @@ def get_ip_by_dev_name(dev_name):
         # get wlan0 error
         return None
 
-    ifconfig_info = ifconfig_info.decode("utf-8")
+    ifconfig_info = ifconfig_info.decode('utf-8')
 
-    inet_addr_str = ifconfig_info.split("\n")[1]
+    inet_addr_str = ifconfig_info.split('\n')[1]
 
-    if "inet addr" in inet_addr_str:
-        return inet_addr_str.split(":")[1].split(" ")[0]
+    if 'inet addr' in inet_addr_str:
+        return inet_addr_str.split(':')[1].split(' ')[0]
     else:
         return None
 
 
 def is_station_mode():
-    ps_pipe = subprocess.Popen(
-        ["ps", "wpa"], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-    )
+    ps_pipe = subprocess.Popen(['ps', 'wpa'],
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE,
+                               )
     ps_info, error = ps_pipe.communicate()
     ps_pipe.kill()
 
@@ -558,9 +546,9 @@ def is_station_mode():
         # get wlan0 error
         return None
 
-    ps_info = ps_info.decode("utf-8")
+    ps_info = ps_info.decode('utf-8')
 
-    if "wpa_supplicant" in ps_info:
+    if 'wpa_supplicant' in ps_info:
         return True
     else:
         return False
@@ -572,10 +560,20 @@ def is_ap_mode():
 
 def number_mapping(input, min_ori, max_ori, min_tar, max_tar):
     check_value_range(input, min_ori, max_ori)
-    if max_ori != min_ori and min_tar != max_tar:
+    if (max_ori != min_ori and min_tar != max_tar):
         output = (input - min_ori) / (max_ori - min_ori) * (max_tar - min_tar) + min_tar
         return output
     elif min_ori == max_ori and min_tar == max_tar:
         return min_tar
     else:
-        raise Exception("InputError, min_value equal max_value")
+        raise Exception('InputError, min_value equal max_value')
+
+
+def duss_result_check(duss_result, resp, ret_code):
+    if duss_result == rm_define.DUSS_SUCCESS:
+        if resp['data'][0] == ret_code:
+            return rm_define.SUCCESS
+        else:
+            return rm_define.FAILURE
+    else:
+        return rm_define.FAILURE

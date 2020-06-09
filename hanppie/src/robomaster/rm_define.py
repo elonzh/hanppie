@@ -36,6 +36,7 @@ BLOCK_ERR_FULL_SDCARD = 0x42
 BLOCK_ERR_STORAGE_SDCARD = 0x43
 BLOCK_ERR_AI_REFUSED = 0x45
 BLOCK_ERR_APP_NOT_SUPPORT = 0x46
+BLOCK_ERR_SERVO_IN_ROBOTIC_ARM = 0x47
 BLOCK_ERR_TASK_REJECTED = 0x51
 BLOCK_ERR_TASK_INTERRUPT = 0x52
 BLOCK_ERR_TASK_TIMEOUT = 0x53
@@ -50,8 +51,11 @@ FAT_STACK_OVERFLOW = 0xE5
 FAT_DEVICE_NOT_SUPPORT = 0xF1
 FAT_UNKNOW = 0xFF
 
-TASK = "task"
-NO_TASK = "no_task"
+TASK = 'task'
+NO_TASK = 'no_task'
+
+ftp_idle = 0x00
+ftp_rcv_data = 0x01
 
 SUCCESS = True
 FAILURE = False
@@ -94,7 +98,7 @@ pwm3 = 0x4
 pwm4 = 0x8
 pwm5 = 0x10
 pwm6 = 0x20
-pwm_all = 0x3F
+pwm_all = 0x3f
 
 stick_overlay_and_axes_enable = 2
 stick_overlay_enable = 1
@@ -208,19 +212,19 @@ armor_bottom_right = 0x8
 armor_top_left = 0x10
 armor_top_right = 0x20
 armor_top_all = 0x30
-armor_bottom_all = 0xF
-armor_all = 0x3F
+armor_bottom_all = 0xf
+armor_all = 0x3f
 
-cond_armor_bottom_front_hit = "armor_bottom_front"
-cond_armor_bottom_back_hit = "armor_bottom_back"
-cond_armor_bottom_left_hit = "armor_bottom_left"
-cond_armor_bottom_right_hit = "armor_bottom_right"
-cond_armor_top_left_hit = "armor_top_left"
-cond_armor_top_right_hit = "armor_top_right"
-cond_armor_hit = "armor_all"
-cond_ir_top_left_hit = "ir_top_left"
-cond_ir_top_right_hit = "ir_top_right"
-cond_ir_hit_detection = "ir_all"
+cond_armor_bottom_front_hit = 'armor_bottom_front'
+cond_armor_bottom_back_hit = 'armor_bottom_back'
+cond_armor_bottom_left_hit = 'armor_bottom_left'
+cond_armor_bottom_right_hit = 'armor_bottom_right'
+cond_armor_top_left_hit = 'armor_top_left'
+cond_armor_top_right_hit = 'armor_top_right'
+cond_armor_hit = 'armor_all'
+cond_ir_top_left_hit = 'ir_top_left'
+cond_ir_top_right_hit = 'ir_top_right'
+cond_ir_hit_detection = 'ir_all'
 
 # led effect
 effect_always_on = 0
@@ -337,67 +341,67 @@ marker_letter_X = 43
 marker_letter_Y = 44
 marker_letter_Z = 45
 
-cond_recognized_people = "vision_recognized_people"
-cond_recognized_head_shoulder = "vision_recognized_head_shoulder"
-cond_recognized_pose_victory = "vision_recognized_pose_victory"
-cond_recognized_pose_give_in = "vision_recognized_pose_give_in"
-cond_recognized_pose_capture = "vision_recognized_pose_capture"
-cond_recognized_pose_left_hand_up = "vision_recognized_pose_left_hand_up"
-cond_recognized_pose_right_hand_up = "vision_recognized_pose_right_hand_up"
-cond_recognized_pose_all = "vision_recognized_pose_all"
-cond_recognized_car = "vision_recognized_car"
-cond_recognized_marker_trans_red = "vision_recognized_marker_trans_red"
-cond_recognized_marker_trans_yellow = "vision_recognized_marker_trans_yellow"
-cond_recognized_marker_trans_green = "vision_recognized_marker_trans_green"
-cond_recognized_marker_trans_left = "vision_recognized_marker_trans_left"
-cond_recognized_marker_trans_right = "vision_recognized_marker_trans_right"
-cond_recognized_marker_trans_forward = "vision_recognized_marker_trans_forward"
-cond_recognized_marker_trans_backward = "vision_recognized_marker_trans_backward"
-cond_recognized_marker_trans_stop = "vision_recognized_marker_trans_stop"
-cond_recognized_marker_trans_red_heart = "vision_recognized_marker_trans_red_heart"
-cond_recognized_marker_trans_sword = "vision_recognized_marker_trans_sword"
-cond_recognized_marker_trans_target = "vision_recognized_marker_trans_target"
-cond_recognized_marker_trans_dice = "vision_recognized_marker_trans_dice"
-cond_recognized_marker_trans_all = "vision_recognized_marker_trans_all"
-cond_recognized_marker_number_zero = "vision_recognized_marker_number_zero"
-cond_recognized_marker_number_one = "vision_recognized_marker_number_one"
-cond_recognized_marker_number_two = "vision_recognized_marker_number_two"
-cond_recognized_marker_number_three = "vision_recognized_marker_number_three"
-cond_recognized_marker_number_four = "vision_recognized_marker_number_four"
-cond_recognized_marker_number_five = "vision_recognized_marker_number_five"
-cond_recognized_marker_number_six = "vision_recognized_marker_number_six"
-cond_recognized_marker_number_seven = "vision_recognized_marker_number_seven"
-cond_recognized_marker_number_eight = "vision_recognized_marker_number_eight"
-cond_recognized_marker_number_nine = "vision_recognized_marker_number_nine"
-cond_recognized_marker_number_all = "vision_recognized_marker_number_all"
-cond_recognized_marker_letter_A = "vision_recognized_marker_letter_A"
-cond_recognized_marker_letter_B = "vision_recognized_marker_letter_B"
-cond_recognized_marker_letter_C = "vision_recognized_marker_letter_C"
-cond_recognized_marker_letter_D = "vision_recognized_marker_letter_D"
-cond_recognized_marker_letter_E = "vision_recognized_marker_letter_E"
-cond_recognized_marker_letter_F = "vision_recognized_marker_letter_F"
-cond_recognized_marker_letter_G = "vision_recognized_marker_letter_G"
-cond_recognized_marker_letter_H = "vision_recognized_marker_letter_H"
-cond_recognized_marker_letter_I = "vision_recognized_marker_letter_I"
-cond_recognized_marker_letter_J = "vision_recognized_marker_letter_J"
-cond_recognized_marker_letter_K = "vision_recognized_marker_letter_K"
-cond_recognized_marker_letter_L = "vision_recognized_marker_letter_L"
-cond_recognized_marker_letter_M = "vision_recognized_marker_letter_M"
-cond_recognized_marker_letter_N = "vision_recognized_marker_letter_N"
-cond_recognized_marker_letter_O = "vision_recognized_marker_letter_O"
-cond_recognized_marker_letter_P = "vision_recognized_marker_letter_P"
-cond_recognized_marker_letter_Q = "vision_recognized_marker_letter_Q"
-cond_recognized_marker_letter_R = "vision_recognized_marker_letter_R"
-cond_recognized_marker_letter_S = "vision_recognized_marker_letter_S"
-cond_recognized_marker_letter_T = "vision_recognized_marker_letter_T"
-cond_recognized_marker_letter_U = "vision_recognized_marker_letter_U"
-cond_recognized_marker_letter_V = "vision_recognized_marker_letter_V"
-cond_recognized_marker_letter_W = "vision_recognized_marker_letter_W"
-cond_recognized_marker_letter_X = "vision_recognized_marker_letter_X"
-cond_recognized_marker_letter_Y = "vision_recognized_marker_letter_Y"
-cond_recognized_marker_letter_Z = "vision_recognized_marker_letter_Z"
-cond_recognized_marker_letter_all = "vision_recognized_marker_letter_all"
-cond_recongized_marker_all = "vision_recongnized_marker_all"
+cond_recognized_people = 'vision_recognized_people'
+cond_recognized_head_shoulder = 'vision_recognized_head_shoulder'
+cond_recognized_pose_victory = 'vision_recognized_pose_victory'
+cond_recognized_pose_give_in = 'vision_recognized_pose_give_in'
+cond_recognized_pose_capture = 'vision_recognized_pose_capture'
+cond_recognized_pose_left_hand_up = 'vision_recognized_pose_left_hand_up'
+cond_recognized_pose_right_hand_up = 'vision_recognized_pose_right_hand_up'
+cond_recognized_pose_all = 'vision_recognized_pose_all'
+cond_recognized_car = 'vision_recognized_car'
+cond_recognized_marker_trans_red = 'vision_recognized_marker_trans_red'
+cond_recognized_marker_trans_yellow = 'vision_recognized_marker_trans_yellow'
+cond_recognized_marker_trans_green = 'vision_recognized_marker_trans_green'
+cond_recognized_marker_trans_left = 'vision_recognized_marker_trans_left'
+cond_recognized_marker_trans_right = 'vision_recognized_marker_trans_right'
+cond_recognized_marker_trans_forward = 'vision_recognized_marker_trans_forward'
+cond_recognized_marker_trans_backward = 'vision_recognized_marker_trans_backward'
+cond_recognized_marker_trans_stop = 'vision_recognized_marker_trans_stop'
+cond_recognized_marker_trans_red_heart = 'vision_recognized_marker_trans_red_heart'
+cond_recognized_marker_trans_sword = 'vision_recognized_marker_trans_sword'
+cond_recognized_marker_trans_target = 'vision_recognized_marker_trans_target'
+cond_recognized_marker_trans_dice = 'vision_recognized_marker_trans_dice'
+cond_recognized_marker_trans_all = 'vision_recognized_marker_trans_all'
+cond_recognized_marker_number_zero = 'vision_recognized_marker_number_zero'
+cond_recognized_marker_number_one = 'vision_recognized_marker_number_one'
+cond_recognized_marker_number_two = 'vision_recognized_marker_number_two'
+cond_recognized_marker_number_three = 'vision_recognized_marker_number_three'
+cond_recognized_marker_number_four = 'vision_recognized_marker_number_four'
+cond_recognized_marker_number_five = 'vision_recognized_marker_number_five'
+cond_recognized_marker_number_six = 'vision_recognized_marker_number_six'
+cond_recognized_marker_number_seven = 'vision_recognized_marker_number_seven'
+cond_recognized_marker_number_eight = 'vision_recognized_marker_number_eight'
+cond_recognized_marker_number_nine = 'vision_recognized_marker_number_nine'
+cond_recognized_marker_number_all = 'vision_recognized_marker_number_all'
+cond_recognized_marker_letter_A = 'vision_recognized_marker_letter_A'
+cond_recognized_marker_letter_B = 'vision_recognized_marker_letter_B'
+cond_recognized_marker_letter_C = 'vision_recognized_marker_letter_C'
+cond_recognized_marker_letter_D = 'vision_recognized_marker_letter_D'
+cond_recognized_marker_letter_E = 'vision_recognized_marker_letter_E'
+cond_recognized_marker_letter_F = 'vision_recognized_marker_letter_F'
+cond_recognized_marker_letter_G = 'vision_recognized_marker_letter_G'
+cond_recognized_marker_letter_H = 'vision_recognized_marker_letter_H'
+cond_recognized_marker_letter_I = 'vision_recognized_marker_letter_I'
+cond_recognized_marker_letter_J = 'vision_recognized_marker_letter_J'
+cond_recognized_marker_letter_K = 'vision_recognized_marker_letter_K'
+cond_recognized_marker_letter_L = 'vision_recognized_marker_letter_L'
+cond_recognized_marker_letter_M = 'vision_recognized_marker_letter_M'
+cond_recognized_marker_letter_N = 'vision_recognized_marker_letter_N'
+cond_recognized_marker_letter_O = 'vision_recognized_marker_letter_O'
+cond_recognized_marker_letter_P = 'vision_recognized_marker_letter_P'
+cond_recognized_marker_letter_Q = 'vision_recognized_marker_letter_Q'
+cond_recognized_marker_letter_R = 'vision_recognized_marker_letter_R'
+cond_recognized_marker_letter_S = 'vision_recognized_marker_letter_S'
+cond_recognized_marker_letter_T = 'vision_recognized_marker_letter_T'
+cond_recognized_marker_letter_U = 'vision_recognized_marker_letter_U'
+cond_recognized_marker_letter_V = 'vision_recognized_marker_letter_V'
+cond_recognized_marker_letter_W = 'vision_recognized_marker_letter_W'
+cond_recognized_marker_letter_X = 'vision_recognized_marker_letter_X'
+cond_recognized_marker_letter_Y = 'vision_recognized_marker_letter_Y'
+cond_recognized_marker_letter_Z = 'vision_recognized_marker_letter_Z'
+cond_recognized_marker_letter_all = 'vision_recognized_marker_letter_all'
+cond_recongized_marker_all = 'vision_recongnized_marker_all'
 
 detection_push_status_exit = 0
 detection_push_status_init = 1
@@ -437,13 +441,13 @@ line_follow_front_speed_default = 0.8  # m/s
 line_follow_line_lost_distance_default = 0.1  # m
 
 # state push type
-state_gimbal_yaw_str = "gimbal_yaw"
-state_gimbal_pitch_str = "gimbal_pitch"
-state_battery_str = "battery"
-state_move_speed_str = "move_speed"
-state_chassis_pitch_str = "chassis_pitch"
-state_chassis_roll_str = "chassis_roll"
-state_chassis_yaw_str = "chassis_yaw"
+state_gimbal_yaw_str = 'gimbal_yaw'
+state_gimbal_pitch_str = 'gimbal_pitch'
+state_battery_str = 'battery'
+state_move_speed_str = 'move_speed'
+state_chassis_pitch_str = 'chassis_pitch'
+state_chassis_roll_str = 'chassis_roll'
+state_chassis_yaw_str = 'chassis_yaw'
 
 # media
 
@@ -462,60 +466,60 @@ applause_once = 1
 applause_twice = 2
 applause_thrice = 3
 
-cond_sound_recognized_applause_once = "sound_recognized_applause_once"
-cond_sound_recognized_applause_twice = "sound_recognized_applause_twice"
-cond_sound_recognized_applause_thrice = "sound_recognized_applause_thrice"
+cond_sound_recognized_applause_once = 'sound_recognized_applause_once'
+cond_sound_recognized_applause_twice = 'sound_recognized_applause_twice'
+cond_sound_recognized_applause_thrice = 'sound_recognized_applause_thrice'
 
 exposure_value_default = 0x00
 exposure_value_large = 0x00
-exposure_value_medium = 0x1C
-exposure_value_small = 0x1D
+exposure_value_medium = 0x1c
+exposure_value_small = 0x1d
 
 zoom_value_min = 100
 zoom_value_max = 400
 
-cond_sensor_adapter1_port1_high_event = "sensor_adapter1_port1_high"
-cond_sensor_adapter1_port1_low_event = "sensor_adapter1_port1_low"
-cond_sensor_adapter1_port1_trigger_event = "sensor_adapter1_port1_trigger"
-cond_sensor_adapter1_port2_high_event = "sensor_adapter1_port2_high"
-cond_sensor_adapter1_port2_low_event = "sensor_adapter1_port2_low"
-cond_sensor_adapter1_port2_trigger_event = "sensor_adapter1_port2_trigger"
-cond_sensor_adapter2_port1_high_event = "sensor_adapter2_port1_high"
-cond_sensor_adapter2_port1_low_event = "sensor_adapter2_port1_low"
-cond_sensor_adapter2_port1_trigger_event = "sensor_adapter2_port1_trigger"
-cond_sensor_adapter2_port2_high_event = "sensor_adapter2_port2_high"
-cond_sensor_adapter2_port2_low_event = "sensor_adapter2_port2_low"
-cond_sensor_adapter2_port2_trigger_event = "sensor_adapter2_port2_trigger"
-cond_sensor_adapter3_port1_high_event = "sensor_adapter3_port1_high"
-cond_sensor_adapter3_port1_low_event = "sensor_adapter3_port1_low"
-cond_sensor_adapter3_port1_trigger_event = "sensor_adapter3_port1_trigger"
-cond_sensor_adapter3_port2_high_event = "sensor_adapter3_port2_high"
-cond_sensor_adapter3_port2_low_event = "sensor_adapter3_port2_low"
-cond_sensor_adapter3_port2_trigger_event = "sensor_adapter3_port2_trigger"
-cond_sensor_adapter4_port1_high_event = "sensor_adapter4_port1_high"
-cond_sensor_adapter4_port1_low_event = "sensor_adapter4_port1_low"
-cond_sensor_adapter4_port1_trigger_event = "sensor_adapter4_port1_trigger"
-cond_sensor_adapter4_port2_high_event = "sensor_adapter4_port2_high"
-cond_sensor_adapter4_port2_low_event = "sensor_adapter4_port2_low"
-cond_sensor_adapter4_port2_trigger_event = "sensor_adapter4_port2_trigger"
-cond_sensor_adapter5_port1_high_event = "sensor_adapter5_port1_high"
-cond_sensor_adapter5_port1_low_event = "sensor_adapter5_port1_low"
-cond_sensor_adapter5_port1_trigger_event = "sensor_adapter5_port1_trigger"
-cond_sensor_adapter5_port2_high_event = "sensor_adapter5_port2_high"
-cond_sensor_adapter5_port2_low_event = "sensor_adapter5_port2_low"
-cond_sensor_adapter5_port2_trigger_event = "sensor_adapter5_port2_trigger"
-cond_sensor_adapter6_port1_high_event = "sensor_adapter6_port1_high"
-cond_sensor_adapter6_port1_low_event = "sensor_adapter6_port1_low"
-cond_sensor_adapter6_port1_trigger_event = "sensor_adapter6_port1_trigger"
-cond_sensor_adapter6_port2_high_event = "sensor_adapter6_port2_high"
-cond_sensor_adapter6_port2_low_event = "sensor_adapter6_port2_low"
-cond_sensor_adapter6_port2_trigger_event = "sensor_adapter6_port2_trigger"
-cond_sensor_adapter7_port1_high_event = "sensor_adapter7_port1_high"
-cond_sensor_adapter7_port1_low_event = "sensor_adapter7_port1_low"
-cond_sensor_adapter7_port1_trigger_event = "sensor_adapter7_port1_trigger"
-cond_sensor_adapter7_port2_high_event = "sensor_adapter7_port2_high"
-cond_sensor_adapter7_port2_low_event = "sensor_adapter7_port2_low"
-cond_sensor_adapter7_port2_trigger_event = "sensor_adapter7_port2_trigger"
+cond_sensor_adapter1_port1_high_event = 'sensor_adapter1_port1_high'
+cond_sensor_adapter1_port1_low_event = 'sensor_adapter1_port1_low'
+cond_sensor_adapter1_port1_trigger_event = 'sensor_adapter1_port1_trigger'
+cond_sensor_adapter1_port2_high_event = 'sensor_adapter1_port2_high'
+cond_sensor_adapter1_port2_low_event = 'sensor_adapter1_port2_low'
+cond_sensor_adapter1_port2_trigger_event = 'sensor_adapter1_port2_trigger'
+cond_sensor_adapter2_port1_high_event = 'sensor_adapter2_port1_high'
+cond_sensor_adapter2_port1_low_event = 'sensor_adapter2_port1_low'
+cond_sensor_adapter2_port1_trigger_event = 'sensor_adapter2_port1_trigger'
+cond_sensor_adapter2_port2_high_event = 'sensor_adapter2_port2_high'
+cond_sensor_adapter2_port2_low_event = 'sensor_adapter2_port2_low'
+cond_sensor_adapter2_port2_trigger_event = 'sensor_adapter2_port2_trigger'
+cond_sensor_adapter3_port1_high_event = 'sensor_adapter3_port1_high'
+cond_sensor_adapter3_port1_low_event = 'sensor_adapter3_port1_low'
+cond_sensor_adapter3_port1_trigger_event = 'sensor_adapter3_port1_trigger'
+cond_sensor_adapter3_port2_high_event = 'sensor_adapter3_port2_high'
+cond_sensor_adapter3_port2_low_event = 'sensor_adapter3_port2_low'
+cond_sensor_adapter3_port2_trigger_event = 'sensor_adapter3_port2_trigger'
+cond_sensor_adapter4_port1_high_event = 'sensor_adapter4_port1_high'
+cond_sensor_adapter4_port1_low_event = 'sensor_adapter4_port1_low'
+cond_sensor_adapter4_port1_trigger_event = 'sensor_adapter4_port1_trigger'
+cond_sensor_adapter4_port2_high_event = 'sensor_adapter4_port2_high'
+cond_sensor_adapter4_port2_low_event = 'sensor_adapter4_port2_low'
+cond_sensor_adapter4_port2_trigger_event = 'sensor_adapter4_port2_trigger'
+cond_sensor_adapter5_port1_high_event = 'sensor_adapter5_port1_high'
+cond_sensor_adapter5_port1_low_event = 'sensor_adapter5_port1_low'
+cond_sensor_adapter5_port1_trigger_event = 'sensor_adapter5_port1_trigger'
+cond_sensor_adapter5_port2_high_event = 'sensor_adapter5_port2_high'
+cond_sensor_adapter5_port2_low_event = 'sensor_adapter5_port2_low'
+cond_sensor_adapter5_port2_trigger_event = 'sensor_adapter5_port2_trigger'
+cond_sensor_adapter6_port1_high_event = 'sensor_adapter6_port1_high'
+cond_sensor_adapter6_port1_low_event = 'sensor_adapter6_port1_low'
+cond_sensor_adapter6_port1_trigger_event = 'sensor_adapter6_port1_trigger'
+cond_sensor_adapter6_port2_high_event = 'sensor_adapter6_port2_high'
+cond_sensor_adapter6_port2_low_event = 'sensor_adapter6_port2_low'
+cond_sensor_adapter6_port2_trigger_event = 'sensor_adapter6_port2_trigger'
+cond_sensor_adapter7_port1_high_event = 'sensor_adapter7_port1_high'
+cond_sensor_adapter7_port1_low_event = 'sensor_adapter7_port1_low'
+cond_sensor_adapter7_port1_trigger_event = 'sensor_adapter7_port1_trigger'
+cond_sensor_adapter7_port2_high_event = 'sensor_adapter7_port2_high'
+cond_sensor_adapter7_port2_low_event = 'sensor_adapter7_port2_low'
+cond_sensor_adapter7_port2_trigger_event = 'sensor_adapter7_port2_trigger'
 
 # sound effect
 media_sound_attacked = 0x101
@@ -528,12 +532,12 @@ media_sound_count_down = 0x106
 media_sound_solmization_1C = 0x107
 media_sound_solmization_1CSharp = 0x108
 media_sound_solmization_1D = 0x109
-media_sound_solmization_1DSharp = 0x10A
-media_sound_solmization_1E = 0x10B
-media_sound_solmization_1F = 0x10C
-media_sound_solmization_1FSharp = 0x10D
-media_sound_solmization_1G = 0x10E
-media_sound_solmization_1GSharp = 0x10F
+media_sound_solmization_1DSharp = 0x10a
+media_sound_solmization_1E = 0x10b
+media_sound_solmization_1F = 0x10c
+media_sound_solmization_1FSharp = 0x10d
+media_sound_solmization_1G = 0x10e
+media_sound_solmization_1GSharp = 0x10f
 media_sound_solmization_1A = 0x110
 media_sound_solmization_1ASharp = 0x111
 media_sound_solmization_1B = 0x112
@@ -544,12 +548,12 @@ media_sound_solmization_2DSharp = 0x116
 media_sound_solmization_2E = 0x117
 media_sound_solmization_2F = 0x118
 media_sound_solmization_2FSharp = 0x119
-media_sound_solmization_2G = 0x11A
-media_sound_solmization_2GSharp = 0x11B
-media_sound_solmization_2A = 0x11C
-media_sound_solmization_2ASharp = 0x11D
-media_sound_solmization_2B = 0x11E
-media_sound_solmization_3C = 0x11F
+media_sound_solmization_2G = 0x11a
+media_sound_solmization_2GSharp = 0x11b
+media_sound_solmization_2A = 0x11c
+media_sound_solmization_2ASharp = 0x11d
+media_sound_solmization_2B = 0x11e
+media_sound_solmization_3C = 0x11f
 media_sound_solmization_3CSharp = 0x120
 media_sound_solmization_3D = 0x121
 media_sound_solmization_3DSharp = 0x122
@@ -560,7 +564,22 @@ media_sound_solmization_3G = 0x126
 media_sound_solmization_3GSharp = 0x127
 media_sound_solmization_3A = 0x128
 media_sound_solmization_3ASharp = 0x129
-media_sound_solmization_3B = 0x12A
+media_sound_solmization_3B = 0x12a
+
+# scratch custom file
+media_custom_audio_0 = 0x10010
+media_custom_audio_1 = 0x10011
+media_custom_audio_2 = 0x10012
+media_custom_audio_3 = 0x10013
+media_custom_audio_4 = 0x10014
+media_custom_audio_5 = 0x10015
+media_custom_audio_6 = 0x10016
+media_custom_audio_7 = 0x10017
+media_custom_audio_8 = 0x10018
+media_custom_audio_9 = 0x10019
+
+custom_audio_file = 0x00
+custom_other_file = 0x01
 
 # mobile
 custom_msg_max_len = 800
@@ -578,9 +597,9 @@ module_msg_type_info = 0x01
 module_msg_type_warning = 0x02
 module_msg_type_error = 0x03
 
-module_status_online = 0xFF
-module_status_offline = 0xFE
-module_status_error = 0xFD
+module_status_online = 0xff
+module_status_offline = 0xfe
+module_status_error = 0xfd
 
 # local service
 local_service_query_type_armor_hit = 1
@@ -629,6 +648,10 @@ mask_x = 0x01
 mask_y = 0x02
 mask_xy = 0x03
 
+# servo
+servo_unknow_mode = 0
+servo_speed_mode = 1
+servo_position_mode = 2
 
 # msg_v1 attri
 
@@ -692,6 +715,7 @@ des_112_enc_type = 0x05
 aes_192_enc_type = 0x06
 aes_256_enc_type = 0x07
 
+
 ## Pyhthon API ##
 class robot_mode(object):
     gimbal_lead = robot_mode_chassis_follow
@@ -700,14 +724,14 @@ class robot_mode(object):
 
 
 class chassis_status(object):
-    static = "static_flag"
-    uphill = "uphill_flag"
-    downhill = "downhill_flag"
-    on_slope = "on_slope_flag"
-    pick_up = "pick_up_flag"
-    impact = "impact"
-    bumpy = "imoact_z_flag"
-    roll_over = "roll_over_flag"
+    static = 'static_flag'
+    uphill = 'uphill_flag'
+    downhill = 'downhill_flag'
+    on_slope = 'on_slope_flag'
+    pick_up = 'pick_up_flag'
+    impact = 'impact'
+    bumpy = 'imoact_z_flag'
+    roll_over = 'roll_over_flag'
 
 
 class gimbal_status(object):
@@ -762,6 +786,11 @@ class line_color(object):
     red = line_follow_color_red = 1
     yellow = line_follow_color_yellow = 2
     blue = line_follow_color_blue = 3
+
+
+class marker_color(object):
+    red = marker_detection_color_red
+    blue = marker_detection_color_blue
 
 
 class sound_id(object):

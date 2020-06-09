@@ -12,10 +12,10 @@ def rmround(value, pre=0):
 
 
 def rmexit(*args, **Kw):
-    raise Exception("Exit")
+    raise Exception('Exit')
 
 
-class RmList:
+class RmList():
     # RmList, list index begins with 1 instead of 0.
     # Adapt to Scratch.
     def __init__(self, initlist=None):

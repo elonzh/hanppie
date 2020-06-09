@@ -1,9 +1,12 @@
-from . import rm_define
+import rm_define
 
 
 class UserScriptCtrl(object):
+
     def __init__(self):
         self.block_running_percent = 100
+        self.block_running_percent = 100
+        self.block_running_fail_reason_code = 0
         self.block_running_state = rm_define.BLOCK_RUN_SUCCESS
         self.script_has_stop = False
         self.script_exit_flag = False
@@ -13,6 +16,15 @@ class UserScriptCtrl(object):
 
     def get_block_running_percent(self):
         return self.block_running_percent
+
+    def set_block_running_fail_reason_code(self, reason):
+        self.block_running_fail_reason_code = reason
+
+    def reset_block_running_fail_reason_code(self):
+        self.block_running_fail_reason_code = 0
+
+    def get_block_running_fail_reason_code(self):
+        return self.block_running_fail_reason_code
 
     def set_block_running_state(self, result):
         if result == rm_define.DUSS_SUCCESS or result == rm_define.DUSS_TASK_FINISHED:
