@@ -1,6 +1,6 @@
 ## hanppie(憨皮)
 
-RoboMaster S1　不提供官方的 SDK，尝试着通过代理的方式在机器上执行命令
+WIP: RoboMaster S1　不提供官方的 SDK，尝试着通过代理的方式在机器上执行命令
 
 ## 一些信息
 
