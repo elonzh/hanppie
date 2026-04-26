@@ -29,6 +29,10 @@ LOG_STREAM_OUT_LEVEL = rm_log.INFO
 
 logger = rm_log.dji_scratch_logger_get()
 
+route_file = os.path.join(os.path.dirname(__file__), "dji.json")
+print("use router file: %s" % route_file)
+event_client.EventClient.DEFAULT_ROUTE_FILE = os.path.join(os.path.dirname(__file__), "dji.json")
+
 event_dji_system = event_client.EventClient(rm_define.system_host_id)
 
 if not LOG_STREAM_OUT_FLAG:

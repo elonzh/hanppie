@@ -168,11 +168,11 @@ Proto Recv-Q Send-Q Local Address          Foreign Address        State
  tcp       0      0 0.0.0.0:8913           0.0.0.0:*              LISTEN
  tcp       0      0 0.0.0.0:8916           0.0.0.0:*              LISTEN
  tcp       0      0 0.0.0.0:21             0.0.0.0:*              LISTEN
- udp       0    704 0.0.0.0:44033          0.0.0.0:*              CLOSE
- udp       0    704 0.0.0.0:42775          0.0.0.0:*              CLOSE
+ udp       0      0 0.0.0.0:58370          0.0.0.0:*              CLOSE
  udp       0      0 0.0.0.0:67             0.0.0.0:*              CLOSE
  udp       0      0 0.0.0.0:67             0.0.0.0:*              CLOSE
- udp       0      0 0.0.0.0:10607          0.0.0.0:*              CLOSE
+ udp       0    704 0.0.0.0:10607          0.0.0.0:*              CLOSE
+ udp       0      0 0.0.0.0:43641          0.0.0.0:*              CLOSE
 ```
 
 ```shell script
@@ -310,6 +310,389 @@ root      18582 1     150484 8408  ffffffff b6d98ed4 S /system/bin/dji_camera
 root      31067 2     0      0     c00831a8 00000000 S kworker/u10:1
 root      31629 2     0      0     c00831a8 00000000 S kworker/0:0
 root      32465 2     0      0     c00831a8 00000000 S kworker/u10:3
+```
+
+```shell script
+root@xw607_dz_ap0002_v4:/ # lsof | grep dji
+dji_hdvt_   234       root  exe       ???                ???       ???        ??? /system/bin/dji_hdvt_uav
+dji_hdvt_   234       root    0       ???                ???       ???        ??? /dev/null
+dji_hdvt_   234       root    1       ???                ???       ???        ??? /dev/null
+dji_hdvt_   234       root    2       ???                ???       ???        ??? /dev/null
+dji_hdvt_   234       root    3       ???                ???       ???        ??? /dev/log/main
+dji_hdvt_   234       root    4       ???                ???       ???        ??? /dev/log/radio
+dji_hdvt_   234       root    5       ???                ???       ???        ??? /dev/log/events
+dji_hdvt_   234       root    6       ???                ???       ???        ??? /dev/log/system
+dji_hdvt_   234       root    7       ???                ???       ???        ??? socket:[3390]
+dji_hdvt_   234       root    8       ???                ???       ???        ??? /dev/__properties__
+dji_hdvt_   234       root    9       ???                ???       ???        ??? socket:[3396]
+dji_hdvt_   234       root   10       ???                ???       ???        ??? /sys/devices/virtual/gpio/gpio129/direction
+dji_hdvt_   234       root   11       ???                ???       ???        ??? /data/rm_game_para_setting.json
+dji_hdvt_   234       root   12       ???                ???       ???        ??? /dev/snd/pcmC0D0p
+dji_hdvt_   234       root   13       ???                ???       ???        ??? /system/audio/spk.apu
+dji_hdvt_   234       root   14       ???                ???       ???        ??? /dev/mem
+dji_hdvt_   234       root   15       ???                ???       ???        ??? socket:[3445]
+dji_hdvt_   234       root   16       ???                ???       ???        ??? /dev/ttyS3
+dji_hdvt_   234       root   17       ???                ???       ???        ??? socket:[3447]
+dji_hdvt_   234       root   18       ???                ???       ???        ??? socket:[3453]
+dji_hdvt_   234       root   19       ???                ???       ???        ??? socket:[3455]
+dji_hdvt_   234       root   20       ???                ???       ???        ??? /dev/input/event0
+dji_hdvt_   234       root   21       ???                ???       ???        ??? /sys/devices/virtual/gpio/gpio146/direction
+dji_hdvt_   234       root   22       ???                ???       ???        ??? /sys/devices/virtual/gpio/gpio146/value
+dji_hdvt_   234       root   23       ???                ???       ???        ??? /sys/devices/virtual/gpio/gpio145/direction
+dji_hdvt_   234       root   24       ???                ???       ???        ??? /sys/devices/virtual/gpio/gpio145/value
+dji_hdvt_   234       root   26       ???                ???       ???        ??? /sys/devices/virtual/gpio/gpio130/direction
+dji_hdvt_   234       root   27       ???                ???       ???        ??? /sys/devices/virtual/gpio/gpio130/value
+dji_hdvt_   234       root   28       ???                ???       ???        ??? /sys/devices/virtual/gpio/gpio129/value
+dji_hdvt_   234       root   30       ???                ???       ???        ??? /sys/devices/virtual/gpio/gpio128/direction
+dji_hdvt_   234       root   31       ???                ???       ???        ??? /sys/devices/virtual/gpio/gpio128/value
+dji_camer   236       root  exe       ???                ???       ???        ??? /system/bin/dji_camera
+dji_camer   236       root    0       ???                ???       ???        ??? /dev/null
+dji_camer   236       root    1       ???                ???       ???        ??? /dev/null
+dji_camer   236       root    2       ???                ???       ???        ??? /dev/null
+dji_camer   236       root    3       ???                ???       ???        ??? /dev/log/main
+dji_camer   236       root    4       ???                ???       ???        ??? /dev/log/radio
+dji_camer   236       root    5       ???                ???       ???        ??? /dev/log/events
+dji_camer   236       root    6       ???                ???       ???        ??? /dev/log/system
+dji_camer   236       root    7       ???                ???       ???        ??? socket:[2594]
+dji_camer   236       root    8       ???                ???       ???        ??? /dev/__properties__
+dji_camer   236       root    9       ???                ???       ???        ??? socket:[2595]
+dji_camer   236       root   11       ???                ???       ???        ??? /dev/ion
+dji_camer   236       root   12       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   13       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   14       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   15       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   16       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   17       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   18       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   19       ???                ???       ???        ??? /dev/ion
+dji_camer   236       root   20       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   21       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   22       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   23       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   24       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   25       ???                ???       ???        ??? /dev/on2psm
+dji_camer   236       root   26       ???                ???       ???        ??? /dev/on2map
+dji_camer   236       root   27       ???                ???       ???        ??? /dev/hx280enc_h1
+dji_camer   236       root   28       ???                ???       ???        ??? /dev/ion
+dji_camer   236       root   29       ???                ???       ???        ??? /dev/on2psm
+dji_camer   236       root   30       ???                ???       ???        ??? /dev/on2map
+dji_camer   236       root   31       ???                ???       ???        ??? /dev/hx280enc_h1
+dji_camer   236       root   32       ???                ???       ???        ??? /dev/ion
+dji_camer   236       root   33       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   34       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   35       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   36       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   37       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   38       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   39       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   40       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   41       ???                ???       ???        ??? /dev/hx170dec
+dji_camer   236       root   42       ???                ???       ???        ??? /dev/on2psm
+dji_camer   236       root   43       ???                ???       ???        ??? /dev/ion
+dji_camer   236       root   44       ???                ???       ???        ??? /dev/on2map
+dji_camer   236       root   45       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   46       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   47       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   48       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   49       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   50       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   51       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   52       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   53       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   54       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   55       ???                ???       ???        ??? /dev/video0
+dji_camer   236       root   56       ???                ???       ???        ??? /dev/log/main
+dji_camer   236       root   57       ???                ???       ???        ??? /dev/log/radio
+dji_camer   236       root   58       ???                ???       ???        ??? /dev/log/events
+dji_camer   236       root   59       ???                ???       ???        ??? /dev/log/system
+dji_camer   236       root   60       ???                ???       ???        ??? /dev/graphics/galcore
+dji_camer   236       root   61       ???                ???       ???        ??? /dev/hx170dec
+dji_camer   236       root   62       ???                ???       ???        ??? /dev/on2psm
+dji_camer   236       root   63       ???                ???       ???        ??? /dev/on2map
+dji_camer   236       root   64       ???                ???       ???        ??? /dev/hx170dec
+dji_camer   236       root   65       ???                ???       ???        ??? /dev/on2psm
+dji_camer   236       root   66       ???                ???       ???        ??? /dev/on2map
+dji_camer   236       root   67       ???                ???       ???        ??? socket:[2713]
+dji_camer   236       root   68       ???                ???       ???        ??? socket:[2728]
+dji_camer   236       root   69       ???                ???       ???        ??? /dev/snd/pcmC0D0c
+dji_camer   236       root   70       ???                ???       ???        ??? /system/audio/mic_ahc_close.apu
+dji_camer   236       root   71       ???                ???       ???        ??? /dev/on2psm
+dji_camer   236       root   72       ???                ???       ???        ??? /dev/on2map
+dji_camer   236       root   73       ???                ???       ???        ??? /dev/hx280enc_h1
+dji_camer   236       root   74       ???                ???       ???        ??? /dev/ion
+dji_camer   236       root   75       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   76       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   77       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   78       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   79       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   80       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   81       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   82       ???                ???       ???        ??? anon_inode:dmabuf
+dji_camer   236       root   83       ???                ???       ???        ??? socket:[6318]
+dji_camer   236       root   84       ???                ???       ???        ??? socket:[24644]
+dji_camer   236       root   85       ???                ???       ???        ??? socket:[5516]
+dji_camer   236       root   88       ???                ???       ???        ??? socket:[23942]
+dji_netwo   238       root  exe       ???                ???       ???        ??? /system/bin/dji_network
+dji_netwo   238       root    0       ???                ???       ???        ??? /dev/null
+dji_netwo   238       root    1       ???                ???       ???        ??? /dev/null
+dji_netwo   238       root    2       ???                ???       ???        ??? /dev/null
+dji_netwo   238       root    3       ???                ???       ???        ??? /dev/log/main
+dji_netwo   238       root    4       ???                ???       ???        ??? /dev/log/radio
+dji_netwo   238       root    5       ???                ???       ???        ??? /dev/log/events
+dji_netwo   238       root    6       ???                ???       ???        ??? /dev/log/system
+dji_netwo   238       root    7       ???                ???       ???        ??? socket:[2596]
+dji_netwo   238       root    8       ???                ???       ???        ??? /dev/__properties__
+dji_netwo   238       root    9       ???                ???       ???        ??? socket:[2601]
+dji_netwo   238       root   11       ???                ???       ???        ??? socket:[5961]
+dji_netwo   238       root   12       ???                ???       ???        ??? socket:[5962]
+dji_netwo   238       root   13       ???                ???       ???        ??? socket:[5963]
+dji_netwo   238       root   14       ???                ???       ???        ??? socket:[5964]
+dji_netwo   238       root   15       ???                ???       ???        ??? socket:[6243]
+dji_sw_ua   240       root  exe       ???                ???       ???        ??? /system/bin/dji_sw_uav
+dji_sw_ua   240       root    0       ???                ???       ???        ??? /dev/null
+dji_sw_ua   240       root    1       ???                ???       ???        ??? /dev/null
+dji_sw_ua   240       root    2       ???                ???       ???        ??? /dev/null
+dji_sw_ua   240       root    3       ???                ???       ???        ??? /dev/log/main
+dji_sw_ua   240       root    4       ???                ???       ???        ??? /dev/log/radio
+dji_sw_ua   240       root    5       ???                ???       ???        ??? /dev/log/events
+dji_sw_ua   240       root    6       ???                ???       ???        ??? /dev/log/system
+dji_sw_ua   240       root    7       ???                ???       ???        ??? socket:[2599]
+dji_sw_ua   240       root    8       ???                ???       ???        ??? /dev/__properties__
+dji_sw_ua   240       root    9       ???                ???       ???        ??? socket:[2600]
+dji_sw_ua   240       root   10       ???                ???       ???        ??? socket:[2604]
+dji_sw_ua   240       root   12       ???                ???       ???        ??? socket:[2609]
+dji_sw_ua   240       root   13       ???                ???       ???        ??? socket:[2610]
+dji_sw_ua   240       root   14       ???                ???       ???        ??? socket:[3403]
+dji_sw_ua   240       root   15       ???                ???       ???        ??? socket:[2611]
+dji_sw_ua   240       root   16       ???                ???       ???        ??? socket:[2613]
+dji_sw_ua   240       root   17       ???                ???       ???        ??? socket:[3404]
+dji_monit   242       root  exe       ???                ???       ???        ??? /system/bin/dji_monitor
+dji_monit   242       root    0       ???                ???       ???        ??? /dev/null
+dji_monit   242       root    1       ???                ???       ???        ??? /dev/null
+dji_monit   242       root    2       ???                ???       ???        ??? /dev/null
+dji_monit   242       root    3       ???                ???       ???        ??? /dev/log/main
+dji_monit   242       root    4       ???                ???       ???        ??? /dev/log/radio
+dji_monit   242       root    5       ???                ???       ???        ??? /dev/log/events
+dji_monit   242       root    6       ???                ???       ???        ??? /dev/log/system
+dji_monit   242       root    7       ???                ???       ???        ??? socket:[3387]
+dji_monit   242       root    8       ???                ???       ???        ??? /dev/__properties__
+dji_monit   242       root    9       ???                ???       ???        ??? socket:[3388]
+dji_monit   242       root   10       ???                ???       ???        ??? socket:[3389]
+dji_sys     244       root  exe       ???                ???       ???        ??? /system/bin/dji_sys
+dji_sys     244       root    0       ???                ???       ???        ??? /dev/null
+dji_sys     244       root    1       ???                ???       ???        ??? /dev/null
+dji_sys     244       root    2       ???                ???       ???        ??? /dev/null
+dji_sys     244       root    3       ???                ???       ???        ??? /dev/log/main
+dji_sys     244       root    4       ???                ???       ???        ??? /dev/log/radio
+dji_sys     244       root    5       ???                ???       ???        ??? /dev/log/events
+dji_sys     244       root    6       ???                ???       ???        ??? /dev/log/system
+dji_sys     244       root    7       ???                ???       ???        ??? socket:[3401]
+dji_sys     244       root    8       ???                ???       ???        ??? /dev/__properties__
+dji_sys     244       root    9       ???                ???       ???        ??? socket:[3402]
+dji_sys     244       root   11       ???                ???       ???        ??? socket:[3807]
+dji_sys     244       root   13       ???                ???       ???        ??? socket:[3822]
+dji_sys     244       root   14       ???                ???       ???        ??? socket:[3918]
+dji_sys     244       root   15       ???                ???       ???        ??? socket:[5121]
+dji_sys     244       root   16       ???                ???       ???        ??? socket:[5299]
+dji_sys     244       root   17       ???                ???       ???        ??? socket:[5477]
+dji_sys     244       root   18       ???                ???       ???        ??? socket:[5521]
+dji_sys     244       root   19       ???                ???       ???        ??? socket:[5528]
+dji_sys     244       root   20       ???                ???       ???        ??? socket:[5530]
+dji_sys     244       root   21       ???                ???       ???        ??? /dev/ttyGS0
+dji_black   247       root  exe       ???                ???       ???        ??? /system/bin/dji_blackbox
+dji_black   247       root    0       ???                ???       ???        ??? /dev/null
+dji_black   247       root    1       ???                ???       ???        ??? /dev/null
+dji_black   247       root    2       ???                ???       ???        ??? /dev/null
+dji_black   247       root    3       ???                ???       ???        ??? /dev/log/main
+dji_black   247       root    4       ???                ???       ???        ??? /dev/log/radio
+dji_black   247       root    5       ???                ???       ???        ??? /dev/log/events
+dji_black   247       root    6       ???                ???       ???        ??? /dev/log/system
+dji_black   247       root    7       ???                ???       ???        ??? socket:[3405]
+dji_black   247       root    8       ???                ???       ???        ??? /dev/__properties__
+dji_black   247       root    9       ???                ???       ???        ??? socket:[3406]
+dji_black   247       root   10       ???                ???       ???        ??? /blackbox/armor1/ARMOR1010.DAT
+dji_black   247       root   11       ???                ???       ???        ??? /blackbox/gimbal/GIMBAL011.DAT
+dji_black   247       root   13       ???                ???       ???        ??? /blackbox/armor2/ARMOR2010.DAT
+dji_black   247       root   14       ???                ???       ???        ??? /blackbox/armor3/ARMOR3010.DAT
+dji_black   247       root   15       ???                ???       ???        ??? /blackbox/armor4/ARMOR4010.DAT
+dji_black   247       root   16       ???                ???       ???        ??? /blackbox/armor5/ARMOR5010.DAT
+dji_black   247       root   17       ???                ???       ???        ??? /blackbox/armor6/ARMOR6010.DAT
+dji_black   247       root   18       ???                ???       ???        ??? /blackbox/gamesystem/GAMESYSTEM010.DAT
+dji_black   247       root   19       ???                ???       ???        ??? /blackbox/gun/GUN010.DAT
+dji_black   247       root   20       ???                ???       ???        ??? /blackbox/camera/CAMERA010.DAT
+dji_black   247       root   21       ???                ???       ???        ??? /blackbox/vision/VISION010.DAT
+dji_black   247       root   22       ???                ???       ???        ??? /blackbox/scratch_sys/SCRATCH_SYS010.DAT
+dji_black   247       root   23       ???                ???       ???        ??? /blackbox/scratch_script/SCRATCH_SCRIPT010.DAT
+dji_black   247       root   24       ???                ???       ???        ??? /blackbox/chassis/CHASSIS010.DAT
+dji_black   247       root   25       ???                ???       ???        ??? /blackbox/network/NETWORK010.DAT
+dji_black   247       root   26       ???                ???       ???        ??? /blackbox/dji_system/SYSTEM010.DAT
+dji_black   247       root   27       ???                ???       ???        ??? /blackbox/stick/STICK010.DAT
+dji_black   247       root   28       ???                ???       ???        ??? /system/etc/dji.json
+dji_black   247       root   29       ???                ???       ???        ??? socket:[5776]
+dji_visio   249       root  exe       ???                ???       ???        ??? /system/bin/dji_vision
+dji_visio   249       root    0       ???                ???       ???        ??? /dev/null
+dji_visio   249       root    1       ???                ???       ???        ??? /dev/null
+dji_visio   249       root    2       ???                ???       ???        ??? /dev/null
+dji_visio   249       root    3       ???                ???       ???        ??? /dev/log/main
+dji_visio   249       root    4       ???                ???       ???        ??? /dev/log/radio
+dji_visio   249       root    5       ???                ???       ???        ??? /dev/log/events
+dji_visio   249       root    6       ???                ???       ???        ??? /dev/log/system
+dji_visio   249       root    7       ???                ???       ???        ??? socket:[4097]
+dji_visio   249       root    8       ???                ???       ???        ??? /dev/__properties__
+dji_visio   249       root    9       ???                ???       ???        ??? socket:[4098]
+dji_visio   249       root   11       ???                ???       ???        ??? /dev/ion
+dji_visio   249       root   12       ???                ???       ???        ??? /dev/ion
+dji_visio   249       root   13       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   14       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   15       ???                ???       ???        ??? /dev/mem
+dji_visio   249       root   16       ???                ???       ???        ??? /data/vision/cnn_model/cnn_model_version
+dji_visio   249       root   17       ???                ???       ???        ??? /dev/on2psm
+dji_visio   249       root   18       ???                ???       ???        ??? /dev/on2map
+dji_visio   249       root   19       ???                ???       ???        ??? /dev/hx280enc_h1
+dji_visio   249       root   20       ???                ???       ???        ??? /dev/ion
+dji_visio   249       root   21       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   22       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   23       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   24       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   25       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   26       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   27       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   28       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   29       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   30       ???                ???       ???        ??? /dev/on2psm
+dji_visio   249       root   31       ???                ???       ???        ??? /dev/on2map
+dji_visio   249       root   32       ???                ???       ???        ??? /dev/hx280enc_h1
+dji_visio   249       root   33       ???                ???       ???        ??? /dev/ion
+dji_visio   249       root   34       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   35       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   36       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   37       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   38       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   39       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   40       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   41       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   42       ???                ???       ???        ??? anon_inode:dmabuf
+dji_visio   249       root   43       ???                ???       ???        ??? socket:[4104]
+dji_visio   249       root   44       ???                ???       ???        ??? /dev/bulk_usb
+dji_visio   249       root   45       ???                ???       ???        ??? socket:[4111]
+dji_visio   249       root  mem       ???              b3:0a         0      22570 /system/bin/dji_vision
+dji_visio   249       root  mem       ???              b3:0a    737280      22570 /system/bin/dji_vision
+dji_visio   249       root  mem       ???              b3:0a    749568      22570 /system/bin/dji_vision
+dji_visio   249       root  mem       ???              00:0c 473513984       1948 /dev/mem
+dji_visio   249       root  mem       ???              00:0c 472821760       1948 /dev/mem
+dji_visio   249       root  mem       ???              00:0c 472129536       1948 /dev/mem
+dji_visio   249       root  mem       ???              00:0c 471437312       1948 /dev/mem
+grep        303       root    1       ???                ???       ???        ??? /data/dji/log/upgrade00.log
+logcat      412       root    3       ???                ???       ???        ??? /data/dji/log/fatal.log
+grep        491       root    1       ???                ???       ???        ??? /data/dji/log/wifi00.log
+```
+
+```text
+root@xw607_dz_ap0002_v4:/system/bin # ./dji_blackbox -h                        
+DUSSBlackbox service 
+usage:
+run dji_blackbox with default type
+       ./dji_blackbox
+DUSSFound env DJI_JSON: /system/etc/dji.json
+DUSSUpdated default_level 2
+DUSSUpdated default_channel 2
+DUSSUpdated default_format 0x160
+DUSSCan't get default_module, so enable all to default_level
+DUSSUse local lib: /system/lib/libduml_hal.so
+duss_sketch_initialize failed 0xfffffc17
+```
+
+```text
+root@xw607_dz_ap0002_v4:/ # /system/bin/dji_camera -h                          
+usage:
+run with wireless in passive mode (default)
+       /system/bin/dji_camera [-p 9000] [-t tcp|udp|ddp|udt]
+
+run with wireless in active mode
+       /system/bin/dji_camera -a 192.168.1.200 [-p 9000] [-t tcp|udp|ddp|udt]
+
+run without wireless
+       /system/bin/dji_camera -n
+run with fb
+       /system/bin/dji_camera -f
+run with local mb
+       /system/bin/dji_camera -l
+run with designated width & height, should be used carefully
+       /system/bin/dji_camera -r width*height
+```
+
+```text
+root@xw607_dz_ap0002_v4:/system/bin # ./dji_hdvt_uav -h                        
+usage:
+run with wifi
+     ./dji_hdvt_uav  -w
+
+run with cp
+     ./dji_hdvt_uav  -c
+
+run with local mb
+     ./dji_hdvt_uav  -l
+
+run with keyboard mouse server
+     ./dji_hdvt_uav  -k
+```
+
+```text
+root@xw607_dz_ap0002_v4:/system/bin # ./dji_mb_ctrl -h                         
+Usage:
+	./dji_mb_ctrl [-h] [-i] [-b batchfile] [-J json_file] [-S service_in_json] [-w event_timeout] [-R role_in_service][-g target_type] [-t target_idx] [-q seq_id][-s cmd_set] [-c cmd_id] [-a attrib] [-0][-1 u8_value] [-2 u16_value] [-3 u32_value] [-4 u32_value][-5 u64_value] [-6 u64_value] [-7 u64_value] [-8 u64_value][long_hex_data]
+
+root@xw607_dz_ap0002_v4:/system/bin # ./dji_mb_parser -h                     
+Usage:
+	./dji_mb_parser [-h] [-C channel_type] [-P protocol] [-D direction] [-R result] [-T target_id] [-S source_id] [-A attribute] [-M message_id] [-L message_length] [-d duration_ms] input_dump_log_file
+
+root@xw607_dz_ap0002_v4:/system/bin # ./dji_network -h                         
+./dji_network: invalid option -- h
+Illegal argument "?"
+usage:
+run dji_network with type of network and connection timeout interval
+       ./dji_network -t wifi -i <sec> -t sdr -i <sec>
+
+run dji_network with default type of network and connection timeout interval
+       ./dji_network
+
+root@xw607_dz_ap0002_v4:/system/bin # ./dji_sys -h                         
+addr is not writeable, returnusage:
+	-t: test mode
+
+root@xw607_dz_ap0002_v4:/system/bin # ./dji_vision -h                          
+usage:
+set global debug level if it's not set
+       ./dji_vision -D 2 
+set module debug level
+       ./dji_vision -d 2 
+set monitor info options
+       ./dji_vision -m 2 
+```
+
+```text
+
+root@xw607_dz_ap0002_v4:/system/bin # ps | grep dji
+root      234   1     43412  5204  ffffffff b6e2bed4 S /system/bin/dji_hdvt_uav
+root      236   1     146432 8528  ffffffff b6de0ed4 S /system/bin/dji_camera
+root      238   1     24200  4076  ffffffff b6f0bed4 S /system/bin/dji_network
+root      240   1     31368  4464  ffffffff b6f21370 S /system/bin/dji_sw_uav
+root      242   1     14580  3092  ffffffff b6e99370 S /system/bin/dji_monitor
+root      244   1     50836  9292  ffffffff b6f2af5c S /system/bin/dji_sys
+root      247   1     31904  20496 ffffffff b6d8ded4 S /system/bin/dji_blackbox
+root      249   1     211060 14608 ffffffff b6f3af5c S /system/bin/dji_vision
+
+root@xw607_dz_ap0002_v4:/ # busybox ps | grep dji                              
+  234 0          4:46 /system/bin/dji_hdvt_uav -g
+  236 0          9:04 /system/bin/dji_camera
+  238 0          1:28 /system/bin/dji_network -t wifi -i 10 -t sdr -i 5
+  240 0          2:25 /system/bin/dji_sw_uav
+  242 0          0:14 /system/bin/dji_monitor -m
+  244 0          0:35 /system/bin/dji_sys
+  247 0          1:19 /system/bin/dji_blackbox
+  249 0          7:22 /system/bin/dji_vision
+  412 0          0:05 logcat -v time -f /data/dji/log/fatal.log -r32768 -n4 *:F
+  460 0          5:50 /data/python_files/bin/python /data/dji_scratch/bin/dji_scratch.py
 ```
 
 ## Reference

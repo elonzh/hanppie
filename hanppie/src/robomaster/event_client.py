@@ -1,3 +1,4 @@
+from pprint import pprint
 import traceback
 
 import duml_cmdset
@@ -32,6 +33,8 @@ class EventClient(object):
         self.debug = False
         self.route_table, _, _ = tools.load_route_table(EventClient.DEFAULT_ROUTE_FILE, 'scratch_service',
                                                         'scratch_client')
+        print("route_table")
+        pprint(self.route_table)
         self.my_server_address = '\0/duss/mb/' + str(hex(host_id))
         self.my_host_id = host_id
         self.wait_ack_list = {}
