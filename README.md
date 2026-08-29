@@ -1,5 +1,7 @@
 # Hanppie（憨皮）
 
+[简体中文](./README.md) | [English](./README_EN.md)
+
 [![CI](https://github.com/elonzh/hanppie/actions/workflows/ci.yml/badge.svg)](https://github.com/elonzh/hanppie/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
@@ -21,7 +23,7 @@ Hanppie 是一个面向 DJI RoboMaster S1 的开源保存与电脑编程工具�
 
 已知边界：官方 SDK 的相机请求会被 S1 拒绝；部分 EP DDS 主题在 S1 上只回传 0。推荐用官方 SDK 负责控制，用 App/Lab 后端负责视频与 S1 特有数据。底盘、云台机械运动和发射器尚未完成安全条件下的物理验证。
 
-完整证据见[真机联调记录](./docs/s1-live-debug-2026-08-29.md)，软硬件、S.BUS、SocketCAN、vcan 和 ROS 2 背景见[调研报告](./docs/robomaster-s1-revival-report.md)。
+项目的长期技术事实源是[《RoboMaster S1 技术架构》](./docs/architecture.md)。完整实测证据见[真机联调记录](./docs/s1-live-debug-2026-08-29.md)，早期软硬件、S.BUS、SocketCAN、vcan 和 ROS 2 调研见[调研报告](./docs/robomaster-s1-revival-report.md)。
 
 ## 安全警告
 
@@ -163,7 +165,7 @@ task prek       # 对全部文件执行 hooks
 
 项目配置集中在 [`pyproject.toml`](./pyproject.toml)、[`Taskfile.yml`](./Taskfile.yml) 和 [`prek.toml`](./prek.toml)，CI 使用相同的 uv 锁文件与命令。
 
-贡献前请阅读 [`CONTRIBUTING.md`](./CONTRIBUTING.md)，安全问题见 [`SECURITY.md`](./SECURITY.md)，来源与商标说明见 [`NOTICE.md`](./NOTICE.md)。
+贡献前请阅读 [`CONTRIBUTING.md`](./CONTRIBUTING.md)，技术或能力变化应同步更新 [`docs/architecture.md`](./docs/architecture.md)。安全问题见 [`SECURITY.md`](./SECURITY.md)，来源与商标说明见 [`NOTICE.md`](./NOTICE.md)。
 
 ## 路线图
 
@@ -173,6 +175,6 @@ task prek       # 对全部文件执行 hooks
 - 为 ROS 2 `cmd_vel`、相机和有效遥测提供安全适配；
 - 建立不同 S1 固件版本的可复现实测矩阵。
 
-## License
+## 许可证
 
 主机侧 Hanppie 代码使用 [MIT License](./LICENSE)。恢复的设备运行时代码、可选 DJI SDK 和社区后端适用各自来源的许可与条款，详见 [`NOTICE.md`](./NOTICE.md)。

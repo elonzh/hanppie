@@ -4,6 +4,8 @@
 > 目标读者：有丰富软件开发经验、尚未接触嵌入式开发的 S1 用户<br>
 > 范围：保留原机主体，优先恢复电脑编程、通用手柄控制、视频和遥测能力；不讨论提升发射威力、绕过机械安全限制等改造。
 
+> **文档关系：**长期维护的当前架构和能力结论以 [`architecture.md`](./architecture.md) 为准；本文保留为前期调研与方案比较记录。
+
 > **实机结果更新：**后续联调已经确认本机固件为 `00.06.0521`，并成功恢复 root ADB、临时启用官方 SDK 服务、验证官方高层 API 和 LED 控制，同时确认官方相机及部分 DDS 主题存在兼容缺口。本文保留为软硬件背景和备选路线调研；实施结论以 [`s1-live-debug-2026-08-29.md`](./s1-live-debug-2026-08-29.md) 为准，S.BUS 不再是当前首选 MVP。
 
 ## 1. 执行摘要
@@ -42,9 +44,9 @@ RoboMaster S1 并不是“硬件无法编程”，而是被 DJI 的产品分层�
 - S1 机内 Unix Socket/DUSS 客户端：[`event_client.py`](../src/hanppie/runtime/event_client.py)
 - S1 底盘、云台和 SDK 模式控制：[`rm_ctrl.py`](../src/hanppie/runtime/rm_ctrl.py)
 - S1 DUSS 命令封装：[`rm_module.py`](../src/hanppie/runtime/rm_module.py)
-- 官方 SDK 网络端口和连接过程：[`conn.py`](../../RoboMaster-SDK/src/robomaster/conn.py)
-- 官方 SDK 端口常量：[`config.py`](../../RoboMaster-SDK/src/robomaster/config.py)
-- 明文 SDK 连接说明：[`connection.rst`](../../RoboMaster-SDK/docs/source/text_sdk/connection.rst)
+- 官方 SDK 网络端口和连接过程：[`conn.py`](https://github.com/dji-sdk/RoboMaster-SDK/blob/ff6646e115ab125af3207a4ed3df42cc76c795b2/src/robomaster/conn.py)
+- 官方 SDK 端口常量：[`config.py`](https://github.com/dji-sdk/RoboMaster-SDK/blob/ff6646e115ab125af3207a4ed3df42cc76c795b2/src/robomaster/config.py)
+- 明文 SDK 连接说明：[`connection.rst`](https://github.com/dji-sdk/RoboMaster-SDK/blob/ff6646e115ab125af3207a4ed3df42cc76c795b2/docs/source/text_sdk/connection.rst)
 
 `hanppie` README 记录的 S1 样本固件为 `00.06.0100`，其中没有 EP 的 `sdk_manager` 模块；这正是 S1 不能直接使用官方外部 SDK 的一个关键差异。你的实机固件版本尚未读取，不能假定与该样本相同。
 

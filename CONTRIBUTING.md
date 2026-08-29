@@ -1,13 +1,10 @@
-# Contributing
+# 参与贡献
 
-Hanppie interacts with a discontinued physical robot and includes recovery
-operations that can expose a root shell. Contributions must keep safe defaults,
-explicit targets, checksum verification, and reversible recovery paths.
+Hanppie 会操作已经停止维护的实体机器人，其中部分恢复操作会临时暴露 root shell。所有贡献必须保持安全默认值、显式设备目标、哈希校验和可逆恢复路径。
 
-## Development setup
+## 开发环境
 
-Install [uv](https://docs.astral.sh/uv/) and
-[Task](https://taskfile.dev/), then run:
+安装 [uv](https://docs.astral.sh/uv/) 和 [Task](https://taskfile.dev/)，然后运行：
 
 ```bash
 task sync
@@ -15,23 +12,24 @@ task hooks
 task check
 ```
 
-Use `task sync:official` or `task sync:lab` only when testing a robot backend.
-The two extras are deliberately mutually exclusive because both dependencies
-install a top-level Python package named `robomaster`.
+仅在测试机器人后端时运行 `task sync:official` 或 `task sync:lab`。两个 extra 互斥，因为它们会安装相互冲突的 RoboMaster Python 顶层包。
 
-The core package and official backend support Python 3.8+. The Lab backend
-requires Python 3.10+ because that is the minimum declared by its upstream
-package. On macOS and on Python 3.9+, set `HANPPIE_OFFICIAL_SDK_PATH` to the
-pinned DJI SDK checkout documented in the README.
+核心包和官方后端支持 Python 3.8+。Lab 后端依照其上游声明要求 Python 3.10+。macOS 或 Python 3.9+ 使用官方后端时，应按照 README 设置 `HANPPIE_OFFICIAL_SDK_PATH`，指向固定提交的 DJI SDK checkout。
 
-## Pull requests
+## 项目语言
 
-- Keep physical actions disabled in automated tests.
-- Mock ADB and network transports in unit tests.
-- Document the exact S1 firmware when reporting device behavior.
-- Separate “API accepted”, “telemetry observed”, and “physical effect verified”.
-- Never commit device backups, serial-specific logs, vendor binaries, or keys.
+- 中文是项目默认语言；面向用户的文档、Issue、PR 说明和提交信息使用中文。
+- `README.md` 是中文入口，`README_EN.md` 是英文镜像；修改其中一份的事实性内容时同步另一份。
+- 代码标识、协议字段、配置键和机器要求的值保留英文。
+- 软硬件架构、协议、能力边界或工作原理发生变化时，同步更新 [`docs/architecture.md`](./docs/architecture.md)。
 
-Run `task prek` before opening a pull request. Hardware test evidence should be
-included in the pull request description, but hardware access is not required
-for ordinary contributions.
+## Pull Request 要求
+
+- 自动化测试中禁止真实机械动作。
+- 单元测试必须模拟 ADB 和网络传输。
+- 报告实机行为时记录准确固件版本。
+- 明确区分“API 接受”“观察到遥测”“确认物理效果”三层证据。
+- 不要提交设备备份、序列号相关日志、厂商二进制、密钥或局域网拓扑。
+- 恢复的 `src/hanppie/runtime` 和 `resources` 只做必要的互操作性修改，不进行顺手重构。
+
+提交 PR 前运行 `task prek`。硬件相关 PR 应在说明中提供脱敏的实测证据；普通贡献不要求拥有 S1 真机。
