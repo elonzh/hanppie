@@ -1,0 +1,7 @@
+loader=rm_define.__dict__["__builtins__"]["__import__"]
+sp=loader("sub"+"process",globals(),locals(),[],0)
+def run(args):
+ p=sp.Popen(args,stdout=sp.PIPE,stderr=sp.STDOUT);o=p.communicate()[0];print(args,p.returncode,o);return p.returncode
+run(["/system/bin/sh","/system/bin/adb_en.sh"])
+run(["/system/bin/setprop","service.adb.tcp.port","5555"])
+run(["/system/bin/setprop","ctl.restart","adbd"])

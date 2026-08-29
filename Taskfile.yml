@@ -1,0 +1,69 @@
+version: "3"
+
+silent: true
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  sync:
+    desc: Install the package and development toolchain
+    cmds:
+      - uv sync
+
+  sync:official:
+    desc: Install host dependencies for a local DJI official SDK checkout
+    cmds:
+      - uv sync --extra official --extra media
+
+  sync:lab:
+    desc: Select the S1 App/Lab-compatible backend
+    cmds:
+      - uv sync --extra lab
+
+  format:
+    desc: Format Python and apply safe lint fixes
+    cmds:
+      - uv run ruff format .
+      - uv run ruff check --fix .
+
+  lint:
+    desc: Check formatting and lint rules without changing files
+    cmds:
+      - uv run ruff format --check .
+      - uv run ruff check .
+
+  test:
+    desc: Run the offline test suite with coverage
+    cmds:
+      - uv run pytest
+
+  check:
+    desc: Run all required local quality gates
+    cmds:
+      - task: lint
+      - task: test
+
+  build:
+    desc: Build source and wheel distributions
+    cmds:
+      - uv build
+
+  hooks:
+    desc: Install prek pre-commit and pre-push hooks
+    cmds:
+      - uv run prek install --hook-type pre-commit --hook-type pre-push --prepare-hooks
+
+  prek:
+    desc: Run all prek hooks against tracked files
+    cmds:
+      - uv run prek run --all-files --show-diff-on-failure
+
+  sdk:status:
+    desc: Inspect the volatile official-SDK patch on an ADB-connected S1
+    requires:
+      vars: [ADB_TARGET]
+    cmds:
+      - uv run hanppie sdk --target {{.ADB_TARGET}} status

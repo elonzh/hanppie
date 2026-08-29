@@ -1,0 +1,21 @@
+minimum_prek_version = "0.4.5"
+
+[[repos]]
+repo = "https://github.com/pre-commit/pre-commit-hooks"
+rev = "v6.0.0"
+hooks = [
+  { id = "check-added-large-files", args = ["--maxkb=500"] },
+  { id = "check-json", exclude = "^src/hanppie/resources/dji\\.json$" },
+  { id = "check-toml" },
+  { id = "check-yaml" },
+  { id = "end-of-file-fixer" },
+  { id = "trailing-whitespace" },
+]
+
+[[repos]]
+repo = "local"
+hooks = [
+  { id = "ruff-check", name = "ruff check", language = "system", entry = "uv run ruff check --fix", types = ["python"] },
+  { id = "ruff-format", name = "ruff format", language = "system", entry = "uv run ruff format", types = ["python"] },
+  { id = "pytest", name = "pytest", language = "system", entry = "uv run pytest", pass_filenames = false, stages = ["pre-push"] },
+]

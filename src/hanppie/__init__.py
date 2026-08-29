@@ -1,0 +1,7 @@
+"""Host and on-device tooling for DJI RoboMaster S1 preservation."""
+
+from __future__ import annotations
+
+__all__ = ["__version__"]
+
+__version__ = "0.1.0"
