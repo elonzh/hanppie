@@ -1,11 +1,7 @@
 from __future__ import annotations
 
 import json
-
-try:
-    from importlib.resources import files
-except ImportError:
-    from importlib_resources import files
+from importlib.resources import files
 
 
 def test_packaged_adb_payload() -> None:

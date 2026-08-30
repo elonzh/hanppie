@@ -12,9 +12,9 @@ task hooks
 task check
 ```
 
-仅在测试机器人后端时运行 `task sync:official` 或 `task sync:lab`。两个 extra 互斥，因为它们会安装相互冲突的 RoboMaster Python 顶层包。
+`uv sync` 会安装内置的 `src/robomaster` SDK fork。仅在测试 App/Lab 后端时运行 `task sync:lab`；该任务使用独立的 `.venv-lab`，相关命令通过 `task run:lab -- ...` 执行，不要把 LAB-SDK 安装进主环境。
 
-核心包和官方后端支持 Python 3.8+。Lab 后端依照其上游声明要求 Python 3.10+。macOS 或 Python 3.9+ 使用官方后端时，应按照 README 设置 `HANPPIE_OFFICIAL_SDK_PATH`，指向固定提交的 DJI SDK checkout。
+项目以 Python 3.10 为开发和测试基线，暂不维护更高版本的兼容矩阵。机内 Lab 载荷仍需保持固件解释器所要求的旧语法兼容性。
 
 ## 项目语言
 
@@ -31,5 +31,6 @@ task check
 - 明确区分“API 接受”“观察到遥测”“确认物理效果”三层证据。
 - 不要提交设备备份、序列号相关日志、厂商二进制、密钥或局域网拓扑。
 - 恢复的 `src/hanppie/runtime` 和 `resources` 只做必要的互操作性修改，不进行顺手重构。
+- `src/robomaster` 来自 Apache-2.0 上游；修改时保留版权头、注明改动，并同步更新对应的离线或实机能力测试。
 
 提交 PR 前运行 `task prek`。硬件相关 PR 应在说明中提供脱敏的实测证据；普通贡献不要求拥有 S1 真机。

@@ -7,6 +7,8 @@
 
 > **文档关系：**本文是一次实机联调的可复现记录；长期维护的当前架构和能力结论见 [`architecture.md`](./architecture.md)。
 
+> **当前实现说明（2026-08-30）：**本文记录的外部官方 SDK checkout 与 Python 3.8/3.14 环境是当时的联调事实。当前项目已将同一提交 `ff6646e115ab125af3207a4ed3df42cc76c795b2` 的纯 Python 源码内置为 `src/robomaster`，开发与 CI 基线改为 Python 3.10；以下旧命令只用于复现实测历史，当前使用方式以 README 和 [`architecture.md`](./architecture.md) 为准。机器人侧临时 SDK proxy 补丁流程不变。
+
 ## 1. 最终结论
 
 这台 S1 已经可以在**不启动手机 App**的情况下由电脑连接，并有两条已实机验证的编程路径：

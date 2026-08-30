@@ -3,8 +3,8 @@
 [简体中文](./README.md) | [English](./README_EN.md)
 
 [![CI](https://github.com/elonzh/hanppie/actions/workflows/ci.yml/badge.svg)](https://github.com/elonzh/hanppie/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT%20%2B%20Apache--2.0-green.svg)](./NOTICE.md)
 
 Hanppie is an open preservation and computer-programming toolkit for the DJI RoboMaster S1. Its goal is to restore auditable and reversible connectivity, programming, telemetry, and remote-control capabilities without depending on the mobile app.
 
@@ -18,10 +18,10 @@ Tested firmware: `00.06.0521`.
 - `1280×720` H.264 video through the App/Lab media path;
 - temporary USB/TCP root ADB enabled through Lab;
 - temporary restoration of DJI's official SDK service with reversible bind mounts;
-- official Python SDK handshake, `Robot.initialize()`, firmware version, serial number, mode, gimbal angle, and LED control;
+- bundled RoboMaster SDK fork handshake, `Robot.initialize()`, firmware version, serial number, mode, gimbal angle, and LED control;
 - complete status, restore, and re-enable round trip for the SDK patch.
 
-Known limitations: the official SDK camera request is rejected by the S1, and several EP DDS topics continuously return zero. The current recommendation is to use the official SDK for control and verified telemetry, and the App/Lab backend for video and S1-specific data. Physical chassis motion, gimbal motion, and the launcher have not yet been tested under the required safety conditions.
+Known limitations: the SDK camera request is rejected by the S1, and several EP DDS topics continuously return zero. The current recommendation is to use the bundled SDK fork for control and verified telemetry, and the App/Lab backend for video and S1-specific data. Physical chassis motion, gimbal motion, and the launcher have not yet been tested under the required safety conditions.
 
 The long-lived technical source of truth is [RoboMaster S1 Technical Architecture](./docs/architecture.md) (Chinese). Reproducible evidence is recorded in the [physical-device debug log](./docs/s1-live-debug-2026-08-29.md), while the earlier [research report](./docs/robomaster-s1-revival-report.md) covers S.BUS, SocketCAN, vcan, ROS 2, and alternative approaches.
 
@@ -38,7 +38,7 @@ Before the first motion test:
 
 ## Installation
 
-The core package requires Python 3.8+ and [uv](https://docs.astral.sh/uv/). [Task](https://taskfile.dev/) is the optional unified task runner.
+Python 3.10 is the project's development and test baseline. [uv](https://docs.astral.sh/uv/) manages the environment, while [Task](https://taskfile.dev/) is the optional unified task runner.
 
 ```bash
 git clone https://github.com/elonzh/hanppie.git
@@ -47,30 +47,15 @@ uv sync
 uv run hanppie --help
 ```
 
-The two robot backends install conflicting RoboMaster Python packages and therefore cannot be active together. Compatibility follows DJI's actual distributions:
+The repository directly maintains `src/robomaster`, imported from the pure-Python source of DJI RoboMaster SDK `0.1.1.68`/`ff6646e`. It preserves the official import path and primary public API:
 
-| Backend | Python | Installation |
-| --- | --- | --- |
-| DJI official SDK | 3.8 | Official `robomaster==0.1.1.68` wheel on Linux x86_64 or Windows x86_64 |
-| DJI official SDK | 3.8+ | Pinned official source checkout on macOS or Python 3.9+ |
-| S1 App/Lab SDK | 3.10+ | Pinned community package |
+```python
+from robomaster import robot
 
-DJI published CPython 3.6–3.8 Linux/Windows x86_64 wheels only, with no source distribution or macOS wheel. Hanppie uses Python 3.8 as the common minimum supported by the official release and the modern toolchain. Its PyAV media adapter and Python 3.13+ `audioop` compatibility dependency allow the pinned official source to run on newer Python versions and macOS.
-
-```bash
-# DJI official backend; supported Python 3.8 platforms install the official wheel.
-task sync:official
-
-# macOS and Python 3.9+ also need a pinned official source checkout.
-git clone https://github.com/dji-sdk/RoboMaster-SDK.git ../RoboMaster-SDK
-git -C ../RoboMaster-SDK checkout ff6646e115ab125af3207a4ed3df42cc76c795b2
-export HANPPIE_OFFICIAL_SDK_PATH=../RoboMaster-SDK
-
-# S1 App/Lab-compatible backend (Python 3.10+).
-task sync:lab
+s1 = robot.Robot()
 ```
 
-`uv sync` reproduces the locked environment. The `official` and `lab` extras are declared mutually exclusive so that one backend cannot silently overwrite the other.
+`uv sync` installs both Hanppie and the bundled SDK fork. An official wheel, external SDK checkout, and `HANPPIE_OFFICIAL_SDK_PATH` are no longer needed. The pinned LAB-SDK distribution also installs its own compatibility package named `robomaster`, so `task sync:lab` places it in a separate `.venv-lab` instead of letting it overwrite the bundled fork in the main environment; run Lab commands with `task run:lab -- ...`. Only Python 3.10 is currently included in the test matrix.
 
 ## Command line
 
@@ -90,10 +75,10 @@ Each command provides its own help:
 
 ```bash
 uv run hanppie sdk --help
-uv run hanppie adb-enable --help
+task run:lab -- adb-enable --help
 ```
 
-### Restore the official SDK after a reboot
+### Restore the SDK proxy after a reboot
 
 A reboot removes ADB and all SDK bind mounts. First select the Lab backend and enable ADB:
 
@@ -103,17 +88,15 @@ export S1_APPID="your-8-character-appid"
 export S1_SERIAL="your-s1-serial"
 
 task sync:lab
-uv run hanppie adb-enable \
+task run:lab -- adb-enable \
   --robot-ip "$S1_IP" \
   --appid "$S1_APPID" \
   --settle-seconds 8
 ```
 
-After confirming `adb devices -l`, select the official backend and enable the audited community patch:
+After confirming `adb devices -l`, enable the audited community patch directly:
 
 ```bash
-task sync:official
-export HANPPIE_OFFICIAL_SDK_PATH=../RoboMaster-SDK
 uv run hanppie sdk \
   --target "$S1_IP:5555" \
   enable \
@@ -137,18 +120,20 @@ uv run hanppie sdk \
 ## Package layout
 
 ```text
-src/hanppie/
-├── cli.py              # unified CLI
-├── sdk_patch.py        # ADB and temporary SDK-service management
-├── adb_bootstrap.py    # App/Lab ADB bootstrap
-├── media_codec.py      # DJI media-interface adapter for macOS
-├── probes/             # safe, single-purpose physical-device probes
-├── payloads/           # minimal temporary payloads uploaded to the S1
-├── runtime/            # recovered S1 Lab/DUSS runtime
-└── resources/          # non-executable device-configuration references
+src/
+├── hanppie/
+│   ├── cli.py              # unified CLI
+│   ├── sdk_patch.py        # ADB and temporary SDK-service management
+│   ├── adb_bootstrap.py    # App/Lab ADB bootstrap
+│   ├── media_codec.py      # PyAV media-interface adapter
+│   ├── probes/             # safe, single-purpose physical-device probes
+│   ├── payloads/           # minimal temporary payloads uploaded to the S1
+│   ├── runtime/            # recovered S1 Lab/DUSS runtime
+│   └── resources/          # non-executable device-configuration references
+└── robomaster/             # bundled S1 SDK fork preserving DJI's API
 ```
 
-`runtime` exists for protocol research and offline testing. Host-side control should enter through the `hanppie` CLI and must not rely on the historical flat import layout.
+`src/robomaster` preserves official imports such as `from robomaster import robot` and is maintained API by API for S1. `runtime` is a recovered reference for on-device code. Regular host-side control should still enter through the `hanppie` CLI.
 
 ## Development toolchain
 
@@ -171,10 +156,10 @@ Read [`CONTRIBUTING.md`](./CONTRIBUTING.md) before contributing. Architecture or
 
 - verify low-speed chassis and small-angle gimbal motion with the wheels lifted;
 - implement a gamepad-control daemon with dead-man control, a 250 ms watchdog, and speed limits;
-- combine App/Lab video and official-SDK control behind a capability adapter;
+- combine App/Lab video and bundled-SDK control behind a capability adapter;
 - expose ROS 2 `cmd_vel`, camera, and verified telemetry safely;
 - build a reproducible verification matrix for different S1 firmware versions.
 
 ## License
 
-Hanppie's host-side code uses the [MIT License](./LICENSE). Recovered device runtime, the optional DJI SDK, and the community backend remain subject to their respective provenance and terms; see [`NOTICE.md`](./NOTICE.md).
+Hanppie's own host-side code uses the [MIT License](./LICENSE). The DJI-derived code under `src/robomaster` uses the Apache License 2.0. Recovered device runtime and the community backend remain subject to their respective provenance and terms; see [`NOTICE.md`](./NOTICE.md).

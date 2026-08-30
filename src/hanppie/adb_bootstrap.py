@@ -5,12 +5,8 @@ from __future__ import annotations
 
 import argparse
 import time
+from importlib.resources import files
 from pathlib import Path
-
-try:
-    from importlib.resources import files
-except ImportError:  # pragma: no cover - exercised by the Python 3.8 CI job
-    from importlib_resources import files
 
 from robomaster_lab_sdk.program import (
     build_lab_bridge_dsp,

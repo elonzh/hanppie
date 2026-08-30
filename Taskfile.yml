@@ -13,15 +13,18 @@ tasks:
     cmds:
       - uv sync
 
-  sync:official:
-    desc: Install host dependencies for a local DJI official SDK checkout
-    cmds:
-      - uv sync --extra official --extra media
-
   sync:lab:
-    desc: Select the S1 App/Lab-compatible backend
+    desc: Install the S1 App/Lab backend into its isolated environment
     cmds:
-      - uv sync --extra lab
+      - UV_PROJECT_ENVIRONMENT=.venv-lab uv sync --group lab
+
+  run:lab:
+    desc: Run a Hanppie command in the isolated App/Lab environment
+    preconditions:
+      - sh: test -x .venv-lab/bin/hanppie
+        msg: Run `task sync:lab` first
+    cmds:
+      - .venv-lab/bin/hanppie {{.CLI_ARGS}}
 
   format:
     desc: Format Python and apply safe lint fixes

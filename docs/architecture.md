@@ -1,7 +1,7 @@
 # RoboMaster S1 与 Hanppie 技术架构
 
 > 文档性质：Hanppie 的长期技术事实源，不使用日期文件名。<br>
-> 当前版本：1.2<br>
+> 当前版本：1.3<br>
 > 最后更新：2026-08-30<br>
 > 已验证固件：RoboMaster S1 `00.06.0521`
 
@@ -422,6 +422,7 @@ Hanppie 不替换整套 S1 固件，而是在保留原机控制器、相机、�
 | 项目增量 | 发生位置 | 对原机做了什么 | 持久性/恢复方式 |
 | --- | --- | --- | --- |
 | 固定的 App/Lab 主机后端 | 电脑 | 实现 AppID、outer session 和 Lab 生命周期 | 不修改固件 |
+| `src/robomaster` SDK fork | Git 仓库与电脑 | 内置官方 `0.1.1.68`/`ff6646e` 的纯 Python 源码，保持 `robomaster` 导入路径并针对 S1 维护 | 随 Hanppie 安装；不修改 S1；Apache-2.0 |
 | Hanppie Lab Bridge DSP | `/data/ftp/python/python_raw.dsp` | 上传白名单 JSON 控制与遥测程序 | 文件写入 `/data`；可停止或覆盖，不等于开机自启 |
 | ADB 启动载荷 | Lab 用户程序 | 调用原机 `adb_en.sh` 并重启 `adbd` | 运行态变化；重启后关闭 |
 | SDK 补丁暂存 | `/data/s1_sdk_test/` | 保存固定哈希的路由配置和 `dji_hdvt_uav` 补丁 | 文件可持续存在；删除目录可清理 |
@@ -440,7 +441,7 @@ flowchart LR
         CLI["CLI / probes"]
         LABHOST["App/Lab 主机后端"]
         PATCHCTL["SDK 补丁控制器"]
-        OFFICIAL["DJI 官方 Python SDK"]
+        OFFICIAL["内置 robomaster SDK fork"]
         CODEC["PyAV 媒体兼容层"]
     end
 
@@ -470,7 +471,7 @@ flowchart LR
     OFFICIAL --> CODEC
 ```
 
-项目当前采用混合后端：官方 SDK 路径提供已验证的控制命令和部分有效遥测；App/Lab 路径提供 S1 原生程序机制、已验证的 720p 视频和 S1 特有入口。两条路径的能力和失败模式不相同，不能把它们抽象成“同一个端口上的同一协议”。
+项目当前采用混合后端：内置 SDK fork 通过临时开放的 SDK proxy 提供已验证的控制命令和部分有效遥测；App/Lab 路径提供 S1 原生程序机制、已验证的 720p 视频和 S1 特有入口。两条路径的能力和失败模式不相同，不能把它们抽象成“同一个端口上的同一协议”。
 
 ### 7.4 包边界
 
@@ -484,22 +485,23 @@ flowchart LR
 | `payloads/` | 临时上传到 S1 的最小机内载荷 |
 | `runtime/` | 恢复的 S1 Lab/DUSS 运行时参考；不作为桌面 SDK 重构 |
 | `resources/` | 原机配置和非执行参考资源 |
+| `src/robomaster/` | 从 DJI SDK 固定提交导入的纯 Python fork；保留官方 API，由 Hanppie 针对 S1 维护 |
 
-### 7.5 后端隔离与 Python 边界
+### 7.5 SDK 打包与 Python 边界
 
-官方 SDK 和 App/Lab SDK 的 Python 包存在命名冲突，不能在同一个环境中可靠共存。项目通过 uv extras 和冲突声明显式切换：
+Hanppie 的单个 wheel 同时包含 `hanppie` 和 `robomaster` 两个顶层包。`uv_build` 显式配置两个 module，因而不再安装 DJI 的 `robomaster` wheel，也不再通过 `HANPPIE_OFFICIAL_SDK_PATH` 注入外部 checkout。官方示例仍可保持：
 
-- `task sync:lab`：安装固定提交的 App/Lab 后端；
-- `task sync:official`：安装官方 SDK 的主机依赖和媒体兼容依赖；
-- macOS 或 Python 3.9+ 通过 `HANPPIE_OFFICIAL_SDK_PATH` 加载固定提交的官方源码；
-- Python 3.8 的 Linux/Windows x86_64 可以直接使用 DJI 官方 wheel。
+```python
+from robomaster import robot
+```
+
+基础 `uv sync` 安装内置 SDK fork。固定提交的 LAB-SDK 虽然提供 `robomaster_lab_sdk` 导入空间，但其发布物也会安装一套同名 `robomaster` 兼容包，上游明确要求不要与另一套 `robomaster` 安装在同一虚拟环境。因此 `task sync:lab` 将它同步到独立的 `.venv-lab`，Lab 命令通过 `task run:lab -- ...` 执行；主 `.venv` 始终解析到本仓库的 `src/robomaster`。这种隔离是包安装边界，不表示两条协议链路不能由更上层进程编排。
 
 | 运行位置 | 当前约束 | 原因 |
 | --- | --- | --- |
 | S1 机内 Lab 程序 | 固定机内解释器和 DJI 模块；项目载荷保持 Python 3.6 语法兼容 | 固件环境不可随主机升级；精确解释器版本仍待记录 |
-| 电脑上的 Hanppie 核心 | Python 3.8+ | 项目自身工具链选择 |
-| 电脑上的 LAB-SDK | Python 3.10+ | 固定上游 Host SDK 的声明和依赖 |
-| 电脑上的 DJI 官方 SDK | 官方 wheel 只覆盖部分旧 Python/平台；固定源码可经兼容层运行于更新版本 | 官方发行物和依赖约束 |
+| 电脑上的 Hanppie 与内置 SDK fork | Python 3.10 | 当前唯一开发、CI 和发布验证基线；暂不建立更高版本矩阵 |
+| 电脑上的 LAB-SDK | Python 3.10 | 固定上游 Host SDK 的下限与当前项目基线一致 |
 | 非 Python 客户端 | 无 Python 约束 | 需要自行实现 App outer、SDK proxy 或机内 DUSS 客户端及生命周期 |
 
 所以不是“只有 Lab Python 才有兼容性要求”，而是每个 Python 实现分别受其运行环境约束；这些约束都不属于 DUSS 协议本身。
@@ -550,14 +552,14 @@ stateDiagram-v2
 
 项目没有向固件增加 `adbd`；它只利用原机已有但正常启动后未开放的组件。Lab Python 在测试设备上以 root 身份运行；`os.system()` 在该环境失败，而模块顶层的 `subprocess.Popen` 可执行系统命令。**实测**
 
-### 7.8 临时官方 SDK 路径
+### 7.8 临时开放 SDK proxy
 
 ```mermaid
 sequenceDiagram
     participant H as Hanppie
     participant A as root ADB
     participant S as DJI Services
-    participant O as 官方 Python SDK
+    participant O as 内置 robomaster SDK fork
     participant D as DUSS/机器人模块
 
     H->>A: 检查 root、原厂哈希和挂载状态
@@ -576,7 +578,7 @@ sequenceDiagram
 
 ### 7.9 媒体兼容与混合后端
 
-官方 SDK 的相机启动请求在数据传输前被 S1 拒绝，因此不能用“电脑端缺少解码库”解释该失败。项目继续使用原生 App/Lab 媒体路径取得已验证的 720p 视频。**实测**
+内置 SDK fork 的相机启动请求在数据传输前被 S1 拒绝，因此不能用“电脑端缺少解码库”解释该失败。项目继续使用原生 App/Lab 媒体路径取得已验证的 720p 视频。**实测**
 
 [`media_codec.py`](../src/hanppie/media_codec.py) 用 PyAV 提供官方 SDK 所期望的 `libmedia_codec` 接口，解决 macOS 上缺少 DJI 原生扩展的问题；它只解决主机解码兼容性，不会让机器人接受不支持的相机命令。**代码/实测**
 
@@ -584,7 +586,7 @@ sequenceDiagram
 
 每个 `probe-*` 命令只回答一个问题，例如“能否握手”“是否有遥测”“能否取得视频帧”。探针默认不发送机械运动或发射指令，显式要求目标参数，打印机器可读结果，并在 `finally` 中退订、停流和关闭连接。
 
-Hanppie 自行维护的主机代码由 Ruff、pytest、coverage 和 prek 检查。恢复的 `runtime` 保留原始结构，只进行必要的包导入调整；其协议关键路径通过 CRC 和消息往返测试覆盖。构建使用 uv 的锁文件生成 sdist 和 wheel。
+Hanppie 自行维护的主机代码由 Ruff、pytest、coverage 和 prek 检查。恢复的 `runtime` 与从 Apache-2.0 上游导入的 `src/robomaster` 保留接近来源的结构，不做无关格式化；前者覆盖 CRC 和消息往返，后者覆盖官方导入 API、版本、媒体 fallback、许可证和 wheel 内容。构建使用 uv 的锁文件生成同时包含两个顶层包的 sdist 和 wheel。
 
 ### 7.11 当前能力矩阵
 
@@ -598,19 +600,19 @@ Hanppie 自行维护的主机代码由 Ruff、pytest、coverage 和 prek 检查�
 | 720p 视频 | Lab | **实测通过** | `1280×720 yuv420p` |
 | Lab 电量 | Lab | **不支持/未知** | 当前返回 `None` |
 | root ADB | Lab + payload | **实测通过** | USB/TCP，重启关闭 |
-| 官方低层握手 | 官方 + 临时补丁 | **实测通过** | 原厂状态失败符合预期 |
-| `Robot.initialize()` | 官方 + 临时补丁 | **实测通过** | Python 3.8 与 3.14 |
-| 固件/序列号/模式 | 官方 | **实测通过** | 身份数据有效 |
-| 云台角度订阅 | 官方 | **实测通过** | 非零真实值 |
-| LED | 官方 | **物理实测通过** | 亮绿和关闭 |
-| 电量/IMU/ESC/底盘姿态 | 官方 | **回调但不可信** | 持续回传零 |
-| 位置/速度 | 官方 | **待运动交叉验证** | 静止时为零 |
-| 官方相机 | 官方 | **S1 拒绝** | 使用 Lab 视频替代 |
-| 底盘运动 | 官方/S.BUS | **待安全实测** | 必须先完成 watchdog |
-| 云台运动 | 官方/S.BUS | **待安全实测** | 先做小角度闭环 |
-| 装甲/红外事件 | 官方/Lab | **待验证** | 代码存在 |
-| 扬声器/视觉识别 | 官方/Lab | **待验证** | 代码存在 |
-| 发射器 | 官方/Lab | **默认禁用** | 不进入普通控制路径 |
+| SDK 低层握手 | 内置 SDK + 临时补丁 | **实测通过** | 原厂状态失败符合预期 |
+| `Robot.initialize()` | 内置 SDK + 临时补丁 | **实测通过** | 导入的同一上游提交已完成真机验证 |
+| 固件/序列号/模式 | 内置 SDK | **实测通过** | 身份数据有效 |
+| 云台角度订阅 | 内置 SDK | **实测通过** | 非零真实值 |
+| LED | 内置 SDK | **物理实测通过** | 亮绿和关闭 |
+| 电量/IMU/ESC/底盘姿态 | 内置 SDK | **回调但不可信** | 持续回传零 |
+| 位置/速度 | 内置 SDK | **待运动交叉验证** | 静止时为零 |
+| SDK 相机 | 内置 SDK | **S1 拒绝** | 使用 Lab 视频替代 |
+| 底盘运动 | 内置 SDK/S.BUS | **待安全实测** | 必须先完成 watchdog |
+| 云台运动 | 内置 SDK/S.BUS | **待安全实测** | 先做小角度闭环 |
+| 装甲/红外事件 | 内置 SDK/Lab | **待验证** | 代码存在 |
+| 扬声器/视觉识别 | 内置 SDK/Lab | **待验证** | 代码存在 |
+| 发射器 | 内置 SDK/Lab | **默认禁用** | 不进入普通控制路径 |
 
 ### 7.12 远程控制目标架构
 
@@ -627,7 +629,7 @@ flowchart LR
     LIMIT["死区 / 曲线 / 限速"]
     WATCHDOG["250 ms watchdog"]
     ADAPTER["Capability Adapter"]
-    CTRL["官方 SDK 控制"]
+    CTRL["内置 SDK 控制"]
     VIDEO["Lab 视频"]
     S1["S1"]
 
@@ -717,6 +719,7 @@ flowchart LR
 
 | 日期 | 版本 | 变化 |
 | --- | --- | --- |
+| 2026-08-30 | 1.3 | 将固定 DJI Python SDK 源码内置为 `src/robomaster`，统一 Python 3.10 基线，移除外部 checkout/官方 wheel 依赖，并隔离会安装同名包的 LAB-SDK 环境 |
 | 2026-08-30 | 1.2 | 将 S1 原生事实、外部生态和 Hanppie 项目实现分层，集中记录项目改动、生命周期和恢复边界 |
 | 2026-08-30 | 1.1 | 补充系统/启动服务/关键文件清单，明确 DUSS 的能力边界，并还原 App/Lab 分层协议和程序生命周期 |
 | 2026-08-30 | 1.0 | 基于固件 `00.06.0521` 的两轮实测、恢复代码和固定上游 SDK，建立长期架构基线 |

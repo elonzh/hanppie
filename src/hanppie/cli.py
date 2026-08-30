@@ -4,21 +4,19 @@ from __future__ import annotations
 
 import argparse
 import importlib
-import os
 import sys
 from collections.abc import Sequence
-from pathlib import Path
 
 from hanppie import __version__
 
 COMMANDS = {
     "sdk": ("hanppie.sdk_patch", "base"),
     "adb-enable": ("hanppie.adb_bootstrap", "lab"),
-    "probe-official": ("hanppie.probes.official_info", "official"),
-    "probe-connection": ("hanppie.probes.official_connection", "official"),
-    "probe-telemetry": ("hanppie.probes.official_telemetry", "official"),
-    "probe-led": ("hanppie.probes.official_led", "official"),
-    "probe-camera": ("hanppie.probes.official_camera", "official"),
+    "probe-official": ("hanppie.probes.official_info", "base"),
+    "probe-connection": ("hanppie.probes.official_connection", "base"),
+    "probe-telemetry": ("hanppie.probes.official_telemetry", "base"),
+    "probe-led": ("hanppie.probes.official_led", "base"),
+    "probe-camera": ("hanppie.probes.official_camera", "base"),
     "probe-lab": ("hanppie.probes.lab_bridge", "lab"),
     "probe-video": ("hanppie.probes.lab_video", "lab"),
 }
@@ -35,24 +33,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _dependency_hint(extra: str) -> str:
-    if extra == "official":
-        return (
-            "task sync:official, then set HANPPIE_OFFICIAL_SDK_PATH to a pinned "
-            "DJI RoboMaster-SDK checkout"
-        )
     if extra == "lab":
-        return "uv sync --extra lab"
-    return "uv sync"
-
-
-def _add_official_sdk_path() -> None:
-    checkout = os.environ.get("HANPPIE_OFFICIAL_SDK_PATH")
-    if not checkout:
-        return
-    root = Path(checkout).expanduser().resolve()
-    source = root / "src" if (root / "src" / "robomaster").is_dir() else root
-    if str(source) not in sys.path:
-        sys.path.insert(0, str(source))
+        return "run `task sync:lab`, then use `task run:lab -- <command> ...`"
+    return "run `uv sync`"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -64,15 +47,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if command not in COMMANDS:
         parser.error(f"unknown command: {command}")
     module_name, extra = COMMANDS[command]
-    if extra == "official":
-        _add_official_sdk_path()
     try:
         module = importlib.import_module(module_name)
     except ModuleNotFoundError as exc:
         if exc.name in {"audioop", "robomaster", "robomaster_lab_sdk", "av", "cv2"}:
             parser.error(
                 f"command {command!r} needs optional dependencies; "
-                f"run `{_dependency_hint(extra)}` first ({exc})"
+                f"{_dependency_hint(extra)} ({exc})"
             )
         raise
     try:
