@@ -173,6 +173,129 @@ class FakeAudio:
         return 2
 
 
+class FakeDirectChassis:
+    def __init__(self, robot) -> None:
+        self.robot = robot
+
+    def drive_speed(
+        self,
+        x: float = 0,
+        y: float = 0,
+        z: float = 0,
+        *,
+        lease_seconds: float,
+    ) -> None:
+        assert self.robot.armed
+        assert lease_seconds > 0
+        self.robot.x += x * lease_seconds
+        self.robot.y += y * lease_seconds
+        self.robot.heading += z * lease_seconds
+
+    def stop(self) -> None:
+        return None
+
+
+class FakeDirectGimbal:
+    def __init__(self, robot) -> None:
+        self.robot = robot
+
+    def drive_speed(
+        self,
+        *,
+        pitch_speed: float = 0,
+        yaw_speed: float = 0,
+        lease_seconds: float,
+    ) -> None:
+        assert self.robot.armed
+        values = list(self.robot.gimbal_values)
+        values[0] += round(pitch_speed * lease_seconds * 10)
+        values[1] += round(yaw_speed * lease_seconds * 10)
+        self.robot.gimbal_values = tuple(values)
+
+    def stop(self) -> None:
+        return None
+
+
+class FakeDirectRobot:
+    instances: list[FakeDirectRobot] = []
+
+    def __init__(self, *, robot_ip: str, appid: str, **_kwargs) -> None:
+        self.robot_ip = robot_ip
+        self.appid = appid
+        self.connected = False
+        self.control_mode = False
+        self.armed = False
+        self.info = AppConnectionInfo(robot_ip, appid, "idle", "00:11:22:33:44:55")
+        self.base = SimpleNamespace(get_battery=lambda: 77)
+        self.camera = FakeCamera()
+        self.audio = FakeAudio()
+        self.chassis = FakeDirectChassis(self)
+        self.gimbal = FakeDirectGimbal(self)
+        self.sequence = 100
+        self.x = 0.0
+        self.y = 0.0
+        self.heading = 0.0
+        self.gimbal_values = (0, 0, 0, 0)
+        self.instances.append(self)
+
+    def initialize(self, **_kwargs) -> bool:
+        self.connected = True
+        return True
+
+    def enter_control_mode(self) -> tuple[int, ...]:
+        self.control_mode = True
+        return (self._next_sequence(),)
+
+    def arm(self) -> None:
+        assert self.control_mode
+        self.armed = True
+
+    def disarm(self) -> None:
+        self.armed = False
+
+    def wait_for_odometry(self, **_kwargs):
+        return SimpleNamespace(
+            received_at=1.0,
+            sequence=self._next_sequence(),
+            battery_percent=77,
+            heading_like=self.heading,
+            values=(self.x, self.y, 0.0, 0.0, 0.0),
+            x=self.x,
+            y=self.y,
+            raw_motion_values=(0.0, 0.0, 0.0),
+        )
+
+    def wait_for_gimbal(self, **_kwargs):
+        return SimpleNamespace(
+            received_at=1.0,
+            sequence=self._next_sequence(),
+            values=self.gimbal_values,
+            flag=0,
+        )
+
+    def set_led(self, **_values):
+        return SimpleNamespace(sequence=self._next_sequence(), accepted=True)
+
+    def set_muzzle_led(self, **_values):
+        return SimpleNamespace(sequence=self._next_sequence(), accepted=True)
+
+    def play_sound(self, _sound_id: int):
+        return SimpleNamespace(sequence=self._next_sequence(), accepted=True)
+
+    def fire_infrared(self, *, lease_seconds: float) -> None:
+        assert self.armed
+        assert lease_seconds > 0
+
+    def close(self) -> None:
+        self.connected = False
+        self.control_mode = False
+        self.armed = False
+
+    def _next_sequence(self) -> int:
+        self.sequence += 1
+        return self.sequence
+
+
 class FakeBridge:
     def __init__(self) -> None:
         self.worker_threads = {"rx": None, "motion": None}
@@ -292,6 +415,18 @@ class FakeRobot:
 
 
 class FakeDeviceSession(DeviceSession):
+    def verify_direct_loss_stop(self):
+        self.close_robot()
+        return {
+            "child_exitcode": -15,
+            "pre_loss_observed_displacement_m": 0.02,
+            "post_loss_observation_seconds": 1.5,
+            "passive_post_loss_samples": 1,
+            "post_loss_displacement_m": 0.001,
+            "maximum_allowed_post_loss_displacement_m": 0.05,
+            "loss_stop_within_bound_observed": True,
+        }
+
     def run_command(self, command, *, check=True, timeout=15.0):
         del timeout
         arguments = list(command)
@@ -350,6 +485,7 @@ def all_config(tmp_path: Path) -> DiagnosisConfig:
 
 def test_runner_executes_complete_diagnosis_and_cleans_up(tmp_path: Path) -> None:
     FakeRobot.instances.clear()
+    FakeDirectRobot.instances.clear()
     config = all_config(tmp_path)
     recorder = DiagnosisRecorder(tmp_path, now=datetime(2026, 8, 30, tzinfo=timezone.utc))
     discovered = RobotBroadcast("192.0.2.10", "00:11:22:33:44:55", "b6359877", False)
@@ -358,6 +494,7 @@ def test_runner_executes_complete_diagnosis_and_cleans_up(tmp_path: Path) -> Non
         recorder,
         console=Console(file=None, quiet=True),
         robot_factory=FakeRobot,  # type: ignore[arg-type]
+        direct_factory=FakeDirectRobot,  # type: ignore[arg-type]
         sleep=lambda _seconds: None,
         discover=lambda _timeout: [discovered],
         session_type=FakeDeviceSession,
@@ -366,7 +503,7 @@ def test_runner_executes_complete_diagnosis_and_cleans_up(tmp_path: Path) -> Non
     status, results = runner.run()
 
     assert status == 0
-    assert [result.status for result in results] == ["PASS"] * 15
+    assert [result.status for result in results] == ["PASS"] * 17
     by_name = {result.name: result for result in results}
     assert len(by_name["led"].evidence["colors"]) == 4
     assert [sound["sound_id"] for sound in by_name["speaker"].evidence["sounds"]] == [
@@ -375,8 +512,9 @@ def test_runner_executes_complete_diagnosis_and_cleans_up(tmp_path: Path) -> Non
     ]
     assert by_name["speaker"].evidence["host_pcm"]["transfer_packets"] == 2
     assert by_name["microphone"].evidence["format"] == "48 kHz mono signed 16-bit PCM"
-    assert by_name["muzzle"].evidence["sequence"][-1] == "set_fire_led:off"
+    assert by_name["muzzle"].evidence["sequence"][-1] == "fire:off"
     assert len(by_name["chassis"].evidence["steps"]) == 6
+    assert by_name["failsafe"].evidence["loss_stop_within_bound_observed"] is True
     assert len(by_name["gimbal"].evidence["steps"]) == 4
     assert by_name["gel"].evidence["count"] == 1
     assert by_name["cleanup"].evidence["adb_tcp_5555_closed"]
@@ -387,6 +525,7 @@ def test_runner_executes_complete_diagnosis_and_cleans_up(tmp_path: Path) -> Non
     assert "192.0.2.10" in report + log
     assert "b6359877" in report + log
     assert all(not robot.connected for robot in FakeRobot.instances)
+    assert all(not robot.connected for robot in FakeDirectRobot.instances)
 
 
 def test_pcm_level_detects_requested_tone_frequency() -> None:
@@ -415,6 +554,7 @@ def test_runner_records_failure_and_still_cleans_up(tmp_path: Path) -> None:
         recorder,
         console=Console(file=None, quiet=True),
         robot_factory=broken_factory,
+        direct_factory=broken_factory,
         sleep=lambda _seconds: None,
     )
 

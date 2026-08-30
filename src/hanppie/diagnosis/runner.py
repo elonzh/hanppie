@@ -21,6 +21,7 @@ from hanppie.diagnosis.model import (
 )
 from hanppie.diagnosis.recorder import DiagnosisRecorder
 from hanppie.diagnosis.session import DeviceSession
+from hanppie.lab.direct import DirectRobot
 from hanppie.lab.protocol import RobotBroadcast
 from hanppie.lab.robot import LabRobot
 
@@ -33,6 +34,7 @@ class DiagnosisRunner:
         *,
         console: Console | None = None,
         robot_factory: Callable[..., LabRobot] = LabRobot,
+        direct_factory: Callable[..., DirectRobot] = DirectRobot,
         sleep: Callable[[float], None] = time.sleep,
         discover: Callable[[float], list[RobotBroadcast]] = discover_robots,
         session_type: type[DeviceSession] = DeviceSession,
@@ -44,6 +46,7 @@ class DiagnosisRunner:
             config,
             recorder,
             robot_factory=robot_factory,
+            direct_factory=direct_factory,
             sleep=sleep,
             discover=discover,
         )

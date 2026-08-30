@@ -19,6 +19,7 @@ class DiagnosisCheck:
 CHECKS = (
     DiagnosisCheck("discovery", "设备发现", "监听并解析 S1 App 广播"),
     DiagnosisCheck("app", "App 会话", "建立 App 会话并检查基础状态"),
+    DiagnosisCheck("direct", "原生直控", "进入原生控制模式并验证 DUSS 遥测"),
     DiagnosisCheck("video", "相机视频", "拉取并解码一帧 720p H.264 视频"),
     DiagnosisCheck("microphone", "机身麦克风", "接收并解码 S1 的 Opus 麦克风流", "auditory"),
     DiagnosisCheck("speaker", "扬声器", "播放 Host PCM、音阶和射击音效", "auditory"),
@@ -32,9 +33,15 @@ CHECKS = (
         "motion",
     ),
     DiagnosisCheck(
+        "failsafe",
+        "失联停止",
+        "低速运动时强制终止主机进程并测量失联后的位移上界",
+        "motion",
+    ),
+    DiagnosisCheck(
         "gimbal",
         "云台运动",
-        "依次测试俯仰正负方向、偏航正负方向并回中",
+        "依次测试俯仰正负方向、偏航正负方向并停止",
         "motion",
     ),
     DiagnosisCheck("infrared", "红外发射", "发射一次红外信号", "infrared"),
@@ -46,6 +53,7 @@ CHECK_BY_NAME = {check.name: check for check in CHECKS}
 DEFAULT_CHECKS = (
     "discovery",
     "app",
+    "direct",
     "video",
     "microphone",
     "speaker",
@@ -103,7 +111,7 @@ def validate_safety(config: DiagnosisConfig) -> None:
 
     selected = set(config.checks)
     errors: list[str] = []
-    if selected.intersection({"chassis", "gimbal"}) and not config.allow_motion:
+    if selected.intersection({"chassis", "failsafe", "gimbal"}) and not config.allow_motion:
         errors.append("底盘/云台诊断需要 --allow-motion")
     if "infrared" in selected and not config.allow_infrared:
         errors.append("红外诊断需要 --allow-infrared")

@@ -13,6 +13,7 @@ from typing import Any
 from hanppie.diagnosis.discovery import discover_robots
 from hanppie.diagnosis.model import DiagnosisConfig
 from hanppie.diagnosis.recorder import DiagnosisRecorder
+from hanppie.lab.direct import DirectRobot
 from hanppie.lab.program import build_lab_program
 from hanppie.lab.protocol import RobotBroadcast
 from hanppie.lab.robot import LabRobot
@@ -27,17 +28,20 @@ class DeviceSession:
         recorder: DiagnosisRecorder,
         *,
         robot_factory: Callable[..., LabRobot] = LabRobot,
+        direct_factory: Callable[..., DirectRobot] = DirectRobot,
         sleep: Callable[[float], None] = time.sleep,
         discover: Callable[[float], list[RobotBroadcast]] = discover_robots,
     ) -> None:
         self.config = config
         self.recorder = recorder
         self.robot_factory = robot_factory
+        self.direct_factory = direct_factory
         self.sleep = sleep
         self.discover = discover
         self.robot_ip = config.robot_ip
         self.appid = config.appid
         self.robot: LabRobot | None = None
+        self.direct_robot: DirectRobot | None = None
         self.lab_ready = False
         self.adb_target = ""
         self.adb_enabled = False
@@ -54,26 +58,47 @@ class DeviceSession:
             self.appid = selected.appid
         return selected
 
-    def ensure_app(self) -> LabRobot:
-        if self.robot is not None and self.robot.connected:
-            return self.robot
+    def ensure_app(self) -> DirectRobot:
+        return self.ensure_direct(control_mode=False)
+
+    def ensure_direct(self, *, control_mode: bool) -> DirectRobot:
+        if self.direct_robot is not None and self.direct_robot.connected:
+            if control_mode:
+                self.direct_robot.enter_control_mode()
+            return self.direct_robot
         self._ensure_identity()
+        self._close_lab_robot()
         assert self.robot_ip is not None and self.appid is not None
-        self.robot = self.robot_factory(
+        self.direct_robot = self.direct_factory(
             robot_ip=self.robot_ip,
             appid=self.appid,
             debug=self.config.debug,
         )
-        if not self.robot.initialize(
+        if not self.direct_robot.initialize(
             conn_type="sta", proto_type="udp", timeout=self.config.timeout
         ):
             raise RuntimeError("S1 App 连接初始化失败")
-        return self.robot
+        if control_mode:
+            self.direct_robot.enter_control_mode()
+        return self.direct_robot
 
     def ensure_lab(self) -> LabRobot:
-        robot = self.ensure_app()
-        if self.lab_ready:
-            return robot
+        if self.robot is not None and self.robot.connected:
+            if self.lab_ready:
+                return self.robot
+            robot = self.robot
+        else:
+            self._ensure_identity()
+            self._close_direct_robot()
+            assert self.robot_ip is not None and self.appid is not None
+            robot = self.robot_factory(
+                robot_ip=self.robot_ip,
+                appid=self.appid,
+                debug=self.config.debug,
+            )
+            if not robot.initialize(conn_type="sta", proto_type="udp", timeout=self.config.timeout):
+                raise RuntimeError("S1 App 连接初始化失败")
+            self.robot = robot
         robot.enter_lab()
         digest = robot.upload_lab_bridge()
         robot.start_lab_program(digest)
@@ -121,6 +146,28 @@ class DeviceSession:
         identity_text = self.adb_shell("id")
         self.adb_ready = True
         return identity_text
+
+    def verify_direct_loss_stop(self) -> dict[str, Any]:
+        """Run the abnormal host-exit probe outside the active App session."""
+
+        from hanppie.diagnosis.failsafe import verify_direct_loss_stop
+
+        self._ensure_identity()
+        self.close_robot()
+        assert self.robot_ip is not None and self.appid is not None
+        completed = False
+        try:
+            evidence = verify_direct_loss_stop(
+                robot_ip=self.robot_ip,
+                appid=self.appid,
+                timeout=self.config.timeout,
+            )
+            completed = True
+            return evidence
+        finally:
+            if not completed:
+                robot = self.ensure_direct(control_mode=True)
+                robot.disarm()
 
     def telemetry(self) -> dict[str, Any]:
         if self.robot is None or self.robot.bridge.last_telemetry is None:
@@ -180,13 +227,39 @@ class DeviceSession:
         return result
 
     def close_robot(self) -> dict[str, Any]:
-        """Stop active output, return the gimbal to center, and close App/Lab."""
+        """Stop active output and close both direct and Lab sessions."""
+
+        evidence = self._close_lab_robot()
+        evidence.update(self._close_direct_robot())
+        return evidence
+
+    def _close_direct_robot(self) -> dict[str, Any]:
+        robot = self.direct_robot
+        self.direct_robot = None
+        evidence: dict[str, Any] = {"direct_session_closed": robot is not None}
+        if robot is None:
+            return evidence
+        try:
+            robot.disarm()
+            evidence["motion_stopped"] = True
+            if robot.connected:
+                robot.set_led(component="all", red=0, green=0, blue=0, effect="off")
+                robot.set_muzzle_led(fire=False, enabled=False)
+                robot.set_muzzle_led(fire=True, enabled=False)
+                evidence["led_off"] = True
+                evidence["blaster_led_off"] = True
+        finally:
+            robot.close()
+        return evidence
+
+    def _close_lab_robot(self) -> dict[str, Any]:
+        """Stop active Lab output, return the gimbal to center, and close it."""
 
         robot = self.robot
         self.robot = None
         lab_ready = self.lab_ready
         self.lab_ready = False
-        evidence: dict[str, Any] = {"robot_session_closed": robot is not None}
+        evidence: dict[str, Any] = {"lab_session_closed": robot is not None}
         if robot is None:
             return evidence
         try:

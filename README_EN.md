@@ -18,7 +18,7 @@ Each document has one responsibility so that a conclusion is never maintained in
 | --- | --- |
 | [Technical architecture](./docs/architecture.md) (Chinese) | The only source of truth for current hardware/software architecture, protocols, capability status, Hanppie mechanisms, and safety boundaries |
 | README | Installation, command usage, and navigation |
-| [Initial recovery log](./docs/s1-live-debug-2026-08-29.md), [App/Lab regression log](./docs/s1-live-regression-2026-08-30.md) | Commands, output, failures, and measurements from a dated run; never the current conclusion |
+| [Initial recovery log](./docs/s1-live-debug-2026-08-29.md), [App/Lab regression log](./docs/s1-live-regression-2026-08-30.md), [AppEnvelope direct-control log](./docs/s1-direct-control-2026-08-31.md) | Commands, output, failures, and measurements from a dated run; never the current conclusion |
 | [Early research report](./docs/robomaster-s1-revival-report.md) | Historical research into S.BUS, SocketCAN, vcan, ROS 2, and alternative approaches |
 | [`src/robomaster/UPSTREAM.md`](./src/robomaster/UPSTREAM.md) | Provenance and maintenance boundary of the bundled DJI SDK fork |
 
@@ -56,7 +56,7 @@ uv run hanppie diag --list
 # Select checks interactively and confirm motion, infrared, and gel firing separately
 uv run hanppie diag --interactive
 
-# Standard non-mechanical diagnosis: discovery, App, video, microphone, speaker, Lab, armor LEDs, muzzle LEDs, ADB, system
+# Standard non-mechanical diagnosis: discovery, App, native direct telemetry, media, Lab, lights, ADB, system
 uv run hanppie diag --no-interactive
 
 # Complete non-interactive regression; each hazardous class requires an explicit gate
@@ -73,6 +73,32 @@ uv run hanppie diag \
 The complete check order, evidence levels, and cleanup mechanism are maintained only in the [architecture diagnosis section](./docs/architecture.md#710-cli完整诊断与质量边界). Motion, infrared, and gel firing require three independent explicit gates.
 
 Output defaults to `.hanppie/diagnosis/<timestamp>/report.md` and `events.jsonl`. The directory is ignored by Git, and its files are evidence for that run only. Architecture conclusions remain in the architecture document. Selecting `adb` or `system` temporarily exposes root ADB; cleanup always reboots the robot and confirms that TCP 5555 has closed. There is no compatibility option to skip this cleanup.
+
+## Direct Python control
+
+`DirectRobot` uses the S1 App data session directly. It neither uploads a Lab program nor calls the bundled official SDK fork. Mechanical commands require explicit control mode, arming, and a short lease:
+
+```python
+import time
+
+from hanppie.lab import DirectRobot
+
+robot = DirectRobot(robot_ip="192.168.1.100", appid="0123abcd")
+try:
+    robot.initialize()
+    robot.enter_control_mode()
+    robot.set_led(red=0, green=255, blue=0)
+
+    # Permit mechanical movement only in a clear, controlled area.
+    robot.arm()
+    robot.chassis.drive_speed(x=0.1, lease_seconds=0.25)
+    time.sleep(0.4)
+finally:
+    robot.disarm()
+    robot.close()
+```
+
+The current API, capabilities, and open gaps are maintained only in the [technical architecture](./docs/architecture.md#711-当前能力矩阵). Gamepad, Web, and ROS 2 input layers are not implemented yet and must eventually feed a control arbiter rather than drive actuators directly.
 
 ## Development toolchain
 

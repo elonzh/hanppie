@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 import hanppie.lab.robot as robot_module
+from hanppie.lab import protocol
 from hanppie.lab.app import AppConnection, AppConnectionInfo
 from hanppie.lab.audio import (
     AUDIO_PLAY_PAYLOAD,
@@ -268,6 +269,37 @@ def test_app_connection_callbacks_initialize_and_close(monkeypatch: pytest.Monke
     assert control_socket.closed
     with pytest.raises(RuntimeError, match="not initialized"):
         connection._send(b"packet")
+
+
+def test_app_connection_waits_for_early_ack_and_expires_control_leases() -> None:
+    connection = AppConnection("192.0.2.10", "b6359877")
+    ack = build_duss(0x09, 0x02, 0xC0, 0x3F, 0x33, b"\x00", 123)
+    connection._handle_packet(ack)
+
+    received = connection.wait_for_duss(
+        123,
+        cmdset=0x3F,
+        cmdid=0x33,
+        ack=True,
+        timeout=0,
+    )
+    assert received is not None
+    assert received.payload == b"\x00"
+
+    connection.set_control_payload(b"motion", lease_seconds=1)
+    connection.set_periodic_duss(
+        "gimbal",
+        (2, 4, 0, 4, 0x69, b"moving"),
+        lease_seconds=1,
+    )
+    assert connection._control_deadline is not None
+    active_payload, periodic = connection._control_tick_state(connection._control_deadline - 0.1)
+    assert active_payload == b"motion"
+    assert periodic
+
+    neutral_payload, periodic = connection._control_tick_state(connection._control_deadline + 0.1)
+    assert neutral_payload == protocol.NEUTRAL_CONTROL
+    assert periodic == ()
 
 
 def test_bridge_serializes_commands_and_filters_telemetry_source_and_session() -> None:

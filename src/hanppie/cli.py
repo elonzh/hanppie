@@ -93,7 +93,7 @@ def diag_command(
     ] = 4.0,
     allow_motion: Annotated[
         bool,
-        typer.Option(help="允许底盘六方向和云台四方向低速运动"),
+        typer.Option(help="允许底盘、云台和失联停止的低速运动测试"),
     ] = False,
     allow_infrared: Annotated[
         bool,
@@ -126,7 +126,7 @@ def diag_command(
 
     selected_set = set(selected)
     if use_interactive:
-        if selected_set.intersection({"chassis", "gimbal"}) and not allow_motion:
+        if selected_set.intersection({"chassis", "failsafe", "gimbal"}) and not allow_motion:
             allow_motion = Confirm.ask(
                 "确认机器人位于平整净空地面，允许完整低速运动诊断吗？",
                 default=False,

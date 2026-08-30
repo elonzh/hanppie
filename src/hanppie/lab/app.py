@@ -6,6 +6,7 @@ import select
 import socket
 import threading
 import time
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -56,8 +57,18 @@ class AppConnection:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._tx_lock = threading.RLock()
+        self._state_lock = threading.RLock()
         self._callbacks: dict[str, list[Callable[[object], None]]] = {}
         self._battery: int | None = None
+        self._control_payload = protocol.NEUTRAL_CONTROL
+        self._control_deadline: float | None = None
+        self._periodic_duss: dict[
+            str, tuple[tuple[int, int, int, int, int, bytes], float | None]
+        ] = {}
+        self._mode_keepalive = bytes.fromhex("000300")
+        self._send_sdk_ready = True
+        self._frame_condition = threading.Condition()
+        self._recent_frames: deque[protocol.DussFrame] = deque(maxlen=256)
 
     def on(self, event: str, callback: Callable[[object], None]) -> Callable[[object], None]:
         self._callbacks.setdefault(event, []).append(callback)
@@ -109,6 +120,15 @@ class AppConnection:
         self.socket = None
         self.connected = False
         self.info = AppConnectionInfo(self.robot_ip, self.appid, "disconnected", self.info.mac)
+        with self._state_lock:
+            self._control_payload = protocol.NEUTRAL_CONTROL
+            self._control_deadline = None
+            self._periodic_duss.clear()
+            self._mode_keepalive = bytes.fromhex("000300")
+            self._send_sdk_ready = True
+        with self._frame_condition:
+            self._recent_frames.clear()
+            self._frame_condition.notify_all()
 
     def _claim_appid(self, timeout: float) -> None:
         claim = self.appid.encode("ascii")
@@ -210,6 +230,94 @@ class AppConnection:
         self._send(self.envelope.wrap_control(duss))
         return sequence
 
+    def set_control_payload(self, payload: bytes, *, lease_seconds: float | None = None) -> None:
+        """Set the control-channel payload repeated by the receive loop."""
+
+        if not payload:
+            raise ValueError("control payload must not be empty")
+        if lease_seconds is not None and lease_seconds <= 0:
+            raise ValueError("lease_seconds must be positive")
+        with self._state_lock:
+            self._control_payload = bytes(payload)
+            self._control_deadline = (
+                None if lease_seconds is None else time.monotonic() + lease_seconds
+            )
+
+    def set_periodic_duss(
+        self,
+        name: str,
+        command: tuple[int, int, int, int, int, bytes] | None,
+        *,
+        lease_seconds: float | None = None,
+    ) -> None:
+        """Add, replace, or remove one DUSS command sent with every control tick."""
+
+        if lease_seconds is not None and lease_seconds <= 0:
+            raise ValueError("lease_seconds must be positive")
+        with self._state_lock:
+            if command is None:
+                self._periodic_duss.pop(name, None)
+            else:
+                deadline = None if lease_seconds is None else time.monotonic() + lease_seconds
+                self._periodic_duss[name] = (command, deadline)
+
+    def configure_mode_keepalive(self, payload: bytes, *, send_sdk_ready: bool) -> None:
+        """Configure the one-second App mode keepalive used by the active backend."""
+
+        with self._state_lock:
+            self._mode_keepalive = bytes(payload)
+            self._send_sdk_ready = bool(send_sdk_ready)
+
+    def _control_tick_state(
+        self, now: float
+    ) -> tuple[bytes, tuple[tuple[int, int, int, int, int, bytes], ...]]:
+        """Expire command leases and snapshot one atomic 50 Hz control tick."""
+
+        with self._state_lock:
+            if self._control_deadline is not None and now >= self._control_deadline:
+                self._control_payload = protocol.NEUTRAL_CONTROL
+                self._control_deadline = None
+            expired = [
+                name
+                for name, (_, deadline) in self._periodic_duss.items()
+                if deadline is not None and now >= deadline
+            ]
+            for name in expired:
+                self._periodic_duss.pop(name, None)
+            return self._control_payload, tuple(
+                command for command, _ in self._periodic_duss.values()
+            )
+
+    def wait_for_duss(
+        self,
+        sequence: int,
+        *,
+        cmdset: int | None = None,
+        cmdid: int | None = None,
+        ack: bool | None = None,
+        timeout: float = 1.0,
+    ) -> protocol.DussFrame | None:
+        """Wait for a matching received DUSS frame without losing an early response."""
+
+        def matches(frame: protocol.DussFrame) -> bool:
+            return (
+                frame.sequence == (sequence & 0xFFFF)
+                and (cmdset is None or frame.cmdset == cmdset)
+                and (cmdid is None or frame.cmdid == cmdid)
+                and (ack is None or bool(frame.attr & 0x80) is ack)
+            )
+
+        deadline = time.monotonic() + max(0.0, timeout)
+        with self._frame_condition:
+            while True:
+                for frame in reversed(self._recent_frames):
+                    if matches(frame):
+                        return frame
+                remaining = deadline - time.monotonic()
+                if remaining <= 0 or not self.connected:
+                    return None
+                self._frame_condition.wait(remaining)
+
     def _send_connection_setup(self) -> None:
         for (
             kind,
@@ -252,14 +360,21 @@ class AppConnection:
             now = time.monotonic()
             if now >= next_control:
                 try:
-                    self.send_control()
+                    control_payload, periodic_duss = self._control_tick_state(now)
+                    self.send_control(control_payload)
+                    for sender, receiver, attr, cmdset, cmdid, payload in periodic_duss:
+                        self.send_duss(sender, receiver, attr, cmdset, cmdid, payload)
                 except OSError:
                     if not self._stop.is_set():
                         raise
                 next_control = now + 0.02
             if now >= next_keepalive and not self.suspend_idle_keepalive:
-                self.send_duss(0x02, 0x09, 0x00, 0x3F, 0x04, bytes.fromhex("000300"))
-                self.send_duss(0x02, 0x07, 0x40, 0x07, 0x17)
+                with self._state_lock:
+                    mode_keepalive = self._mode_keepalive
+                    send_sdk_ready = self._send_sdk_ready
+                self.send_duss(0x02, 0x09, 0x00, 0x3F, 0x04, mode_keepalive)
+                if send_sdk_ready:
+                    self.send_duss(0x02, 0x07, 0x40, 0x07, 0x17)
                 next_keepalive = now + 1.0
 
     def _handle_packet(self, data: bytes) -> None:
@@ -274,6 +389,9 @@ class AppConnection:
         for frame in frames:
             if not frame.valid:
                 continue
+            with self._frame_condition:
+                self._recent_frames.append(frame)
+                self._frame_condition.notify_all()
             self._emit("duss", frame)
             if frame.cmdset == 0x48 and frame.cmdid == 0x08 and len(frame.payload) == 62:
                 self._battery = frame.payload[10]

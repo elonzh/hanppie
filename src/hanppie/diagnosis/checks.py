@@ -48,6 +48,7 @@ class DiagnosisChecks:
         return {
             "discovery": self.discovery,
             "app": self.app,
+            "direct": self.direct,
             "video": self.video,
             "microphone": self.microphone,
             "lab": self.lab,
@@ -55,6 +56,7 @@ class DiagnosisChecks:
             "speaker": self.speaker,
             "muzzle": self.muzzle,
             "chassis": self.chassis,
+            "failsafe": self.failsafe,
             "gimbal": self.gimbal,
             "infrared": self.infrared,
             "gel": self.gel,
@@ -119,6 +121,25 @@ class DiagnosisChecks:
             if started:
                 robot.camera.stop_video_stream()
 
+    def direct(self) -> dict[str, Any]:
+        robot = self.session.ensure_direct(control_mode=True)
+        odometry = robot.wait_for_odometry(timeout=self.session.config.timeout)
+        gimbal = robot.wait_for_gimbal(timeout=self.session.config.timeout)
+        if odometry is None:
+            raise TimeoutError("进入原生控制模式后未收到 0x48/0x08 底盘遥测")
+        if gimbal is None:
+            raise TimeoutError("进入原生控制模式后未收到 0x48/0x08 云台遥测")
+        return {
+            "_summary": "未上传 Lab 程序，已进入原生控制模式并持续收到 DUSS 遥测",
+            "backend": "AppEnvelope direct DUSS",
+            "lab_program_uploaded": False,
+            "armed": robot.armed,
+            "battery_percent": odometry.battery_percent,
+            "odometry_sequence": odometry.sequence,
+            "gimbal_sequence": gimbal.sequence,
+            "gimbal_raw": list(gimbal.values),
+        }
+
     def microphone(self) -> dict[str, Any]:
         robot = self.session.ensure_app()
         started = False
@@ -149,31 +170,22 @@ class DiagnosisChecks:
         }
 
     def led(self) -> dict[str, Any]:
-        robot = self.session.ensure_lab()
+        robot = self.session.ensure_app()
         completed: list[dict[str, Any]] = []
         try:
             for name, red, green, blue in LED_COLORS:
-                if not robot.set_led(component="all", red=red, green=green, blue=blue, effect="on"):
-                    raise RuntimeError(f"装甲灯 {name} 命令未发送")
-                sequence = robot.bridge.command_sequence
-                telemetry = self.session.wait_command("led.set", sequence)
-                if telemetry.get("last_command_ok") is not True:
-                    raise RuntimeError(
-                        f"机内装甲灯 {name} 调用失败：{telemetry.get('last_command_error')}"
-                    )
-                completed.append({"name": name, "rgb": [red, green, blue]})
+                ack = robot.set_led(component="all", red=red, green=green, blue=blue, effect="on")
+                completed.append(
+                    {"name": name, "rgb": [red, green, blue], "ack_sequence": ack.sequence}
+                )
                 self.session.sleep(0.35)
 
-            if not robot.set_led(component="all", red=0, green=0, blue=0, effect="off"):
-                raise RuntimeError("装甲灯关闭命令未发送")
-            sequence = robot.bridge.command_sequence
-            telemetry = self.session.wait_command("led.set", sequence)
-            if telemetry.get("last_command_ok") is not True:
-                raise RuntimeError("机内装甲灯关闭调用失败")
+            off = robot.set_led(component="all", red=0, green=0, blue=0, effect="off")
             return {
-                "_summary": "红、绿、蓝、白循环及关闭均获 controller 确认；未做外部视觉确认",
+                "_summary": "红、绿、蓝、白循环及关闭均获原生 DUSS ACK；未做外部视觉确认",
                 "colors": completed,
-                "off_acknowledged": True,
+                "off_ack_sequence": off.sequence,
+                "backend": "AppEnvelope direct DUSS 0x3f/0x33",
             }
         finally:
             robot.set_led(component="all", red=0, green=0, blue=0, effect="off")
@@ -181,26 +193,19 @@ class DiagnosisChecks:
     def speaker(self) -> dict[str, Any]:
         robot = self.session.ensure_app()
         host_pcm = self._test_host_pcm_speaker(robot)
-        robot = self.session.ensure_lab()
+        robot = self.session.ensure_app()
         audio_started = robot.camera.start_audio_stream()
         baseline = self._collect_audio_stats(robot.camera, frames=3) if audio_started else []
         sounds: list[dict[str, Any]] = []
         try:
             for name, sound_id in SPEAKER_SOUNDS:
-                if not robot.call("media", "play_sound", sound=sound_id):
-                    raise RuntimeError(f"扬声器 {name} 命令未发送")
-                sequence = robot.bridge.command_sequence
-                telemetry = self.session.wait_command("media.play_sound", sequence)
-                if telemetry.get("last_command_ok") is not True:
-                    raise RuntimeError(
-                        f"机内扬声器 {name} 调用失败：{telemetry.get('last_command_error')}"
-                    )
+                ack = robot.play_sound(sound_id)
                 samples = self._collect_audio_stats(robot.camera, frames=5) if audio_started else []
                 sounds.append(
                     {
                         "name": name,
                         "sound_id": sound_id,
-                        "controller_acknowledged": True,
+                        "duss_ack_sequence": ack.sequence,
                         "microphone_loopback": samples,
                     }
                 )
@@ -215,7 +220,7 @@ class DiagnosisChecks:
         )
         ratio = round(sound_rms / baseline_rms, 2) if baseline_rms else None
         acoustic_loopback = sound_rms > max(200.0, baseline_rms * 1.8)
-        summary = "音阶和射击音效均获 controller 确认"
+        summary = "音阶和射击音效均获原生 DUSS ACK"
         if acoustic_loopback:
             summary += "，机身麦克风同时记录到显著声压变化"
         else:
@@ -232,6 +237,7 @@ class DiagnosisChecks:
             "rms_ratio": ratio,
             "acoustic_loopback_observed": acoustic_loopback,
             "host_pcm": host_pcm,
+            "backend": "AppEnvelope direct media",
         }
 
     def _test_host_pcm_speaker(self, robot) -> dict[str, Any]:
@@ -287,127 +293,154 @@ class DiagnosisChecks:
         }
 
     def muzzle(self) -> dict[str, Any]:
-        robot = self.session.ensure_lab()
+        robot = self.session.ensure_app()
         completed: list[str] = []
         try:
-            for method, effect in (
-                ("set_led", "on"),
-                ("set_led", "off"),
-                ("set_fire_led", "on"),
-                ("set_fire_led", "off"),
+            for fire, enabled, name in (
+                (False, True, "steady:on"),
+                (False, False, "steady:off"),
+                (True, True, "fire:on"),
+                (True, False, "fire:off"),
             ):
-                if not robot.call("blaster", method, effect=effect):
-                    raise RuntimeError(f"枪口灯 {method}/{effect} 命令未发送")
-                sequence = robot.bridge.command_sequence
-                telemetry = self.session.wait_command(f"blaster.{method}", sequence)
-                if telemetry.get("last_command_ok") is not True:
-                    raise RuntimeError(
-                        f"机内枪口灯 {method}/{effect} 调用失败："
-                        f"{telemetry.get('last_command_error')}"
-                    )
-                completed.append(f"{method}:{effect}")
+                robot.set_muzzle_led(fire=fire, enabled=enabled)
+                completed.append(name)
                 self.session.sleep(0.35)
             return {
-                "_summary": "枪口常亮和开火灯效的点亮/关闭均获 controller 确认；未做外部视觉确认",
+                "_summary": "枪口常亮和开火灯效均获原生 DUSS ACK；未做外部视觉确认",
                 "sequence": completed,
+                "backend": "AppEnvelope direct DUSS 0x3f/0x33",
             }
         finally:
-            robot.call("blaster", "reset_led")
+            robot.set_muzzle_led(fire=False, enabled=False)
+            robot.set_muzzle_led(fire=True, enabled=False)
 
     def chassis(self) -> dict[str, Any]:
-        robot = self.session.ensure_lab()
-        initial = self.session.telemetry()
+        robot = self.session.ensure_direct(control_mode=True)
+        robot.arm()
+        initial = robot.wait_for_odometry(timeout=self.session.config.timeout)
+        if initial is None:
+            raise TimeoutError("底盘动作前未收到原生里程计遥测")
         steps: list[dict[str, Any]] = []
         try:
             for name, x, y, z in CHASSIS_SEQUENCE:
-                before = self.session.telemetry()
-                if not robot.bridge.send(x=x, y=y, z=z):
-                    raise RuntimeError(f"底盘 {name} 命令未发送")
-                sequence = robot.bridge.command_sequence
-                active = self.session.wait_command("chassis.move_with_speed", sequence)
-                if active.get("last_command_ok") is not True:
-                    raise RuntimeError(
-                        f"机内底盘 {name} 调用失败：{active.get('last_command_error')}"
-                    )
-                self.session.sleep(robot.config.command_timeout + 0.25)
-                stopped = self.session.wait_telemetry(
-                    lambda values, expected=sequence: (
-                        int(values.get("rx_command_seq", 0) or 0) >= expected
-                        and values.get("motion_active") is False
-                    )
+                before = robot.wait_for_odometry(timeout=self.session.config.timeout)
+                if before is None:
+                    raise TimeoutError(f"底盘 {name} 动作前未收到里程计")
+                sent_at = time.monotonic()
+                robot.chassis.drive_speed(x=x, y=y, z=z, lease_seconds=0.25)
+                moving = robot.wait_for_odometry(
+                    after=sent_at + 0.12,
+                    timeout=self.session.config.timeout,
                 )
+                if moving is None:
+                    raise TimeoutError(f"底盘 {name} 动作中未收到里程计")
+                self.session.sleep(max(0.0, sent_at + 0.4 - time.monotonic()))
+                stopped = robot.wait_for_odometry(
+                    after=sent_at + 0.3,
+                    timeout=self.session.config.timeout,
+                )
+                if stopped is None:
+                    raise TimeoutError(f"底盘 {name} 动作后未收到里程计")
                 steps.append(
                     {
                         "direction": name,
                         "command": {"x_mps": x, "y_mps": y, "z_dps": z},
-                        "watchdog_stopped": True,
-                        "delta": self._pose_delta(before, stopped),
+                        "host_lease_seconds": 0.25,
+                        "neutral_sent_after_lease": True,
+                        "delta": self._direct_pose_delta(before, stopped),
+                        "moving_raw_values_2_4": moving.raw_motion_values,
+                        "stopped_raw_values_2_4": stopped.raw_motion_values,
                     }
                 )
-                self._stop_and_confirm(robot)
+                robot.chassis.stop()
                 self.session.sleep(0.1)
         finally:
-            robot.bridge.stop_robot()
-        final = self.session.telemetry()
+            robot.disarm()
+        final = robot.wait_for_odometry(timeout=self.session.config.timeout)
+        if final is None:
+            final = initial
         return {
-            "_summary": "底盘前后左右及双向旋转均获确认，每步均由 watchdog 归零",
+            "_summary": "底盘六方向已通过原生控制通道执行，每步在 250 ms 租约后归零",
             "steps": steps,
-            "net_delta": self._pose_delta(initial, final),
+            "net_delta": self._direct_pose_delta(initial, final),
+            "backend": "AppEnvelope control channel",
         }
 
     def gimbal(self) -> dict[str, Any]:
-        robot = self.session.ensure_lab()
-        initial = self.session.telemetry()
+        robot = self.session.ensure_direct(control_mode=True)
+        robot.arm()
+        initial = robot.wait_for_gimbal(timeout=self.session.config.timeout)
+        if initial is None:
+            raise TimeoutError("云台动作前未收到原生遥测")
         steps: list[dict[str, Any]] = []
         try:
             for name, pitch, yaw in GIMBAL_SEQUENCE:
-                before = self.session.telemetry()
-                if not robot.bridge.send(gimbal_pitch=pitch, gimbal_yaw=yaw):
-                    raise RuntimeError(f"云台 {name} 命令未发送")
-                sequence = robot.bridge.command_sequence
-                active = self.session.wait_command("gimbal.rotate_with_speed", sequence)
-                if active.get("last_command_ok") is not True:
-                    raise RuntimeError(
-                        f"机内云台 {name} 调用失败：{active.get('last_command_error')}"
-                    )
-                self.session.sleep(robot.config.command_timeout + 0.25)
-                stopped = self.session.wait_telemetry(
-                    lambda values, expected=sequence: (
-                        int(values.get("rx_command_seq", 0) or 0) >= expected
-                        and values.get("motion_active") is False
-                    )
+                before = robot.wait_for_gimbal(timeout=self.session.config.timeout)
+                if before is None:
+                    raise TimeoutError(f"云台 {name} 动作前未收到遥测")
+                sent_at = time.monotonic()
+                robot.gimbal.drive_speed(
+                    pitch_speed=pitch,
+                    yaw_speed=yaw,
+                    lease_seconds=0.25,
                 )
+                self.session.sleep(0.4)
+                stopped = robot.wait_for_gimbal(
+                    after=sent_at + 0.3,
+                    timeout=self.session.config.timeout,
+                )
+                if stopped is None:
+                    raise TimeoutError(f"云台 {name} 动作后未收到遥测")
                 steps.append(
                     {
                         "direction": name,
                         "command": {"pitch_dps": pitch, "yaw_dps": yaw},
-                        "watchdog_stopped": True,
-                        "delta": self._gimbal_delta(before, stopped),
+                        "host_lease_seconds": 0.25,
+                        "neutral_sent_after_lease": True,
+                        "raw_delta": [
+                            end - start
+                            for start, end in zip(before.values, stopped.values, strict=True)
+                        ],
                     }
                 )
-                self._stop_and_confirm(robot)
+                robot.gimbal.stop()
                 self.session.sleep(0.1)
-
-            if not robot.call("gimbal", "recenter"):
-                raise RuntimeError("云台回中命令未发送")
-            sequence = robot.bridge.command_sequence
-            centered = self.session.wait_command("gimbal.recenter", sequence)
-            if centered.get("last_command_ok") is not True:
-                raise RuntimeError("机内云台回中调用失败")
-            self.session.sleep(0.8)
-            final = self.session.telemetry()
+            final = robot.wait_for_gimbal(timeout=self.session.config.timeout) or initial
             return {
-                "_summary": "云台俯仰和偏航双向运动均获确认，并已执行回中",
+                "_summary": "云台俯仰和偏航双向运动已通过原生 DUSS 速度控制执行并归零",
                 "steps": steps,
-                "recenter_acknowledged": True,
-                "initial": self._gimbal_pose(initial),
-                "final": self._gimbal_pose(final),
+                "initial_raw": list(initial.values),
+                "final_raw": list(final.values),
+                "backend": "AppEnvelope direct DUSS 0x04/0x69",
             }
         finally:
-            robot.bridge.stop_robot()
+            robot.disarm()
+
+    def failsafe(self) -> dict[str, Any]:
+        evidence = self.session.verify_direct_loss_stop()
+        evidence["_summary"] = "直控主机进程被强制终止后，观察窗口内的累计位移未超过安全上界"
+        return evidence
 
     def infrared(self) -> dict[str, Any]:
-        return self._fire("infrared", "blaster.fire_ir")
+        robot = self.session.ensure_direct(control_mode=True)
+        robot.arm()
+        try:
+            led = robot.set_muzzle_led(fire=True, enabled=True)
+            sound = robot.play_sound(0x102)
+            robot.fire_infrared(lease_seconds=0.12)
+            self.session.sleep(0.2)
+        finally:
+            robot.disarm()
+            robot.set_muzzle_led(fire=True, enabled=False)
+        return {
+            "_summary": "红外触发走原生控制通道，射击音效和枪口闪光获 DUSS ACK；未验证外部接收",
+            "fire_type": "infrared",
+            "count": 1,
+            "control_lease_seconds": 0.12,
+            "muzzle_led_ack_sequence": led.sequence,
+            "shoot_sound_ack_sequence": sound.sequence,
+            "backend": "AppEnvelope direct control and DUSS",
+        }
 
     def gel(self) -> dict[str, Any]:
         return self._fire("gel", "blaster.fire_gel")
@@ -615,6 +648,25 @@ class DiagnosisChecks:
             "pitch_deg": values.get("gimbal_pitch"),
             "yaw_deg": values.get("gimbal_yaw"),
         }
+
+    @staticmethod
+    def _direct_pose_delta(before, after) -> dict[str, float | None]:
+        return {
+            "x_m": DiagnosisChecks._finite_delta(before.x, after.x),
+            "y_m": DiagnosisChecks._finite_delta(before.y, after.y),
+            "heading_like": DiagnosisChecks._finite_delta(before.heading_like, after.heading_like),
+        }
+
+    @staticmethod
+    def _finite_delta(start: object, end: object) -> float | None:
+        try:
+            start_value = float(start)
+            end_value = float(end)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(start_value) or not math.isfinite(end_value):
+            return None
+        return round(end_value - start_value, 4)
 
     @staticmethod
     def _difference(before: dict[str, Any], after: dict[str, Any], field: str) -> float | None:
