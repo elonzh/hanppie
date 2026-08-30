@@ -1,0 +1,273 @@
+CONTROL_PORT = __CONTROL_PORT__
+TELEMETRY_PORT = __TELEMETRY_PORT__
+TELEMETRY_PERIOD = __TELEMETRY_PERIOD__
+COMMAND_TIMEOUT = __COMMAND_TIMEOUT__
+MAX_CHASSIS_SPEED = 3.5
+MAX_CHASSIS_YAW_SPEED = 600.0
+MAX_GIMBAL_SPEED = 540.0
+
+
+def _root_import(name):
+    builtins = rm_define.__dict__["__builtins__"]
+    importer = builtins["__import__"] if isinstance(builtins, dict) else builtins.__import__
+    return importer(name, globals(), locals(), [], 0)
+
+
+def _safe_call(function, *arguments):
+    try:
+        function(*arguments)
+        return True
+    except Exception:
+        return False
+
+
+def _clamp(value, minimum, maximum):
+    try:
+        number = float(value)
+    except Exception:
+        number = 0.0
+    return max(minimum, min(maximum, number))
+
+
+def _stop_motion():
+    _safe_call(chassis_ctrl.stop)
+    _safe_call(gimbal_ctrl.stop)
+
+
+def _set_mode(name):
+    mode = str(name).lower()
+    if mode in ("free", "gimbal_lead"):
+        return _safe_call(robot_ctrl.set_mode, rm_define.robot_mode_free)
+    if mode in ("gimbal_follow", "chassis_lead"):
+        return _safe_call(robot_ctrl.set_mode, rm_define.robot_mode_gimbal_follow)
+    if mode in ("chassis_follow", "follow"):
+        return _safe_call(robot_ctrl.set_mode, rm_define.robot_mode_chassis_follow)
+    return False
+
+
+def _set_led(command):
+    red = int(_clamp(command.get("red", 255), 0, 255))
+    green = int(_clamp(command.get("green", 255), 0, 255))
+    blue = int(_clamp(command.get("blue", 255), 0, 255))
+    component = str(command.get("component", "all")).lower()
+    effect_name = str(command.get("effect", "on")).lower()
+    if effect_name == "off":
+        if component in ("all", "bottom"):
+            _safe_call(led_ctrl.turn_off, rm_define.armor_bottom_all)
+        if component in ("all", "top", "gimbal"):
+            _safe_call(led_ctrl.turn_off, rm_define.armor_top_all)
+        return
+    effects = {
+        "on": rm_define.effect_always_on,
+        "solid": rm_define.effect_always_on,
+        "breath": rm_define.effect_breath,
+        "flash": rm_define.effect_flash,
+    }
+    effect = effects.get(effect_name, rm_define.effect_always_on)
+    if component in ("all", "bottom"):
+        _safe_call(
+            led_ctrl.set_bottom_led,
+            rm_define.armor_bottom_all,
+            red,
+            green,
+            blue,
+            effect,
+        )
+    if component in ("all", "top", "gimbal"):
+        _safe_call(
+            led_ctrl.set_top_led,
+            rm_define.armor_top_all,
+            red,
+            green,
+            blue,
+            effect,
+        )
+
+
+def _generic_call(command):
+    module = str(command.get("module", "")).lower()
+    method = str(command.get("method", "")).lower()
+    params = command.get("params", {})
+    if not isinstance(params, dict):
+        return False
+    if module == "system":
+        return method == "set_telemetry"
+    if module == "chassis":
+        if method == "stop":
+            return _safe_call(chassis_ctrl.stop)
+        if method == "set_wheel_speed":
+            return _safe_call(
+                chassis_ctrl.set_wheel_speed,
+                int(params.get("w1", 0)),
+                int(params.get("w2", 0)),
+                int(params.get("w3", 0)),
+                int(params.get("w4", 0)),
+            )
+        if method == "set_pwm_value":
+            return _safe_call(
+                chassis_ctrl.set_pwm_value,
+                int(params.get("pwm", 0)),
+                float(params.get("value", 0)),
+            )
+    if module == "gimbal":
+        if method == "stop":
+            return _safe_call(gimbal_ctrl.stop)
+        if method == "recenter":
+            return _safe_call(gimbal_ctrl.recenter)
+        if method == "suspend":
+            return _safe_call(gimbal_ctrl.suspend)
+        if method == "resume":
+            return _safe_call(gimbal_ctrl.resume)
+        if method == "angle_ctrl":
+            return _safe_call(
+                gimbal_ctrl.angle_ctrl,
+                float(params.get("yaw", 0)),
+                float(params.get("pitch", 0)),
+            )
+    if module == "armor" and method == "set_hit_sensitivity":
+        return _safe_call(armor_ctrl.set_hit_sensitivity, int(params.get("sensitivity", 5)))
+    if module == "media":
+        if method == "play_sound":
+            return _safe_call(media_ctrl.play_sound, params.get("sound", 0))
+        if method == "capture":
+            return _safe_call(media_ctrl.capture)
+    return False
+
+
+def _apply_command(command, state, now):
+    session_id = int(command.get("session_id", 0) or 0)
+    sequence = int(command.get("command_seq", 0) or 0)
+    if not session_id or not sequence:
+        return
+    if session_id != state["session_id"]:
+        _stop_motion()
+        state["session_id"] = session_id
+        state["last_sequence"] = 0
+        state["armed"] = False
+        state["motion_active"] = False
+    if sequence <= state["last_sequence"]:
+        return
+    state["last_sequence"] = sequence
+
+    module = str(command.get("module", "")).lower()
+    method = str(command.get("method", "")).lower()
+    if module == "system" and method == "arm":
+        state["armed"] = True
+        return
+    if module == "system" and method == "disarm":
+        state["armed"] = False
+        state["motion_active"] = False
+        _stop_motion()
+        return
+    if command.get("stop", False):
+        state["motion_active"] = False
+        _stop_motion()
+        return
+    if command.get("led", False):
+        _set_led(command)
+    if module and method and module not in ("chassis", "gimbal"):
+        _generic_call(command)
+    if not state["armed"]:
+        return
+    if "mode" in command:
+        _set_mode(command.get("mode"))
+    if module in ("chassis", "gimbal") and method:
+        _generic_call(command)
+    if command.get("fire", False):
+        fire_type = str(command.get("fire_type", "infrared")).lower()
+        if fire_type in ("infrared", "ir", "led"):
+            _safe_call(ir_blaster_ctrl.fire_once)
+        else:
+            _safe_call(gun_ctrl.fire_once)
+
+    chassis_fields = ("x", "y", "z")
+    gimbal_fields = ("gimbal_pitch", "gimbal_yaw")
+    has_chassis = any(name in command for name in chassis_fields)
+    has_gimbal = any(name in command for name in gimbal_fields)
+    if has_chassis:
+        _safe_call(
+            chassis_ctrl.move_with_speed,
+            _clamp(command.get("x", 0), -MAX_CHASSIS_SPEED, MAX_CHASSIS_SPEED),
+            _clamp(command.get("y", 0), -MAX_CHASSIS_SPEED, MAX_CHASSIS_SPEED),
+            _clamp(command.get("z", 0), -MAX_CHASSIS_YAW_SPEED, MAX_CHASSIS_YAW_SPEED),
+        )
+    if has_gimbal:
+        _safe_call(
+            gimbal_ctrl.rotate_with_speed,
+            int(_clamp(command.get("gimbal_yaw", 0), -MAX_GIMBAL_SPEED, MAX_GIMBAL_SPEED)),
+            int(_clamp(command.get("gimbal_pitch", 0), -MAX_GIMBAL_SPEED, MAX_GIMBAL_SPEED)),
+        )
+    if has_chassis or has_gimbal:
+        state["last_motion"] = now
+        state["motion_active"] = True
+
+
+def _value(function, argument):
+    try:
+        return float(function(argument))
+    except Exception:
+        return None
+
+
+def _telemetry(state, now):
+    return {
+        "type": "telemetry",
+        "sequence": state["telemetry_sequence"],
+        "time_ms": int(now * 1000),
+        "session_id": state["session_id"],
+        "rx_command_seq": state["last_sequence"],
+        "x": _value(chassis_ctrl.get_position_based_power_on, rm_define.chassis_forward),
+        "y": _value(chassis_ctrl.get_position_based_power_on, rm_define.chassis_translation),
+        "yaw": _value(chassis_ctrl.get_attitude, rm_define.chassis_yaw),
+        "gimbal_yaw": _value(gimbal_ctrl.get_axis_angle, rm_define.gimbal_axis_yaw),
+        "gimbal_pitch": _value(gimbal_ctrl.get_axis_angle, rm_define.gimbal_axis_pitch),
+    }
+
+
+def start():
+    time_module = _root_import("time")
+    socket_module = _root_import("socket")
+    select_module = _root_import("select")
+    json_module = _root_import("json")
+    _set_mode("free")
+    _stop_motion()
+
+    receiver = socket_module.socket(socket_module.AF_INET, socket_module.SOCK_DGRAM)
+    receiver.setsockopt(socket_module.SOL_SOCKET, socket_module.SO_REUSEADDR, 1)
+    receiver.bind(("0.0.0.0", CONTROL_PORT))
+    receiver.setblocking(False)
+    sender = socket_module.socket(socket_module.AF_INET, socket_module.SOCK_DGRAM)
+    sender.setsockopt(socket_module.SOL_SOCKET, socket_module.SO_BROADCAST, 1)
+    state = {
+        "target": ("255.255.255.255", TELEMETRY_PORT),
+        "session_id": 0,
+        "last_sequence": 0,
+        "telemetry_sequence": 0,
+        "armed": False,
+        "motion_active": False,
+        "last_motion": 0.0,
+    }
+    next_telemetry = time_module.time()
+    while True:
+        readable, _, _ = select_module.select([receiver], [], [], 0.01)
+        for ready in readable:
+            try:
+                payload, source = ready.recvfrom(4096)
+                command = json_module.loads(payload.decode("utf-8"))
+                if isinstance(command, dict):
+                    state["target"] = (source[0], TELEMETRY_PORT)
+                    _apply_command(command, state, time_module.time())
+            except Exception:
+                pass
+        now = time_module.time()
+        if state["motion_active"] and now - state["last_motion"] > COMMAND_TIMEOUT:
+            _stop_motion()
+            state["motion_active"] = False
+        if now >= next_telemetry:
+            packet = json_module.dumps(_telemetry(state, now), separators=(",", ":"))
+            try:
+                sender.sendto(packet.encode("utf-8"), state["target"])
+            except Exception:
+                pass
+            state["telemetry_sequence"] = state["telemetry_sequence"] + 1
+            next_telemetry = now + TELEMETRY_PERIOD

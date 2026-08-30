@@ -8,11 +8,8 @@ import time
 from importlib.resources import files
 from pathlib import Path
 
-from robomaster_lab_sdk.program import (
-    build_lab_bridge_dsp,
-    upload_lab_dsp,
-)
-from robomaster_lab_sdk.robot import Robot
+from hanppie.lab.program import build_lab_program
+from hanppie.lab.robot import LabRobot
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -33,30 +30,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def upload_program(s1: Robot, python_code: str) -> str:
-    dsp, identity = build_lab_bridge_dsp(python_code=python_code)
+def upload_program(s1: LabRobot, dsp: str, identity) -> str:
     byte_count = len(dsp.encode("utf-8"))
-
-    s1.send_duss(0x02, 0x09, 0x40, 0x3F, 0x4C, b"\x00")
-    time.sleep(0.02)
-    s1.send_lab_metadata(identity.guid, identity.sign, identity.full_marker)
-    time.sleep(0.02)
-    s1.send_lab_guid_metadata(identity.guid, identity.guid_marker)
-    time.sleep(0.02)
-    s1.send_lab_upload_size(byte_count)
-    time.sleep(0.02)
-
-    digest = upload_lab_dsp(s1.robot_ip, dsp, timeout=10.0)
-
-    # start_lab_program() needs the identity associated with the uploaded digest.
-    # LAB-SDK 0.1.0 does not yet expose a public custom-program upload method.
-    s1._last_dsp_md5 = digest
-    s1._last_guid = identity.guid
-    s1._last_sign = identity.sign
-    s1._last_full_marker = identity.full_marker
-    s1._last_guid_marker = identity.guid_marker
-    s1._lab_program_registered = False
-
+    digest = s1.upload_prepared_program(dsp, identity)
     print(f"uploaded Lab payload: bytes={byte_count} md5={digest}")
     return digest
 
@@ -71,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
         payload_source = payload.read_text(encoding="utf-8")
         payload_name = "hanppie:enable_adb_standalone.py.txt"
     python_code = payload_source
-    dsp, identity = build_lab_bridge_dsp(python_code=python_code)
+    dsp, identity = build_lab_program(python_code)
     print(
         "prepared Lab payload: "
         f"source={payload_name} bytes={len(dsp.encode('utf-8'))} "
@@ -80,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         return 0
 
-    s1 = Robot(robot_ip=args.robot_ip, appid=args.appid, debug=args.debug)
+    s1 = LabRobot(robot_ip=args.robot_ip, appid=args.appid, debug=args.debug)
     initialized = False
     program_started = False
     try:
@@ -92,7 +68,7 @@ def main(argv: list[str] | None = None) -> int:
         s1.enter_lab()
         print("entered Lab mode")
 
-        digest = upload_program(s1, python_code)
+        digest = upload_program(s1, dsp, identity)
         s1.start_lab_program(digest)
         program_started = True
         print("started ADB enable payload")

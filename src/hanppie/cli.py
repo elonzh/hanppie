@@ -11,14 +11,14 @@ from hanppie import __version__
 
 COMMANDS = {
     "sdk": ("hanppie.sdk_patch", "base"),
-    "adb-enable": ("hanppie.adb_bootstrap", "lab"),
+    "adb-enable": ("hanppie.adb_bootstrap", "base"),
     "probe-official": ("hanppie.probes.official_info", "base"),
     "probe-connection": ("hanppie.probes.official_connection", "base"),
     "probe-telemetry": ("hanppie.probes.official_telemetry", "base"),
     "probe-led": ("hanppie.probes.official_led", "base"),
     "probe-camera": ("hanppie.probes.official_camera", "base"),
-    "probe-lab": ("hanppie.probes.lab_bridge", "lab"),
-    "probe-video": ("hanppie.probes.lab_video", "lab"),
+    "probe-lab": ("hanppie.probes.lab_bridge", "base"),
+    "probe-video": ("hanppie.probes.lab_video", "base"),
 }
 
 
@@ -33,8 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _dependency_hint(extra: str) -> str:
-    if extra == "lab":
-        return "run `task sync:lab`, then use `task run:lab -- <command> ...`"
+    del extra
     return "run `uv sync`"
 
 
@@ -50,7 +49,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         module = importlib.import_module(module_name)
     except ModuleNotFoundError as exc:
-        if exc.name in {"audioop", "robomaster", "robomaster_lab_sdk", "av", "cv2"}:
+        if exc.name in {"audioop", "robomaster", "av", "cv2"}:
             parser.error(
                 f"command {command!r} needs optional dependencies; "
                 f"{_dependency_hint(extra)} ({exc})"

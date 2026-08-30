@@ -21,7 +21,7 @@ Hanppie 是一个面向 DJI RoboMaster S1 的开源保存与电脑编程工具�
 - 内置 RoboMaster SDK fork：握手、`Robot.initialize()`、版本、序列号、模式、云台角度和 LED；
 - SDK 补丁的状态检查、在线恢复和重新启用完整往返。
 
-已知边界：SDK 相机请求会被 S1 拒绝；部分 EP DDS 主题在 S1 上只回传 0。推荐用内置 SDK fork 负责控制，用 App/Lab 后端负责视频与 S1 特有数据。底盘、云台机械运动和发射器尚未完成安全条件下的物理验证。
+已知边界：SDK 相机请求会被 S1 拒绝；部分 EP DDS 主题在 S1 上只回传 0。推荐用内置 SDK fork 负责控制，用 App/Lab 后端负责视频与 S1 特有数据。App/Lab 原链路已完成上述实测；迁入 `src/hanppie/lab` 后已通过离线报文、生命周期和打包回归，仍需在当前真机上复测。底盘、云台机械运动和发射器尚未完成安全条件下的物理验证。
 
 项目的长期技术事实源是[《RoboMaster S1 技术架构》](./docs/architecture.md)。完整实测证据见[真机联调记录](./docs/s1-live-debug-2026-08-29.md)，早期软硬件、S.BUS、SocketCAN、vcan 和 ROS 2 调研见[调研报告](./docs/robomaster-s1-revival-report.md)。
 
@@ -55,7 +55,7 @@ from robomaster import robot
 s1 = robot.Robot()
 ```
 
-`uv sync` 会同时安装 Hanppie 与内置 SDK fork，不再需要官方 wheel、外部 SDK checkout 或 `HANPPIE_OFFICIAL_SDK_PATH`。固定的 LAB-SDK 发布物还会安装自己的同名 `robomaster` 兼容包，因此 `task sync:lab` 会把它放入独立的 `.venv-lab`，避免覆盖主环境中的内置 fork；Lab 命令使用 `task run:lab -- ...`。当前只验证 Python 3.10，不把更高版本列入测试矩阵。
+`uv sync` 会同时安装 Hanppie、内置 SDK fork 和项目自行维护的 App/Lab 后端，不再需要官方 wheel、外部 SDK checkout、独立 Lab 虚拟环境或 `HANPPIE_OFFICIAL_SDK_PATH`。当前只验证 Python 3.10，不把更高版本列入测试矩阵。
 
 ## 命令行
 
@@ -75,7 +75,7 @@ hanppie probe-video         App/Lab 视频解码
 
 ```bash
 uv run hanppie sdk --help
-task run:lab -- adb-enable --help
+uv run hanppie adb-enable --help
 ```
 
 ### 从重启状态恢复 SDK proxy
@@ -87,8 +87,7 @@ export S1_IP="192.168.x.x"
 export S1_APPID="your-8-character-appid"
 export S1_SERIAL="your-s1-serial"
 
-task sync:lab
-task run:lab -- adb-enable \
+uv run hanppie adb-enable \
   --robot-ip "$S1_IP" \
   --appid "$S1_APPID" \
   --settle-seconds 8
@@ -125,6 +124,7 @@ src/
 │   ├── cli.py              # 统一 CLI
 │   ├── sdk_patch.py        # ADB + 临时 SDK 服务管理
 │   ├── adb_bootstrap.py    # App/Lab ADB bootstrap
+│   ├── lab/                # AppID、outer DUSS、Lab 生命周期、Bridge 与视频
 │   ├── media_codec.py      # PyAV 媒体接口兼容层
 │   ├── probes/             # 安全、单一目的的真机探针
 │   ├── payloads/           # 临时上传到 S1 的最小载荷
@@ -162,4 +162,4 @@ task prek       # 对全部文件执行 hooks
 
 ## 许可证
 
-Hanppie 自有主机代码使用 [MIT License](./LICENSE)；`src/robomaster` 的 DJI 派生代码使用 Apache License 2.0。恢复的设备运行时代码和社区后端适用各自来源的许可与条款，详见 [`NOTICE.md`](./NOTICE.md)。
+Hanppie 自有主机代码（包括 `src/hanppie/lab`）使用 [MIT License](./LICENSE)；`src/robomaster` 的 DJI 派生代码使用 Apache License 2.0。恢复的设备运行时代码适用其来源的许可与条款，详见 [`NOTICE.md`](./NOTICE.md)。

@@ -421,7 +421,7 @@ Hanppie 不替换整套 S1 固件，而是在保留原机控制器、相机、�
 
 | 项目增量 | 发生位置 | 对原机做了什么 | 持久性/恢复方式 |
 | --- | --- | --- | --- |
-| 固定的 App/Lab 主机后端 | 电脑 | 实现 AppID、outer session 和 Lab 生命周期 | 不修改固件 |
+| 内置 App/Lab 主机后端 | Git 仓库与电脑 | `src/hanppie/lab` 实现 AppID、outer session、Lab 生命周期、Bridge 和视频 | 随 Hanppie 安装；不修改固件；MIT |
 | `src/robomaster` SDK fork | Git 仓库与电脑 | 内置官方 `0.1.1.68`/`ff6646e` 的纯 Python 源码，保持 `robomaster` 导入路径并针对 S1 维护 | 随 Hanppie 安装；不修改 S1；Apache-2.0 |
 | Hanppie Lab Bridge DSP | `/data/ftp/python/python_raw.dsp` | 上传白名单 JSON 控制与遥测程序 | 文件写入 `/data`；可停止或覆盖，不等于开机自启 |
 | ADB 启动载荷 | Lab 用户程序 | 调用原机 `adb_en.sh` 并重启 `adbd` | 运行态变化；重启后关闭 |
@@ -437,7 +437,7 @@ Hanppie 不修改 `/init.rc`、原厂启动脚本或 `/system` 持久文件。�
 
 ```mermaid
 flowchart LR
-    subgraph HOST["电脑：Hanppie 与固定依赖"]
+    subgraph HOST["电脑：Hanppie 内置后端"]
         CLI["CLI / probes"]
         LABHOST["App/Lab 主机后端"]
         PATCHCTL["SDK 补丁控制器"]
@@ -480,6 +480,7 @@ flowchart LR
 | `cli.py` | 统一命令入口、后端选择和依赖提示 |
 | `adb_bootstrap.py` | 通过 Lab 会话临时开启 ADB |
 | `sdk_patch.py` | 检查、启用和恢复临时官方 SDK 服务 |
+| `lab/` | 项目自有 AppID/outer DUSS、Lab 程序生命周期、UDP Bridge 和视频实现 |
 | `media_codec.py` | 官方 SDK 的 PyAV 媒体兼容层 |
 | `probes/` | 单一目的、默认无机械运动的实机探针 |
 | `payloads/` | 临时上传到 S1 的最小机内载荷 |
@@ -495,22 +496,21 @@ Hanppie 的单个 wheel 同时包含 `hanppie` 和 `robomaster` 两个顶层包�
 from robomaster import robot
 ```
 
-基础 `uv sync` 安装内置 SDK fork。固定提交的 LAB-SDK 虽然提供 `robomaster_lab_sdk` 导入空间，但其发布物也会安装一套同名 `robomaster` 兼容包，上游明确要求不要与另一套 `robomaster` 安装在同一虚拟环境。因此 `task sync:lab` 将它同步到独立的 `.venv-lab`，Lab 命令通过 `task run:lab -- ...` 执行；主 `.venv` 始终解析到本仓库的 `src/robomaster`。这种隔离是包安装边界，不表示两条协议链路不能由更上层进程编排。
+同一个 `uv sync` 还会安装 `src/hanppie/lab`。该包是 Hanppie 自行维护的 App/Lab 主机实现，不导入外部 LAB-SDK，也不再需要外部 Git checkout、第二个虚拟环境或另一套同名 `robomaster` 包。公开社区实现只用于核对互操作行为；固定参考提交没有声明软件许可证，因此不能把其源码直接复制进本仓库。
 
 | 运行位置 | 当前约束 | 原因 |
 | --- | --- | --- |
 | S1 机内 Lab 程序 | 固定机内解释器和 DJI 模块；项目载荷保持 Python 3.6 语法兼容 | 固件环境不可随主机升级；精确解释器版本仍待记录 |
 | 电脑上的 Hanppie 与内置 SDK fork | Python 3.10 | 当前唯一开发、CI 和发布验证基线；暂不建立更高版本矩阵 |
-| 电脑上的 LAB-SDK | Python 3.10 | 固定上游 Host SDK 的下限与当前项目基线一致 |
 | 非 Python 客户端 | 无 Python 约束 | 需要自行实现 App outer、SDK proxy 或机内 DUSS 客户端及生命周期 |
 
 所以不是“只有 Lab Python 才有兼容性要求”，而是每个 Python 实现分别受其运行环境约束；这些约束都不属于 DUSS 协议本身。
 
 ### 7.6 Lab Bridge 与项目生命周期
 
-Hanppie 在 S1 原生 Lab 生命周期之上上传一个项目自定义 DSP。该程序自行打开 Host → S1 UDP `40923` 和 S1 → Host UDP `40924`，以白名单 JSON method 接收控制意图并回传遥测。它再调用机内 controller API 生成 DUSS；这组 UDP/JSON 语义是 Hanppie/LAB-SDK 的桥接协议，不是 DJI 所有 Lab 程序天然具备的协议。
+Hanppie 在 S1 原生 Lab 生命周期之上上传一个项目自定义 DSP。该程序自行打开 Host → S1 UDP `40923` 和 S1 → Host UDP `40924`，以白名单 JSON method 接收控制意图并回传遥测。它再调用机内 controller API 生成 DUSS；这组 UDP/JSON 语义是 Hanppie Lab Bridge 协议，不是 DJI 所有 Lab 程序天然具备的协议。
 
-固定 LAB-SDK 中的 `Dc68Envelope` 实现 App outer session：每次连接生成 session 和 tick，并分别维护 direct/control 序列。Hanppie 通过它进入原生 Lab 生命周期，再增加 Bridge 就绪和机械归零状态：
+`lab/protocol.py` 中的 `AppEnvelope` 实现 App outer session：每次连接生成 session 和 tick，分别维护 direct/control 序列，并根据机器人回包更新发送窗口。`lab/robot.py` 在这条原生生命周期上增加 Bridge 就绪和机械归零状态：
 
 ```mermaid
 stateDiagram-v2
@@ -533,12 +533,16 @@ stateDiagram-v2
 | `upload_lab_bridge()` | 生成 DSP，发送 metadata/GUID/size，经 FTP 上传，保存 MD5 | 新上传会使主机侧“已注册”状态失效 |
 | `start_lab_program()` | 初次以 MD5 注册，发送 metadata/runtime notify/start；同一对象中已注册时只发 start | 只启动机内程序，尚未证明 Bridge 可用 |
 | `start_lab_bridge()` | 主机启动 UDP TX/RX，发送 probe，等待真实 telemetry，绑定当前 session，arm 后立即 neutral stop | telemetry 才是当前实现的就绪条件 |
-| `stop_lab_bridge()` | 先发送全局 stop，再结束主机 UDP 进程 | **不会停止机内 Python 程序** |
+| `stop_lab_bridge()` | 发送 disarm/stop，再结束主机 UDP 收发线程并重建干净 Bridge 对象 | **不会停止机内 Python 程序** |
 | `stop_lab_program()` | 发送停止用 metadata 和 runtime notify，恢复 Lab keepalive | **不会自动关闭 Host Bridge** |
 | `exit_lab()` | 停止 Lab keepalive，发送普通模式与 neutral control | 不删除已上传 DSP，也不关闭基础 socket |
-| `close()` | 停 Host Bridge、尝试退出 Lab、关闭 App socket/thread | 当前实现**不会代替调用 `stop_lab_program()`** |
+| `close()` | 依次停 Bridge、尽力停止已启动程序、退出 Lab，再关闭 App socket/thread | 用于异常清理；显式生命周期仍更容易定位失败步骤 |
 
 安全退出必须显式按“机械归零 → `stop_lab_bridge()` → `stop_lab_program()` → `exit_lab()` → `close()`”执行，并放在 `finally` 中。新连接按完整上传/注册流程处理，不假定旧注册状态可复用。
+
+主机 Bridge 为每次实例生成随机 session ID，并为命令维护单调序号；机内程序拒绝零 session、旧序号和未 arm 的机械命令。底盘或云台速度命令会由主机每 `100 ms` 续租，机内在默认 `300 ms` 没有收到新命令时归零；换 session 和 disarm 也会立即停止机械运动。LED、遥测选择和非机械媒体操作不要求 arm，底盘、云台、模式切换和发射器均要求 arm。
+
+这些措施只解决误包、旧包和主机失联，不构成密码学认证。App/Lab、匿名 FTP 和 Bridge UDP 都是未加密链路；能进入同一可信网段的第三方仍可能监听、伪造或抢占 session。项目只支持可信隔离局域网，不应通过公网、端口转发或 VPN Overlay 暴露这些端口。
 
 ### 7.7 临时开启 ADB
 
@@ -592,12 +596,15 @@ Hanppie 自行维护的主机代码由 Ruff、pytest、coverage 和 prek 检查�
 
 下表记录的是 **Hanppie 当前验证结果**，不是 S1 出厂能力表。
 
+App/Lab 链路的“实测通过”来自第 1 轮真机联调；项目随后将该链路独立实现到 `src/hanppie/lab`。新实现已通过固定报文向量、模拟生命周期、Python 3.6 载荷语法和独立 wheel 安装测试，但在本版本完成时尚未用当前真机重新跑完整链路，因此表中同时标出这一迁移边界。
+
 | 能力 | 后端 | 状态 | 说明 |
 | --- | --- | --- | --- |
-| App/Lab 会话 | Lab | **实测通过** | 无需 root |
-| 机内 Lab Python | Lab | **实测通过** | 可上传、启动、停止 |
-| 姿态回传 | Lab | **实测通过** | 已获得连续样本 |
-| 720p 视频 | Lab | **实测通过** | `1280×720 yuv420p` |
+| App/Lab 会话 | Lab | **原链路实测；内置实现待回归** | 无需 root；内置实现有抓包向量测试 |
+| 机内 Lab Python | Lab | **原链路实测；内置实现待回归** | 内置实现覆盖生成、上传、注册、启动和停止 |
+| 姿态回传 | Lab | **原链路实测；内置实现待回归** | 原链路已获得连续样本；新 Bridge 有模拟测试 |
+| 720p 视频 | Lab | **原链路实测；内置实现待回归** | 原链路得到 `1280×720 yuv420p`；新解码链路有离线测试 |
+| Lab Bridge 控制 | Lab | **代码完成；物理待验证** | session/序号、arm、限幅、续租和 300 ms 失联归零 |
 | Lab 电量 | Lab | **不支持/未知** | 当前返回 `None` |
 | root ADB | Lab + payload | **实测通过** | USB/TCP，重启关闭 |
 | SDK 低层握手 | 内置 SDK + 临时补丁 | **实测通过** | 原厂状态失败符合预期 |
@@ -719,7 +726,7 @@ flowchart LR
 
 | 日期 | 版本 | 变化 |
 | --- | --- | --- |
-| 2026-08-30 | 1.3 | 将固定 DJI Python SDK 源码内置为 `src/robomaster`，统一 Python 3.10 基线，移除外部 checkout/官方 wheel 依赖，并隔离会安装同名包的 LAB-SDK 环境 |
+| 2026-08-30 | 1.3 | 内置 `src/robomaster` SDK fork 与项目自有 `src/hanppie/lab` App/Lab 后端，统一 Python 3.10 基线，移除官方 wheel、外部 checkout 和第二套 Lab 环境依赖 |
 | 2026-08-30 | 1.2 | 将 S1 原生事实、外部生态和 Hanppie 项目实现分层，集中记录项目改动、生命周期和恢复边界 |
 | 2026-08-30 | 1.1 | 补充系统/启动服务/关键文件清单，明确 DUSS 的能力边界，并还原 App/Lab 分层协议和程序生命周期 |
 | 2026-08-30 | 1.0 | 基于固件 `00.06.0521` 的两轮实测、恢复代码和固定上游 SDK，建立长期架构基线 |
@@ -730,6 +737,6 @@ flowchart LR
 - [电脑控制与二次开发调研报告](./robomaster-s1-revival-report.md)
 - [DJI RoboMaster S1 用户手册 v1.8](https://dl.djicdn.com/downloads/robomaster-s1/20220429UM/RoboMaster_S1_User_Manual_v1.8_EN.pdf)
 - [DJI RoboMaster-SDK](https://github.com/dji-sdk/RoboMaster-SDK)
-- [RoboMaster-S1-WiFi-SDK](https://github.com/tatsuyai713/RoboMaster-S1-WiFi-SDK)
+- [RoboMaster-S1-WiFi-SDK](https://github.com/tatsuyai713/RoboMaster-S1-WiFi-SDK)（仅作固定提交的行为参考，未作为依赖或源码来源）
 - [jeguzzi/robomaster_ros](https://github.com/jeguzzi/robomaster_ros)
 - [proroklab/robomaster_sdk_can](https://github.com/proroklab/robomaster_sdk_can)

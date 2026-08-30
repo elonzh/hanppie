@@ -36,22 +36,6 @@ def test_missing_optional_dependency_shows_install_hint(
     assert "uv sync" in capsys.readouterr().err
 
 
-def test_missing_lab_dependency_shows_isolated_environment_hint(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    def missing(_name: str) -> None:
-        raise ModuleNotFoundError("missing", name="robomaster_lab_sdk")
-
-    monkeypatch.setattr(cli.importlib, "import_module", missing)
-
-    with pytest.raises(SystemExit, match="2"):
-        cli.main(["probe-lab"])
-
-    error = capsys.readouterr().err
-    assert "task sync:lab" in error
-    assert "task run:lab" in error
-
-
 def test_keyboard_interrupt_returns_shell_status(monkeypatch: pytest.MonkeyPatch) -> None:
     def interrupt(_arguments: list[str]) -> int:
         raise KeyboardInterrupt

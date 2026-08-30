@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Probe the stock S1 Lab bridge without issuing a motion command."""
+"""Probe the Hanppie S1 Lab bridge without issuing a motion command."""
 
 from __future__ import annotations
 
 import argparse
 import time
 
-from robomaster_lab_sdk.robot import Robot
+from hanppie.lab import LabRobot
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -22,7 +22,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    s1 = Robot(robot_ip=args.robot_ip, appid=args.appid, debug=args.debug)
+    s1 = LabRobot(robot_ip=args.robot_ip, appid=args.appid, debug=args.debug)
     initialized = False
     program_started = False
     bridge_started = False
@@ -36,13 +36,13 @@ def main(argv: list[str] | None = None) -> int:
         s1.enter_lab()
         print("entered Lab mode")
         digest = s1.upload_lab_bridge()
-        print(f"uploaded stock Lab bridge: md5={digest}")
+        print(f"uploaded Hanppie Lab bridge: md5={digest}")
         s1.start_lab_program()
         program_started = True
-        print("started stock Lab bridge program")
+        print("started Hanppie Lab bridge program")
         s1.start_lab_bridge()
         bridge_started = True
-        print(f"host bridge ready: worker_pids={s1.bridge.worker_pids}")
+        print(f"host bridge ready: worker_threads={s1.bridge.worker_threads}")
 
         s1.chassis.sub_attitude(
             freq=5, callback=lambda value: attitude_samples.append(tuple(value))

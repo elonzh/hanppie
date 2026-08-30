@@ -47,10 +47,6 @@ dev = [
   "pytest-cov>=7,<8",
   "ruff>=0.15.18,<0.16",
 ]
-lab = [
-  "robomaster-s1-lab-sdk @ git+https://github.com/tatsuyai713/RoboMaster-S1-WiFi-SDK.git@fce5ff284a1ca910b7ca93c499b95eea4813152e#subdirectory=LAB-SDK",
-]
-
 [tool.uv]
 default-groups = ["dev"]
 required-version = ">=0.12.6,<0.13"

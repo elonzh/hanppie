@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import argparse
 
-from robomaster_lab_sdk.robot import Robot
+from hanppie.lab import LabRobot
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -22,7 +22,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    s1 = Robot(robot_ip=args.robot_ip, appid=args.appid, debug=args.debug)
+    s1 = LabRobot(robot_ip=args.robot_ip, appid=args.appid, debug=args.debug)
     initialized = False
     video_started = False
     try:

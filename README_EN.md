@@ -21,7 +21,7 @@ Tested firmware: `00.06.0521`.
 - bundled RoboMaster SDK fork handshake, `Robot.initialize()`, firmware version, serial number, mode, gimbal angle, and LED control;
 - complete status, restore, and re-enable round trip for the SDK patch.
 
-Known limitations: the SDK camera request is rejected by the S1, and several EP DDS topics continuously return zero. The current recommendation is to use the bundled SDK fork for control and verified telemetry, and the App/Lab backend for video and S1-specific data. Physical chassis motion, gimbal motion, and the launcher have not yet been tested under the required safety conditions.
+Known limitations: the SDK camera request is rejected by the S1, and several EP DDS topics continuously return zero. The current recommendation is to use the bundled SDK fork for control and verified telemetry, and the App/Lab backend for video and S1-specific data. The original App/Lab path produced the physical-device results above; after its migration into `src/hanppie/lab`, packet, lifecycle, and packaging regressions pass offline, but the new internal implementation still needs a current physical-device rerun. Physical chassis motion, gimbal motion, and the launcher have not yet been tested under the required safety conditions.
 
 The long-lived technical source of truth is [RoboMaster S1 Technical Architecture](./docs/architecture.md) (Chinese). Reproducible evidence is recorded in the [physical-device debug log](./docs/s1-live-debug-2026-08-29.md), while the earlier [research report](./docs/robomaster-s1-revival-report.md) covers S.BUS, SocketCAN, vcan, ROS 2, and alternative approaches.
 
@@ -55,7 +55,7 @@ from robomaster import robot
 s1 = robot.Robot()
 ```
 
-`uv sync` installs both Hanppie and the bundled SDK fork. An official wheel, external SDK checkout, and `HANPPIE_OFFICIAL_SDK_PATH` are no longer needed. The pinned LAB-SDK distribution also installs its own compatibility package named `robomaster`, so `task sync:lab` places it in a separate `.venv-lab` instead of letting it overwrite the bundled fork in the main environment; run Lab commands with `task run:lab -- ...`. Only Python 3.10 is currently included in the test matrix.
+`uv sync` installs Hanppie, the bundled SDK fork, and Hanppie's own App/Lab backend. An official wheel, external SDK checkout, separate Lab environment, and `HANPPIE_OFFICIAL_SDK_PATH` are no longer needed. Only Python 3.10 is currently included in the test matrix.
 
 ## Command line
 
@@ -75,7 +75,7 @@ Each command provides its own help:
 
 ```bash
 uv run hanppie sdk --help
-task run:lab -- adb-enable --help
+uv run hanppie adb-enable --help
 ```
 
 ### Restore the SDK proxy after a reboot
@@ -87,8 +87,7 @@ export S1_IP="192.168.x.x"
 export S1_APPID="your-8-character-appid"
 export S1_SERIAL="your-s1-serial"
 
-task sync:lab
-task run:lab -- adb-enable \
+uv run hanppie adb-enable \
   --robot-ip "$S1_IP" \
   --appid "$S1_APPID" \
   --settle-seconds 8
@@ -125,6 +124,7 @@ src/
 │   ├── cli.py              # unified CLI
 │   ├── sdk_patch.py        # ADB and temporary SDK-service management
 │   ├── adb_bootstrap.py    # App/Lab ADB bootstrap
+│   ├── lab/                # AppID, outer DUSS, Lab lifecycle, Bridge, and video
 │   ├── media_codec.py      # PyAV media-interface adapter
 │   ├── probes/             # safe, single-purpose physical-device probes
 │   ├── payloads/           # minimal temporary payloads uploaded to the S1
@@ -162,4 +162,4 @@ Read [`CONTRIBUTING.md`](./CONTRIBUTING.md) before contributing. Architecture or
 
 ## License
 
-Hanppie's own host-side code uses the [MIT License](./LICENSE). The DJI-derived code under `src/robomaster` uses the Apache License 2.0. Recovered device runtime and the community backend remain subject to their respective provenance and terms; see [`NOTICE.md`](./NOTICE.md).
+Hanppie's own host-side code, including `src/hanppie/lab`, uses the [MIT License](./LICENSE). The DJI-derived code under `src/robomaster` uses the Apache License 2.0. Recovered device runtime remains subject to its provenance and terms; see [`NOTICE.md`](./NOTICE.md).
