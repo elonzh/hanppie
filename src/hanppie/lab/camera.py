@@ -1,11 +1,13 @@
-"""S1 App video control and H.264 decoding."""
+"""S1 App video and microphone stream control."""
 
 from __future__ import annotations
 
 import queue
 import threading
+import time
 
 from hanppie.lab.app import AppConnection
+from hanppie.lab.audio import OpusDecoder
 
 
 class LabCamera:
@@ -13,10 +15,14 @@ class LabCamera:
         self._connection = connection
         self._chunks: queue.Queue[bytes] = queue.Queue(maxsize=120)
         self._frames: queue.Queue[object] = queue.Queue(maxsize=1)
+        self._audio_packets: queue.Queue[bytes] = queue.Queue(maxsize=32)
+        self._audio_decoder = OpusDecoder()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._streaming = False
+        self._audio_streaming = False
         self._connection.on("video", self._accept_chunk)
+        self._connection.on("audio", self._accept_audio)
 
     def _accept_chunk(self, payload: object) -> None:
         if not isinstance(payload, bytes):
@@ -26,6 +32,11 @@ class LabCamera:
         except queue.Full:
             self._clear(self._chunks)
             self._chunks.put_nowait(payload)
+
+    def _accept_audio(self, payload: object) -> None:
+        if not self._audio_streaming or not isinstance(payload, bytes):
+            return
+        self._put_latest(self._audio_packets, payload)
 
     def start_video_stream(self, *, display: bool = False, resolution: str = "720p") -> bool:
         del display
@@ -66,11 +77,56 @@ class LabCamera:
                 thread.join(timeout=1.0)
         return True
 
+    def start_audio_stream(self) -> bool:
+        """Request the S1 microphone's Opus stream over the App session."""
+
+        self._clear(self._audio_packets)
+        self._audio_streaming = True
+        self._connection.send_duss(0x02, 0x01, 0x40, 0x3F, 0x1E, b"\x01")
+        return True
+
+    def stop_audio_stream(self) -> bool:
+        """Stop accepting microphone packets locally.
+
+        The observed App protocol has a start request but no independently
+        verified receive-stop command. Closing the App session stops the
+        device stream.
+        """
+
+        self._audio_streaming = False
+        self._clear(self._audio_packets)
+        return True
+
+    def read_audio_opus(self, *, timeout: float = 1.0) -> bytes | None:
+        try:
+            return self._audio_packets.get(timeout=max(0.0, timeout))
+        except queue.Empty:
+            return None
+
+    def decode_audio_opus(self, packet: bytes) -> bytes | None:
+        return self._audio_decoder.decode(packet)
+
+    def read_audio_frame(self, *, timeout: float = 1.0) -> bytes | None:
+        """Return decoded 48 kHz mono signed 16-bit PCM."""
+
+        deadline = time.monotonic() + max(0.0, timeout)
+        while True:
+            remaining = deadline - time.monotonic()
+            packet = self.read_audio_opus(timeout=max(0.0, remaining))
+            if packet is None:
+                return None
+            pcm = self.decode_audio_opus(packet)
+            if pcm:
+                return pcm
+            if remaining <= 0:
+                return None
+
     def close(self) -> None:
         try:
             self.stop_video_stream()
         except (OSError, RuntimeError):
             pass
+        self.stop_audio_stream()
 
     def _stream_control(self, control: int, state: int, resolution: int) -> None:
         self._connection.send_duss(

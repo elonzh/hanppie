@@ -73,6 +73,8 @@ def test_diag_lists_checks_and_rejects_unknown() -> None:
     assert listed.exit_code == 0
     assert "chassis" in listed.output
     assert "speaker" in listed.output
+    assert "microphone" in listed.output
+    assert "muzzle" in listed.output
     assert invalid.exit_code == 2
     assert "unknown" in invalid.output
 

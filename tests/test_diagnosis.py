@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 from rich.console import Console
 
+from hanppie.diagnosis.checks import DiagnosisChecks
 from hanppie.diagnosis.discovery import discover_robots
 from hanppie.diagnosis.firmware import STOCK_HASHES, classify_runtime
 from hanppie.diagnosis.model import (
@@ -102,10 +103,8 @@ def test_discover_robots_decodes_and_deduplicates(monkeypatch) -> None:
     assert sock.closed
 
 
-def test_recorder_redacts_logs_and_report(tmp_path: Path) -> None:
+def test_recorder_keeps_complete_local_evidence(tmp_path: Path) -> None:
     recorder = DiagnosisRecorder(tmp_path, now=datetime(2026, 8, 30, tzinfo=timezone.utc))
-    recorder.add_secret("192.0.2.10")
-    recorder.add_secret("secret-id")
     recorder.event(
         "info",
         "sample",
@@ -120,11 +119,10 @@ def test_recorder_redacts_logs_and_report(tmp_path: Path) -> None:
 
     log = recorder.log_path.read_text(encoding="utf-8")
     report = recorder.report_path.read_text(encoding="utf-8")
-    assert "192.0.2.10" not in log + report
-    assert "192.168.1.8" not in log + report
-    assert "AA:BB:CC:DD:EE:FF" not in log + report
-    assert "secret-id" not in log + report
-    assert "[REDACTED]" in log + report
+    assert "192.0.2.10" in log + report
+    assert "192.168.1.8" in log
+    assert "AA:BB:CC:DD:EE:FF" in log
+    assert "secret-id" in log + report
     assert "docs/architecture.md" in report
     json.loads(log)
 
@@ -142,6 +140,9 @@ class FakeFrame:
 
 
 class FakeCamera:
+    def __init__(self) -> None:
+        self.audio_streaming = False
+
     def start_video_stream(self, **_kwargs) -> bool:
         return True
 
@@ -151,8 +152,25 @@ class FakeCamera:
     def stop_video_stream(self) -> bool:
         return True
 
+    def start_audio_stream(self) -> bool:
+        self.audio_streaming = True
+        return True
+
+    def read_audio_frame(self, **_kwargs):
+        return (1000).to_bytes(2, "little", signed=True) * 480
+
+    def stop_audio_stream(self) -> bool:
+        self.audio_streaming = False
+        return True
+
     def close(self) -> None:
         return None
+
+
+class FakeAudio:
+    def play_pcm(self, pcm: bytes) -> int:
+        assert pcm
+        return 2
 
 
 class FakeBridge:
@@ -205,6 +223,11 @@ class FakeBridge:
         elif command.get("fire"):
             suffix = "fire_ir" if command["fire_type"] == "infrared" else "fire_gel"
             name = f"blaster.{suffix}"
+            self.values.update(
+                last_fire_led_ok=True,
+                last_fire_sound_ok=True,
+                last_fire_actuator_ok=True,
+            )
         else:
             name = f"{command['module']}.{command['method']}"
             if name == "gimbal.recenter":
@@ -227,6 +250,7 @@ class FakeRobot:
         self.info = AppConnectionInfo(robot_ip, appid, "idle", "00:11:22:33:44:55")
         self.base = SimpleNamespace(get_battery=lambda: 77)
         self.camera = FakeCamera()
+        self.audio = FakeAudio()
         self.bridge = FakeBridge()
         self.config = SimpleNamespace(command_timeout=0.0)
         self.instances.append(self)
@@ -342,10 +366,16 @@ def test_runner_executes_complete_diagnosis_and_cleans_up(tmp_path: Path) -> Non
     status, results = runner.run()
 
     assert status == 0
-    assert [result.status for result in results] == ["PASS"] * 13
+    assert [result.status for result in results] == ["PASS"] * 15
     by_name = {result.name: result for result in results}
     assert len(by_name["led"].evidence["colors"]) == 4
-    assert by_name["speaker"].evidence["sound_id"] == 0x107
+    assert [sound["sound_id"] for sound in by_name["speaker"].evidence["sounds"]] == [
+        0x107,
+        0x102,
+    ]
+    assert by_name["speaker"].evidence["host_pcm"]["transfer_packets"] == 2
+    assert by_name["microphone"].evidence["format"] == "48 kHz mono signed 16-bit PCM"
+    assert by_name["muzzle"].evidence["sequence"][-1] == "set_fire_led:off"
     assert len(by_name["chassis"].evidence["steps"]) == 6
     assert len(by_name["gimbal"].evidence["steps"]) == 4
     assert by_name["gel"].evidence["count"] == 1
@@ -354,9 +384,23 @@ def test_runner_executes_complete_diagnosis_and_cleans_up(tmp_path: Path) -> Non
     assert by_name["system"].evidence["runtime_classification"] == "stock"
     report = recorder.report_path.read_text(encoding="utf-8")
     log = recorder.log_path.read_text(encoding="utf-8")
-    assert "192.0.2.10" not in report + log
-    assert "b6359877" not in report + log
+    assert "192.0.2.10" in report + log
+    assert "b6359877" in report + log
     assert all(not robot.connected for robot in FakeRobot.instances)
+
+
+def test_pcm_level_detects_requested_tone_frequency() -> None:
+    tone = DiagnosisChecks._tone_pcm(
+        frequency=440.0,
+        duration=0.02,
+        amplitude=2000,
+        sample_rate=48_000,
+    )
+    matching = DiagnosisChecks._pcm_level(tone, tone_frequency=440.0)
+    unrelated = DiagnosisChecks._pcm_level(tone, tone_frequency=1000.0)
+
+    assert matching["tone_amplitude"] > 1500
+    assert unrelated["tone_amplitude"] < matching["tone_amplitude"] / 5
 
 
 def test_runner_records_failure_and_still_cleans_up(tmp_path: Path) -> None:

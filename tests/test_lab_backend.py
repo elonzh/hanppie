@@ -1,12 +1,23 @@
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Callable
+from types import SimpleNamespace
 
 import pytest
 
 import hanppie.lab.robot as robot_module
 from hanppie.lab.app import AppConnection, AppConnectionInfo
+from hanppie.lab.audio import (
+    AUDIO_PLAY_PAYLOAD,
+    LabAudio,
+    OpusDecoder,
+    build_audio_block,
+    build_audio_start_payload,
+    build_audio_stop_payload,
+    encode_speaker_pcm,
+)
 from hanppie.lab.bridge import LabBridge, LabTelemetry
 from hanppie.lab.camera import LabCamera
 from hanppie.lab.config import LabConfig
@@ -206,6 +217,12 @@ def test_app_connection_builds_setup_and_dispatches_video_and_battery(
     assert connection.get_battery() == 76
     assert len(battery_events) == 1
 
+    audio_events: list[object] = []
+    connection.on("audio", audio_events.append)
+    audio = build_duss(0x01, 0x02, 0x80, 0x3F, 0x1D, b"opus", 2)
+    connection._handle_packet(audio)
+    assert audio_events == [b"opus"]
+
 
 def test_app_connection_callbacks_initialize_and_close(monkeypatch: pytest.MonkeyPatch) -> None:
     connection = AppConnection("192.0.2.10", "b6359877")
@@ -344,8 +361,11 @@ def test_camera_emits_app_stream_commands_and_queue_strategy(
     calls: list[tuple[object, ...]] = []
 
     class Connection:
-        def on(self, _event: str, callback: Callable[[object], None]) -> None:
-            self.callback = callback
+        def __init__(self) -> None:
+            self.callbacks: dict[str, Callable[[object], None]] = {}
+
+        def on(self, event: str, callback: Callable[[object], None]) -> None:
+            self.callbacks[event] = callback
 
         def send_duss(self, *args: object) -> None:
             calls.append(args)
@@ -364,7 +384,8 @@ def test_camera_emits_app_stream_commands_and_queue_strategy(
             self.joined = timeout == 1
 
     monkeypatch.setattr("hanppie.lab.camera.threading.Thread", Thread)
-    camera = LabCamera(Connection())  # type: ignore[arg-type]
+    connection = Connection()
+    camera = LabCamera(connection)  # type: ignore[arg-type]
 
     camera._accept_chunk("not-bytes")
     camera._accept_chunk(b"h264")
@@ -382,8 +403,96 @@ def test_camera_emits_app_stream_commands_and_queue_strategy(
     with pytest.raises(ValueError, match="resolution"):
         camera.start_video_stream(resolution="4k")
     assert camera.stop_video_stream()
+    camera._audio_decoder = type("Decoder", (), {"decode": lambda _self, _packet: b"pcm"})()
+    assert camera.start_audio_stream()
+    assert calls[-1][3:6] == (0x3F, 0x1E, b"\x01")
+    connection.callbacks["audio"](b"opus")
+    assert camera.read_audio_opus(timeout=0) == b"opus"
+    connection.callbacks["audio"](b"opus")
+    assert camera.read_audio_frame(timeout=0) == b"pcm"
+    assert camera.stop_audio_stream()
     camera.close()
     assert camera.read_video_frame(timeout=0) is None
+
+
+def test_s1_opus_decoder_resamples_to_mono_s16(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Codec:
+        sample_rate = 0
+        layout = ""
+
+        def decode(self, _packet: object) -> list[object]:
+            return [object()]
+
+    class CodecContext:
+        @staticmethod
+        def create(name: str, mode: str) -> Codec:
+            assert (name, mode) == ("opus", "r")
+            return Codec()
+
+    class Resampler:
+        def __init__(self, **values: object) -> None:
+            assert values == {"format": "s16", "layout": "mono", "rate": 48_000}
+
+        def resample(self, _frame: object) -> list[object]:
+            return [SimpleNamespace(samples=2, planes=[b"\x01\x00\x02\x00padding"])]
+
+    fake_av = SimpleNamespace(
+        CodecContext=CodecContext,
+        AudioResampler=Resampler,
+        Packet=lambda payload: payload,
+    )
+    monkeypatch.setitem(sys.modules, "av", fake_av)
+
+    decoder = OpusDecoder()
+    assert decoder.decode(b"") is None
+    assert decoder.decode(b"opus") == b"\x01\x00\x02\x00"
+
+
+def test_lab_audio_uploads_encoded_clip_with_captured_sequence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connection = FakeConnection()
+    audio = LabAudio(connection)  # type: ignore[arg-type]
+    delays: list[float] = []
+    monkeypatch.setattr("hanppie.lab.audio.time.sleep", delays.append)
+    encoded = b"e" * 1000
+    monkeypatch.setattr("hanppie.lab.audio.encode_speaker_pcm", lambda _pcm: encoded)
+
+    assert audio.play_pcm(b"pcm") == 2
+    calls = [call for call in connection.calls if isinstance(call, tuple)]
+    assert [(call[4], call[5]) for call in calls] == [
+        (0x3F, 0x5F),
+        (0x00, 0x09),
+        (0x00, 0x09),
+        (0x3F, 0x5F),
+        (0x3F, 0xB3),
+    ]
+    assert bytes.fromhex(str(calls[0][6])) == build_audio_start_payload(2, 1000)
+    assert bytes.fromhex(str(calls[1][6])) == build_audio_block(b"e" * 960, 0)
+    assert bytes.fromhex(str(calls[2][6])) == build_audio_block(b"e" * 40, 1)
+    assert bytes.fromhex(str(calls[3][6])) == build_audio_stop_payload(encoded)
+    assert bytes.fromhex(str(calls[4][6])) == AUDIO_PLAY_PAYLOAD
+    assert delays == [0.055, 0.006, 0.055, 0.107]
+
+
+def test_speaker_pcm_is_length_prefixed_opus() -> None:
+    encoded = encode_speaker_pcm(b"\x00" * 960)
+    offset = 0
+    packets: list[bytes] = []
+    while offset < len(encoded):
+        size = int.from_bytes(encoded[offset : offset + 2], "little")
+        offset += 2
+        packets.append(encoded[offset : offset + size])
+        offset += size
+    assert offset == len(encoded)
+    assert packets
+    assert all((packet[0] & 0xF8) == 0x28 for packet in packets)
+
+
+def test_audio_metadata_and_block_headers_match_observed_packets() -> None:
+    assert build_audio_start_payload(5, 4562).hex() == ("00000001000500d2110000000000000000")
+    assert build_audio_stop_payload(b"captured-pcm").hex() == ("023262e9161cd25bdf6e070a1a14b627c3")
+    assert build_audio_block(b"audio", 1).hex() == "00010000000500617564696f"
 
 
 def test_lab_robot_lifecycle_and_program_registration(

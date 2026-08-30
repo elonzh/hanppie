@@ -47,7 +47,7 @@ Only Python 3.10 is tested. [`pyproject.toml`](./pyproject.toml) and [`uv.lock`]
 
 ## One-command physical-device diagnosis
 
-`diag` is the project's only physical-device validation and debugging entry point. It supports interactive and non-interactive execution through Typer and Rich, and every run creates a redacted Markdown report and JSONL event log:
+`diag` is the project's only physical-device validation and debugging entry point. It supports interactive and non-interactive execution through Typer and Rich, and every run creates a Markdown report and JSONL event log:
 
 ```bash
 # Show every check and its risk class
@@ -56,7 +56,7 @@ uv run hanppie diag --list
 # Select checks interactively and confirm motion, infrared, and gel firing separately
 uv run hanppie diag --interactive
 
-# Standard non-mechanical diagnosis: discovery, App, video, Lab, LED cycle, speaker, ADB, system
+# Standard non-mechanical diagnosis: discovery, App, video, microphone, speaker, Lab, armor LEDs, muzzle LEDs, ADB, system
 uv run hanppie diag --no-interactive
 
 # Complete non-interactive regression; each hazardous class requires an explicit gate

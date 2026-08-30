@@ -277,6 +277,8 @@ class AppConnection:
             self._emit("duss", frame)
             if frame.cmdset == 0x48 and frame.cmdid == 0x08 and len(frame.payload) == 62:
                 self._battery = frame.payload[10]
+            elif frame.cmdset == 0x3F and frame.cmdid == 0x1D:
+                self._emit("audio", frame.payload)
 
     def get_battery(self) -> int | None:
         return self._battery

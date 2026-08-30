@@ -47,7 +47,7 @@ s1 = robot.Robot()
 
 ## 一键实机诊断
 
-`diag` 是项目唯一的实机验证与调试入口。它使用 Typer 和 Rich 提供交互式与非交互式执行，并为每次运行生成已脱敏的 Markdown 报告和 JSONL 事件日志：
+`diag` 是项目唯一的实机验证与调试入口。它使用 Typer 和 Rich 提供交互式与非交互式执行，并为每次运行生成 Markdown 报告和 JSONL 事件日志：
 
 ```bash
 # 查看全部项目和风险等级
@@ -56,7 +56,7 @@ uv run hanppie diag --list
 # 交互选择，并逐项确认机械运动、红外和水弹测试
 uv run hanppie diag --interactive
 
-# 标准非机械诊断：发现、App、视频、Lab、灯光循环、扬声器、临时 ADB 和机内信息
+# 标准非机械诊断：发现、App、视频、麦克风、扬声器、Lab、装甲灯、枪口灯、ADB 和机内信息
 uv run hanppie diag --no-interactive
 
 # 完整非交互回归；三类危险能力必须分别显式解锁

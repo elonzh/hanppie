@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import array
 import math
+import sys
 import time
 from typing import Any
 
 from hanppie.diagnosis.firmware import STOCK_HASHES, classify_runtime
 from hanppie.diagnosis.session import DeviceSession
+from hanppie.lab.audio import MICROPHONE_SAMPLE_RATE, SPEAKER_SAMPLE_RATE
 
 LED_COLORS = (
     ("red", 255, 0, 0),
@@ -29,7 +32,10 @@ GIMBAL_SEQUENCE = (
     ("yaw-positive", 0.0, 15.0),
     ("yaw-negative", 0.0, -15.0),
 )
-SPEAKER_TONE_ID = 0x107
+SPEAKER_SOUNDS = (
+    ("solmization-1C", 0x107),
+    ("shoot", 0x102),
+)
 
 
 class DiagnosisChecks:
@@ -43,9 +49,11 @@ class DiagnosisChecks:
             "discovery": self.discovery,
             "app": self.app,
             "video": self.video,
+            "microphone": self.microphone,
             "lab": self.lab,
             "led": self.led,
             "speaker": self.speaker,
+            "muzzle": self.muzzle,
             "chassis": self.chassis,
             "gimbal": self.gimbal,
             "infrared": self.infrared,
@@ -111,6 +119,27 @@ class DiagnosisChecks:
             if started:
                 robot.camera.stop_video_stream()
 
+    def microphone(self) -> dict[str, Any]:
+        robot = self.session.ensure_app()
+        started = False
+        try:
+            started = robot.camera.start_audio_stream()
+            if not started:
+                raise RuntimeError("机器人麦克风流请求未发送")
+            samples = self._collect_audio_stats(robot.camera, frames=3)
+            if not samples:
+                raise TimeoutError("未收到可解码的 S1 麦克风音频")
+            return {
+                "_summary": "已接收并解码 S1 麦克风的 48 kHz 单声道 Opus 音频",
+                "format": "48 kHz mono signed 16-bit PCM",
+                "frames": samples,
+                "maximum_peak": max(sample["peak"] for sample in samples),
+                "maximum_rms": max(sample["rms"] for sample in samples),
+            }
+        finally:
+            if started:
+                robot.camera.stop_audio_stream()
+
     def lab(self) -> dict[str, Any]:
         robot = self.session.ensure_lab()
         return {
@@ -150,19 +179,140 @@ class DiagnosisChecks:
             robot.set_led(component="all", red=0, green=0, blue=0, effect="off")
 
     def speaker(self) -> dict[str, Any]:
+        robot = self.session.ensure_app()
+        host_pcm = self._test_host_pcm_speaker(robot)
         robot = self.session.ensure_lab()
-        if not robot.call("media", "play_sound", sound=SPEAKER_TONE_ID):
-            raise RuntimeError("扬声器命令未发送")
-        sequence = robot.bridge.command_sequence
-        telemetry = self.session.wait_command("media.play_sound", sequence)
-        if telemetry.get("last_command_ok") is not True:
-            raise RuntimeError(f"机内扬声器调用失败：{telemetry.get('last_command_error')}")
-        self.session.sleep(0.5)
+        audio_started = robot.camera.start_audio_stream()
+        baseline = self._collect_audio_stats(robot.camera, frames=3) if audio_started else []
+        sounds: list[dict[str, Any]] = []
+        try:
+            for name, sound_id in SPEAKER_SOUNDS:
+                if not robot.call("media", "play_sound", sound=sound_id):
+                    raise RuntimeError(f"扬声器 {name} 命令未发送")
+                sequence = robot.bridge.command_sequence
+                telemetry = self.session.wait_command("media.play_sound", sequence)
+                if telemetry.get("last_command_ok") is not True:
+                    raise RuntimeError(
+                        f"机内扬声器 {name} 调用失败：{telemetry.get('last_command_error')}"
+                    )
+                samples = self._collect_audio_stats(robot.camera, frames=5) if audio_started else []
+                sounds.append(
+                    {
+                        "name": name,
+                        "sound_id": sound_id,
+                        "controller_acknowledged": True,
+                        "microphone_loopback": samples,
+                    }
+                )
+        finally:
+            if audio_started:
+                robot.camera.stop_audio_stream()
+
+        baseline_rms = max((sample["rms"] for sample in baseline), default=0.0)
+        sound_rms = max(
+            (sample["rms"] for sound in sounds for sample in sound["microphone_loopback"]),
+            default=0.0,
+        )
+        ratio = round(sound_rms / baseline_rms, 2) if baseline_rms else None
+        acoustic_loopback = sound_rms > max(200.0, baseline_rms * 1.8)
+        summary = "音阶和射击音效均获 controller 确认"
+        if acoustic_loopback:
+            summary += "，机身麦克风同时记录到显著声压变化"
+        else:
+            summary += "；未取得可判定的物理声学回环证据"
+        if host_pcm.get("acoustic_loopback_observed"):
+            summary += "；Host PCM 测试音播放也取得声学回环"
+        else:
+            summary += "；Host PCM 已发送但未取得可判定的声学回环"
         return {
-            "_summary": "内置提示音调用获 controller 确认；未做外部听觉确认",
-            "sound_id": SPEAKER_TONE_ID,
-            "acknowledged": True,
+            "_summary": summary,
+            "sounds": sounds,
+            "baseline_microphone": baseline,
+            "maximum_sound_rms": sound_rms,
+            "rms_ratio": ratio,
+            "acoustic_loopback_observed": acoustic_loopback,
+            "host_pcm": host_pcm,
         }
+
+    def _test_host_pcm_speaker(self, robot) -> dict[str, Any]:
+        audio_started = robot.camera.start_audio_stream()
+        try:
+            baseline = (
+                self._collect_audio_stats(robot.camera, frames=3, tone_frequency=440.0)
+                if audio_started
+                else []
+            )
+        finally:
+            if audio_started:
+                robot.camera.stop_audio_stream()
+
+        self.session.close_robot()
+        robot = self.session.ensure_app()
+        output_audio_started = False
+        try:
+            tone = self._tone_pcm(
+                frequency=440.0,
+                duration=1.0,
+                amplitude=8000,
+                sample_rate=SPEAKER_SAMPLE_RATE,
+            )
+            packets = robot.audio.play_pcm(tone)
+            output_audio_started = robot.camera.start_audio_stream()
+            loopback = (
+                self._collect_audio_stats(robot.camera, frames=50, tone_frequency=440.0)
+                if output_audio_started
+                else []
+            )
+        finally:
+            if output_audio_started:
+                robot.camera.stop_audio_stream()
+        baseline_rms = max((sample["rms"] for sample in baseline), default=0.0)
+        sound_rms = max((sample["rms"] for sample in loopback), default=0.0)
+        baseline_tone = max((sample["tone_amplitude"] for sample in baseline), default=0.0)
+        sound_tone = max((sample["tone_amplitude"] for sample in loopback), default=0.0)
+        return {
+            "format": "12 kHz mono signed 16-bit PCM to length-prefixed Opus",
+            "frequency_hz": 440.0,
+            "duration_seconds": 1.0,
+            "amplitude": 8000,
+            "transfer_packets": packets,
+            "fresh_app_session_before_upload": True,
+            "baseline_microphone": baseline,
+            "microphone_loopback": loopback,
+            "rms_ratio": round(sound_rms / baseline_rms, 2) if baseline_rms else None,
+            "tone_amplitude_ratio": (
+                round(sound_tone / baseline_tone, 2) if baseline_tone else None
+            ),
+            "acoustic_loopback_observed": sound_tone > max(100.0, baseline_tone * 2.5),
+        }
+
+    def muzzle(self) -> dict[str, Any]:
+        robot = self.session.ensure_lab()
+        completed: list[str] = []
+        try:
+            for method, effect in (
+                ("set_led", "on"),
+                ("set_led", "off"),
+                ("set_fire_led", "on"),
+                ("set_fire_led", "off"),
+            ):
+                if not robot.call("blaster", method, effect=effect):
+                    raise RuntimeError(f"枪口灯 {method}/{effect} 命令未发送")
+                sequence = robot.bridge.command_sequence
+                telemetry = self.session.wait_command(f"blaster.{method}", sequence)
+                if telemetry.get("last_command_ok") is not True:
+                    raise RuntimeError(
+                        f"机内枪口灯 {method}/{effect} 调用失败："
+                        f"{telemetry.get('last_command_error')}"
+                    )
+                completed.append(f"{method}:{effect}")
+                self.session.sleep(0.35)
+            return {
+                "_summary": "枪口常亮和开火灯效的点亮/关闭均获 controller 确认；未做外部视觉确认",
+                "sequence": completed,
+            }
+        finally:
+            robot.call("blaster", "reset_led")
 
     def chassis(self) -> dict[str, Any]:
         robot = self.session.ensure_lab()
@@ -365,11 +515,76 @@ class DiagnosisChecks:
             raise RuntimeError(f"机内发射调用失败：{telemetry.get('last_command_error')}")
         effect = "未验证外部红外接收" if fire_type == "infrared" else "空仓，未验证弹丸物理发射"
         return {
-            "_summary": f"controller 调用已确认；{effect}",
+            "_summary": f"发射、射击音效和枪口闪光均获 controller 确认；{effect}",
             "fire_type": fire_type,
             "count": 1,
             "acknowledged": True,
+            "effects": {
+                "muzzle_led": telemetry.get("last_fire_led_ok"),
+                "shoot_sound": telemetry.get("last_fire_sound_ok"),
+                "actuator": telemetry.get("last_fire_actuator_ok"),
+            },
         }
+
+    def _collect_audio_stats(
+        self, camera, *, frames: int, tone_frequency: float | None = None
+    ) -> list[dict[str, Any]]:
+        samples: list[dict[str, Any]] = []
+        deadline = self._deadline(self.session.config.timeout)
+        while len(samples) < frames and self._before(deadline):
+            pcm = camera.read_audio_frame(timeout=min(0.5, max(0.0, deadline - time.monotonic())))
+            if not pcm:
+                continue
+            level = self._pcm_level(pcm, tone_frequency=tone_frequency)
+            level["bytes"] = len(pcm)
+            samples.append(level)
+        return samples
+
+    @staticmethod
+    def _pcm_level(pcm: bytes, *, tone_frequency: float | None = None) -> dict[str, int | float]:
+        even = pcm[: len(pcm) - (len(pcm) % 2)]
+        values = array.array("h")
+        values.frombytes(even)
+        if sys.byteorder == "big":
+            values.byteswap()
+        if not values:
+            return {"samples": 0, "peak": 0, "rms": 0.0}
+        peak = max(abs(value) for value in values)
+        rms = math.sqrt(sum(value * value for value in values) / len(values))
+        result: dict[str, int | float] = {
+            "samples": len(values),
+            "peak": peak,
+            "rms": round(rms, 2),
+        }
+        if tone_frequency is not None:
+            mean = sum(values) / len(values)
+            angular_step = 2 * math.pi * tone_frequency / MICROPHONE_SAMPLE_RATE
+            in_phase = sum(
+                (value - mean) * math.cos(angular_step * index)
+                for index, value in enumerate(values)
+            )
+            quadrature = sum(
+                (value - mean) * math.sin(angular_step * index)
+                for index, value in enumerate(values)
+            )
+            result["tone_frequency_hz"] = tone_frequency
+            result["tone_amplitude"] = round(2 * math.hypot(in_phase, quadrature) / len(values), 2)
+        return result
+
+    @staticmethod
+    def _tone_pcm(
+        *, frequency: float, duration: float, amplitude: int, sample_rate: int = 48_000
+    ) -> bytes:
+        values = array.array(
+            "h",
+            (
+                round(amplitude * math.sin(2 * math.pi * frequency * index / sample_rate))
+                for index in range(round(sample_rate * duration))
+            ),
+        )
+        if sys.byteorder == "big":
+            values.byteswap()
+        return values.tobytes()
 
     def _stop_and_confirm(self, robot) -> None:
         if not robot.bridge.stop_robot():

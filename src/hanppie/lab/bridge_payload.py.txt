@@ -15,7 +15,13 @@ def _root_import(name):
 
 def _safe_call(function, *arguments):
     try:
-        function(*arguments)
+        result = function(*arguments)
+        if result is False:
+            return False
+        if isinstance(result, dict):
+            values = result.get("kw", {})
+            if isinstance(values, dict) and "result" in values:
+                return values.get("result") in (0, True)
         return True
     except Exception:
         return False
@@ -151,6 +157,17 @@ def _generic_call(command):
             )
     if module == "armor" and method == "set_hit_sensitivity":
         return _safe_call(armor_ctrl.set_hit_sensitivity, int(params.get("sensitivity", 5)))
+    if module == "blaster":
+        effect = str(params.get("effect", "on")).lower()
+        enabled = effect not in ("off", "0", "false")
+        if method == "set_led":
+            return _safe_call(led_ctrl.gun_led_on if enabled else led_ctrl.gun_led_off)
+        if method == "set_fire_led":
+            return _safe_call(led_ctrl.fire_led_on if enabled else led_ctrl.fire_led_off)
+        if method == "reset_led":
+            fire_off = _safe_call(led_ctrl.fire_led_off)
+            gun_off = _safe_call(led_ctrl.gun_led_off)
+            return fire_off and gun_off
     if module == "media":
         if method == "play_sound":
             return _safe_call(media_ctrl.play_sound, params.get("sound", 0))
@@ -229,10 +246,28 @@ def _apply_command(command, state, now):
         state["motion_active"] = state["chassis_active"] or state["gimbal_active"]
     if command.get("fire", False):
         fire_type = str(command.get("fire_type", "infrared")).lower()
+        led_ok = _safe_call(led_ctrl.fire_led_on)
+        sound_ok = _safe_call(media_ctrl.play_sound, rm_define.media_sound_shoot)
         if fire_type in ("infrared", "ir", "led"):
-            _record_call(state, "blaster.fire_ir", ir_blaster_ctrl.fire_once)
+            fire_name = "blaster.fire_ir"
+            fire_ok = _safe_call(ir_blaster_ctrl.fire_once)
         else:
-            _record_call(state, "blaster.fire_gel", gun_ctrl.fire_once)
+            fire_name = "blaster.fire_gel"
+            fire_ok = _safe_call(gun_ctrl.fire_once)
+        state["last_fire_led_ok"] = led_ok
+        state["last_fire_sound_ok"] = sound_ok
+        state["last_fire_actuator_ok"] = fire_ok
+        state["fire_led_off_time"] = now + 0.4
+        state["last_command"] = fire_name
+        state["last_command_ok"] = led_ok and sound_ok and fire_ok
+        failures = []
+        if not led_ok:
+            failures.append("muzzle-led")
+        if not sound_ok:
+            failures.append("shoot-sound")
+        if not fire_ok:
+            failures.append("actuator")
+        state["last_command_error"] = ",".join(failures)
 
     chassis_fields = ("x", "y", "z")
     gimbal_fields = ("gimbal_pitch", "gimbal_yaw")
@@ -281,6 +316,9 @@ def _telemetry(state, now):
         "last_command": state["last_command"],
         "last_command_ok": state["last_command_ok"],
         "last_command_error": state["last_command_error"],
+        "last_fire_led_ok": state["last_fire_led_ok"],
+        "last_fire_sound_ok": state["last_fire_sound_ok"],
+        "last_fire_actuator_ok": state["last_fire_actuator_ok"],
         "x": _value(chassis_ctrl.get_position_based_power_on, rm_define.chassis_forward),
         "y": _value(chassis_ctrl.get_position_based_power_on, rm_define.chassis_translation),
         "yaw": _value(chassis_ctrl.get_attitude, rm_define.chassis_yaw),
@@ -316,6 +354,10 @@ def start():
         "last_command": "",
         "last_command_ok": True,
         "last_command_error": "",
+        "last_fire_led_ok": None,
+        "last_fire_sound_ok": None,
+        "last_fire_actuator_ok": None,
+        "fire_led_off_time": 0.0,
     }
     next_telemetry = time_module.time()
     while True:
@@ -335,6 +377,9 @@ def start():
             state["chassis_active"] = False
             state["gimbal_active"] = False
             state["motion_active"] = False
+        if state["fire_led_off_time"] and now >= state["fire_led_off_time"]:
+            _safe_call(led_ctrl.fire_led_off)
+            state["fire_led_off_time"] = 0.0
         if now >= next_telemetry:
             packet = json_module.dumps(_telemetry(state, now), separators=(",", ":"))
             try:

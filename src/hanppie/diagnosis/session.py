@@ -43,8 +43,6 @@ class DeviceSession:
         self.adb_enabled = False
         self.adb_ready = False
         self.pre_adb_cleanup: dict[str, Any] = {}
-        recorder.add_secret(self.robot_ip)
-        recorder.add_secret(self.appid)
 
     def discover_devices(self) -> list[RobotBroadcast]:
         return self.discover(self.config.discovery_timeout)
@@ -54,9 +52,6 @@ class DeviceSession:
         self.robot_ip = selected.robot_ip
         if selected.appid != "00000000":
             self.appid = selected.appid
-        self.recorder.add_secret(self.robot_ip)
-        self.recorder.add_secret(self.appid)
-        self.recorder.add_secret(selected.robot_mac)
         return selected
 
     def ensure_app(self) -> LabRobot:
@@ -73,7 +68,6 @@ class DeviceSession:
             conn_type="sta", proto_type="udp", timeout=self.config.timeout
         ):
             raise RuntimeError("S1 App 连接初始化失败")
-        self.recorder.add_secret(getattr(self.robot.info, "mac", ""))
         return self.robot
 
     def ensure_lab(self) -> LabRobot:
@@ -82,7 +76,6 @@ class DeviceSession:
             return robot
         robot.enter_lab()
         digest = robot.upload_lab_bridge()
-        self.recorder.add_secret(digest)
         robot.start_lab_program(digest)
         robot.start_lab_bridge()
         self.lab_ready = True
@@ -95,7 +88,6 @@ class DeviceSession:
         self.pre_adb_cleanup = self.close_robot()
         assert self.robot_ip is not None and self.appid is not None
         self.adb_target = f"{self.robot_ip}:5555"
-        self.recorder.add_secret(self.adb_target)
         payload = files("hanppie.payloads").joinpath("enable_adb_standalone.py.txt")
         dsp, identity = build_lab_program(payload.read_text(encoding="utf-8"), title="Hanppie-ADB")
         robot = self.robot_factory(
@@ -113,7 +105,6 @@ class DeviceSession:
                 raise RuntimeError("无法建立用于启用 ADB 的 App 会话")
             robot.enter_lab()
             digest = robot.upload_prepared_program(dsp, identity)
-            self.recorder.add_secret(digest)
             robot.start_lab_program(digest)
             started = True
             self.adb_enabled = True
@@ -209,6 +200,11 @@ class DeviceSession:
                 if robot.set_led(component="all", red=0, green=0, blue=0, effect="off"):
                     self.wait_command_on(robot, "led.set", led_sequence)
                     evidence["led_off"] = True
+
+                blaster_sequence = robot.bridge.command_sequence + 1
+                if robot.call("blaster", "reset_led"):
+                    reset = self.wait_command_on(robot, "blaster.reset_led", blaster_sequence)
+                    evidence["blaster_led_off"] = reset.get("last_command_ok") is True
 
                 if self.config.allow_motion and "gimbal" in self.config.checks:
                     center_sequence = robot.bridge.command_sequence + 1

@@ -78,7 +78,7 @@ class DiagnosisRunner:
                 duration,
                 error=f"{type(exc).__name__}: {exc}",
             )
-            self.console.print(f"[bold red]FAIL[/] {check.title}: {self.recorder.redact(exc)}")
+            self.console.print(f"[bold red]FAIL[/] {check.title}: {exc}")
             self.recorder.event(
                 "error",
                 "check.finish",

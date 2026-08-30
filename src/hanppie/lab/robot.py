@@ -8,6 +8,7 @@ import time
 from collections.abc import Callable
 
 from hanppie.lab.app import AppConnection
+from hanppie.lab.audio import LabAudio
 from hanppie.lab.bridge import LabBridge, LabTelemetry
 from hanppie.lab.camera import LabCamera
 from hanppie.lab.config import DEFAULT_CONFIG, LabConfig
@@ -102,6 +103,7 @@ class LabRobot:
         self.base = self.connection
         self.bridge = self._new_bridge()
         self.camera = LabCamera(self.connection)
+        self.audio = LabAudio(self.connection)
         self.chassis = Chassis(self)
         self.gimbal = Gimbal(self)
         self._callbacks: dict[str, list[Callable[[object], None]]] = {}
@@ -149,6 +151,7 @@ class LabRobot:
         return initialized
 
     def close(self) -> None:
+        self.audio.close()
         self.camera.close()
         self.stop_lab_bridge()
         if self._program_started:
