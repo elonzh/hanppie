@@ -79,11 +79,14 @@ class FakeConnection:
 
 
 class FakeBridge:
-    def __init__(self, ready: bool = True) -> None:
+    def __init__(self, ready: bool = True, acknowledge_arm: bool = True) -> None:
         self.robot_ip = ""
         self.ready = ready
+        self.acknowledge_arm = acknowledge_arm
         self.calls: list[object] = []
         self.worker_threads = {"rx": None, "motion": None}
+        self.command_sequence = 0
+        self.last_telemetry: LabTelemetry | None = None
 
     def on_telemetry(self, _callback: Callable[[LabTelemetry], None]) -> None:
         self.calls.append("callback")
@@ -109,6 +112,7 @@ class FakeBridge:
 
     def arm(self) -> bool:
         self.calls.append("arm")
+        self.command_sequence += 1
         return True
 
     def disarm(self) -> bool:
@@ -117,6 +121,13 @@ class FakeBridge:
 
     def stop_robot(self) -> bool:
         self.calls.append("stop")
+        self.command_sequence += 1
+        if self.acknowledge_arm:
+            self.last_telemetry = LabTelemetry(
+                self.command_sequence,
+                0,
+                {"rx_command_seq": self.command_sequence, "armed": True},
+            )
         return True
 
     def drive_speed(self, x: float, y: float, z: float) -> bool:
@@ -311,6 +322,13 @@ def test_bridge_start_common_commands_and_close(monkeypatch: pytest.MonkeyPatch)
     assert bridge.disarm()
     assert bridge.gimbal_drive_speed(2, 3)
     assert bridge.call("gimbal", "recenter")
+    assert bridge._motion is None
+    assert bridge.drive_speed(1, 2, 3)
+    assert bridge.gimbal_drive_speed(4, 5)
+    assert bridge.call("gimbal", "stop")
+    assert bridge._motion == {"x": 1.0, "y": 2.0, "z": 3.0}
+    assert bridge.call("chassis", "stop")
+    assert bridge._motion is None
     assert bridge.set_led(red=1, green=2, blue=3)
     assert bridge.fire("infrared")
     bridge._command_sequence = 0x7FFFFFFF
@@ -493,6 +511,40 @@ def test_lab_bridge_timeout_closes_transport() -> None:
     with pytest.raises(TimeoutError, match="matching-session"):
         robot.start_lab_bridge()
     assert bridge.calls[-1] == "close"
+
+
+def test_lab_bridge_requires_arm_and_neutral_confirmation() -> None:
+    robot, _connection = make_robot()
+    bridge = FakeBridge(acknowledge_arm=False)
+    robot.bridge = bridge  # type: ignore[assignment]
+    robot._program_started = True
+
+    with pytest.raises(TimeoutError, match="confirm arm"):
+        robot.start_lab_bridge()
+    assert bridge.calls[-1] == "close"
+
+
+def test_lab_bridge_retries_probe_until_program_socket_is_ready() -> None:
+    robot, _connection = make_robot(
+        zero_delay_config(bridge_ready_timeout=1, bridge_probe_interval=0.1)
+    )
+    bridge = FakeBridge(ready=False)
+    attempts = 0
+
+    def eventually_ready(_timeout: float) -> bool:
+        nonlocal attempts
+        attempts += 1
+        return attempts == 3
+
+    bridge.wait_for_telemetry = eventually_ready  # type: ignore[method-assign]
+    robot.bridge = bridge  # type: ignore[assignment]
+    robot._program_started = True
+
+    robot.start_lab_bridge()
+
+    assert attempts == 3
+    assert bridge.calls.count(("prime", 1, 0)) == 3
+    assert bridge.calls[-2:] == ["arm", "stop"]
 
 
 def test_lab_lifecycle_rejects_out_of_order_operations() -> None:

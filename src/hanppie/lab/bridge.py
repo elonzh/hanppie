@@ -53,6 +53,10 @@ class LabBridge:
             "motion": (self._motion_thread.native_id if self._motion_thread is not None else None),
         }
 
+    @property
+    def command_sequence(self) -> int:
+        return self._command_sequence
+
     def start(self) -> None:
         if self._rx_thread is not None:
             return
@@ -128,7 +132,20 @@ class LabBridge:
             time.sleep(max(0.0, interval))
 
     def call(self, module: str, method: str, **params: object) -> bool:
+        with self._lock:
+            if module == "chassis":
+                self._clear_motion_fields("x", "y", "z")
+            elif module == "gimbal":
+                self._clear_motion_fields("gimbal_pitch", "gimbal_yaw")
         return self.send(module=module, method=method, params=params)
+
+    def _clear_motion_fields(self, *fields: str) -> None:
+        if self._motion is None:
+            return
+        for field in fields:
+            self._motion.pop(field, None)
+        if not self._motion:
+            self._motion = None
 
     def arm(self) -> bool:
         return self.call("system", "arm")

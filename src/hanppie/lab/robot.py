@@ -333,13 +333,37 @@ class LabRobot:
             raise RuntimeError("start_lab_program() must be called before starting the Bridge")
         self.bridge.start()
         try:
-            self.bridge.prime(count=1, interval=0)
-            self.request_telemetry()
-            if not self.bridge.wait_for_telemetry(self.config.bridge_ready_timeout):
-                raise TimeoutError("Lab program did not return matching-session telemetry")
-            if not self.bridge.arm():
-                raise RuntimeError("Lab bridge could not arm the current session")
-            self.bridge.stop_robot()
+            deadline = time.monotonic() + self.config.bridge_ready_timeout
+            while True:
+                # The Lab start ACK can arrive before dji_scratch has opened
+                # the program's UDP socket. Repeat the idempotent stop/session
+                # probe so a packet lost during that window does not make the
+                # Bridge appear unavailable.
+                self.bridge.prime(count=1, interval=0)
+                self.request_telemetry()
+                remaining = max(0.0, deadline - time.monotonic())
+                wait_time = min(self.config.bridge_probe_interval, remaining)
+                if self.bridge.wait_for_telemetry(wait_time):
+                    break
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("Lab program did not return matching-session telemetry")
+            arm_deadline = time.monotonic() + self.config.bridge_ready_timeout
+            while True:
+                if not self.bridge.arm() or not self.bridge.stop_robot():
+                    raise RuntimeError("Lab bridge could not arm the current session")
+                expected_sequence = self.bridge.command_sequence
+                remaining = max(0.0, arm_deadline - time.monotonic())
+                time.sleep(min(self.config.bridge_probe_interval, remaining))
+                telemetry = self.bridge.last_telemetry
+                if telemetry is not None:
+                    received_sequence = int(telemetry.values.get("rx_command_seq", 0) or 0)
+                    if (
+                        received_sequence >= expected_sequence
+                        and telemetry.values.get("armed") is True
+                    ):
+                        break
+                if time.monotonic() >= arm_deadline:
+                    raise TimeoutError("Lab program did not confirm arm and neutral stop")
         except Exception:
             self.bridge.close()
             raise

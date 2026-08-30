@@ -50,10 +50,3 @@ tasks:
     desc: Run all prek hooks against tracked files
     cmds:
       - uv run prek run --all-files --show-diff-on-failure
-
-  sdk:status:
-    desc: Inspect the volatile official-SDK patch on an ADB-connected S1
-    requires:
-      vars: [ADB_TARGET]
-    cmds:
-      - uv run hanppie sdk --target {{.ADB_TARGET}} status

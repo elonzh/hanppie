@@ -26,10 +26,13 @@ classifiers = [
 ]
 dependencies = [
   "av>=15,<19",
+  "click>=8.2,<8.5",
   "netaddr>=1.3",
   "netifaces>=0.11",
   "numpy>=1.24",
   "opencv-python>=4.10",
+  "rich>=14,<15",
+  "typer>=0.21,<0.22",
 ]
 
 [project.urls]
@@ -53,6 +56,14 @@ required-version = ">=0.12.6,<0.13"
 
 [tool.uv.build-backend]
 module-name = ["hanppie", "robomaster"]
+source-include = [
+  "AGENTS.md",
+  "README_EN.md",
+  "Taskfile.yml",
+  "docs/**",
+  "prek.toml",
+  "tests/**",
+]
 
 [tool.ruff]
 line-length = 100
@@ -69,6 +80,10 @@ select = ["B", "E4", "E7", "E9", "F", "I", "RUF", "UP"]
 ignore = [
   "RUF012",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"src/hanppie/cli.py" = ["RUF001"]
+"src/hanppie/diagnosis/*.py" = ["RUF001"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -92,9 +107,7 @@ branch = true
 source = ["hanppie"]
 omit = [
   "src/hanppie/__main__.py",
-  "src/hanppie/adb_bootstrap.py",
   "src/hanppie/payloads/*",
-  "src/hanppie/probes/*",
   "src/hanppie/resources/*",
   "src/hanppie/runtime/*",
 ]

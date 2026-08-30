@@ -21,12 +21,37 @@ def _safe_call(function, *arguments):
         return False
 
 
+def _record_call(state, name, function, *arguments):
+    try:
+        result = function(*arguments)
+        state["last_command"] = name
+        state["last_command_ok"] = result is not False
+        state["last_command_error"] = ""
+        return state["last_command_ok"]
+    except Exception as error:
+        state["last_command"] = name
+        state["last_command_ok"] = False
+        state["last_command_error"] = str(error)
+        return False
+
+
 def _clamp(value, minimum, maximum):
     try:
         number = float(value)
     except Exception:
         number = 0.0
-    return max(minimum, min(maximum, number))
+    if number < minimum:
+        return minimum
+    if number > maximum:
+        return maximum
+    return number
+
+
+def _has_field(command, names):
+    for name in names:
+        if name in command:
+            return True
+    return False
 
 
 def _stop_motion():
@@ -144,6 +169,8 @@ def _apply_command(command, state, now):
         state["session_id"] = session_id
         state["last_sequence"] = 0
         state["armed"] = False
+        state["chassis_active"] = False
+        state["gimbal_active"] = False
         state["motion_active"] = False
     if sequence <= state["last_sequence"]:
         return
@@ -153,53 +180,84 @@ def _apply_command(command, state, now):
     method = str(command.get("method", "")).lower()
     if module == "system" and method == "arm":
         state["armed"] = True
+        state["last_command"] = "system.arm"
+        state["last_command_ok"] = True
+        state["last_command_error"] = ""
         return
     if module == "system" and method == "disarm":
         state["armed"] = False
+        state["chassis_active"] = False
+        state["gimbal_active"] = False
         state["motion_active"] = False
         _stop_motion()
+        state["last_command"] = "system.disarm"
+        state["last_command_ok"] = True
+        state["last_command_error"] = ""
         return
     if command.get("stop", False):
+        state["chassis_active"] = False
+        state["gimbal_active"] = False
         state["motion_active"] = False
         _stop_motion()
+        state["last_command"] = "system.stop"
+        state["last_command_ok"] = True
+        state["last_command_error"] = ""
         return
     if command.get("led", False):
         _set_led(command)
+        state["last_command"] = "led.set"
+        state["last_command_ok"] = True
+        state["last_command_error"] = ""
     if module and method and module not in ("chassis", "gimbal"):
-        _generic_call(command)
+        state["last_command"] = module + "." + method
+        state["last_command_ok"] = _generic_call(command)
+        state["last_command_error"] = "" if state["last_command_ok"] else "rejected"
     if not state["armed"]:
         return
     if "mode" in command:
-        _set_mode(command.get("mode"))
+        state["last_command"] = "robot.set_mode"
+        state["last_command_ok"] = _set_mode(command.get("mode"))
+        state["last_command_error"] = "" if state["last_command_ok"] else "rejected"
     if module in ("chassis", "gimbal") and method:
-        _generic_call(command)
+        state["last_command"] = module + "." + method
+        state["last_command_ok"] = _generic_call(command)
+        state["last_command_error"] = "" if state["last_command_ok"] else "rejected"
+        if module == "chassis":
+            state["chassis_active"] = False
+        else:
+            state["gimbal_active"] = False
+        state["motion_active"] = state["chassis_active"] or state["gimbal_active"]
     if command.get("fire", False):
         fire_type = str(command.get("fire_type", "infrared")).lower()
         if fire_type in ("infrared", "ir", "led"):
-            _safe_call(ir_blaster_ctrl.fire_once)
+            _record_call(state, "blaster.fire_ir", ir_blaster_ctrl.fire_once)
         else:
-            _safe_call(gun_ctrl.fire_once)
+            _record_call(state, "blaster.fire_gel", gun_ctrl.fire_once)
 
     chassis_fields = ("x", "y", "z")
     gimbal_fields = ("gimbal_pitch", "gimbal_yaw")
-    has_chassis = any(name in command for name in chassis_fields)
-    has_gimbal = any(name in command for name in gimbal_fields)
+    has_chassis = _has_field(command, chassis_fields)
+    has_gimbal = _has_field(command, gimbal_fields)
     if has_chassis:
-        _safe_call(
+        state["chassis_active"] = _record_call(
+            state,
+            "chassis.move_with_speed",
             chassis_ctrl.move_with_speed,
             _clamp(command.get("x", 0), -MAX_CHASSIS_SPEED, MAX_CHASSIS_SPEED),
             _clamp(command.get("y", 0), -MAX_CHASSIS_SPEED, MAX_CHASSIS_SPEED),
             _clamp(command.get("z", 0), -MAX_CHASSIS_YAW_SPEED, MAX_CHASSIS_YAW_SPEED),
         )
     if has_gimbal:
-        _safe_call(
+        state["gimbal_active"] = _record_call(
+            state,
+            "gimbal.rotate_with_speed",
             gimbal_ctrl.rotate_with_speed,
             int(_clamp(command.get("gimbal_yaw", 0), -MAX_GIMBAL_SPEED, MAX_GIMBAL_SPEED)),
             int(_clamp(command.get("gimbal_pitch", 0), -MAX_GIMBAL_SPEED, MAX_GIMBAL_SPEED)),
         )
     if has_chassis or has_gimbal:
         state["last_motion"] = now
-        state["motion_active"] = True
+        state["motion_active"] = state["chassis_active"] or state["gimbal_active"]
 
 
 def _value(function, argument):
@@ -216,6 +274,13 @@ def _telemetry(state, now):
         "time_ms": int(now * 1000),
         "session_id": state["session_id"],
         "rx_command_seq": state["last_sequence"],
+        "armed": state["armed"],
+        "chassis_active": state["chassis_active"],
+        "gimbal_active": state["gimbal_active"],
+        "motion_active": state["motion_active"],
+        "last_command": state["last_command"],
+        "last_command_ok": state["last_command_ok"],
+        "last_command_error": state["last_command_error"],
         "x": _value(chassis_ctrl.get_position_based_power_on, rm_define.chassis_forward),
         "y": _value(chassis_ctrl.get_position_based_power_on, rm_define.chassis_translation),
         "yaw": _value(chassis_ctrl.get_attitude, rm_define.chassis_yaw),
@@ -244,8 +309,13 @@ def start():
         "last_sequence": 0,
         "telemetry_sequence": 0,
         "armed": False,
+        "chassis_active": False,
+        "gimbal_active": False,
         "motion_active": False,
         "last_motion": 0.0,
+        "last_command": "",
+        "last_command_ok": True,
+        "last_command_error": "",
     }
     next_telemetry = time_module.time()
     while True:
@@ -262,6 +332,8 @@ def start():
         now = time_module.time()
         if state["motion_active"] and now - state["last_motion"] > COMMAND_TIMEOUT:
             _stop_motion()
+            state["chassis_active"] = False
+            state["gimbal_active"] = False
             state["motion_active"] = False
         if now >= next_telemetry:
             packet = json_module.dumps(_telemetry(state, now), separators=(",", ":"))

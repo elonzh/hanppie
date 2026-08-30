@@ -54,6 +54,8 @@ def test_bridge_source_is_self_contained_and_configured() -> None:
     assert "COMMAND_TIMEOUT = 0.4" in source
     assert "robomaster_lab_sdk" not in source
     assert "def start():" in source
+    assert "any(" not in source
+    assert "return max(" not in source
     ast.parse(source, feature_version=(3, 6))
     assert source.index('if not state["armed"]') < source.index(
         'if module in ("chassis", "gimbal")'

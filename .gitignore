@@ -17,6 +17,8 @@ dist/
 # Local device material may contain vendor binaries, serials, and logs.
 .s1-backup/
 .s1-debug/
+.s1-reports/
+.hanppie/
 
 # Local environment and secrets
 .env

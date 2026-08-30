@@ -4,9 +4,9 @@
 > 目标读者：有丰富软件开发经验、尚未接触嵌入式开发的 S1 用户<br>
 > 范围：保留原机主体，优先恢复电脑编程、通用手柄控制、视频和遥测能力；不讨论提升发射威力、绕过机械安全限制等改造。
 
-> **文档关系：**长期维护的当前架构和能力结论以 [`architecture.md`](./architecture.md) 为准；本文保留为前期调研与方案比较记录。
+> **文档关系：**本文是冻结的前期调研与方案比较记录，不随实现进展更新。长期维护的当前架构、采用方案、能力状态和安全边界只以 [`architecture.md`](./architecture.md) 为准。
 
-> **实机结果更新：**后续联调已经确认本机固件为 `00.06.0521`，并成功恢复 root ADB、临时启用官方 SDK 服务、验证官方高层 API 和 LED 控制，同时确认官方相机及部分 DDS 主题存在兼容缺口。本文保留为软硬件背景和备选路线调研；实施结论以 [`s1-live-debug-2026-08-29.md`](./s1-live-debug-2026-08-29.md) 为准，S.BUS 不再是当前首选 MVP。
+> **阅读方式：**文中的推荐、里程碑和“待验证”均表示 2026-08-29 调研时的判断，不表示当前项目状态。当前采用方案不要从本文推导，直接查看 [`architecture.md` 的 Hanppie 实现章节](./architecture.md#7-hanppie-项目实现与机制)。
 
 ## 1. 执行摘要
 
@@ -272,7 +272,7 @@ version | sequence | monotonic_ms | x | y | yaw | pitch | speed | mode | enable 
 
 #### Level 1：仅尝试临时打开入口
 
-恢复的运行时代码与 [`adb_bootstrap.py`](../src/hanppie/adb_bootstrap.py) 展示了两个可逆动作：
+恢复的运行时代码与[初次恢复记录](./s1-live-debug-2026-08-29.md)展示了两个可逆动作：
 
 - 从 Lab Python 的安全模块命名空间取回标准 `__import__`，临时启动 `/system/bin/adb_en.sh`；
 - 通过 DUSS 调用 `robot_ctrl.enable_sdk_mode()`、`SDKCtrl.sdk_on()` 和 `stream_on()`。
@@ -496,7 +496,7 @@ S1 样本系统是 Android 4.4.4、`userdebug`、`test-keys`，已经不适合�
 - [ ] 是否接受 root；如果接受，能否承受最坏情况下失去 Wi-Fi/需硬件维修；
 - [ ] 是否有第二块电池、逻辑分析仪和可固定机身的测试台。
 
-## 11. 最终建议
+## 11. 调研时的最终建议
 
 对于你的背景，最佳投入顺序是：
 

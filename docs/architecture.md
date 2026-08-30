@@ -1,11 +1,25 @@
 # RoboMaster S1 与 Hanppie 技术架构
 
 > 文档性质：Hanppie 的长期技术事实源，不使用日期文件名。<br>
-> 当前版本：1.3<br>
+> 当前版本：1.6<br>
 > 最后更新：2026-08-30<br>
 > 已验证固件：RoboMaster S1 `00.06.0521`
 
 本文持续记录 RoboMaster S1 的固有软硬件架构、通信机制和扩展边界，以及 Hanppie 在这些基础上增加的电脑控制能力。为避免把原机能力与项目改动混为一谈，二者按章节严格分开；按日期保存的调研和联调记录只作为证据，不替代本文。
+
+## 文档所有权
+
+同一结论只在一个位置维护。引用可以重复出现，但不得复制一份需要同步更新的结论表。
+
+| 信息类型 | 权威位置 | 其他文档如何处理 |
+| --- | --- | --- |
+| 当前架构、协议、端口语义、能力状态、项目机制和安全边界 | 本文 | 只链接到本文的具体章节 |
+| 安装、CLI 参数和开发命令 | 中英文 README、`hanppie --help` 和 `pyproject.toml` | 本文只解释机制，不复制完整用法 |
+| 单次实机命令、原始输出、故障和测量值 | 日期化联调记录或 `diag` 自动报告 | 作为证据保留，不宣称“当前状态”，也不因后续变化回写 |
+| 前期路线比较与外部生态调研 | `robomaster-s1-revival-report.md` | 标记为历史调研；采用后的当前方案回到本文 |
+| 内置 SDK fork 来源 | `src/robomaster/UPSTREAM.md` | 其他位置只引用 |
+
+自动生成的 `.hanppie/diagnosis/<timestamp>/report.md` 和 `events.jsonl` 属于本地运行证据，默认不进入 Git。真机结果改变能力结论时，只更新本文并引用相应证据；不再复制一份新的长期能力矩阵。
 
 ## 证据标记
 
@@ -150,7 +164,7 @@ flowchart LR
 | 构建 | `userdebug`、`test-keys`，构建日期 2022-10-27 | **实测** |
 | 系统属性 | `ro.secure=1`、`ro.debuggable=1`；DJI init 服务以 root 用户运行 | **代码/实测** |
 | Shell/基础工具 | Android `mksh`、BusyBox，包含 ADB 脚本和 `adbd` | **代码/实测** |
-| Lab 解释器 | `/data/python_files/bin/python`；本轮没有保存精确 `--version`，恢复的机内代码以 Python 3.6 语法为兼容基线 | **代码，版本待验证** |
+| Lab 解释器 | `/data/python_files/bin/python`，Python `3.6.6`，GCC 4.8.3 构建 | **实测** |
 | 运行环境 | `DEVICE_TYPE=UAV`，DJI 启动脚本设置 `HOME=/data`，init 设置固定 `PYTHONPATH` | **代码** |
 | 主要网络接口 | `iwlan0`；`usb0` 固定为 `192.168.1.10`；`rndis0` 固定为 `192.168.42.2` | **代码；Wi-Fi Station 实测** |
 | USB 复合功能 | 原厂路径使用 RNDIS、Mass Storage、Bulk、ACM；调试路径额外加入 ADB | **代码/实测** |
@@ -356,7 +370,7 @@ stateDiagram-v2
 
 #### 5.3.4 机内 Python 兼容性
 
-S1 Lab 程序受固件内固定解释器、标准库和 DJI 注入模块约束。当前恢复代码以 Python 3.6 语法作为兼容目标，但本轮没有保存机内解释器的精确 `--version`，仍需实机补录。这个约束只属于机内 Lab 实现，不属于 DUSS 协议本身；主机端或其他语言客户端的版本边界见第 7.5 节。
+S1 Lab 程序受固件内固定的 Python `3.6.6`、标准库和 DJI 注入模块约束。root ADB 直接启动解释器时，默认 `site` 初始化会因 Android 的 root UID 没有 passwd 记录而报 `getpwuid(): uid not found: 0`；使用 `-S` 可完成 `sys`、`socket`、`json`、`select`、`threading` 和 `_thread` 探针。Lab 程序由 `dji_scratch` 提供自己的运行环境，不能用 root shell 直接执行的结果代替 Lab 执行结果。这个约束只属于机内 Lab 实现，不属于 DUSS 协议本身；主机端或其他语言客户端的版本边界见第 7.5 节。
 
 ### 5.4 原生媒体路径
 
@@ -422,25 +436,23 @@ Hanppie 不替换整套 S1 固件，而是在保留原机控制器、相机、�
 | 项目增量 | 发生位置 | 对原机做了什么 | 持久性/恢复方式 |
 | --- | --- | --- | --- |
 | 内置 App/Lab 主机后端 | Git 仓库与电脑 | `src/hanppie/lab` 实现 AppID、outer session、Lab 生命周期、Bridge 和视频 | 随 Hanppie 安装；不修改固件；MIT |
+| Typer/Rich CLI 与实机诊断 | Git 仓库与电脑 | 通过唯一 `diag` 命令执行完整诊断，生成脱敏 JSONL 日志和 Markdown 证据报告 | 只写本地 `.hanppie/diagnosis`；默认不进入 Git |
 | `src/robomaster` SDK fork | Git 仓库与电脑 | 内置官方 `0.1.1.68`/`ff6646e` 的纯 Python 源码，保持 `robomaster` 导入路径并针对 S1 维护 | 随 Hanppie 安装；不修改 S1；Apache-2.0 |
 | Hanppie Lab Bridge DSP | `/data/ftp/python/python_raw.dsp` | 上传白名单 JSON 控制与遥测程序 | 文件写入 `/data`；可停止或覆盖，不等于开机自启 |
 | ADB 启动载荷 | Lab 用户程序 | 调用原机 `adb_en.sh` 并重启 `adbd` | 运行态变化；重启后关闭 |
-| SDK 补丁暂存 | `/data/s1_sdk_test/` | 保存固定哈希的路由配置和 `dji_hdvt_uav` 补丁 | 文件可持续存在；删除目录可清理 |
-| SDK bind mount | 运行中的 `/system/etc/dji.json`、`/system/bin/dji_hdvt_uav` | 临时覆盖运行视图，开放 EP SDK proxy | `restore` 卸载；重启自然回滚；不覆盖 `/system` 原文件 |
-| DJI 服务重启 | S1 运行态 | 补丁启停时重启 `dji_sys`、`dji_hdvt_uav`、`dji_vision` | 仅当前运行周期 |
 | PyAV 媒体兼容层 | 电脑 | 替代官方 SDK 缺失的 macOS `libmedia_codec` 扩展 | 不修改 S1，也不能改变 S1 命令支持情况 |
 | `runtime/`、`resources/` 分析副本 | Git 仓库 | 保存恢复的原机运行库和配置供研究/测试 | 只影响仓库；不是部署到 S1 的新运行时 |
 
-Hanppie 不修改 `/init.rc`、原厂启动脚本或 `/system` 持久文件。表中“写入 `/data`”与“开机自动生效”是两件事：补丁文件可以仍在磁盘上，但 bind mount、服务状态和 TCP 5555 ADB 都会随重启失效。
+Hanppie 不修改 `/init.rc`、原厂启动脚本或 `/system` 持久文件。Lab DSP 会写入 `/data`，但不等于开机自动运行；TCP 5555 ADB 只在诊断采集阶段临时启用，并由清理阶段重启设备关闭。
 
 ### 7.3 当前实现架构
 
 ```mermaid
 flowchart LR
     subgraph HOST["电脑：Hanppie 内置后端"]
-        CLI["CLI / probes"]
+        CLI["Typer / Rich CLI"]
+        DIAG["diag 完整诊断与证据记录"]
         LABHOST["App/Lab 主机后端"]
-        PATCHCTL["SDK 补丁控制器"]
         OFFICIAL["内置 robomaster SDK fork"]
         CODEC["PyAV 媒体兼容层"]
     end
@@ -448,41 +460,41 @@ flowchart LR
     subgraph ADDITIONS["S1 上的 Hanppie 临时增量"]
         BRIDGE["Lab Bridge DSP<br/>UDP 40923 / 40924"]
         ADBPAYLOAD["ADB 启动载荷"]
-        SDKPATCH["bind mount SDK 补丁"]
     end
 
     subgraph STOCK["S1 原生能力"]
         APPSESSION["App outer session"]
         SCRATCH["dji_scratch / Lab Python"]
         ADB["adb_en.sh / adbd"]
-        SDKPROXY["SDK proxy 入口"]
         DUSS["DUSS"]
         MEDIA["App H.264 / Opus"]
     end
 
-    CLI --> LABHOST --> APPSESSION --> SCRATCH
+    CLI --> DIAG
+    DIAG --> LABHOST --> APPSESSION --> SCRATCH
     SCRATCH --> BRIDGE --> DUSS
     LABHOST <--> BRIDGE
     SCRATCH --> ADBPAYLOAD --> ADB
-    CLI --> PATCHCTL --> ADB
-    ADB --> SDKPATCH --> SDKPROXY
-    OFFICIAL --> SDKPROXY --> DUSS
+    DIAG --> ADBPAYLOAD
     MEDIA --> LABHOST
-    OFFICIAL --> CODEC
+    OFFICIAL -. 独立编程接口 .-> CODEC
 ```
 
-项目当前采用混合后端：内置 SDK fork 通过临时开放的 SDK proxy 提供已验证的控制命令和部分有效遥测；App/Lab 路径提供 S1 原生程序机制、已验证的 720p 视频和 S1 特有入口。两条路径的能力和失败模式不相同，不能把它们抽象成“同一个端口上的同一协议”。
+`diag` 只使用项目自有 App/Lab 后端，不修改路由配置，也不临时伪装 EP 开放官方 SDK proxy。`src/robomaster` 继续作为保持官方导入接口的独立编程包维护，但它不参与当前诊断链路；不能把 SDK 接口是否存在与 S1 实机能力是否通过混为一谈。
 
 ### 7.4 包边界
 
 | 路径 | 项目职责 |
 | --- | --- |
-| `cli.py` | 统一命令入口、后端选择和依赖提示 |
-| `adb_bootstrap.py` | 通过 Lab 会话临时开启 ADB |
-| `sdk_patch.py` | 检查、启用和恢复临时官方 SDK 服务 |
+| `cli.py` | 静态声明唯一 `diag` 子命令，负责交互选择和独立安全开关 |
+| `diagnosis/model.py` | 诊断目录、配置、结果模型和风险门 |
+| `diagnosis/discovery.py` | 被动发现并解析 S1 App 广播 |
+| `diagnosis/session.py` | App、Lab、临时 ADB 的连接依赖和最终清理 |
+| `diagnosis/checks.py` | 灯光、声音、视频、底盘、云台、发射和系统检查实现 |
+| `diagnosis/recorder.py` | JSONL 事件、脱敏和单次 Markdown 报告 |
+| `diagnosis/runner.py` | 按依赖执行检查、汇总状态和保证清理 |
 | `lab/` | 项目自有 AppID/outer DUSS、Lab 程序生命周期、UDP Bridge 和视频实现 |
 | `media_codec.py` | 官方 SDK 的 PyAV 媒体兼容层 |
-| `probes/` | 单一目的、默认无机械运动的实机探针 |
 | `payloads/` | 临时上传到 S1 的最小机内载荷 |
 | `runtime/` | 恢复的 S1 Lab/DUSS 运行时参考；不作为桌面 SDK 重构 |
 | `resources/` | 原机配置和非执行参考资源 |
@@ -500,7 +512,7 @@ from robomaster import robot
 
 | 运行位置 | 当前约束 | 原因 |
 | --- | --- | --- |
-| S1 机内 Lab 程序 | 固定机内解释器和 DJI 模块；项目载荷保持 Python 3.6 语法兼容 | 固件环境不可随主机升级；精确解释器版本仍待记录 |
+| S1 机内 Lab 程序 | Python 3.6.6 和固件内 DJI 模块 | 固件环境不可随主机升级；项目载荷同时做 3.6 语法与真机执行测试 |
 | 电脑上的 Hanppie 与内置 SDK fork | Python 3.10 | 当前唯一开发、CI 和发布验证基线；暂不建立更高版本矩阵 |
 | 非 Python 客户端 | 无 Python 约束 | 需要自行实现 App outer、SDK proxy 或机内 DUSS 客户端及生命周期 |
 
@@ -532,7 +544,7 @@ stateDiagram-v2
 | `enter_lab()` | 归零控制状态，发送 Lab mode DUSS，每 `0.8 s` 续发 keepalive，再发送 Lab 参数与状态查询 | keepalive 是会话状态的一部分 |
 | `upload_lab_bridge()` | 生成 DSP，发送 metadata/GUID/size，经 FTP 上传，保存 MD5 | 新上传会使主机侧“已注册”状态失效 |
 | `start_lab_program()` | 初次以 MD5 注册，发送 metadata/runtime notify/start；同一对象中已注册时只发 start | 只启动机内程序，尚未证明 Bridge 可用 |
-| `start_lab_bridge()` | 主机启动 UDP TX/RX，发送 probe，等待真实 telemetry，绑定当前 session，arm 后立即 neutral stop | telemetry 才是当前实现的就绪条件 |
+| `start_lab_bridge()` | 主机启动 UDP TX/RX，在超时窗口内重复 stop/session probe，收到当前 session telemetry 后重复 arm + neutral，直到遥测确认命令序号和 `armed=true` | Lab 启动 ACK 早于用户程序 UDP socket 就绪；单发 UDP probe 不可靠 |
 | `stop_lab_bridge()` | 发送 disarm/stop，再结束主机 UDP 收发线程并重建干净 Bridge 对象 | **不会停止机内 Python 程序** |
 | `stop_lab_program()` | 发送停止用 metadata 和 runtime notify，恢复 Lab keepalive | **不会自动关闭 Host Bridge** |
 | `exit_lab()` | 停止 Lab keepalive，发送普通模式与 neutral control | 不删除已上传 DSP，也不关闭基础 socket |
@@ -540,45 +552,31 @@ stateDiagram-v2
 
 安全退出必须显式按“机械归零 → `stop_lab_bridge()` → `stop_lab_program()` → `exit_lab()` → `close()`”执行，并放在 `finally` 中。新连接按完整上传/注册流程处理，不假定旧注册状态可复用。
 
-主机 Bridge 为每次实例生成随机 session ID，并为命令维护单调序号；机内程序拒绝零 session、旧序号和未 arm 的机械命令。底盘或云台速度命令会由主机每 `100 ms` 续租，机内在默认 `300 ms` 没有收到新命令时归零；换 session 和 disarm 也会立即停止机械运动。LED、遥测选择和非机械媒体操作不要求 arm，底盘、云台、模式切换和发射器均要求 arm。
+主机 Bridge 为每次实例生成随机 session ID，并为命令维护单调序号；机内程序拒绝零 session、旧序号和未 arm 的机械命令。底盘或云台速度命令会由主机每 `100 ms` 续租，机内在默认 `300 ms` 没有收到新命令时归零；换 session 和 disarm 也会立即停止机械运动。LED、遥测选择和非机械媒体操作不要求 arm，底盘、云台、模式切换和发射器均要求 arm。遥测还回传 chassis/gimbal active、最后处理的命令、结果和错误，区分“UDP 已发送”和“机内 controller 调用成功”。
+
+固件 Lab 解释器的语法目标是 Python 3.6，但仅通过语法解析还不足以证明运行兼容。首次真机运动回归中，命令序号已被接收，但使用生成器 `any(...)` 和嵌套 `min/max` 的控制分支没有执行到 controller；改为显式循环和比较后，底盘与云台开始动作。由于旧版本吞掉了该分支异常，无法进一步确认具体缺失的是内建函数还是 Lab 执行器限制；项目因此将“Python 3.6 可解析”和“固件真机可执行”作为两层独立测试。
 
 这些措施只解决误包、旧包和主机失联，不构成密码学认证。App/Lab、匿名 FTP 和 Bridge UDP 都是未加密链路；能进入同一可信网段的第三方仍可能监听、伪造或抢占 session。项目只支持可信隔离局域网，不应通过公网、端口转发或 VPN Overlay 暴露这些端口。
 
 ### 7.7 临时开启 ADB
 
-[`adb_bootstrap.py`](../src/hanppie/adb_bootstrap.py) 复用原生 App/Lab 会话，上传仓库内置的最小程序：
+诊断会话复用原生 App/Lab 链路，上传仓库内置的最小程序：
 
 1. 取得 Lab 会话并进入 Lab 模式；
 2. 上传 [`enable_adb_standalone.py.txt`](../src/hanppie/payloads/enable_adb_standalone.py.txt)；
 3. 机内程序调用原机已有的 `adb_en.sh`，设置 TCP 5555 并重启 `adbd`；
-4. 主机等待 ADB 出现后才继续维护；
-5. 完成维护后在线恢复服务并重启 S1，关闭无认证 root ADB。
+4. 主机轮询到 ADB 进入 `device` 状态后才采集系统信息；
+5. 最终清理重启 S1、断开主机 ADB，并确认 TCP 5555 已关闭。
 
 项目没有向固件增加 `adbd`；它只利用原机已有但正常启动后未开放的组件。Lab Python 在测试设备上以 root 身份运行；`os.system()` 在该环境失败，而模块顶层的 `subprocess.Popen` 可执行系统命令。**实测**
 
-### 7.8 临时开放 SDK proxy
+该固件的旧版 adbd 对主机侧 `adb reboot` 处理不可靠：TCP transport 会短暂关闭，但设备可能没有完成系统重启并随后重新监听。当前清理先通过 root shell 恢复 `service.adb.tcp.port=-1`，再执行设备端 `reboot`；第一次端口关闭只表示重启开始，必须等 App 广播重新出现后再次稳定检查真实目标地址。**实测**
 
-```mermaid
-sequenceDiagram
-    participant H as Hanppie
-    participant A as root ADB
-    participant S as DJI Services
-    participant O as 内置 robomaster SDK fork
-    participant D as DUSS/机器人模块
+### 7.8 内置 SDK fork 的边界
 
-    H->>A: 检查 root、原厂哈希和挂载状态
-    H->>A: 上传固定哈希补丁并再次校验
-    H->>S: 停止三个 DJI 服务
-    H->>A: bind mount 路由配置与 dji_hdvt_uav
-    H->>S: 重新启动服务
-    O->>S: UDP 30030 握手
-    S-->>O: 建立 20020 会话
-    O->>D: 控制或订阅 DUSS 能力
-    H->>S: restore 时停止服务并卸载 bind mount
-    H->>S: 恢复原厂服务；重启关闭 ADB
-```
+`src/robomaster` 保存并维护官方 Python API 形态，用于后续 S1 适配和普通编程接口。当前项目不再提供修改机内路由、bind mount 厂商程序或开放 EP SDK proxy 的运行工具；过去对该路线的实验命令与输出只保留在日期化联调记录中。
 
-[`sdk_patch.py`](../src/hanppie/sdk_patch.py) 不覆盖 `/system`：补丁先放在 `/data`，验证固定 SHA-256 后再 bind mount 到运行路径。`restore` 卸载它们并检查原厂哈希；设备重启也会自然回滚。补丁启用后 UDP 30030 开始监听，官方握手和 `Robot.initialize()` 成功。**代码/实测**
+因此，内置 SDK fork 能够导入、构建和通过离线测试，不等于它在原厂状态的 S1 上能够直接初始化。当前完整实机诊断使用 `src/hanppie/lab`，两者的连接前提必须分别判断。
 
 ### 7.9 媒体兼容与混合后端
 
@@ -586,9 +584,38 @@ sequenceDiagram
 
 [`media_codec.py`](../src/hanppie/media_codec.py) 用 PyAV 提供官方 SDK 所期望的 `libmedia_codec` 接口，解决 macOS 上缺少 DJI 原生扩展的问题；它只解决主机解码兼容性，不会让机器人接受不支持的相机命令。**代码/实测**
 
-### 7.10 探针与质量边界
+### 7.10 CLI、完整诊断与质量边界
 
-每个 `probe-*` 命令只回答一个问题，例如“能否握手”“是否有遥测”“能否取得视频帧”。探针默认不发送机械运动或发射指令，显式要求目标参数，打印机器可读结果，并在 `finally` 中退订、停流和关闭连接。
+`hanppie diag` 是唯一实机验证与调试命令；项目没有发布版本，因此不保留 `survey`、`probe-*`、`sdk` 或 `adb-enable` 的命令别名、动态导入分派或兼容层。Typer 静态声明子命令和类型化参数，Rich 负责项目选择、风险确认、进度和结果表。
+
+诊断项目按依赖顺序执行：广播发现 → App 会话与电量 → 视频 → Lab/Bridge → 红绿蓝白灯光循环 → 扬声器 → 底盘六方向 → 云台四方向与回中 → 红外/水弹 → 临时 ADB → 机内信息 → 清理。只选择后置项目时，会话层建立必要的前置连接，但报告只把用户选择的项目列为诊断结果。机内信息包含 Android 构建属性、Python 版本、关键进程、init service 状态、TCP/UDP 与 Unix socket、相关挂载、关键文件元数据和已知固件哈希分类。
+
+```mermaid
+flowchart LR
+    SELECT["交互选择或 --check / --all"]
+    GATES["独立风险门<br/>motion / infrared / gel"]
+    RUNNER["DiagnosisRunner<br/>显式检查表"]
+    APP["App / 视频 / Lab Bridge<br/>灯光 / 声音 / 执行机构"]
+    ROOT["临时 root ADB / 系统采集"]
+    CLEAN["stop / disarm / close / reboot"]
+    EVENTS["脱敏 events.jsonl"]
+    REPORT["单次 report.md"]
+    ARCH["architecture.md<br/>唯一长期结论"]
+
+    SELECT --> GATES --> RUNNER
+    RUNNER --> APP
+    RUNNER --> ROOT
+    APP --> CLEAN
+    ROOT --> CLEAN
+    RUNNER --> EVENTS --> REPORT
+    REPORT -. 证据支持 .-> ARCH
+```
+
+无选项的非交互运行采用标准非机械集合：发现、App、视频、Lab、灯光循环、扬声器、ADB 和系统信息。它会临时改变 ADB 运行态并在末尾重启关闭；底盘/云台、红外和水弹即使通过 `--all` 选中，也分别要求 `--allow-motion`、`--allow-infrared` 和 `--allow-gel`。交互模式逐类确认，拒绝任一确认就不会开始运行。诊断不提供保留 root ADB 或跳过最终安全清理的选项。
+
+每项检查把主机发送成功、机内 command sequence、controller 结果、遥测变化和物理效果分开记录。底盘依次发送 `x/y/z` 正负方向的六次低速单发命令，云台依次发送 pitch/yaw 正负方向的四次低速单发命令；这些命令不由主机续租，每一步都等待机内 `300 ms` watchdog 归零后再显式 stop。云台序列结束后回中，发射检查只执行单次 controller 调用。无论检查成功或异常，最终清理都会再次停止机械运动、关闭灯光、尽力回中、disarm、停止 Lab并关闭 App。临时 ADB 开启时，清理先把 TCP port property 恢复为 `-1`，再从设备 shell 发起重启；只有重新收到 App 广播并连续确认真实机器人目标的 TCP 5555 保持关闭，清理才通过。
+
+报告器在写日志前按本次目标脱敏 IP、AppID、MAC、ADB target 和临时 DSP 摘要。报告标题明确其“单次证据”性质；能力是否从接口存在提升为命令通过、遥测通过或物理通过，仍只在第 7.11 节维护。
 
 Hanppie 自行维护的主机代码由 Ruff、pytest、coverage 和 prek 检查。恢复的 `runtime` 与从 Apache-2.0 上游导入的 `src/robomaster` 保留接近来源的结构，不做无关格式化；前者覆盖 CRC 和消息往返，后者覆盖官方导入 API、版本、媒体 fallback、许可证和 wheel 内容。构建使用 uv 的锁文件生成同时包含两个顶层包的 sdist 和 wheel。
 
@@ -596,30 +623,26 @@ Hanppie 自行维护的主机代码由 Ruff、pytest、coverage 和 prek 检查�
 
 下表记录的是 **Hanppie 当前验证结果**，不是 S1 出厂能力表。
 
-App/Lab 链路的“实测通过”来自第 1 轮真机联调；项目随后将该链路独立实现到 `src/hanppie/lab`。新实现已通过固定报文向量、模拟生命周期、Python 3.6 载荷语法和独立 wheel 安装测试，但在本版本完成时尚未用当前真机重新跑完整链路，因此表中同时标出这一迁移边界。
+App/Lab 链路最初通过外部行为参考完成真机联调，随后由项目独立实现到 `src/hanppie/lab`。当前内置实现已经重新完成固定报文向量、模拟生命周期、Python 3.6 载荷语法、独立 wheel 安装和固件 `00.06.0521` 真机回归。
 
 | 能力 | 后端 | 状态 | 说明 |
 | --- | --- | --- | --- |
-| App/Lab 会话 | Lab | **原链路实测；内置实现待回归** | 无需 root；内置实现有抓包向量测试 |
-| 机内 Lab Python | Lab | **原链路实测；内置实现待回归** | 内置实现覆盖生成、上传、注册、启动和停止 |
-| 姿态回传 | Lab | **原链路实测；内置实现待回归** | 原链路已获得连续样本；新 Bridge 有模拟测试 |
-| 720p 视频 | Lab | **原链路实测；内置实现待回归** | 原链路得到 `1280×720 yuv420p`；新解码链路有离线测试 |
-| Lab Bridge 控制 | Lab | **代码完成；物理待验证** | session/序号、arm、限幅、续租和 300 ms 失联归零 |
-| Lab 电量 | Lab | **不支持/未知** | 当前返回 `None` |
-| root ADB | Lab + payload | **实测通过** | USB/TCP，重启关闭 |
-| SDK 低层握手 | 内置 SDK + 临时补丁 | **实测通过** | 原厂状态失败符合预期 |
-| `Robot.initialize()` | 内置 SDK + 临时补丁 | **实测通过** | 导入的同一上游提交已完成真机验证 |
-| 固件/序列号/模式 | 内置 SDK | **实测通过** | 身份数据有效 |
-| 云台角度订阅 | 内置 SDK | **实测通过** | 非零真实值 |
-| LED | 内置 SDK | **物理实测通过** | 亮绿和关闭 |
-| 电量/IMU/ESC/底盘姿态 | 内置 SDK | **回调但不可信** | 持续回传零 |
-| 位置/速度 | 内置 SDK | **待运动交叉验证** | 静止时为零 |
-| SDK 相机 | 内置 SDK | **S1 拒绝** | 使用 Lab 视频替代 |
-| 底盘运动 | 内置 SDK/S.BUS | **待安全实测** | 必须先完成 watchdog |
-| 云台运动 | 内置 SDK/S.BUS | **待安全实测** | 先做小角度闭环 |
+| App/Lab 会话 | 内置 Lab | **实测通过** | 无需 root；AppID、outer session 和动态窗口均由项目实现 |
+| 机内 Lab Python | 内置 Lab | **实测通过** | 生成、FTP 上传、注册、启动、停止和重复清理通过 |
+| 姿态回传 | 内置 Lab | **实测通过** | 当前 Bridge 连续返回位置、姿态和云台角度 |
+| 720p 视频 | 内置 Lab | **实测通过** | `1280×720 yuv420p`，可正常停流 |
+| Lab Bridge 安全状态 | 内置 Lab | **实测通过** | session/序号、arm 确认、命令结果、续租和 300 ms 失联归零 |
+| Lab Bridge 底盘 | 内置 Lab | **完整低速序列实测通过** | `±0.15 m/s` 前后左右与 `±15°/s` 双向旋转均获 controller 确认，遥测增量方向对应，每步 watchdog 停车 |
+| Lab Bridge 云台 | 内置 Lab | **完整低速序列实测通过** | pitch/yaw `±15°/s` 四方向均获确认，遥测变化约 `4.3～4.6°`，watchdog 停止并回中至 `0°` |
+| App 电量 | 内置 Lab | **可解析但稳定性不足** | 同一设备的诊断曾返回 `26` 和 `0`；`1～100` 可作为当次有效候选，`0` 必须明确标记为不可信 |
+| root ADB | Lab + payload | **实测通过** | 临时 TCP root ADB；设备端 shell 重启、App 广播恢复后确认 5555 保持关闭 |
+| 内置 `robomaster` fork | Python 包 | **离线可用，未纳入当前诊断** | 保持官方导入接口；原厂 S1 不直接开放其所需的 EP SDK proxy |
+| LED | 内置 Lab | **完整 controller 序列通过** | 红、绿、蓝、白和关闭均已处理；尚未记录外部视觉确认 |
+| 扬声器 | 内置 Lab | **controller 调用通过** | 内置提示音命令已处理；尚未记录外部听觉确认 |
 | 装甲/红外事件 | 内置 SDK/Lab | **待验证** | 代码存在 |
-| 扬声器/视觉识别 | 内置 SDK/Lab | **待验证** | 代码存在 |
-| 发射器 | 内置 SDK/Lab | **默认禁用** | 不进入普通控制路径 |
+| 视觉识别 | 内置 SDK/Lab | **待验证** | 代码存在 |
+| 红外发射 | 内置 Lab | **controller 调用通过** | 仅测试一次红外路径，未验证外部接收效果 |
+| 水弹发射 | 内置 Lab | **空仓 controller 调用通过** | 空仓单次调用返回 `blaster.fire_gel` / success；未验证有弹丸时的物理发射，仍不进入普通控制路径 |
 
 ### 7.12 远程控制目标架构
 
@@ -665,22 +688,20 @@ flowchart LR
 #### 7.13.1 网络安全
 
 - TCP 5555 是无认证 root ADB，只能在隔离网络短时开放；
-- 不通过公网、VPN Overlay 或路由器端口转发暴露 ADB/SDK；
+- 不通过公网、VPN Overlay 或路由器端口转发暴露 ADB；
 - 不把真实凭据、个人文件或未脱敏备份放入 S1；
-- 完成维护后先 `sdk restore`，再重启并确认 5555 拒绝连接。
+- `diag` 最终清理必须重启设备、断开主机 ADB 并确认 5555 拒绝连接。
 
 #### 7.13.2 文件安全
 
-- `enable` 只接受固定的已审计 SHA-256；
-- 上传后在设备端再次计算哈希；
-- 修改使用 `/data` 暂存和 bind mount，不覆盖 `/system`；
-- 发现设备文件既不匹配原厂哈希，也不匹配补丁哈希时立即停止；
+- 诊断只读取关键文件元数据和哈希，不通过 ADB 修改 `/system`；
+- Lab Bridge 与 ADB 启动载荷只使用仓库内置资源，不接受任意外部载荷路径；
 - 设备备份、厂商二进制和序列号日志不进入 Git。
 
 #### 7.13.3 机械安全
 
-- 自动化测试不执行机械动作；
-- 首次底盘测试必须悬空车轮，首次云台测试只做小角度；
+- 自动化测试默认不执行机械动作；实机诊断只有在显式选择且打开对应风险门后才执行；
+- 底盘测试必须悬空车轮，或放在已清空且无跌落风险的水平地面；云台只做低速小角度；
 - 取出水弹并保持物理电源开关可触达；
 - 不能以 API 返回成功代替物理方向、速度和停车验证。
 
@@ -694,7 +715,6 @@ flowchart LR
 | 官方声音/视觉是否兼容 | 一次只测一个能力并清理状态 | API、数据/事件和物理结果一致 |
 | 装甲/红外事件格式 | 触发已知事件并记录 DUSS | 重复触发得到稳定字段 |
 | 明文 SDK 是否可复用 | 临时服务下只发送无运动查询 | 能进入 command 模式并安全退出 |
-| 机内 Python 精确版本与模块集 | root ADB 下记录解释器 `--version`、`sys.version`、`sys.path` 和模块探针 | 能区分解释器版本、DJI 注入模块和标准库边界 |
 | 原厂启动后的完整进程/端口快照 | 冷启动后只读记录 `ps`、`getprop init.svc.*`、`netstat` 和 `/proc/net/unix` | 服务、PID、监听端口和 DUSS Unix socket 能互相对应 |
 | DSP 文件和注册状态能否跨重启复用 | 上传无运动程序，分别测试退出 Lab、重连和冷启动 | 明确文件、注册、运行三个状态各自的持久边界 |
 | `script_manage` 的实际执行流程 | 从设备备份模块并审计 DSP 解析、子进程创建和终止逻辑 | 找到用户 Python 文件路径、启动命令和信号处理 |
@@ -707,7 +727,7 @@ flowchart LR
 
 - 新确认或否定一项硬件能力；
 - 新发现端口、消息格式、服务或模块关系；
-- 修改 ADB、SDK 补丁、媒体或后端选择流程；
+- 修改 ADB、媒体或后端选择流程；
 - 新增 S.BUS、CAN、ROS 2、远程控制等架构组件；
 - 改变安全默认值、哈希验证或恢复步骤；
 - 新固件实测结果改变当前能力矩阵。
@@ -718,7 +738,7 @@ flowchart LR
 2. 标记证据等级；
 3. 把可复现命令和完整输出放入新的实测记录，而不是无限扩充本文；
 4. 在下方更新日志追加一条摘要；
-5. 检查中英文 README 中的事实性摘要是否需要同步。
+5. README 只在安装或命令用法变化时更新，不复制本文的能力结论。
 
 第 2～5 章不得记录 Hanppie 的实现流程、文件修改策略或目标架构；第 7 章必须明确每项项目增量发生在电脑还是 S1、是否持久化以及如何恢复。跨层结论使用交叉引用，不在原生章节复制项目流程。
 
@@ -726,6 +746,9 @@ flowchart LR
 
 | 日期 | 版本 | 变化 |
 | --- | --- | --- |
+| 2026-08-30 | 1.6 | 未发布阶段删除旧调试命令和动态兼容分派，收敛为静态 `diag`；诊断代码按模型、发现、会话、检查、记录和编排拆分，并扩展灯光、声音、底盘六方向、云台四方向与强制清理序列 |
+| 2026-08-30 | 1.5 | 建立文档单一事实来源规则，增加 Typer/Rich 实机测绘、脱敏证据报告、独立风险门和统一清理机制；完整真机测绘通过并补证空仓水弹 controller、系统快照和 ADB 重启竞态 |
+| 2026-08-30 | 1.4 | 完成内置 App/Lab 真机回归，修复程序 UDP 就绪重试、旧解释器控制分支和续租停止时序，验证视频、ADB、遥测、底盘、云台、红外与 watchdog |
 | 2026-08-30 | 1.3 | 内置 `src/robomaster` SDK fork 与项目自有 `src/hanppie/lab` App/Lab 后端，统一 Python 3.10 基线，移除官方 wheel、外部 checkout 和第二套 Lab 环境依赖 |
 | 2026-08-30 | 1.2 | 将 S1 原生事实、外部生态和 Hanppie 项目实现分层，集中记录项目改动、生命周期和恢复边界 |
 | 2026-08-30 | 1.1 | 补充系统/启动服务/关键文件清单，明确 DUSS 的能力边界，并还原 App/Lab 分层协议和程序生命周期 |
@@ -734,6 +757,7 @@ flowchart LR
 ## 参考与证据
 
 - [真机联调与官方 SDK 恢复记录](./s1-live-debug-2026-08-29.md)
+- [内置 App/Lab 后端真机回归记录](./s1-live-regression-2026-08-30.md)
 - [电脑控制与二次开发调研报告](./robomaster-s1-revival-report.md)
 - [DJI RoboMaster S1 用户手册 v1.8](https://dl.djicdn.com/downloads/robomaster-s1/20220429UM/RoboMaster_S1_User_Manual_v1.8_EN.pdf)
 - [DJI RoboMaster-SDK](https://github.com/dji-sdk/RoboMaster-SDK)
