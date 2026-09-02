@@ -100,6 +100,35 @@ finally:
 
 The current API, capabilities, and open gaps are maintained only in the [technical architecture](./docs/architecture.md#711-当前能力矩阵). Gamepad, Web, and ROS 2 input layers are not implemented yet and must eventually feed a control arbiter rather than drive actuators directly.
 
+## Codex MCP conversation control
+
+Hanppie provides a local STDIO MCP server. The default installer safely adds it to the user-scoped Codex configuration shared by the ChatGPT desktop app, Codex CLI, and IDE extension on the same computer. Windows, macOS, Linux, and WSL all launch the current Python interpreter by absolute path, without requiring the `codex` command on `PATH`.
+
+```bash
+# Discover and connect the only usable S1 on the LAN automatically
+uv run hanppie mcp install
+
+# Or write only the current project's .codex/config.toml
+uv run hanppie mcp install --scope project
+
+# Pin the target when more than one S1 may be present
+uv run hanppie mcp install \
+  --replace \
+  --robot-ip "$S1_IP" \
+  --appid "$S1_APPID"
+
+# Run the server directly when debugging client configuration
+uv run hanppie mcp serve
+```
+
+Restart the relevant Codex client after installation, then use `/mcp` to confirm that `hanppie` is connected. `install` preserves every other Codex setting and MCP server. Repeating the same configuration is a no-op; changing an existing Hanppie entry requires `--replace`. User scope resolves `--codex-home`, then `CODEX_HOME`, then `~/.codex/config.toml`; project scope writes `.codex/config.toml` at the project root. Local MCP configuration is not available to ChatGPT Web; see the [Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp).
+
+The server exposes connection, status, Python-context, Python-execution, and disconnect tools. The first connection may automatically select the only usable S1 on the LAN. The same MCP server then reuses the active App connection across a continuous conversation and multiple tool calls instead of initializing it for every instruction. `execute_python` defaults to `robot_access=auto`; `reuse` exposes only an existing connection, while `none` explicitly runs host-only Python. Each call gets a fresh namespace with `robot`, `time`, `sleep`, `output_dir`, `save_frame`, and `checkpoint`, and returns `result`, streams, progress events, errors, and artifacts. Arbitrary source runs only in the PC-side Python 3.10 worker.
+
+Installation and startup have no motion, infrared, or gel permission switches. Chassis, gimbal, and infrared use the normal `DirectRobot` `robot.arm()` and lease API. Gel firing is available as `result = robot.fire_gel()` or `robot.fire("gel")`; MCP switches to the verified Lab/Bridge path and waits for its execution result. A failed Lab transition is retried and attempts to restore the previous Direct connection; shared LED and stop operations do not cause unnecessary backend switches. Every successful or failed call still neutralizes and disarms without closing a healthy connection. A timeout kills the worker and the next call creates a new connection. Velocity multiplied by duration is not proof of an exact angle or distance; multi-stage code can call `checkpoint("stage", ...)` after each completed stage. Execution failures are returned as MCP tool errors so Codex does not mistake them for successful completion.
+
+This is arbitrary Python execution for a trusted local user, not a security sandbox. Starting MCP, completing its handshake, and listing tools do not write files. The first actual Hanppie tool call activates `.hanppie/mcp/sessions/<session-id>/`: `server.log` contains server and worker events, `calls.jsonl` stores paired `started` and `completed` events under one `call_id`, and `calls/<run-id>/` contains files, images, and checkpoints produced by that Python call. `get_python_context` is itself a tool call, so it activates recording and reports the version, actual facade signatures, capability boundaries, and active paths; `--artifact-dir` changes the whole root. Call records contain submitted Python source and returned content and should be managed as local execution records. The [technical architecture](./docs/architecture.md#734-codex-mcp-与持久-host-python-worker) is authoritative for execution, cleanup, and concurrency boundaries.
+
 ## Development toolchain
 
 ```bash

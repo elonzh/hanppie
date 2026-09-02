@@ -19,7 +19,7 @@
 | 已废弃实现、旧命令、迁移过程和历史取舍 | 日期化联调记录与 Git 历史 | 不进入本文正文 |
 | 内置 SDK fork 来源 | `src/robomaster/UPSTREAM.md` | 其他位置只引用 |
 
-自动生成的 `.hanppie/diagnosis/<timestamp>/report.md` 和 `events.jsonl` 属于本地运行证据，默认不进入 Git。真机结果改变能力结论时，更新本文并引用相应证据；当前能力矩阵只在本文维护。
+自动生成的 `.hanppie/diagnosis/<timestamp>/` 诊断证据和 `.hanppie/mcp/sessions/<session-id>/` MCP 运行记录默认不进入 Git。真机结果改变能力结论时，更新本文并引用相应证据；当前能力矩阵只在本文维护。
 
 ## 证据标记
 
@@ -636,11 +636,29 @@ UDP `10607` 直连与官方 SDK 是两件事：前者自行实现 `AppEnvelope`�
 
 因此，无 USB 的局域网遥控在传输层已成立。**代码/实测** 跨互联网遥控不能直接暴露 UDP `56789/10607`、FTP、Bridge 或 ADB；实现状态和网络边界见第 7.12 节。
 
+#### 7.3.4 Codex MCP 与持久 Host Python Worker
+
+Hanppie 通过 `hanppie mcp serve` 提供本机 STDIO MCP 服务。服务公开 `get_python_context`、`get_connection_status`、`connect_robot`、`execute_python` 和 `disconnect_robot` 五个工具；连续对话状态仍由 Codex 维护，MCP 生命周期上下文持有一个 `PythonExecutor`，后者只创建一个长期运行的隔离 worker。`execute_python` 的 `robot_access` 默认为 `auto`，负责按需发现、连接并注入 `robot`；`reuse` 只复用现有连接，未连接时注入 `None`，不会发现或连接；`none` 始终注入 `None`，用于明确的 Host-only Python。兼容参数 `connect_robot=false` 映射为 `reuse`，不再同时承担“不要连接”和“不要提供现有 robot”两种语义。worker 在第一次 `connect_robot` 或 `robot_access=auto` 的调用中建立 App 会话，并在后续工具调用中复用当前 Direct 或 Lab 后端。**代码/离线测试**
+
+未配置目标时，首次连接会被动收集 App 广播，过滤不可用的 `00000000` AppID；只有一个候选时自动选择，多于一个候选时拒绝猜测，没有候选时返回网络与显式目标提示。不连接机器人的 Host Python 调用不会触发发现。MCP 安装和启动参数不包含动作、红外或水弹权限门；显式 IP 与 AppID 只用于目标选择。发现和连接本身不执行机械动作。**代码/离线测试**
+
+`execute_python` 在 worker 的电脑 Python 3.10 中为每次调用创建新的源码命名空间，注入 Direct/Lab 路由外观 `robot`、`time`、`sleep`、`output_dir`、`save_frame` 和 `checkpoint`；调用之间不保存 Python 变量，但保存 worker 和当前 App 连接。代码把最终值写入 `result`，MCP 返回标准输出、错误、结构化结果、阶段事件和制品路径。`checkpoint(name, **data)` 立即追加本次调用的 `events.jsonl`，所以后续源码失败时，已经完成的动作阶段仍会出现在错误响应和制品中。`get_python_context` 的 schema 版本为 2，返回 Hanppie/Python 版本、访问模式、当前受支持的 facade 签名和能力边界；其中底盘、云台速度加时长只表示开环速度命令，不宣称已实现精确角度或距离控制。MCP 工具结果中 `ok=false` 会转换为协议层工具错误，客户端收到 `isError=true`，完整执行结果仍先写入调用记录。**代码/离线测试**
+
+底盘、云台、声音、红外、枪口灯和媒体等 Direct-only 能力按需使用 `DirectRobot`；`robot.fire_gel()` 与 `robot.fire("gel")` 会关闭 Direct 会话，完成 `LabRobot` 进入 Lab、上传并启动固定 Bridge 的生命周期，然后等待 arm 与 `blaster.fire_gel` 命令结果。Direct → Lab 完整生命周期失败时会清理本次未完成的 Lab 实例并最多执行两次，第二次前等待 `250 ms`；仍失败则尝试恢复调用前的 Direct 后端。连接状态中的 `transition.last` 保存来源、目标、尝试次数、耗时、错误和回滚结果。任意用户源码不会上传为机内 Lab 程序。**代码/离线测试，水弹能力本身已有实测**
+
+同一后端在连续调用中复用：连续水弹调用不会重复上传 Bridge；共享的 `set_led` 保留当前后端，`robot.stop()`、`robot.chassis.stop()` 和 `robot.gimbal.stop()` 只停止当前后端，不会为了清理而打开或切换连接；只有调用当前后端不支持的能力时才切换。每次正常或异常返回都会归零并 disarm，但健康连接不会关闭；Direct 动作仍遵循 `DirectRobot` 自身的显式 `arm()` 和租约语义，Lab 水弹调用由路由层完成当前 session 的 arm 与命令确认。清理失败时 worker 主动断开。调用超时会强制结束整个 worker，App 连接随进程释放，下一次调用创建新 worker；显式 `disconnect_robot` 和 MCP 服务退出则执行 disarm、close。**代码/离线测试**
+
+`MCPRecorder` 只计算默认路径，不在 MCP 进程启动时写文件；直到第一个 Hanppie 工具实际被调用，才创建 `.hanppie/mcp/sessions/<session-id>/`。因此客户端初始化、MCP 握手、列出工具以及从未调用工具便退出都不会在当前工作目录生成 `.hanppie`。激活后，`server.log` 记录服务、worker 生命周期和工具调用摘要，worker 的 stdout/stderr 也重定向到该文件，避免污染 STDIO MCP 协议；`calls.jsonl` 为每次工具调用写入同一 `call_id` 的 `started` 和 `completed` 两类结构化事件：前者立即保存工具名和完整参数，后者保存耗时、结果或异常。进程在调用中断时至少保留 `started`，不会让正在执行的调用从记录中消失。`calls/<run-id>/` 是 `execute_python` 的工作目录和制品目录，其中 `events.jsonl` 保存用户显式写入的阶段检查点。记录在校验参数前开始，因此被拒绝的调用也会留下异常；worker 超时结果会标为 error。每个已激活服务使用独立会话目录，避免多个 Codex 客户端共享同一日志文件。`get_python_context` 本身是一次工具调用，所以会激活记录并返回这些绝对路径；`--artifact-dir` 只改变整棵 MCP 数据根目录，默认值仍是 Git 忽略的 `.hanppie/mcp`。调用参数会原样保存 Python 源码，结果会保存 stdout、stderr 和结构化返回，因此这些文件属于可信本地执行记录，不做内容脱敏。**代码/离线测试**
+
+`hanppie mcp install` 幂等写入 Codex 的 `mcp_servers.hanppie` 表，其他配置和 MCP 服务保持不变；已有不同配置时必须显式 `--replace`。user 范围优先使用显式 `--codex-home`，再使用 `CODEX_HOME`，否则使用跨平台用户主目录下的 `.codex/config.toml`；project 范围向上寻找 Git 或 Python 项目根并写入 `.codex/config.toml`。配置以当前 Python 解释器绝对路径和 `-m hanppie mcp serve` 参数启动，不依赖 shell 引号或 `codex` 可执行文件是否在 PATH，因此同一实现适用于 Windows、macOS、Linux 和 WSL 的本机 Codex。**代码/离线测试**
+
+这是面向可信本地用户的任意 Python 代码执行入口，不是安全沙箱。Host Python 保留运行 MCP 服务的本机账户权限，可以导入模块、访问绝对路径或故意绕过预注入对象。MCP 只提供 STDIO，不监听网络，但仍不能交给不可信调用方。当前没有跨进程控制源仲裁；运行实机控制时不得同时运行 `diag`、另一个 Hanppie MCP、RoboMaster App 或其他控制程序。**代码边界**
+
 ### 7.4 包边界
 
 | 路径 | 项目职责 |
 | --- | --- |
-| `cli.py` | 静态声明唯一 `diag` 子命令，负责交互选择和独立安全开关 |
+| `cli.py` | 静态声明 `diag` 与 `mcp` 子命令，负责诊断交互、MCP 服务参数和 Codex 配置安装 |
 | `diagnosis/model.py` | 诊断目录、配置、结果模型和风险门 |
 | `diagnosis/discovery.py` | 被动发现并解析 S1 App 广播 |
 | `diagnosis/session.py` | App 直连、Lab、临时 ADB 的互斥连接依赖和最终清理 |
@@ -653,6 +671,9 @@ UDP `10607` 直连与官方 SDK 是两件事：前者自行实现 `AppEnvelope`�
 | `lab/robot.py`、`lab/bridge.py` | Lab 程序生命周期和可选 UDP/JSON Bridge 后端 |
 | `lab/camera.py`、`lab/audio.py` | UDP `10607` 会话中的视频、麦克风和 Host PCM 媒体实现，两套机器人后端共用 |
 | `media_codec.py` | 官方 SDK 的 PyAV 媒体兼容层 |
+| `mcp/server.py`、`mcp/executor.py`、`mcp/worker.py`、`mcp/runtime.py` | STDIO 工具、生命周期、持久隔离 worker、连接复用、Host Python 上下文和清理 |
+| `mcp/install.py` | 保留现有 TOML 内容并跨平台安装 user 或 project 范围的 Codex MCP 配置 |
+| `mcp/recorder.py` | 为每个 MCP 服务会话保存运行日志、完整工具调用 JSONL 和 Python 调用制品目录 |
 | `payloads/` | 临时上传到 S1 的最小机内载荷 |
 | `runtime/` | 恢复的 S1 Lab/DUSS 运行时参考；不作为桌面 SDK 重构 |
 | `resources/` | 原机配置和非执行参考资源 |
@@ -672,6 +693,7 @@ from robomaster import robot
 | --- | --- | --- |
 | S1 机内 Lab 程序 | Python 3.6.6 和固件内 DJI 模块 | 固件环境不可随主机升级；项目载荷同时做 3.6 语法与真机执行测试 |
 | 电脑上的 Hanppie 与内置 SDK fork | Python 3.10 | 开发、CI 和发布验证基线 |
+| MCP Host 持久 worker | Python 3.10 | 使用当前 Hanppie 环境；连接跨调用复用，每次调用使用新命名空间，不保存解释器变量 |
 | 非 Python 客户端 | 无 Python 约束 | 需要自行实现 UDP `10607` 外层封包、SDK proxy 或机内 DUSS 客户端及生命周期 |
 
 所以不是“只有 Lab Python 才有兼容性要求”，而是每个 Python 实现分别受其运行环境约束；这些约束都不属于 DUSS 协议本身。
@@ -805,6 +827,7 @@ Hanppie 自行维护的主机代码由 Ruff、pytest、coverage 和 prek 检查�
 | App 电量 | Direct + Lab 共用 | **可解析但稳定性不足** | 同一设备的诊断曾返回 `26`、`0` 和 `87`；`1～100` 可作为当次有效候选，`0` 必须明确标记为不可信 |
 | root ADB | Lab + payload | **实测通过** | 临时 TCP root ADB；设备端 shell 重启、App 广播恢复后确认 5555 保持关闭 |
 | 内置 `robomaster` fork | Python 包 | **离线可用，未纳入当前诊断** | 保持官方导入接口；原厂 S1 不直接开放其所需的 EP SDK proxy |
+| Codex MCP Python 执行 | Host Direct + Lab | **STDIO、持久 worker、安装与离线生命周期测试通过，未做对话实机回归** | 目标发现、Direct/Lab 按能力切换、跨调用后端复用、新命名空间、结果/制品、超时重启和逐调用 disarm 已有离线测试；经 Codex 对话发起的实机动作仍需单独验证 |
 | LED | Direct DUSS | **完整 ACK 序列通过** | `0x3F/0x33` 红、绿、蓝、白和关闭均取得成功 ACK；尚未记录外部视觉确认 |
 | 扬声器内置音效 | Direct DUSS | **DUSS ACK 与物理声学回环通过** | `0x3F/0x1A` 的音阶和射击声均取得成功 ACK；协议和声学证据见第 7.9 节 |
 | Host PCM 到扬声器 | Direct + Lab 共用 | **物理声学回环实测通过** | 编码、传输、会话隔离和声学证据见第 7.9 节 |
@@ -814,15 +837,15 @@ Hanppie 自行维护的主机代码由 Ruff、pytest、coverage 和 prek 检查�
 | 装甲/红外事件 | 未接入当前后端 | **待验证** | 上游 SDK 和机内 `rm_ctrl.py` 存在相关定义；UDP `10607` 或 Bridge 事件链路尚未接入 |
 | 视觉识别 | 未接入当前后端 | **待验证** | 上游 SDK 和机内 `rm_ctrl.py` 存在相关定义；UDP `10607` 或 Bridge 视觉链路尚未接入 |
 | 红外发射 | Direct control + DUSS | **原生触发与枪口可见效果已执行** | control channel 发出 120 ms 触发；枪口闪光和射击声取得成功 ACK，现场操作者确认枪口灯产生可见反应；光学编码与外部红外接收仍未验证，见第 5.5 节 |
-| 水弹发射 | 内置 Lab | **空仓控制与机械击发动作通过** | 枪口闪光、射击声和空仓单次发射三个结果均成功，现场操作者确认出现水弹击发机械动作；弹仓为空，未验证弹丸射出，仍不进入普通控制路径 |
+| 水弹发射 | 内置 Lab | **空仓控制与机械击发动作通过，已接入 MCP** | 枪口闪光、射击声和空仓单次发射三个结果均成功，现场操作者确认出现水弹击发机械动作；MCP 已通过固定 Lab/Bridge 生命周期接入并有离线切换测试，尚未做 MCP 对话实机回归 |
 
 ### 7.12 远程控制当前边界
 
 当前仓库只支持电脑和 S1 位于同一可信、可双向访问的 IP 网络。主直控路径只使用 UDP `45678/56789` 完成身份交换，并通过 UDP `10609/10607` 传输数据、媒体、DUSS 和 control；它不要求 USB、FTP 或 Lab Bridge。可选 Lab 路径额外使用 FTP `21` 和 Bridge UDP `40923/40924`。**代码/实测**
 
-当前没有远程网关、身份验证、加密会话、Web UI、手柄输入、控制源仲裁或公网传输实现，因此项目当前不具备跨互联网远程控制能力。上述 S1 和 Bridge 端口均不得直接暴露到公网、路由器端口转发或 VPN Overlay。
+当前增加了只在本机工作的 STDIO MCP Python 入口、局域网广播自动发现和 MCP 生命周期内的 App 连接复用，但仍没有远程网关、身份验证、加密会话、Web UI、手柄输入、跨进程控制源仲裁或公网传输实现，因此项目当前不具备跨互联网远程控制能力。上述 S1 和 Bridge 端口均不得直接暴露到公网、路由器端口转发或 VPN Overlay。
 
-局域网程序控制已经具备 `DirectRobot` API，但持续遥控器尚未实现。接入手柄、键盘、Web 或 ROS 2 时，输入不能直接调用执行器；必须经过单一控制仲裁层，维护当前控制源、显式 arm、速度限制、短租约、断连 neutral 和紧急停止。当前 250 ms 主机租约与一次进程异常退出位移测试只能作为底层证据，不能替代远程网关的认证、加密、心跳、速率限制和多控制源抢占策略。
+局域网程序控制已经具备 `DirectRobot` API 和 MCP 生命周期内的持续连接，但持续连接不提供持续运动租约，也不等于完整遥控器。MCP 不能协调另一个进程或 App；接入手柄、键盘、Web 或 ROS 2 时，输入仍必须经过跨输入源的单一控制仲裁层，维护当前控制源、显式 arm、速度限制、短租约、断连 neutral 和紧急停止。当前 250 ms 主机租约、MCP worker 超时终止与一次进程异常退出位移测试只能作为底层证据，不能替代远程网关的认证、加密、心跳、速率限制和多控制源抢占策略。
 
 ### 7.13 安全与恢复模型
 
@@ -832,11 +855,13 @@ Hanppie 自行维护的主机代码由 Ruff、pytest、coverage 和 prek 检查�
 - 不通过公网、VPN Overlay 或路由器端口转发暴露 ADB；
 - 不把真实凭据、个人文件或设备备份放入 S1；
 - `diag` 最终清理必须重启设备、断开主机 ADB 并确认 5555 拒绝连接。
+- MCP 只使用本机 STDIO，不提供网络监听；不得把代码执行入口转接给不可信或公网调用方。
 
 #### 7.13.2 文件安全
 
 - 诊断只读取关键文件元数据和哈希，不通过 ADB 修改 `/system`；
 - Lab Bridge 与 ADB 启动载荷只使用仓库内置资源，不接受任意外部载荷路径；
+- MCP Host Python 是用户明确要求的可信代码执行入口，不是文件系统沙箱；相对输出统一进入 `.hanppie/mcp`，但绝对路径仍具有本机账户权限；
 - 设备备份、厂商二进制和序列号日志不进入 Git。
 
 #### 7.13.3 机械安全

@@ -100,6 +100,35 @@ finally:
 
 当前 API、能力与未完成项只在[技术架构](./docs/architecture.md#711-当前能力矩阵)维护。手柄、Web 和 ROS 2 输入层尚未实现，不能绕过未来的控制仲裁层直接驱动执行器。
 
+## Codex MCP 对话控制
+
+Hanppie 提供本机 STDIO MCP 服务。默认安装命令会安全地加入 user 范围的 Codex 共享配置；同一台电脑上的 ChatGPT 桌面端、Codex CLI 和 IDE 扩展共用该配置。Windows、macOS、Linux 和 WSL 都使用当前 Python 解释器的绝对路径启动服务，不要求 `codex` 命令位于 PATH。
+
+```bash
+# 自动发现并连接局域网内唯一可用的 S1
+uv run hanppie mcp install
+
+# 也可以只写当前项目的 .codex/config.toml
+uv run hanppie mcp install --scope project
+
+# 也可以固定目标，避免存在多台 S1 时需要重新配置
+uv run hanppie mcp install \
+  --replace \
+  --robot-ip "$S1_IP" \
+  --appid "$S1_APPID"
+
+# 需要调试客户端配置时，也可以直接运行服务
+uv run hanppie mcp serve
+```
+
+安装后重启对应的 Codex 客户端，并用 `/mcp` 确认 `hanppie` 已连接。`install` 会保留其他 Codex 设置和 MCP 服务；相同配置重复执行不会改文件，已有不同的 Hanppie 配置必须显式传入 `--replace`。user 范围依次使用 `--codex-home`、`CODEX_HOME` 或 `~/.codex/config.toml`，project 范围写入项目根的 `.codex/config.toml`。本地 MCP 配置不适用于 ChatGPT Web，详见 [Codex MCP 文档](https://learn.chatgpt.com/docs/extend/mcp)。
+
+MCP 提供连接、状态、Python 上下文、Python 执行和断开工具。首次连接可以自动选择局域网内唯一可用的 S1，之后同一 MCP 服务在连续对话和多次工具调用之间复用当前 App 连接，不再为每条指令反复初始化。`execute_python` 默认用 `robot_access=auto` 按需连接；`reuse` 只提供已有连接，`none` 明确执行 Host-only Python。每次 Python 调用仍使用新命名空间，提供 `robot`、`time`、`sleep`、`output_dir`、`save_frame` 和 `checkpoint`，并返回 `result`、输出、阶段事件、错误和制品路径；任意源码只在电脑 Python 3.10 worker 中执行。
+
+安装和启动没有动作、红外或水弹权限选项。底盘、云台和红外直接使用 `DirectRobot` 的正常 `robot.arm()` 与租约 API；水弹调用 `result = robot.fire_gel()` 或 `robot.fire("gel")`，MCP 会切换到已验证的 Lab/Bridge 路径并等待执行结果。Lab 切换失败会重试并尝试恢复原 Direct 连接；共享灯光和 stop 不会触发无意义的后端切换。每次调用正常或异常结束仍会归零并 `disarm()`，但健康连接不会关闭；超时会结束整个 worker，并在下一次调用时重建连接。速度乘以持续时间不是精确角度或距离证明，多阶段动作可在每个完成点调用 `checkpoint("阶段名", ...)` 保留部分进度。执行失败会以 MCP 工具错误返回，便于 Codex 直接识别失败而不是误判为完成。
+
+这是面向可信本地用户的任意 Python 代码执行入口，不是安全沙箱。MCP 启动、握手和列出工具不会写文件；首次实际调用 Hanppie 工具后才会创建 `.hanppie/mcp/sessions/<session-id>/`。`server.log` 保存服务与 worker 运行日志，`calls.jsonl` 为每次调用保存同一 `call_id` 的 `started`/`completed` 事件，`calls/<run-id>/` 保存该次 Python 调用生成的文件、图片和检查点。`get_python_context` 本身也算一次调用，会激活记录并返回当前版本、真实 facade 签名、能力边界和记录路径；`--artifact-dir` 可以整体修改这个根目录。调用记录包含提交的 Python 源码和返回内容，应按本机运行记录管理。完整执行边界、清理和并发限制只在[技术架构](./docs/architecture.md#734-codex-mcp-与持久-host-python-worker)维护。
+
 ## 开发工具链
 
 ```bash
