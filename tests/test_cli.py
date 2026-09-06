@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from hanppie import cli
@@ -11,7 +12,58 @@ from hanppie.diagnosis.model import validate_safety
 runner = CliRunner()
 
 
-def test_version_and_help_expose_diag_and_mcp() -> None:
+@pytest.mark.parametrize(
+    "outcome,code,count",
+    [
+        ("ok", 0, 2),
+        ("tool_error", 1, 1),
+        ("limit", 1, 1),
+        ("exception", 1, 1),
+        ("interrupt", 130, 1),
+    ],
+)
+def test_agent_prompt_execution_and_cleanup(monkeypatch, outcome, code, count):
+    from hanppie.agent.model import AgentReply, ToolResult
+
+    calls = []
+    closed = []
+
+    class Service:
+        def process_prompt(self, text):
+            calls.append(text)
+            if outcome == "exception":
+                raise RuntimeError("test failure")
+            if outcome == "interrupt":
+                raise KeyboardInterrupt
+            return AgentReply(
+                "done",
+                failed=outcome == "limit",
+                tool_results=(ToolResult("1", "test", {"ok": outcome != "tool_error"}),),
+            )
+
+        def close(self):
+            closed.append(True)
+
+    def build(config, **kwargs):
+        assert kwargs["text_only"] is True
+        return Service()
+
+    monkeypatch.setattr("hanppie.agent.service.build_voice_agent", build)
+    result = runner.invoke(cli.app, ["agent", "run", "-p", "观察", "--prompt", "再看"])
+    assert result.exit_code == code, result.output
+    assert len(calls) == count
+    assert closed == [True]
+
+
+def test_agent_empty_prompt_rejected_before_initialization(monkeypatch):
+    def build(*args, **kwargs):
+        pytest.fail("must reject before startup")
+
+    monkeypatch.setattr("hanppie.agent.service.build_voice_agent", build)
+    assert runner.invoke(cli.app, ["agent", "run", "-p", "  "]).exit_code == 2
+
+
+def test_version_and_help_expose_diag_mcp_and_agent() -> None:
     version = runner.invoke(cli.app, ["--version"])
     help_result = runner.invoke(cli.app, ["--help"])
 
@@ -20,6 +72,7 @@ def test_version_and_help_expose_diag_and_mcp() -> None:
     assert help_result.exit_code == 0
     assert "diag" in help_result.stdout
     assert "mcp" in help_result.stdout
+    assert "agent" in help_result.stdout
     assert "robot" not in help_result.stdout
     assert "survey" not in help_result.stdout
     assert "probe-" not in help_result.stdout
@@ -120,3 +173,32 @@ def test_mcp_has_no_action_permission_options() -> None:
     assert "--allow-infrared" not in result.output
     assert "--allow-gel" not in result.output
     assert "--max-lease-seconds" not in result.output
+
+
+def test_agent_help_exposes_voice_conversation_options() -> None:
+    commands = runner.invoke(cli.app, ["agent", "--help"], env={"COLUMNS": "200"})
+    result = runner.invoke(cli.app, ["agent", "run", "--help"], env={"COLUMNS": "200"})
+
+    assert commands.exit_code == 0
+    assert "login" in commands.output
+    assert "logout" in commands.output
+    assert result.exit_code == 0
+    assert "--wake-phrase" in result.output
+    assert "--active-timeout" in result.output
+    assert "--auth" in result.output
+    assert "--codex-model" in result.output
+    assert "--codex-executable" not in result.output
+    assert "--local-transcription-model" in result.output
+    assert "--transcription-model" in result.output
+    assert "--no-tts" in result.output
+
+
+def test_agent_logout_without_credentials_is_a_noop(tmp_path: Path) -> None:
+    result = runner.invoke(
+        cli.app,
+        ["agent", "logout"],
+        env={"HANPPIE_HOME": str(tmp_path / "hanppie")},
+    )
+
+    assert result.exit_code == 0
+    assert "没有" in result.output

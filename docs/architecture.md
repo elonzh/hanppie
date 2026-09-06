@@ -1,7 +1,7 @@
 # RoboMaster S1 与 Hanppie 技术架构
 
 > 文档性质：Hanppie 的长期技术事实源，不使用日期文件名。<br>
-> 最后更新：2026-08-30<br>
+> 最后更新：2026-09-02<br>
 > 已验证固件：RoboMaster S1 `00.06.0521`
 
 本文只记录 RoboMaster S1 的当前固有架构、通信和扩展边界，以及 Hanppie 当前增加的电脑控制能力。原机能力与项目实现按章节严格分开；已被替代的方案、旧命令、迁移过程和开发取舍不进入正文，按日期保存的调研、联调记录与 Git 历史负责保存这些信息。
@@ -19,7 +19,7 @@
 | 已废弃实现、旧命令、迁移过程和历史取舍 | 日期化联调记录与 Git 历史 | 不进入本文正文 |
 | 内置 SDK fork 来源 | `src/robomaster/UPSTREAM.md` | 其他位置只引用 |
 
-自动生成的 `.hanppie/diagnosis/<timestamp>/` 诊断证据和 `.hanppie/mcp/sessions/<session-id>/` MCP 运行记录默认不进入 Git。真机结果改变能力结论时，更新本文并引用相应证据；当前能力矩阵只在本文维护。
+自动生成的 `.hanppie/diagnosis/<timestamp>/` 诊断证据、`.hanppie/mcp/sessions/<session-id>/` MCP 运行记录和 `.hanppie/agent/` 语音会话记录默认不进入 Git。真机结果改变能力结论时，更新本文并引用相应证据；当前能力矩阵只在本文维护。
 
 ## 证据标记
 
@@ -523,7 +523,7 @@ Hanppie 不修改 `/init.rc`、原厂启动脚本或 `/system` 持久文件。La
 ```mermaid
 flowchart LR
     subgraph HOST["电脑"]
-        ENTRY["Hanppie API / diag"]
+        ENTRY["Hanppie API / diag / MCP / agent"]
         APPHOST["AppConnection / AppEnvelope<br/>身份与数据会话"]
         DIRECTHOST["DirectRobot<br/>DUSS / control 直控"]
         BRIDGEHOST["LabRobot / LabBridge<br/>可选机内 Python 后端"]
@@ -654,11 +654,42 @@ Hanppie 通过 `hanppie mcp serve` 提供本机 STDIO MCP 服务。服务公开 
 
 这是面向可信本地用户的任意 Python 代码执行入口，不是安全沙箱。Host Python 保留运行 MCP 服务的本机账户权限，可以导入模块、访问绝对路径或故意绕过预注入对象。MCP 只提供 STDIO，不监听网络，但仍不能交给不可信调用方。当前没有跨进程控制源仲裁；运行实机控制时不得同时运行 `diag`、另一个 Hanppie MCP、RoboMaster App 或其他控制程序。**代码边界**
 
+#### 7.3.5 唤醒词、连续对话与 LangGraph 智能体
+
+`hanppie agent run --prompt TEXT`（简写 `-p`）直接调用同一 LangGraph 与 Python 执行器，不经过唤醒门控，不初始化麦克风、转写模型或语音播放。重复 `--prompt` 按顺序共享内存会话和持久机器人连接；跨进程不保存上下文。每轮等待模型与工具完成，任一工具报错或达到工具轮数上限即停止后续 prompt 并返回退出码 1，正常完成返回 0，中断返回 130；退出时关闭连接。文本在实际执行时以 `user.prompt` 写入 `.hanppie/agent/sessions`，回复包含工具结果和阶段耗时。文本模式忽略音频选项，包括 `--tts`。**代码/离线测试**
+
+延迟链路当前为串行的「断句 → 转写 → 模型规划 → 工具执行 → 模型续接 → 完整回复播报」。断句静音默认 `480 ms`，本地 Whisper 使用 `beam_size=1`；中文识别准确率与速度仍需现场测量。模型生成的瞬时状态设置不应添加演示性等待；`disarm` 是解除运动使能，不是关闭灯光或撤销用户要求的最终状态。工具执行完成立即输出终端回执，不等待模型总结，但回执不代表整个复合任务完成。当前仍收齐 SSE 完整响应后才执行代码或播报，未实现流式首句播报、播报打断、执行期间监听或并行转写。**代码/文本实机测试，语音端到端未验证**
+
+`latency` 保存 `transcription`、`speech_playback`、`input_to_reply_ready`、`input_to_delivery_complete`。文本起点是接受 prompt；麦克风起点是最后一个达到能量阈值的音频块回调时间，包含其后断句、转写和回复，不包含此前说话时长；它是 VAD 估计，不是声学首声测量。`assistant.reply.timings` 分开记录模型规划、工具、模型续接；观察工具只计本地取图并返回 `capture_ms`。Codex 模型 metrics 记录首 SSE 事件、首个文本/工具参数 delta（后端有发才记录）、首个完整工具项、输入/输出 token 数。`execution.progress` 的 `tool_dispatch`/`tool_complete` 使用从 LangGraph 调用开始的相对时间；派发不等于真实电机启动，不得据此宣称首动作延迟。当前没有传感器级首动作时间戳、声学首声指标或 P95 保证。**代码/离线计时测试/文本实测**
+
+Codex 请求默认显式使用 `--reasoning-effort low`；不支持的强度由后端报错，不静默降级。`--model-timeout` 默认 30 秒，是 SDK 网络操作超时，不是整轮硬截止时间。完成事件后停止读取并关闭 SSE 资源；网络错误不自动重试，避免隐藏尾延迟。`--codex-model` 控制规划及普通续接，`--codex-vision-model` 控制带图片的续接，默认跟随规划模型；因此文本模型必须搭配支持图像的视觉模型才能观察。默认规划模型仍为 Sol；Spark 可以显式选择，但短基准的速度优势不等于复杂机器人任务质量已达标。**代码/模型与灯光实测**
+
+`hanppie agent run` 是一个常驻电脑进程。它从电脑系统麦克风读取 16 kHz 单声道 PCM，以本地能量 VAD 保留短前滚并把连续音频切成最长受限的单句 WAV；单句随后交给所选授权模式的转写器。`WakeWordGate` 在转写文本中匹配“小憨批”或配置的别名：休眠时忽略没有唤醒词的结果，命中后进入有期限的活动窗口，窗口内后续句子不必重复唤醒词；只有唤醒词时回复“我在”，模型调用 `sleep_session` 或活动窗口超时后重新等待唤醒。这里的唤醒不是声学关键词模型。TTS 播放期间不同时采集下一句，减少自身回复造成的回声触发。**代码/离线测试**
+
+`--auth` 有 `auto`、`codex` 和 `api-key` 三种取值。`auto` 在存在显式 OpenAI client 或 `OPENAI_API_KEY` 时选择 `api-key`，否则选择 `codex`。`hanppie agent login` 自己执行 ChatGPT Codex device-code OAuth：向 `auth.openai.com` 申请用户码、轮询授权码并交换 access/refresh token；它不安装、启动或调用 Codex CLI/App Server，也不导入 `~/.codex/auth.json`。凭据原子写入 `HANPPIE_HOME/auth.json` 或默认的 `~/.hanppie/auth.json`，POSIX 文件权限为 `0600`；刷新时接受服务端轮换后的 refresh token，`agent logout` 只删除 Hanppie 自己的凭据。**代码/离线协议测试**
+
+Codex 模式用 access token 直接请求 `https://chatgpt.com/backend-api/codex/responses`，携带当前 JWT 中的 ChatGPT account id 和 consumer Codex 请求头。该端点要求 `input` 列表与 SSE 流式响应；Hanppie 从 `response.output_text.delta` 和 `response.output_item.done` 重建结果，遇到 HTTP 401 时强制刷新 token 后只重试一次。每次请求明确传 `store=false`，默认模型为 `gpt-5.6-sol`，`--codex-model` 可以覆盖。这里使用的是当前 ChatGPT Codex 消费者后端协议，不是 OpenAI Platform 的公共 Responses API；它不需要 Platform API key，但兼容性依赖当前 consumer endpoint。**代码/离线协议测试/真实无工具与工具回合验证**
+
+Codex 模式用 CPU `faster-whisper` 的 int8 模型在本机转写，每句使用临时 WAV 并在完成后删除；首次按模型名使用时由 faster-whisper 下载模型到其用户缓存。休眠期 VAD 人声不离开本机，只有接受唤醒后的指令文本进入 Codex。回复通过 macOS `say`、Linux `spd-say`/`espeak` 或 Windows PowerShell `System.Speech` 的可用系统实现播报，找不到系统 TTS 时启动失败并提示使用 `--no-tts`。API key 模式保留 OpenAI transcription、Responses/vision 和 TTS；该模式的 VAD 人声在唤醒匹配前先发送到转写 API。**代码/离线测试**
+
+连续对话由 LangGraph `StateGraph`、内存 checkpointer 和同一 `thread_id` 维护；API key 模式用 OpenAI Responses 的 `previous_response_id` 串联模型上下文。Codex 模式不保存或恢复远端 response/thread，而是在 Hanppie 内存中按会话记录用户输入、模型 output item 和工具结果，每次直连请求都重放当前会话的完整 Responses input。每个新唤醒会话使用新 thread，会话状态不在程序重启后恢复。模型可以直接回答普通问题，也只能选择三个稳定工具：`execute_robot_python` 负责所有可组合的机器人动作、`observe_surroundings` 负责相机画面与视觉理解、`sleep_session` 结束当前活动会话。这一边界避免为“前进、转圈、灯光、拍照”等动作分别增加模型工具；新增且已进入 `RobotFacade` 的能力会通过同一个 Python 上下文供模型组合。工具循环限制最大轮数并关闭并行工具调用，连续执行仍复用 `PythonExecutor` 的单 worker 和当前 App 连接。**代码/离线测试/真实工具回合验证**
+
+语音模型产生的 Python 与可信 MCP 源码使用同一 Host worker，但调用前多一层 AST 策略：拒绝 import、动态执行和文件内置函数、私有/dunder 属性、函数或类定义以及未注入的全局名字，要求源码实际使用 `robot`。它允许局部变量、循环、分支、`robot` facade、`time`、`sleep` 和 `checkpoint`，所以一个工具调用可以表达完整动作序列。这个策略只缩小模型误用面，不是抵抗恶意源码的强沙箱；语音智能体不能作为不可信远程代码入口。动作代码仍必须显式 `robot.arm()`，并在 `finally` 中 stop/disarm；活动会话中的“停止、停下、别动”由本地快速路径直接对已有连接执行 stop/disarm，不等待大模型。**代码/离线测试**
+
+“观察附近”先通过确定的 Host Python 程序启动 S1 视频，收到首帧后预热 1.2 秒，再读取 newest 帧、保存 JPEG 并保证停流，再将该图像交给所选模式的视觉模型。首帧可能仅部分刷新且 `is_corrupt=false`，因此不直接用于观察；预热后仍无帧或标记损坏时返回错误，不上传。固定预热不是所有网络条件下的图像完整性保证。返回语义严格限定为当前前向相机画面，不把单帧描述成完整 360 度环境；环顾需要模型显式组合底盘或云台动作与多次观察。Codex 或 OpenAI 的对话规划与图像理解仍依赖网络；电脑和 S1 之间的控制链路仍是局域网 App/Lab 会话。Codex 模式在电脑扬声器使用系统 TTS，API key 模式播放 24 kHz signed 16-bit PCM 的 AI 合成语音；当前都不使用 S1 扬声器播报。**文本 CLI 状态/灯光/运动及单图模型往返已实测；语音端到端未验证，预热后的图片未再次上传模型**
+
+观察工具只返回本地图片，不单独请求模型；gateway 在工具续接中附加该图片并选择视觉模型，单次普通观察为「规划 → 拍照 → 视觉回答」两次模型请求。Codex 图片只加入这一次续接请求，不留在文本模型的重放历史中；后续追问依据视觉回答文本，重新检查图像细节需要再次观察。API key 模式的历史仍由 `previous_response_id` 串联。两请求路由及图片不重放由离线测试覆盖，当前未再次上传私人照片做新路径实测。**代码/离线测试**
+
+`AgentRecorder` 只在首次接受唤醒词或执行文本 prompt 后创建 `.hanppie/agent/sessions/<session-id>/events.jsonl`，保存接受的文本、最终回复和工具结果；休眠背景转写不保存。本智能体内部的 PythonExecutor 制品位于 `.hanppie/agent/runtime/`，同样保持首次实际调用才创建目录。仅启动、等待和退出不会污染项目目录。记录可能包含用户语音转写、模型生成源码、相机图像和机器人返回，应作为本机敏感运行记录管理。**代码/离线测试**
+
 ### 7.4 包边界
 
 | 路径 | 项目职责 |
 | --- | --- |
-| `cli.py` | 静态声明 `diag` 与 `mcp` 子命令，负责诊断交互、MCP 服务参数和 Codex 配置安装 |
+| `cli.py` | 静态声明 `diag`、`mcp` 与 `agent` 子命令，负责诊断交互、服务参数和 Codex 配置安装 |
+| `agent/audio.py`、`agent/service.py` | 电脑麦克风 VAD、OpenAI/本地转写、OpenAI/系统语音、授权路由、唤醒词活动窗口、连续监听和惰性会话记录 |
+| `agent/graph.py`、`agent/gateway.py`、`agent/codex.py`、`agent/codex_auth.py` | LangGraph 会话状态、OpenAI Platform/Codex consumer Responses 工具循环、device-code OAuth、内存会话历史、相机图像理解和机器人规划提示 |
+| `agent/policy.py`、`agent/tools.py` | 模型生成 Python 的 AST 边界、持久执行器适配、确定性相机采集和本地停止快速路径 |
 | `diagnosis/model.py` | 诊断目录、配置、结果模型和风险门 |
 | `diagnosis/discovery.py` | 被动发现并解析 S1 App 广播 |
 | `diagnosis/session.py` | App 直连、Lab、临时 ADB 的互斥连接依赖和最终清理 |
@@ -694,6 +725,7 @@ from robomaster import robot
 | S1 机内 Lab 程序 | Python 3.6.6 和固件内 DJI 模块 | 固件环境不可随主机升级；项目载荷同时做 3.6 语法与真机执行测试 |
 | 电脑上的 Hanppie 与内置 SDK fork | Python 3.10 | 开发、CI 和发布验证基线 |
 | MCP Host 持久 worker | Python 3.10 | 使用当前 Hanppie 环境；连接跨调用复用，每次调用使用新命名空间，不保存解释器变量 |
+| 语音智能体 Host 进程 | Python 3.10 | 电脑麦克风/扬声器、本地 VAD、LangGraph 内存状态；可选 Codex OAuth + 本地 ASR/系统 TTS 或 OpenAI API；机器人调用复用 MCP 的持久 worker 实现 |
 | 非 Python 客户端 | 无 Python 约束 | 需要自行实现 UDP `10607` 外层封包、SDK proxy 或机内 DUSS 客户端及生命周期 |
 
 所以不是“只有 Lab Python 才有兼容性要求”，而是每个 Python 实现分别受其运行环境约束；这些约束都不属于 DUSS 协议本身。
@@ -764,7 +796,7 @@ SDK 与当前实机后端的连接边界只在第 7.3.2 节维护。本节只定
 
 机身麦克风不经过官方 EP SDK proxy。Hanppie 在已经建立的 UDP `10609/10607` session 中发送 DUSS `cmdset=0x3F, cmdid=0x1E, payload=01` 请求音频，随后从 `cmdset=0x3F, cmdid=0x1D` 回包取得 Opus payload，再由 PyAV 解码并重采样为 48 kHz、单声道、signed 16-bit PCM。固件 `00.06.0521` 已连续返回可解码的 20 ms 音频帧；当前只确认了开始请求，未确认独立的停止请求，因此 `stop_audio_stream()` 只停止主机接收，关闭 UDP `10607` session 才终止设备侧流。**实测/代码**
 
-扬声器有两条已经分开验证的直连路径。固件内置音效通过 DUSS `0x3F/0x1A` 请求播放，诊断依次调用音阶 `0x107` 和射击声 `0x102`；两项均取得同序号、返回码为零的 ACK，机身麦克风测得的最大 RMS 相对基线提高约 `14.95` 倍。Host 音频路径接收 12 kHz、单声道、signed 16-bit PCM，按 20 ms 帧编码为带双字节小端长度前缀的 Opus 数据；随后用 DUSS `0x3F/0x5F` 声明传输 ID、分块数和总长度，以 `0x00/0x09` 上传不超过 960 字节的分块，再用 `0x3F/0x5F` 提交编码数据 MD5，最后通过 `0x3F/0xB3` 触发播放。诊断在独立 UDP `10607` session 中播放 1 秒低音量 440 Hz 合成音，播放后才重新请求麦克风流；本次实测中，目标频率幅度相对独立基线提高 `8.27` 倍。`LabAudio.play_pcm()` 只是沿用既有类名，实际只依赖 `AppConnection`，`DirectRobot` 与 `LabRobot` 均可使用；Hanppie CLI 尚不采集电脑系统麦克风，也未处理 DSP 自定义音频资源。**实测/代码**
+扬声器有两条已经分开验证的直连路径。固件内置音效通过 DUSS `0x3F/0x1A` 请求播放，诊断依次调用音阶 `0x107` 和射击声 `0x102`；两项均取得同序号、返回码为零的 ACK，机身麦克风测得的最大 RMS 相对基线提高约 `14.95` 倍。Host 音频路径接收 12 kHz、单声道、signed 16-bit PCM，按 20 ms 帧编码为带双字节小端长度前缀的 Opus 数据；随后用 DUSS `0x3F/0x5F` 声明传输 ID、分块数和总长度，以 `0x00/0x09` 上传不超过 960 字节的分块，再用 `0x3F/0x5F` 提交编码数据 MD5，最后通过 `0x3F/0xB3` 触发播放。诊断在独立 UDP `10607` session 中播放 1 秒低音量 440 Hz 合成音，播放后才重新请求麦克风流；本次实测中，目标频率幅度相对独立基线提高 `8.27` 倍。`LabAudio.play_pcm()` 只是沿用既有类名，实际只依赖 `AppConnection`，`DirectRobot` 与 `LabRobot` 均可使用。`agent` 已采集电脑系统麦克风用于外部 ASR，并由电脑扬声器播放 TTS；`diag` 仍未把电脑麦克风接入 S1 的 Host PCM 远程对讲，也未处理 DSP 自定义音频资源。**实测/代码**
 
 ### 7.10 CLI、完整诊断与质量边界
 
@@ -828,20 +860,23 @@ Hanppie 自行维护的主机代码由 Ruff、pytest、coverage 和 prek 检查�
 | root ADB | Lab + payload | **实测通过** | 临时 TCP root ADB；设备端 shell 重启、App 广播恢复后确认 5555 保持关闭 |
 | 内置 `robomaster` fork | Python 包 | **离线可用，未纳入当前诊断** | 保持官方导入接口；原厂 S1 不直接开放其所需的 EP SDK proxy |
 | Codex MCP Python 执行 | Host Direct + Lab | **STDIO、持久 worker、安装与离线生命周期测试通过，未做对话实机回归** | 目标发现、Direct/Lab 按能力切换、跨调用后端复用、新命名空间、结果/制品、超时重启和逐调用 disarm 已有离线测试；经 Codex 对话发起的实机动作仍需单独验证 |
+| 唤醒词连续对话智能体 | Host LangGraph + Direct/Lab | **实现、离线工具循环与 Codex OAuth 真实直连回合通过，未做端到端实机回归** | 电脑 VAD、转写后唤醒、活动窗口连续对话、Codex OAuth consumer Responses 或 OpenAI Platform Responses、生成代码策略、停止快速路径、两类 TTS 和惰性记录已接入；麦克风权限、相机视觉、S1 动作与多轮语音组合仍需实机验证 |
 | LED | Direct DUSS | **完整 ACK 序列通过** | `0x3F/0x33` 红、绿、蓝、白和关闭均取得成功 ACK；尚未记录外部视觉确认 |
 | 扬声器内置音效 | Direct DUSS | **DUSS ACK 与物理声学回环通过** | `0x3F/0x1A` 的音阶和射击声均取得成功 ACK；协议和声学证据见第 7.9 节 |
 | Host PCM 到扬声器 | Direct + Lab 共用 | **物理声学回环实测通过** | 编码、传输、会话隔离和声学证据见第 7.9 节 |
-| 电脑系统麦克风采集 | 未实现 | **项目外围待实现** | 设备后端已接受 12 kHz 单声道 PCM；CLI 尚未接入 macOS/Linux 音频输入和权限生命周期 |
+| 电脑系统麦克风采集 | Host sounddevice | **实现与离线分段测试通过，未做本机权限回归** | 16 kHz 单声道 PCM、本地能量 VAD、前滚、静音结束和最长句限制已接入；不同系统的设备选择、麦克风授权和环境阈值需现场调节 |
 | DSP 自定义音频资源 | 未实现 | **待实现/验证** | DSP `audio-list` 与自定义音效 ID 的上传、维护和播放尚未实现 |
 | 枪口灯 | Direct DUSS | **完整 ACK 与外部视觉观察通过** | `0x3F/0x33` 常亮与开火灯效的点亮/关闭均取得成功 ACK；完整回归时由现场操作者确认枪口灯产生可见反应 |
 | 装甲/红外事件 | 未接入当前后端 | **待验证** | 上游 SDK 和机内 `rm_ctrl.py` 存在相关定义；UDP `10607` 或 Bridge 事件链路尚未接入 |
-| 视觉识别 | 未接入当前后端 | **待验证** | 上游 SDK 和机内 `rm_ctrl.py` 存在相关定义；UDP `10607` 或 Bridge 视觉链路尚未接入 |
+| 视觉理解 | Host 外部视觉模型 + S1 相机 | **实现与离线适配测试通过，未做端到端实机回归** | 确定性读取当前 newest 视频帧并送视觉模型，返回范围限定为当前前向画面；不使用 S1 原生目标识别，也未实现建图或自动环境扫描 |
 | 红外发射 | Direct control + DUSS | **原生触发与枪口可见效果已执行** | control channel 发出 120 ms 触发；枪口闪光和射击声取得成功 ACK，现场操作者确认枪口灯产生可见反应；光学编码与外部红外接收仍未验证，见第 5.5 节 |
 | 水弹发射 | 内置 Lab | **空仓控制与机械击发动作通过，已接入 MCP** | 枪口闪光、射击声和空仓单次发射三个结果均成功，现场操作者确认出现水弹击发机械动作；MCP 已通过固定 Lab/Bridge 生命周期接入并有离线切换测试，尚未做 MCP 对话实机回归 |
 
 ### 7.12 远程控制当前边界
 
 当前仓库只支持电脑和 S1 位于同一可信、可双向访问的 IP 网络。主直控路径只使用 UDP `45678/56789` 完成身份交换，并通过 UDP `10609/10607` 传输数据、媒体、DUSS 和 control；它不要求 USB、FTP 或 Lab Bridge。可选 Lab 路径额外使用 FTP `21` 和 Bridge UDP `40923/40924`。**代码/实测**
+
+语音智能体的 Codex 模式在本机转写和播报，只在唤醒后通过互联网把文本、工具结果及观察帧发送给 Codex；模型文件首次下载仍需要网络。API key 模式还会把 VAD 切分的有声 WAV 发送给转写模型，并可把回复发送给语音合成模型。该出站模型调用不是 S1 的远程控制入口，但属于音频、文本、图像和设备结果的数据出境边界。部署者必须自行选择合适的授权模式和数据策略；两种模式的对话/视觉都依赖外部模型服务，所以当前不提供完全离线的智能体。**代码边界**
 
 当前增加了只在本机工作的 STDIO MCP Python 入口、局域网广播自动发现和 MCP 生命周期内的 App 连接复用，但仍没有远程网关、身份验证、加密会话、Web UI、手柄输入、跨进程控制源仲裁或公网传输实现，因此项目当前不具备跨互联网远程控制能力。上述 S1 和 Bridge 端口均不得直接暴露到公网、路由器端口转发或 VPN Overlay。
 
@@ -856,12 +891,14 @@ Hanppie 自行维护的主机代码由 Ruff、pytest、coverage 和 prek 检查�
 - 不把真实凭据、个人文件或设备备份放入 S1；
 - `diag` 最终清理必须重启设备、断开主机 ADB 并确认 5555 拒绝连接。
 - MCP 只使用本机 STDIO，不提供网络监听；不得把代码执行入口转接给不可信或公网调用方。
+- Codex 授权模式由 Hanppie 独立保存 OAuth token 并直连 ChatGPT consumer Responses 后端，不调用 Codex CLI/App Server；其休眠阶段语音在本机转写，唤醒后的文本、工具结果和观察图像会发给该后端。API key 模式还会把休眠阶段的 VAD 有声片段发给 OpenAI Platform 转写 API；使用前应确认环境中的隐私和数据策略。
 
 #### 7.13.2 文件安全
 
 - 诊断只读取关键文件元数据和哈希，不通过 ADB 修改 `/system`；
 - Lab Bridge 与 ADB 启动载荷只使用仓库内置资源，不接受任意外部载荷路径；
 - MCP Host Python 是用户明确要求的可信代码执行入口，不是文件系统沙箱；相对输出统一进入 `.hanppie/mcp`，但绝对路径仍具有本机账户权限；
+- 模型生成的语音智能体 Python 有额外 AST 策略但不是强沙箱；会话文本、工具结果和相机图片统一进入 `.hanppie/agent`，不得把智能体暴露给不可信远程输入；
 - 设备备份、厂商二进制和序列号日志不进入 Git。
 
 #### 7.13.3 机械安全

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -39,6 +40,12 @@ mcp_app = typer.Typer(
     rich_markup_mode="rich",
 )
 app.add_typer(mcp_app, name="mcp")
+agent_app = typer.Typer(
+    help="运行带唤醒词、连续对话和视觉观察的 S1 语音智能体。",
+    no_args_is_help=True,
+    rich_markup_mode="rich",
+)
+app.add_typer(agent_app, name="agent")
 
 
 def _version_callback(value: bool) -> None:
@@ -205,6 +212,229 @@ def _installed_serve_args(
     if config.debug:
         args.append("--debug")
     return args
+
+
+@agent_app.command("login")
+def agent_login_command(
+    timeout: Annotated[
+        float,
+        typer.Option(min=30.0, help="等待浏览器设备授权完成的最长时间（秒）"),
+    ] = 900.0,
+) -> None:
+    """不依赖 Codex CLI，直接完成 ChatGPT Codex OAuth 设备授权。"""
+
+    from hanppie.agent.codex_auth import CodexOAuthManager
+
+    oauth = CodexOAuthManager()
+    try:
+        auth_path = oauth.login(
+            timeout_seconds=timeout,
+            notify=lambda message: console.print(message, markup=False),
+        )
+    except Exception as exc:
+        console.print(f"Codex 授权失败：{exc}", style="red", markup=False)
+        raise typer.Exit(1) from exc
+    finally:
+        oauth.close()
+    console.print(f"Codex 授权已保存：{auth_path}", markup=False)
+
+
+@agent_app.command("logout")
+def agent_logout_command() -> None:
+    """删除 Hanppie 保存的 Codex OAuth 凭据。"""
+
+    from hanppie.agent.codex_auth import CodexOAuthManager
+
+    oauth = CodexOAuthManager()
+    removed = oauth.logout()
+    if removed:
+        console.print(f"已删除 Codex 授权：{oauth.auth_path}", markup=False)
+    else:
+        console.print("当前没有 Hanppie Codex 授权。", markup=False)
+
+
+@agent_app.command("run")
+def agent_run_command(
+    prompt: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--prompt", "-p", help="直接执行文本；可重复以连续对话，完成后退出，不启用音频"
+        ),
+    ] = None,
+    robot_ip: Annotated[str | None, typer.Option(help="显式 S1 IPv4 地址")] = None,
+    appid: Annotated[str | None, typer.Option(help="显式 8 位十六进制 AppID")] = None,
+    local_ip: Annotated[str, typer.Option(help="本机 IPv4 绑定地址")] = "0.0.0.0",
+    discovery_timeout: Annotated[
+        float,
+        typer.Option(min=0.1, help="自动发现 S1 的广播监听时长（秒）"),
+    ] = 4.0,
+    connection_timeout: Annotated[
+        float,
+        typer.Option(min=0.1, help="S1 连接超时（秒）"),
+    ] = 10.0,
+    execution_timeout: Annotated[
+        float,
+        typer.Option(min=0.1, help="单次机器人 Python 默认超时（秒）"),
+    ] = 20.0,
+    max_execution_timeout: Annotated[
+        float,
+        typer.Option(min=0.1, help="单次机器人 Python 最大超时（秒）"),
+    ] = 60.0,
+    wake_phrases: Annotated[
+        list[str] | None,
+        typer.Option("--wake-phrase", help="唤醒词；可重复，默认小憨批/小憨皮"),
+    ] = None,
+    active_timeout: Annotated[
+        float,
+        typer.Option(min=1.0, help="唤醒后免唤醒词连续对话时长（秒）"),
+    ] = 45.0,
+    auth: Annotated[
+        str,
+        typer.Option(help="模型授权：auto、codex 或 api-key"),
+    ] = "auto",
+    model: Annotated[str, typer.Option(help="OpenAI API Key 模式的规划模型")] = "gpt-5.6",
+    vision_model: Annotated[
+        str | None,
+        typer.Option(help="OpenAI API Key 模式的视觉模型；默认与规划模型相同"),
+    ] = None,
+    codex_model: Annotated[
+        str,
+        typer.Option(help="Codex OAuth 模式的规划与视觉模型"),
+    ] = "gpt-5.6-sol",
+    codex_vision_model: Annotated[
+        str | None, typer.Option(help="Codex 视觉模型；默认与规划模型相同")
+    ] = None,
+    reasoning_effort: Annotated[
+        str, typer.Option(help="Codex 推理强度：none/minimal/low/medium/high/xhigh")
+    ] = "low",
+    model_timeout: Annotated[
+        float, typer.Option(min=0.1, help="Codex 单次网络读写超时（秒），不是整轮截止时间")
+    ] = 30.0,
+    transcription_model: Annotated[
+        str,
+        typer.Option(help="OpenAI API Key 模式的语音转写模型"),
+    ] = "gpt-transcribe",
+    local_transcription_model: Annotated[
+        str,
+        typer.Option(help="Codex 模式的本地 faster-whisper 模型或目录"),
+    ] = "small",
+    tts_model: Annotated[
+        str,
+        typer.Option(help="OpenAI API Key 模式的语音合成模型"),
+    ] = "gpt-4o-mini-tts",
+    voice: Annotated[str, typer.Option(help="OpenAI API Key 模式的合成音色")] = "coral",
+    tts: Annotated[
+        bool,
+        typer.Option("--tts/--no-tts", help="播放语音回复"),
+    ] = True,
+    audio_device: Annotated[
+        str | None,
+        typer.Option(help="sounddevice 输入/输出设备名称或编号"),
+    ] = None,
+    vad_threshold: Annotated[
+        float,
+        typer.Option(min=1.0, help="本地能量 VAD 的 RMS 阈值"),
+    ] = 500.0,
+    silence_ms: Annotated[
+        int,
+        typer.Option(min=100, help="判定一句话结束的静音时长（毫秒）"),
+    ] = 480,
+    max_utterance_seconds: Annotated[
+        float,
+        typer.Option(min=1.0, help="单段语音最长时长（秒）"),
+    ] = 15.0,
+    artifact_dir: Annotated[
+        Path,
+        typer.Option(help="智能体对话、调用和制品的根目录"),
+    ] = Path(".hanppie/agent"),
+    debug: Annotated[bool, typer.Option(help="捕获 App 协议调试输出")] = False,
+) -> None:
+    """通过 LangGraph 控制 S1：持续语音对话，或直接执行 --prompt。"""
+
+    from hanppie.agent.audio import VoiceActivityConfig
+    from hanppie.agent.model import AgentConfig
+    from hanppie.agent.service import build_voice_agent
+
+    if prompt is not None and any(not item.strip() for item in prompt):
+        raise typer.BadParameter("prompt 不能为空", param_hint="--prompt")
+    resolved_device: str | int | None = audio_device
+    if audio_device is not None and audio_device.isdecimal():
+        resolved_device = int(audio_device)
+    try:
+        executor = ExecutorConfig(
+            robot_ip=robot_ip,
+            appid=appid,
+            local_ip=local_ip,
+            discovery_timeout=discovery_timeout,
+            connection_timeout=connection_timeout,
+            execution_timeout=execution_timeout,
+            max_execution_timeout=max_execution_timeout,
+            artifact_base=artifact_dir / "runtime",
+            debug=debug,
+        )
+        config = AgentConfig(
+            executor=executor,
+            wake_phrases=tuple(wake_phrases) if wake_phrases else ("小憨批", "小憨皮"),
+            active_timeout_seconds=active_timeout,
+            auth_provider=auth,
+            model=model,
+            vision_model=vision_model,
+            codex_model=codex_model,
+            codex_vision_model=codex_vision_model,
+            reasoning_effort=reasoning_effort,
+            model_timeout_seconds=model_timeout,
+            transcription_model=transcription_model,
+            local_transcription_model=local_transcription_model,
+            tts_model=tts_model,
+            voice=voice,
+            artifact_base=artifact_dir,
+            tts_enabled=tts,
+        )
+        audio_config = VoiceActivityConfig(
+            rms_threshold=vad_threshold,
+            silence_ms=silence_ms,
+            max_utterance_seconds=max_utterance_seconds,
+        )
+        service = build_voice_agent(
+            config,
+            text_only=prompt is not None,
+            audio_config=audio_config,
+            audio_device=resolved_device,
+            emit=lambda message: console.print(message, markup=False),
+        )
+    except Exception as exc:
+        console.print(f"无法启动智能体：{exc}", style="red", markup=False)
+        raise typer.Exit(1) from exc
+
+    if prompt is not None:
+        failed = False
+        try:
+            for item in prompt:
+                reply = service.process_prompt(item)
+                if reply.failed or any(
+                    result.output.get("ok") is False for result in reply.tool_results
+                ):
+                    failed = True
+                    break
+        except KeyboardInterrupt as exc:
+            raise typer.Exit(130) from exc
+        except Exception as exc:
+            console.print(f"执行失败：{exc}", style="red", markup=False)
+            raise typer.Exit(1) from exc
+        finally:
+            service.close()
+        if failed:
+            raise typer.Exit(1)
+        return
+
+    if tts:
+        if config.auth_provider == "codex" or (
+            config.auth_provider == "auto" and not os.environ.get("OPENAI_API_KEY")
+        ):
+            console.print("提示：Codex 模式使用本机系统语音播报。", style="dim", markup=False)
+        else:
+            console.print("提示：回复声音由 AI 合成。", style="dim", markup=False)
+    service.run_forever()
 
 
 def _interactive_selection() -> tuple[str, ...]:

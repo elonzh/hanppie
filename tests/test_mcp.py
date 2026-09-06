@@ -548,19 +548,24 @@ def test_executor_keeps_worker_for_host_python_and_recovers_after_timeout(tmp_pa
         make_config(
             tmp_path,
             execution_timeout=0.1,
-            max_execution_timeout=0.2,
+            max_execution_timeout=2.0,
             max_output_chars=20,
         )
     )
     session_dir = executor._recorder.session_dir
     recovered_process = None
     try:
-        first = executor.execute("print('x' * 100)\nresult = 6 * 7", connect_robot=False)
+        # Cold spawn must not compete with the deliberately tiny infinite-loop timeout.
+        first = executor.execute(
+            "print('x' * 100)\nresult = 6 * 7", connect_robot=False, timeout_seconds=2.0
+        )
         first_pid = executor._process.pid
         second = executor.execute("result = 'same worker'", connect_robot=False)
         second_pid = executor._process.pid
         timed_out = executor.execute("while True:\n    pass", connect_robot=False)
-        recovered = executor.execute("result = 'recovered'", connect_robot=False)
+        recovered = executor.execute(
+            "result = 'recovered'", connect_robot=False, timeout_seconds=2.0
+        )
         recovered_process = executor._process
 
         assert first["result"] == 42
@@ -615,8 +620,10 @@ def test_executor_startup_and_close_without_calls_create_no_artifacts(tmp_path: 
     artifact_base = tmp_path / "unused" / ".hanppie" / "mcp"
 
     executor = PythonExecutor(ExecutorConfig(artifact_base=artifact_base))
+    context = executor.context_snapshot()
     executor.close()
 
+    assert context["execution"]["persistent_worker"] is True
     assert not artifact_base.exists()
 
 

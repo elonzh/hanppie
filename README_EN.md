@@ -129,6 +129,40 @@ Installation and startup have no motion, infrared, or gel permission switches. C
 
 This is arbitrary Python execution for a trusted local user, not a security sandbox. Starting MCP, completing its handshake, and listing tools do not write files. The first actual Hanppie tool call activates `.hanppie/mcp/sessions/<session-id>/`: `server.log` contains server and worker events, `calls.jsonl` stores paired `started` and `completed` events under one `call_id`, and `calls/<run-id>/` contains files, images, and checkpoints produced by that Python call. `get_python_context` is itself a tool call, so it activates recording and reports the version, actual facade signatures, capability boundaries, and active paths; `--artifact-dir` changes the whole root. Call records contain submitted Python source and returned content and should be managed as local execution records. The [technical architecture](./docs/architecture.md#734-codex-mcp-与持久-host-python-worker) is authoritative for execution, cleanup, and concurrency boundaries.
 
+## Xiaohanpi voice agent
+
+Authorize Hanppie directly with the ChatGPT Codex device flow and grant the terminal access to the system microphone. The agent then listens continuously for “小憨批”, keeps a conversational window after wake-up, composes robot behavior, and understands the current camera frame. This mode does not require Codex to be installed or running:
+
+```bash
+uv run hanppie agent login
+
+# With no OPENAI_API_KEY, auto uses the Codex OAuth stored by Hanppie
+uv run hanppie agent run
+
+# Execute text without audio or a wake word; repeated -p shares context and connection
+uv run hanppie agent run --auth codex \
+  -p "Describe what is nearby." -p "What stands out in that image?"
+
+# Optional low-latency planner with a separate vision model
+uv run hanppie agent run --auth codex \
+  --codex-model gpt-5.3-codex-spark --codex-vision-model gpt-5.6-sol \
+  --reasoning-effort low --model-timeout 30 -p "Set the armor lights to solid blue."
+
+# Pin the target when multiple robots are present
+uv run hanppie agent run \
+  --auth codex \
+  --robot-ip "$S1_IP" \
+  --appid "$S1_APPID"
+```
+
+Hanppie performs the device-code OAuth flow and token refresh itself, then sends the Bearer token directly to ChatGPT's streaming Codex Responses backend. No Codex CLI, `codex exec`, or App Server subprocess participates. Credentials are atomically stored in `~/.hanppie/auth.json` with mode `0600` on POSIX; `HANPPIE_HOME` changes the directory, and `hanppie agent logout` deletes only this local credential. Requests use `store=false`, Hanppie replays the conversation from memory, and the default model is `gpt-5.6-sol`, overridable with `--codex-model`. This consumer backend is not the public OpenAI Platform API, so compatibility follows the current Codex OAuth protocol.
+
+Local `faster-whisper` performs transcription (the default `small` model is downloaded on first use), and the operating system performs speech synthesis. When `OPENAI_API_KEY` is set, `auto` preserves the OpenAI transcription, Responses, and TTS path. Use `--auth api-key` or `--auth codex` to choose explicitly.
+
+For example, say “小憨批，观察一下附近有些什么东西？” to capture and describe the S1's current forward camera view. Follow-ups do not need the wake phrase during the default 45-second active window. “退下” returns to sleep; “停止”, “停下”, and “别动” use a local stop path against an existing connection without waiting for the model. Repeat `--wake-phrase` for aliases, use `--active-timeout` to change the conversation window, select the microphone with `--audio-device`, select a local Whisper model with `--local-transcription-model`, or disable speech playback with `--no-tts`.
+
+`--prompt` bypasses wake-word matching and disables audio input and playback. Execution failures return a nonzero exit code and stop subsequent prompts. Conversation and tool records are written to `.hanppie/agent/` only after a wake-up or prompt execution. See the [technical architecture](./docs/architecture.md#735-唤醒词连续对话与-langgraph-智能体) for data boundaries, LangGraph state, generated-code policy, and verification limits.
+
 ## Development toolchain
 
 ```bash

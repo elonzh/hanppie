@@ -129,6 +129,45 @@ MCP 提供连接、状态、Python 上下文、Python 执行和断开工具。�
 
 这是面向可信本地用户的任意 Python 代码执行入口，不是安全沙箱。MCP 启动、握手和列出工具不会写文件；首次实际调用 Hanppie 工具后才会创建 `.hanppie/mcp/sessions/<session-id>/`。`server.log` 保存服务与 worker 运行日志，`calls.jsonl` 为每次调用保存同一 `call_id` 的 `started`/`completed` 事件，`calls/<run-id>/` 保存该次 Python 调用生成的文件、图片和检查点。`get_python_context` 本身也算一次调用，会激活记录并返回当前版本、真实 facade 签名、能力边界和记录路径；`--artifact-dir` 可以整体修改这个根目录。调用记录包含提交的 Python 源码和返回内容，应按本机运行记录管理。完整执行边界、清理和并发限制只在[技术架构](./docs/architecture.md#734-codex-mcp-与持久-host-python-worker)维护。
 
+## 小憨批语音智能体
+
+先让 Hanppie 直接完成一次 ChatGPT Codex 设备授权，并允许终端访问系统麦克风，即可持续监听“小憨批”，在一次唤醒后的活动窗口内连续对话、组合机器人动作或理解当前相机画面。此模式不要求安装或启动 Codex：
+
+```bash
+uv run hanppie agent login
+
+# 未设置 OPENAI_API_KEY 时，auto 默认使用 Hanppie 保存的 Codex OAuth
+uv run hanppie agent run
+
+# 直接执行文本，无需唤醒或音频设备；重复 -p 复用上下文和机器人连接
+uv run hanppie agent run --auth codex \
+  -p "观察一下附近有些什么东西？" -p "刚才画面中最显眼的是什么？"
+
+# 多台设备时固定目标
+uv run hanppie agent run \
+  --auth codex \
+  --robot-ip "$S1_IP" \
+  --appid "$S1_APPID"
+```
+
+测试低延迟规划模型，同时指定独立视觉模型：
+
+```bash
+uv run hanppie agent run --auth codex \
+  --codex-model gpt-5.3-codex-spark --codex-vision-model gpt-5.6-sol \
+  --reasoning-effort low --model-timeout 30 -p "把装甲灯设为蓝色常亮"
+```
+
+模型访问权限由账户决定；参数或模型不支持时直接报错，不自动切换。计时口径与当前性能边界见[技术架构](./docs/architecture.md#735-唤醒词连续对话与-langgraph-智能体)。
+
+Codex 模式由 Hanppie 自己执行 device-code OAuth、刷新凭据，并以 Bearer token 直接流式请求 ChatGPT 的 Codex Responses 后端；没有 Codex CLI、`codex exec` 或 App Server 子进程。凭据默认原子写入 `~/.hanppie/auth.json`，在 POSIX 上权限为 `0600`，`HANPPIE_HOME` 可修改目录；`hanppie agent logout` 只删除这份本地凭据。请求使用 `store=false`，连续上下文由 Hanppie 在内存中重放，默认模型为 `gpt-5.6-sol`，也可用 `--codex-model` 覆盖。该消费者后端不是 OpenAI Platform 公共 API，兼容性取决于当前 Codex OAuth 协议。
+
+本地 `faster-whisper` 负责转写（首次使用默认 `small` 模型时会下载模型），系统语音负责播报。若已有 OpenAI API key，`auto` 会保留原来的 OpenAI 转写、Responses 和 TTS 链路；也可以用 `--auth api-key` 或 `--auth codex` 明确选择。
+
+例如说“小憨批，观察一下附近有些什么东西？”，智能体会读取 S1 当前前向相机帧并用视觉模型回答。唤醒后的默认 45 秒内可以直接追问；说“退下”可让会话休眠，活动会话中的“停止”“停下”“别动”会走不等待大模型的已有连接停止路径。`--wake-phrase` 可重复配置别名，`--active-timeout` 调整连续对话窗口，`--audio-device` 选择电脑音频输入设备，`--local-transcription-model` 选择本地 Whisper 模型，`--no-tts` 关闭语音播放。
+
+`--prompt` 无需唤醒，禁用音频输入和播放；执行失败返回非零退出码，并停止后续 prompt。对话和调用记录在实际唤醒或执行 prompt 后写入 `.hanppie/agent/`。完整数据边界、LangGraph 状态、代码策略和验证边界见[技术架构](./docs/architecture.md#735-唤醒词连续对话与-langgraph-智能体)。
+
 ## 开发工具链
 
 ```bash

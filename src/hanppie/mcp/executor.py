@@ -88,6 +88,11 @@ class PythonExecutor:
     def describe_context(self) -> dict[str, object]:
         return self._recorder.record_call("get_python_context", {}, self._describe_context)
 
+    def context_snapshot(self) -> dict[str, object]:
+        """Return the execution contract without activating persistent records."""
+
+        return self._describe_context()
+
     def _describe_context(self) -> dict[str, object]:
         target = self._resolved_target
         return {
