@@ -1,0 +1,6 @@
+[mcp_servers.hanppie]
+command = "uv"
+args = ["run", "--project", "/Users/elonzh/workspace/hanppie", "hanppie", "mcp", "serve", "--local-ip", "0.0.0.0", "--discovery-timeout", "4.0", "--connection-timeout", "10.0", "--execution-timeout", "20.0", "--max-execution-timeout", "60.0"]
+startup_timeout_sec = 15
+tool_timeout_sec = 65
+default_tools_approval_mode = "writes"
