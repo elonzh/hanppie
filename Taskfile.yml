@@ -35,6 +35,27 @@ tasks:
     cmds:
       - task: lint
       - task: test
+      - task: kotlin:test
+
+  kotlin:test:
+    desc: Run Kotlin protocol and loopback integration tests (hardware opt-in)
+    cmds:
+      - '{{if eq OS "windows"}}.\gradlew.bat{{else}}./gradlew{{end}} :packages:robot-core:desktopTest :apps:desktop:desktopTest'
+
+  desktop:run:
+    desc: Run the Compose desktop application
+    cmds:
+      - '{{if eq OS "windows"}}.\gradlew.bat{{else}}./gradlew{{end}} :apps:desktop:run'
+
+  android:check:
+    desc: Build and lint the Android APK using the configured Android SDK
+    cmds:
+      - '{{if eq OS "windows"}}.\gradlew.bat{{else}}./gradlew{{end}} :apps:android:assembleDebug :apps:android:lintDebug'
+
+  desktop:package:
+    desc: Build a self-contained desktop application for the current OS
+    cmds:
+      - '{{if eq OS "windows"}}.\gradlew.bat{{else}}./gradlew{{end}} :apps:desktop:createDistributable'
 
   build:
     desc: Build source and wheel distributions

@@ -1,0 +1,18 @@
+[versions]
+kotlin = "2.4.10"
+compose = "1.12.0"
+coroutines = "1.10.2"
+agp = "9.2.1"
+
+[libraries]
+miuix-ui = { module = "top.yukonga.miuix.kmp:miuix-ui", version = "0.9.3" }
+commons-net = { module = "commons-net:commons-net", version = "3.13.0" }
+coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "coroutines" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-kmp = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

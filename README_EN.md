@@ -26,6 +26,38 @@ Before using physical hardware, read the architecture's [safety and recovery mod
 
 ## Installation
 
+### Desktop application
+
+Both desktop and Android support **Settings → Language → System default / 简体中文 / English**. The choice is saved and takes effect immediately without reconnecting the robot.
+
+Install JDK 21 and run from the repository root (use `gradlew.bat` on Windows):
+
+```bash
+./gradlew :apps:desktop:run
+./gradlew :packages:robot-core:desktopTest :apps:desktop:desktopTest
+./gradlew :apps:desktop:createDistributable
+```
+
+The packaged application is under `apps/desktop/build/compose/binaries/main/app/` and includes its runtime.
+Desktop video/audio requires FFmpeg with H.264 and Opus support on the application process PATH, or an absolute executable path in `HANPPIE_FFMPEG`. FFmpeg is not bundled; Android uses system codecs. See the cockpit controls below for keyboard and touch operation.
+Connecting opens a full-screen cockpit with a video background and touch controls. **控制台** returns to conversation, scripts and settings. The water-shot button sends one direct command; it does not upload or start a Lab script. Physical water firing remains unverified.
+Click a discovered robot to connect, or select manual connection and enter an explicit IPv4/AppID. Open a Python 3.6 script in the script tab,
+upload it, and explicitly enable execution before starting. Editing requires another upload.
+Use **朗读** beside an assistant reply to read it aloud. Linux requires a configured Speech Dispatcher (`spd-say`).
+For Android, configure the SDK managed by IDEA in the ignored `local.properties`, install API 37 and Build Tools 36.1.0, and run `task android:check`. The APK is at `apps/android/build/outputs/apk/debug/android-debug.apk`.
+See the [client architecture](./docs/architecture.md#730-单体仓库与-kotlin-多平台客户端) for current implementation and verification boundaries.
+
+On Android or desktop, open **设置**, enter an OpenAI-compatible API URL, model and API key, then send messages. Settings and conversation history last only for the current process. Connect a specific robot in **设备** before requesting scripts, and review the generated source before confirming execution. Cancelling a conversation does not stop an onboard script; use **脚本 → 停止脚本** for that.
+
+On Android, the microphone icon beside Send records through the phone's system speech service after consent and microphone permission. Review the recognized draft before sending it. **朗读** reads an assistant message, **设置 → 自动朗读** enables reading subsequent completed replies, and **停止朗读** interrupts playback. This uses phone audio, not the robot microphone or speaker. The system recognition service may process audio online; the app does not install or switch system services automatically.
+
+Desktop configuration also accepts `HANPPIE_LLM_ENDPOINT`, `HANPPIE_LLM_MODEL` and `HANPPIE_LLM_API_KEY` environment variables. Never commit real credentials. With `HANPPIE_LLM_LIVE_TEST=1`, the opt-in `ChatAgentTest.liveCompatibleConversationWithoutRobot` test uses the configured cloud API with a simulated status tool and never connects to a robot.
+The [Chinese usage guide](./README.md#桌面程序) also documents opt-in, no-motion hardware integration tests.
+
+### Python tools
+
+On Android and desktop, connecting a robot opens the cockpit. Enable remote control before using the chassis/gimbal sticks or WASD and arrow keys. Q shifts down, E shifts up; holding either Shift key slows translation until released. On-screen minus/plus buttons also change gears. Outward aiming beyond the follow threshold engages software chassis turning; release stops it. Physical follow behavior is not yet validated; see [architecture boundaries](./docs/architecture.md). R or the ammunition selector switches between infrared and gel beads; Space or **开火** fires the selected type, and Esc stops control. Infrared is selected by default; switching never fires. Gel beads use a direct single-shot command, not a Lab script. Enable video and robot microphone playback explicitly. Return to **控制台** for chat, scripts and settings. Leaving the cockpit or losing desktop window focus stops control. Audio/video are robot-to-app only, not two-way calling.
+
 Python 3.10 is the development and test baseline. [uv](https://docs.astral.sh/uv/) manages the environment, while [Task](https://taskfile.dev/) is the optional unified task runner.
 
 ```bash
