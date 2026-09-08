@@ -40,24 +40,27 @@ class RemoteDiagnosticsLiveTest {
             assertTrue(wheels.size>=10,"Missing ESC samples")
             for(i in 0..3) assertTrue(kotlin.math.abs(wheels.map { it[i] }.average())<8.0,"Sustained idle wheel speed: $wheels")
             if(System.getenv("HANPPIE_TEST_ALLOW_FOLLOW")=="1") {
+                for (direction in listOf(1.0, -1.0)) {
                 // Bounded outward aiming; always stops even if orientation or assertion fails.
-                withTimeout(6000) {
-                    while((session.cameraYaw ?: error("Missing yaw")) < 70.0) {
-                        session.drive(0.0,0.0,0.0,0.0,15.0)
+                withTimeout(20000) {
+                    while((session.cameraYaw ?: error("Missing yaw")) * direction < 70.0) {
+                        session.drive(0.0,0.0,0.0,0.0,15.0 * direction)
                         delay(50)
                     }
                 }
                 session.halt(); delay(500); report("before-follow")
                 val followStart=angles.last()
-                repeat(20) { session.drive(0.0,0.0,0.0,0.0,15.0,cameraRelative=true); delay(50) }
+                repeat(20) { session.drive(0.0,0.0,0.0,0.0,15.0 * direction,cameraRelative=true); delay(50) }
                 session.halt(); delay(500); report("after-follow")
                 val followEnd=angles.last()
                 val bodyDelta=(followEnd[0]-followEnd[2])-(followStart[0]-followStart[2])
-                println("follow-body-yaw-delta=$bodyDelta")
-                assertTrue(bodyDelta in 2.0..35.0,"Chassis did not follow clockwise: $bodyDelta")
+                println("follow-direction=$direction body-yaw-delta=$bodyDelta")
+                assertTrue(bodyDelta * direction in 2.0..35.0,"Chassis did not follow direction $direction: $bodyDelta")
                 assertTrue(kotlin.math.abs(followEnd[1]-followStart[1])<1.0,"Ground pitch changed during follow")
                 wheels.clear(); delay(2000); report("follow-stopped")
+                assertTrue(wheels.size >= 10, "Missing post-follow ESC samples")
                 for(i in 0..3) assertTrue(kotlin.math.abs(wheels.map { it[i] }.average())<8.0,"Follow did not stop")
+                }
             }
         } finally { runCatching { session.halt() }; session.close() }
     }

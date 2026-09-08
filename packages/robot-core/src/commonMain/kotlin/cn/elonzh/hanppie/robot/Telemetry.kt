@@ -4,13 +4,40 @@ package cn.elonzh.hanppie.robot
 data class MotionTelemetry(val batteryPercent: Int?, val headingLike: Float, val raw: List<Float>)
 data class LabMessage(val type: Int, val level: Int, val text: String)
 
+/** SDK GimbalPosSubject wire angles; ground reference is not a calibrated world frame. */
+data class GimbalTelemetry(
+    val groundYawDegrees: Double, val groundPitchDegrees: Double,
+    val yawDegrees: Double, val pitchDegrees: Double, val status: Int,
+)
+
+/** Fixed, packet-tested App subscription; see docs/architecture.md section 5.3.5. */
+internal object GimbalSubscription {
+    const val messageId = 0x0a
+    const val uid = 0x00020009f79b3c97L
+    const val frequencyHz = 10
+    fun removePayload() = byteArrayOf(0, 2, messageId.toByte())
+    fun addPayload() = ByteArray(15).apply {
+        this[0] = 2 // subscriber node
+        this[1] = messageId.toByte()
+        // flags=0 (no timestamp), periodic mode=0, one UID
+        this[4] = 1
+        repeat(8) { this[5 + it] = (uid ushr (it * 8)).toByte() }
+        put16(13, frequencyHz)
+    }
+}
+
 object Telemetry {
     /** DDS subscription 0x0a: UID 0x00020009f79b3c97, SDK GimbalPosSubject. */
     fun gimbalYaw(frame: DussFrame): Double? {
+        return gimbal(frame)?.yawDegrees?.takeIf { it in -360.0..360.0 }
+    }
+
+    fun gimbal(frame: DussFrame): GimbalTelemetry? {
         val p = frame.payload
         if (!frame.valid || frame.set != 0x48 || frame.id != 8 || p.size != 11 ||
-            p.u8(0) != 0 || p.u8(1) != 10) return null
-        return (p.u16(6).toShort().toDouble() / 10).takeIf { it in -360.0..360.0 }
+            p.u8(0) != 0 || p.u8(1) != GimbalSubscription.messageId) return null
+        fun angle(offset: Int) = p.u16(offset).toShort().toDouble() / 10
+        return GimbalTelemetry(angle(2), angle(4), angle(6), angle(8), p.u8(10))
     }
     fun motion(frame: DussFrame): MotionTelemetry? {
         if (!frame.valid || frame.set != 0x48 || frame.id != 8 || frame.payload.size != 62) return null

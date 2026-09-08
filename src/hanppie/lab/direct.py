@@ -15,6 +15,23 @@ from hanppie.lab.camera import LabCamera
 _PAIR_HASH_1 = b"ba7dc15a96c84f408e436c7bca716ae67b2188f68100b217"
 _PAIR_HASH_2 = b"ca01dd0a449f4c8f844008cc9aa9140e56b47e09372be5b2"
 
+# Fixed App subscription, corroborated by the macOS SubscribeManager and SDK.
+# See docs/architecture.md, macOS client analysis; preserve the captured bytes.
+_GIMBAL_SUBSCRIPTION_ID = 0x0A
+_GIMBAL_SUBSCRIPTION_UID = 0x00020009F79B3C97
+_GIMBAL_SUBSCRIPTION_HZ = 10
+_GIMBAL_SUBSCRIPTION_REMOVE = bytes((0, 2, _GIMBAL_SUBSCRIPTION_ID))
+_GIMBAL_SUBSCRIPTION_ADD = struct.pack(
+    "<BBBBBQH",
+    2,
+    _GIMBAL_SUBSCRIPTION_ID,
+    0,
+    0,
+    1,
+    _GIMBAL_SUBSCRIPTION_UID,
+    _GIMBAL_SUBSCRIPTION_HZ,
+)
+
 # Protocol facts recovered from Windows RoboMaster App traffic. These entries
 # continue after APP_CONNECTION_SETUP and deliberately regenerate the active
 # session, tick, DUSS sequence and CRC rather than replaying captured packets.
@@ -29,7 +46,7 @@ _DIRECT_MODE_SETUP = (
     ("direct", 0x02, 0xA9, 0x40, 0x3F, 0xA3, b"\x09" + b"\x00" * 34, b"\x00\x00"),
     ("direct", 0x02, 0xA9, 0x40, 0x3F, 0xA3, b"\x51" + _PAIR_HASH_1, b"\x00\x00"),
     ("direct", 0x02, 0xA9, 0x40, 0x3F, 0xA3, b"\x91" + _PAIR_HASH_2, b"\x00\x00"),
-    ("direct", 0x02, 0x09, 0x40, 0x48, 0x04, bytes.fromhex("00020a"), b"\x00\x00"),
+    ("direct", 0x02, 0x09, 0x40, 0x48, 0x04, _GIMBAL_SUBSCRIPTION_REMOVE, b"\x00\x00"),
     (
         "direct",
         0x02,
@@ -37,7 +54,7 @@ _DIRECT_MODE_SETUP = (
         0x40,
         0x48,
         0x03,
-        bytes.fromhex("020a000001973c9bf7090002000a00"),
+        _GIMBAL_SUBSCRIPTION_ADD,
         b"\x00\x00",
     ),
     ("control", 0, 0, 0, 0, 0, protocol.NEUTRAL_CONTROL, b""),
@@ -150,6 +167,23 @@ class DirectGimbalTelemetry:
     flag: int
     payload_hex: str
 
+    # SDK GimbalPosSubject wire angles, not a calibrated world orientation.
+    @property
+    def ground_yaw_degrees(self) -> float:
+        return self.values[0] / 10.0
+
+    @property
+    def ground_pitch_degrees(self) -> float:
+        return self.values[1] / 10.0
+
+    @property
+    def yaw_degrees(self) -> float:
+        return self.values[2] / 10.0
+
+    @property
+    def pitch_degrees(self) -> float:
+        return self.values[3] / 10.0
+
 
 def decode_direct_odometry(frame: protocol.DussFrame) -> DirectOdometry | None:
     if frame.cmdset != 0x48 or frame.cmdid != 0x08 or len(frame.payload) != 62:
@@ -166,10 +200,11 @@ def decode_direct_odometry(frame: protocol.DussFrame) -> DirectOdometry | None:
 
 def decode_direct_gimbal(frame: protocol.DussFrame) -> DirectGimbalTelemetry | None:
     if (
-        frame.cmdset != 0x48
+        not frame.valid
+        or frame.cmdset != 0x48
         or frame.cmdid != 0x08
         or len(frame.payload) != 11
-        or frame.payload[:2] != b"\x00\x0a"
+        or frame.payload[:2] != bytes((0, _GIMBAL_SUBSCRIPTION_ID))
     ):
         return None
     return DirectGimbalTelemetry(

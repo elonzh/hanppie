@@ -20,5 +20,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "hanppie"
-include(":packages:robot-core", ":apps:desktop")
-include(":apps:android")
+include(":packages:robot-core", ":shared", ":androidApp", ":desktopApp")

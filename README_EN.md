@@ -33,18 +33,18 @@ Both desktop and Android support **Settings → Language → System default / �
 Install JDK 21 and run from the repository root (use `gradlew.bat` on Windows):
 
 ```bash
-./gradlew :apps:desktop:run
-./gradlew :packages:robot-core:desktopTest :apps:desktop:desktopTest
-./gradlew :apps:desktop:createDistributable
+./gradlew :desktopApp:run
+./gradlew :packages:robot-core:desktopTest :shared:jvmTest
+./gradlew :desktopApp:createDistributable
 ```
 
-The packaged application is under `apps/desktop/build/compose/binaries/main/app/` and includes its runtime.
+The packaged application is under `desktopApp/build/compose/binaries/main/app/` and includes its runtime.
 Desktop video/audio requires FFmpeg with H.264 and Opus support on the application process PATH, or an absolute executable path in `HANPPIE_FFMPEG`. FFmpeg is not bundled; Android uses system codecs. See the cockpit controls below for keyboard and touch operation.
 Connecting opens a full-screen cockpit with a video background and touch controls. **控制台** returns to conversation, scripts and settings. The water-shot button sends one direct command; it does not upload or start a Lab script. Physical water firing remains unverified.
 Click a discovered robot to connect, or select manual connection and enter an explicit IPv4/AppID. Open a Python 3.6 script in the script tab,
 upload it, and explicitly enable execution before starting. Editing requires another upload.
 Use **朗读** beside an assistant reply to read it aloud. Linux requires a configured Speech Dispatcher (`spd-say`).
-For Android, configure the SDK managed by IDEA in the ignored `local.properties`, install API 37 and Build Tools 36.1.0, and run `task android:check`. The APK is at `apps/android/build/outputs/apk/debug/android-debug.apk`.
+For Android, configure the SDK managed by IDEA in the ignored `local.properties`, install API 37 and Build Tools 36.1.0, and run `task android:check`. The APK is at `androidApp/build/outputs/apk/debug/androidApp-debug.apk`.
 See the [client architecture](./docs/architecture.md#730-单体仓库与-kotlin-多平台客户端) for current implementation and verification boundaries.
 
 On Android or desktop, open **设置**, enter an OpenAI-compatible API URL, model and API key, then send messages. Settings and conversation history last only for the current process. Connect a specific robot in **设备** before requesting scripts, and review the generated source before confirming execution. Cancelling a conversation does not stop an onboard script; use **脚本 → 停止脚本** for that.

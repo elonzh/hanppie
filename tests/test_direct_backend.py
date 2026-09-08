@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import struct
+from dataclasses import replace
 
 import pytest
 
@@ -11,6 +12,7 @@ from hanppie.lab.direct import (
     build_chassis_control_payload,
     build_gimbal_speed_payload,
     build_led_payload,
+    decode_direct_gimbal,
 )
 
 
@@ -122,6 +124,11 @@ def test_direct_robot_requires_arm_and_uses_command_leases(
     assert robot.control_mode
     assert not robot.armed
     assert connection.keepalives[0] == (bytes.fromhex("0b0300"), False)
+    # Captured App vectors: remove message 10, then subscribe to one UID at 10 Hz.
+    assert [(item[4], item[5]) for item in connection.duss if item[3] == 0x48] == [
+        (4, bytes.fromhex("00020a")),
+        (3, bytes.fromhex("020a000001973c9bf7090002000a00")),
+    ]
 
     robot.arm()
     robot.chassis.drive_speed(x=0.1, lease_seconds=0.25)
@@ -166,3 +173,27 @@ def test_direct_robot_decodes_native_telemetry() -> None:
     assert robot.gimbal_telemetry is not None
     assert robot.gimbal_telemetry.values == (10, -20, 30, -40)
     assert robot.gimbal_telemetry.flag == 3
+
+
+def test_gimbal_wire_angles_and_invalid_envelopes() -> None:
+    # Independent signed 0.1-degree values, including yaw beyond +/-180 degrees.
+    payload = bytes.fromhex("000ae2046fff0af7850085")
+    frame = protocol.DussFrame(24, 9, 2, 8, 0, 0x48, 8, payload, True)
+    result = decode_direct_gimbal(frame)
+    assert result is not None
+    assert result.ground_yaw_degrees == 125.0
+    assert result.ground_pitch_degrees == -14.5
+    assert result.yaw_degrees == -229.4
+    assert result.pitch_degrees == 13.3
+    assert result.flag == 0x85  # Preserve reserved bits; do not interpret them as completion.
+    for length in range(len(payload)):
+        assert decode_direct_gimbal(replace(frame, payload=payload[:length])) is None
+    for invalid in (
+        replace(frame, valid=False),
+        replace(frame, cmdset=0x3F),
+        replace(frame, cmdid=4),
+        replace(frame, payload=b"\x01" + payload[1:]),
+        replace(frame, payload=b"\x00\x09" + payload[2:]),
+        replace(frame, payload=payload + b"\x00"),
+    ):
+        assert decode_direct_gimbal(invalid) is None

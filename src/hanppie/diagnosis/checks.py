@@ -138,6 +138,13 @@ class DiagnosisChecks:
             "odometry_sequence": odometry.sequence,
             "gimbal_sequence": gimbal.sequence,
             "gimbal_raw": list(gimbal.values),
+            "gimbal_angles_degrees": {
+                "ground_yaw": gimbal.ground_yaw_degrees,
+                "ground_pitch": gimbal.ground_pitch_degrees,
+                "yaw": gimbal.yaw_degrees,
+                "pitch": gimbal.pitch_degrees,
+            },
+            "gimbal_status_raw": gimbal.flag,
         }
 
     def microphone(self) -> dict[str, Any]:

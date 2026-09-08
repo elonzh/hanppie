@@ -36,13 +36,22 @@ Android 和桌面均可在「设置 → 语言」选择跟随系统、简体中�
 task android:check
 ```
 
-APK 位于 `apps/android/build/outputs/apk/debug/android-debug.apk`。手机开启 USB 调试并确认 USB 安装后，可安装测试版：
+APK 位于 `androidApp/build/outputs/apk/debug/androidApp-debug.apk`。手机开启 USB 调试并确认 USB 安装后，可安装测试版：
 
 ```bash
-adb -s <手机设备ID> install -r apps/android/build/outputs/apk/debug/android-debug.apk
+adb -s <手机设备ID> install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
 ```
 
 在手机上连接 S1 所在的 Wi-Fi，打开“憨皮”→“搜索设备”，或选择“手动连接”。“脚本”页使用系统文件选择器打开/保存 `.py`；在“设置”→“语音服务”中选择识别服务或配置系统朗读。
+
+Android 模拟器使用默认 NAT/DHCP 即可尝试直连机器人，不要把虚拟 Wi-Fi 手动改为家庭局域网的静态 IP；发现不到时使用“手动连接”填写机器人的真实局域网 IPv4 和 AppID。macOS 的“系统设置 → 隐私与安全性 → 本地网络”中需允许启动模拟器的应用访问局域网。若电脑能连接而模拟器报 `No route to host`，先完全退出模拟器，再使用现有 SDK 冷启动（保留应用及数据，不使用 Wipe Data）：
+
+```bash
+"$ANDROID_HOME/emulator/emulator" -list-avds
+"$ANDROID_HOME/emulator/emulator" -avd <上一步的设备名称> -no-snapshot-load
+```
+
+`ANDROID_HOME` 指向 IDEA 使用的同一套 SDK。不要为此额外安装 SDK。当前验证边界见[客户端架构](./docs/architecture.md#730-单体仓库与-kotlin-多平台客户端)。
 
 ### 桌面程序
 
@@ -53,26 +62,26 @@ Android 和桌面连接后进入全屏驾驶舱，开启视频或监听机器人
 安装 JDK 21，在仓库根目录运行（Windows 将 `./gradlew` 替换为 `gradlew.bat`）：
 
 ```bash
-./gradlew :apps:desktop:run
-./gradlew :packages:robot-core:desktopTest :apps:desktop:desktopTest
-./gradlew :apps:desktop:createDistributable
+./gradlew :desktopApp:run
+./gradlew :packages:robot-core:desktopTest :shared:jvmTest
+./gradlew :desktopApp:createDistributable
 ```
 
-分发程序位于 `apps/desktop/build/compose/binaries/main/app/`，包含运行时，不需要安装 Python。
+分发程序位于 `desktopApp/build/compose/binaries/main/app/`，包含运行时，不需要安装 Python。
 打开后点击“搜索设备”，点击发现的目标连接；也可选择“手动连接”，填写机器人 IPv4 和 AppID 后连接。
 在“脚本”页打开或编辑 Python 3.6 脚本，先上传，再勾选执行授权并启动。
 编辑后需要重新上传；“停止脚本”用于发送机内停止命令。
 在“对话”页点击回复旁的“朗读”播报文字。Linux 需要已安装并配置 Speech Dispatcher（`spd-say`）。
 能力与验证边界以[客户端架构](./docs/architecture.md#730-单体仓库与-kotlin-多平台客户端)为准。
 
-Android 和桌面均可进入“设置”，填写兼容 API 地址、模型及 API Key，再发送消息连续对话。设置和聊天记录仅保留本次运行；“新对话”清空上下文。需要控制机器人时先在“设备”页连接指定目标，在聊天中检查生成的完整脚本并“确认执行”。“取消”仅取消对话；停止机内脚本使用“脚本”页的“停止脚本”。
+Android 和桌面均可进入“设置”，填写兼容 API 地址、模型及 API Key，点击“保存设置”；地址、模型、密钥和自动朗读选项将在下次启动恢复。清空 API Key 再保存可移除已保存的密钥。保存失败会显示提示，不会改为明文存储。聊天记录仅保留本次运行；“新对话”清空上下文。需要控制机器人时先在“设备”页连接指定目标，在聊天中检查生成的完整脚本并“确认执行”。“取消”仅取消对话；停止机内脚本使用“脚本”页的“停止脚本”。
 
 手机“对话”页点发送旁的麦克风图标，阅读系统识别说明并允许麦克风权限后说话；可点“结束录音”，识别文字回填输入框，检查后再点“发送”。点回复旁的“朗读”播报该条文字，或在“设置”中开启“自动朗读”播报后续完整回复；“停止朗读”随时打断。当前使用手机的音频输入/输出，不是机器人麦克风或扬声器。系统识别服务可能联网；缺少兼容服务时会提示，应用不会自动安装或切换系统引擎。
 
 桌面也可通过 `HANPPIE_LLM_ENDPOINT`、`HANPPIE_LLM_MODEL`、`HANPPIE_LLM_API_KEY` 环境变量注入配置。不要把真实密钥写入源码或提交。显式设置 `HANPPIE_LLM_API_KEY` 后可运行不连接机器人的真实接口测试：
 
 ```bash
-HANPPIE_LLM_LIVE_TEST=1 ./gradlew :apps:desktop:desktopTest --tests '*ChatAgentTest.liveCompatibleConversationWithoutRobot' --rerun-tasks
+HANPPIE_LLM_LIVE_TEST=1 ./gradlew :shared:jvmTest --tests '*ChatAgentTest.liveCompatibleConversationWithoutRobot' --rerun-tasks
 ```
 
 默认测试只访问本机模拟服务。后续实机测试必须显式设置目标和上传授权，会覆盖机器人当前 Lab 上传文件：
@@ -84,7 +93,7 @@ HANPPIE_TEST_ALLOW_LAB=1 \
 ./gradlew :packages:robot-core:desktopTest --tests '*HardwareIntegrationTest' --rerun-tasks
 ```
 
-桌面界面实机测试使用同样的 `HANPPIE_TEST_ROBOT_IP`、`HANPPIE_TEST_APPID`，运行 `./gradlew :apps:desktop:desktopTest --tests '*DesktopLiveTest' --rerun-tasks`。默认仅接收音视频；`HANPPIE_TEST_ALLOW_LAB=1` 加上模型环境配置验证无运动脚本的真实模型执行与回传（覆盖机内 Lab 文件）；`HANPPIE_TEST_ALLOW_REMOTE=1` 额外测试短时云台、红外和 Esc 停止。测试前关闭其他机器人控制会话。
+桌面界面实机测试使用同样的 `HANPPIE_TEST_ROBOT_IP`、`HANPPIE_TEST_APPID`，运行 `./gradlew :shared:jvmTest --tests '*DesktopLiveTest' --rerun-tasks`。默认仅接收音视频；`HANPPIE_TEST_ALLOW_LAB=1` 加上模型环境配置验证无运动脚本的真实模型执行与回传（覆盖机内 Lab 文件）；`HANPPIE_TEST_ALLOW_REMOTE=1` 额外测试短时云台、红外和 Esc 停止。测试前关闭其他机器人控制会话。
 
 ### Python 工具链
 

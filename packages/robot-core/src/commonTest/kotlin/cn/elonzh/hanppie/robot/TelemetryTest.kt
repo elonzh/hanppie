@@ -3,6 +3,31 @@ package cn.elonzh.hanppie.robot
 import kotlin.test.*
 
 class TelemetryTest {
+    @Test fun gimbalSubscriptionPreservesCapturedBytes() {
+        assertEquals("00020a", GimbalSubscription.removePayload().hex())
+        assertEquals("020a000001973c9bf7090002000a00", GimbalSubscription.addPayload().hex())
+        assertEquals(listOf("00020a", "020a000001973c9bf7090002000a00"),
+            remoteSetup.filter { it.set == 0x48 }.map { it.payload })
+    }
+
+    @Test fun allGimbalAnglesAndEnvelopeValidation() {
+        // Same independent wire vector as Python; negative and >180-degree yaw.
+        val payload = byteArrayOf(0,10,0xe2.toByte(),4,0x6f,0xff.toByte(),0x0a,0xf7.toByte(),0x85.toByte(),0,0x85.toByte())
+        val frame = frame(0x48,8,payload)
+        assertEquals(GimbalTelemetry(125.0,-14.5,-229.4,13.3,0x85), Telemetry.gimbal(frame))
+        assertEquals(-229.4, Telemetry.gimbalYaw(frame))
+        for (length in 0 until payload.size) assertNull(Telemetry.gimbal(frame.copy(payload=payload.copyOf(length))))
+        for (invalid in listOf(
+            frame.copy(valid=false), frame.copy(set=0x3f), frame.copy(id=4),
+            frame.copy(payload=payload.copyOf().apply { this[0]=1 }),
+            frame.copy(payload=payload.copyOf().apply { this[1]=9 }),
+            frame.copy(payload=payload+byteArrayOf(0)),
+        )) assertNull(Telemetry.gimbal(invalid))
+        val outOfControlRange = frame.copy(payload=payload.copyOf().apply { this[6]=0x11; this[7]=0x0e })
+        assertEquals(360.1, Telemetry.gimbal(outOfControlRange)!!.yawDegrees)
+        assertNull(Telemetry.gimbalYaw(outOfControlRange)) // Preserve the control safety bound.
+    }
+
     @Test fun relativeYawAndCameraCoordinates() {
         val p = byteArrayOf(0,10,0,0,0,0,0x84.toByte(),3,0,0,0)
         assertEquals(90.0,Telemetry.gimbalYaw(frame(0x48,8,p)))

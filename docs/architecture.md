@@ -55,7 +55,7 @@
 
 | 名称 | 名称来源 | 本文实际指向 |
 | --- | --- | --- |
-| RoboMaster App | DJI 产品名称 | 手机端应用；与 S1 的身份交换使用 Host UDP `45678` 和 S1 UDP `56789`，后续数据会话通常使用 Host UDP `10609` 和 S1 UDP `10607` |
+| RoboMaster App | DJI 产品名称 | 手机/macOS 应用；与 S1 的身份交换使用 Host UDP `45678` 和 S1 UDP `56789`，后续数据会话通常使用 Host UDP `10609` 和 S1 UDP `10607` |
 | RoboMaster Lab | DJI App 中的功能名称 | 创建和运行 `.dsp` 程序；机内由 `/data/dji_scratch/bin/dji_scratch.py` 管理，文件经 FTP `21` 上传，生命周期命令通过 DUSS 发送 |
 | `AppEnvelope` | Hanppie 代码名称，不是 DJI 官方术语 | [`lab/protocol.py`](../src/hanppie/lab/protocol.py) 对 UDP `10607` 报文中、位于 DUSS 或媒体数据之外的 session、tick、direct/control channel 等字段的封装；字段来自固定 App 抓包并经实机互操作验证 |
 | DUSS | 原厂代码和协议常量中的名称 | 具有 sender、receiver、sequence、command set、command id、payload 和 CRC 的消息；机内由 Unix Datagram Socket 路由，并可经 UART 或 UDP `10607` 外层封包承载 |
@@ -332,7 +332,7 @@ Python 不是 DUSS 的组成部分。只要实现帧格式、CRC、地址、序�
 
 ### 5.3 RoboMaster App 与 Lab 程序机制
 
-RoboMaster App 是手机应用，Lab 是该应用中的程序功能；两者不共同构成一套名为“App/Lab”的协议。实际链路由以下机制组成：
+RoboMaster App 提供手机和 macOS 客户端，Lab 是该应用中的程序功能；两者不共同构成一套名为“App/Lab”的协议。实际链路由以下机制组成：
 
 - **身份交换**：Host UDP `45678` 与 S1 UDP `56789` 交换广播和 8 字节 AppID；
 - **数据会话**：Host UDP `10609` 与 S1 UDP `10607` 交换带 session/tick 的外层封包，其中可以承载 DUSS、control channel 和媒体；
@@ -409,6 +409,32 @@ chassis_ctrl.move_with_speed(x, y, z)
 #### 5.3.4 机内 Python 兼容性
 
 S1 Lab 程序受固件内固定的 Python `3.6.6`、标准库和 DJI 注入模块约束。root ADB 直接启动解释器时，默认 `site` 初始化会因 Android 的 root UID 没有 passwd 记录而报 `getpwuid(): uid not found: 0`；使用 `-S` 可完成 `sys`、`socket`、`json`、`select`、`threading` 和 `_thread` 探针。Lab 程序由 `dji_scratch` 提供自己的运行环境，不能用 root shell 直接执行的结果代替 Lab 执行结果。这个约束只属于机内 Lab 实现，不属于 DUSS 协议本身；主机端或其他语言客户端的版本边界见第 7.5 节。
+
+#### 5.3.5 macOS 客户端静态分析边界
+
+RoboMaster macOS `1.1.5`（build `239`）安装包采用 Unity `2019.2.3f1` / Mono，业务程序集包括 `Assembly-CSharp.dll`、`RobotService.dll` 和 `Native.dll`。Unity 资源包含机器人零件网格、纹理、材质和 Transform 层级；这些是应用显示资源，不是经标定的 CAD、URDF、碰撞或惯性模型。**代码**
+
+`RobotService` 的 `DJICommandController` 经 `DJIUnityBridge` 调用 `unitybridge` 原生入口，支持字符串、数值和结构体参数；`DJIParamValue.Encode()` 使用 JSON。`DJIUnityEvent.GetCode()` 将事件类型放入高 32 位、key/subtype 放入低 32 位。例如云台速度动作 key 为 `0x04000009`，参数类包含 `short pitch/roll/yaw`；这些是进程内桥接语义，不能直接解释成线上 DUSS 命令号或载荷布局。**代码**
+
+`unitybridge.bundle` 保留底盘、云台、Scratch 控制处理器以及 `DjiProtocolEncoder::Encode`、`DjiProtocolDecoder::DecodeV1/DecodeCommand/DecodeExtHeader` 的原生符号。反汇编显示编码路径调用 CRC16；`GetFullCmdId(a,b,c)` 的位组合为 `((a << 30) | (b << 16) | c)` 的 32 位结果。静态提取尚未还原全部封包分支、参数单位和 App 会话状态机，也未以该桌面版本进行实机互操作验证。不能将其直接替换为 Hanppie 的已验证协议实现。**代码**
+
+**云台订阅与角度字段：** macOS `SubscribeManager::GetStructureSize` 为 UID `0x00020009f79b3c97` 返回 9 字节；云台订阅回调检查该 UID，按 signed int16 读取角度，并使用 `0.1` 缩放。与上游 `GimbalPosSubject` 和现有 S1 报文对照后，当前使用的周期推送可按下表解析。地面参考角沿用 SDK 的 `ground` 命名，不代表已标定的世界坐标或指南针航向。**代码/实测报文**
+
+| DUSS `48:08` payload 偏移 | 类型 | 字段 |
+| --- | --- | --- |
+| 0 | u8 | 周期订阅模式，本订阅为 `0` |
+| 1 | u8 | 本会话订阅消息 ID，本订阅为 `0x0a`；不是 UID 或设备地址 |
+| 2 / 4 | little-endian int16，各除以 10 | ground yaw / ground pitch（度） |
+| 6 / 8 | little-endian int16，各除以 10 | yaw / pitch（度，SDK 字段语义） |
+| 10 | u8 | 原始状态位；当前诊断不解释为任务完成或校准完成 |
+
+本订阅的 `48:04` 删除载荷为 `sub_mode=0, node_id=2, msg_id=10`；`48:03` 添加载荷为 `node_id=2, msg_id=10, flags=0, sub_mode=0, UID count=1, UID=<Q>, frequency=<H>(10 Hz)`。推送包含两字节订阅头和九字节主题数据；其语义依赖本会话已建立的订阅，不能仅凭任意 `48:08` 报文的长度判定字段。当前 62 字节复合遥测的完整 UID 顺序尚未确认，不能据此把其中全部浮点值标注为位置或速度。
+
+macOS 云台回调还包含参考值相减和角度折返，官方 UI 展示值不必等于原始字段直接缩放。`DJISubscribeController` 的 `Input.gyro` 路径采集的是客户端传感器；它不是机器人 IMU 解码器。
+
+**内部调试控制路径：** `ViewChassis.sendSpeedAndFollow` 用两个不同 key 选择速度和跟随处理。`DJIRobomasterChassisControlProcessor::OnTimerTicked` 的速度分支构造 `3f:21` 的三个 float、共 12 字节载荷，与当前 Kotlin 底盘速度路径相互印证；跟随分支构造 `3f:22` 的 `(x,y,0)` float 载荷，并调用 `SendGimbalYaw`。这只证明该客户端存在上述发送路径，未确认其在当前 S1 固件上的完整模式前置条件、参考系和失联行为。Hanppie 没有启用这个原生跟随分支。**代码**
+
+可复现的输入指纹、反汇编地址和本次验证记录见 [macOS App 静态分析记录](s1-app-static-analysis-2026-09-08.md)。本地提取对象索引位于 `.hanppie/app-analysis/2026-09-08/report.md`；厂商程序、反编译输出和模型保留在 Git 忽略目录。
 
 ### 5.4 原生媒体路径
 
@@ -523,10 +549,13 @@ Hanppie 不修改 `/init.rc`、原厂启动脚本或 `/system` 持久文件。La
 
 | 路径 | 当前职责 |
 | --- | --- |
-| `apps/android` | Android 应用入口、系统主题、权限声明、APK 与真机 UI 测试 |
-| `apps/desktop` | 多平台 UI 模块及桌面入口；`jvmSharedMain` 共享响应式页面和会话模型，`androidMain` 提供 Android 生命周期、文件选择和 TTS，`desktopMain` 提供 AWT 文件对话框与桌面 TTS |
+| `androidApp` | 独立 Android 应用入口、系统主题、权限声明、APK 与真机 UI 测试；只依赖 `shared`，不依赖桌面应用 |
+| `desktopApp` | 独立 Kotlin/JVM 应用入口、Compose application 生命周期及原生桌面打包；只依赖 `shared` |
+| `shared` | KMP 共享 UI 库，无应用 `main` 或打包任务。`commonMain` 保存平台无关状态、接口、主题与 Compose Resources；`androidJvmMain` 在 Android/JVM 间共享页面、会话和智能体；`androidMain` 与 `jvmMain` 提供各平台窗口/生命周期、文件选择、媒体、语音和凭据实现 |
 | `packages/robot-core` | `commonMain` 实现 DUSS CRC、App 封包、广播解析、Lab DSP 容器和遥测；`jvmSharedMain` 在 Android/JVM 上复用 UDP、Apache Commons Net FTP 与 Lab 生命周期 |
 | `src/hanppie`、`src/robomaster`、`tests` | 现有 Python 工具、SDK fork 和回归测试，不受客户端拆分影响 |
+
+模块边界遵循 [KMP 官方推荐结构](https://kotlinlang.org/docs/multiplatform/multiplatform-project-recommended-structure.html)：平台应用入口依赖共享库，共享库不反向依赖应用。共享 UI 包名为 `cn.elonzh.hanppie.ui`，只向入口暴露 `AndroidWorkbench` 和 `DesktopWorkbench`；内部状态与控制器不因拆分而公开。桌面共享库使用标准 `jvmMain` / `jvmTest`，跨 Android/JVM 的中间源集显式命名为 `androidJvmMain`。纯逻辑测试在 `commonTest`，JVM/UI 测试在共享库 `jvmTest`，Android instrumentation 在 `androidApp`；桌面启动及打包由 `desktopApp` 负责。协议库保留独立模块及其 `desktop` 目标。当前仅配置 Android/JVM 目标：UDP/FTP、同步资源格式化和部分智能体实现依赖 JVM，尚无 iOS target、Xcode 工程或 iOS 平台适配，不声明支持 iOS。
 
 构建使用 Kotlin 2.4.10、Compose Multiplatform 1.12.0、Miuix 0.9.3、Gradle 9.4.1、AGP 9.2.1，构建 JDK 21。Android `compileSdk=37`（Miuix/Compose AAR 的最低编译要求）、`targetSdk=36`、`minSdk=26`；编译 SDK 不是手机必须运行的系统版本。客户端已接入 Koog 1.2.0 文字对话智能体，Android 支持系统语音输入，Android/桌面对话页支持回复朗读；未接入唤醒或手柄。Android 和桌面已接入机器人视频和麦克风下行播放；客户端向机器人上行音频尚未实现。
 
@@ -534,7 +563,7 @@ Hanppie 不修改 `/init.rc`、原厂启动脚本或 `/system` 持久文件。La
 
 Miuix 提供按钮、输入框、卡片、复选框和弹窗。共享主题设置 `LocalSquircleEnabled=false` 使用其标准圆角渲染：0.9.3 的 squircle shader 与 Compose 1.12.0 的桌面 Skia 签名不兼容。脚本编辑器使用 Compose BasicTextField，避免将多行源码垂直居中。
 
-**GUI 国际化：** Android 和桌面共享 `Localization.kt` 的中英文消息目录，中文消息键及英文译文集中维护，动态值使用 `{0}` 形式占位符；Compose 界面和非 Composable 服务消息共用 `tr`。设置提供跟随系统、简体中文、English，切换即时重组，不重建 ConsoleModel、机器人连接或清空编辑器/对话。语言选择分别保存到桌面 Java Preferences `cn/elonzh/hanppie/ui` 与 Android 私有 SharedPreferences `hanppie-ui`，不保存模型凭据。首次跟随系统，中文区域使用简体中文，其他语言使用英文；桌面启动时读取系统语言，Android 随配置变化更新。导航、驾驶舱、设置、脚本界面、确认框、语音提示、媒体状态及已知错误有双语显示；系统/设备提供的原始错误、报文、脚本源码、用户输入和历史消息保持原文，未知消息不做推测翻译。Android 应用名称使用原生 `values` / `values-zh` 资源，按系统资源语言显示。
+**GUI 国际化：** Android 和桌面共享 Compose Resources：`commonMain/composeResources/values/strings.xml` 为英文默认资源，`values-zh/strings.xml` 为简体中文，调用使用生成的 `Res.string` 类型安全标识；参数采用标准 `%1$s` 格式。`Localization.kt` 只管理应用语言偏好，JVM/Android 适配层通过官方资源 API 加载每种语言并缓存，首次加载同步等待资源读取，后续界面和同步服务回调只查内存并格式化，不反查译文或用原文作资源键。连接/脚本实时状态保存资源标识和参数，聊天角色使用枚举，连接地址为独立字段，业务判断不依赖显示语言。设置提供跟随系统、简体中文、English，切换即时重组，不重建 ConsoleModel、机器人连接或清空编辑器/对话。语言选择分别保存到桌面 Java Preferences `cn/elonzh/hanppie/ui` 与 Android 私有 SharedPreferences `hanppie-ui`，不保存模型凭据。首次跟随系统，中文区域使用简体中文，其他语言使用英文；桌面启动时读取系统语言，Android 随配置变化更新。导航、驾驶舱、设置、脚本界面、确认框、语音提示、媒体状态及已知错误有双语显示；系统/设备提供的原始错误、报文、脚本源码、用户输入和历史消息保持原文，不做推测翻译。Android 应用名称使用原生 `values` / `values-zh` 资源，按系统资源语言显示。Gradle 插件及第三方依赖版本统一声明在 `gradle/libs.versions.toml`。
 
 智能体每轮系统提示使用当前界面语言作为默认回复语言，用户可另行要求，不翻译或修改工具 ID 与脚本源码。Android 识别语言传入当前应用的 `zh-CN` / `en-US`，切换语言取消正在进行的识别和播报，并选择对应语言的离线 TTS voice；缺少语音包明确报错，不自动下载。桌面 TTS 仍使用系统配置的声音。语言选择恢复、占位符一致性、切换后编辑器保留、英文手机/桌面界面由离线测试覆盖；不以翻译工作声称修复 HyperOS 识别服务权限问题。
 
@@ -556,27 +585,27 @@ UDP 会话只接受指定机器人地址，身份交换与持久 App 会话复�
 
 **遥控与媒体：** `RemoteCommands` 移植 App 进入/退出序列；App 会话保持 50 Hz 中性 control 心跳，底盘非零速度使用独立 DUSS `3f:21` 的 `<fff>` 命令，目标为 `host2byte(3,6)=0xC3`；进入遥控时设置该模块 `3f:19=01`、`3f:28=00`。底盘全零（包括浮点负零）改发 `3f:20` 四个 int16 零转速，与恢复的 `ChassisCtrl._set_chassis_stop` 一致，避免车身速度零指令下持续的轮速输出。App `01:04` 心跳载荷保持 11 字节，不在其中发送底盘速度结构。云台采用 S1 `rm_module.Gimbal.set_accel_ctrl` 对应的 `04:0c` 七字节 `<hhhB>`：yaw、roll=0、pitch（0.1°/s）和控制字 `0xdc`；UI 向上/向右分别对应 pitch/yaw 正值。遥控期间以 50 Hz 发送当前输入或零速，进入遥控、松手、停止和租约过期持续发零。实机 15°/s、200 ms 右转约 3°；持续清零覆盖单个 UDP 停止包丢失，但不证明固件自身无漂移。
 
-GUI 的 WASD 与左摇杆使用镜头坐标：云台相对底盘 yaw 为 θ 时，底盘速度为 `(forward*cosθ-right*sinθ, forward*sinθ+right*cosθ)`。角度来自既有 DDS 0x0a 订阅（UID `0x00020009f79b3c97`）的 `48:08` 11 字节报文，offset 6 的 signed int16 / 10，对照 SDK `GimbalPosSubject`；不使用 `heading_like` 或积分估算。协议角度可能超过 ±180°，按 ±360° 接收。每个 50 Hz 发送周期使用最新角度，超过 500 ms 未收到有效角度则平移、云台水平输入及跟随转向归零，俯仰控制仍可用。驾驶舱显示底盘相对镜头的朝向和等待状态。底层 `AppSession.drive` 默认仍是底盘坐标，GUI 显式选择镜头坐标及软件联动。
+GUI 的 WASD 与左摇杆使用镜头坐标：云台相对底盘 yaw 为 θ 时，底盘速度为 `(forward*cosθ-right*sinθ, forward*sinθ+right*cosθ)`。角度来自既有云台周期订阅的 yaw 字段（布局和证据见第 5.3.5 节）；不使用 `heading_like` 或积分估算。协议角度可能超过 ±180°，按 ±360° 接收。每个 50 Hz 发送周期使用最新角度，超过 500 ms 未收到有效角度则平移、云台水平输入及跟随转向归零，俯仰控制仍可用。驾驶舱显示底盘相对镜头的朝向和等待状态。底层 `AppSession.drive` 默认仍是底盘坐标，GUI 显式选择镜头坐标及软件联动。
 
 触摸与键盘共用固定 20 Hz 输入循环，输入变化不重启协程；单次租约 250 ms，底盘过期归零。摇杆跟踪独立 pointer ID，12% 中心死区，松手/取消用 finally 归零。平移三档为 0.15/0.30/0.60 m/s，默认二档，Q 降档、E 升档，端点不循环、长按不连续换档；UI 提供等价加减按钮。左右 Shift 任一按住时平移乘以 0.25，松开全部 Shift 恢复当前档位；缓行不改变云台速率。斜向输入按向量长度归一化，不能超过当前档位速度；档位保留在 ConsoleModel 生命周期，失焦/停止清除按住状态。联动转向上限 60°/s，云台输入上限 30°/s，均不是实测速率标定。启用遥控是显式授权；失焦/离页/后台禁用。模式切换与 Lab 上传互斥，回到 Lab 前退出直控。弹药默认红外，R 键或弹药选择控件在红外/水弹之间切换，切换本身不发送设备命令；选择保留在当前 ConsoleModel 生命周期。空格与唯一开火按钮发射当前选择，R 和空格均忽略键盘长按重复。红外发送 120 ms 触发；水弹直接发送 S1 `rm_module.Gun.set_cmd_fire(0,1)` 对应的 `09 / 3f:51 / 01`，不上传 Lab、不切换模式、不自动重试；当前只确认发送，实射和设备接受情况未验收，不能声称已发射或命中。
 
-软件联动沿用当前底盘/云台报文，不切换固件跟随模式：相对 yaw 超过 60°且用户继续向外转时开始同向底盘转向，60～90°线性增加权重，目标转速为云台输入两倍乘权重、限幅 ±60°/s；相对角度达到 230°时停止向外的云台输入，只由底盘转向释放余量。向内转动不触发跟随，松手、停止、租约/角度过期立即停止联动，不在空闲时追中。S1 云台 yaw 可控范围为 ±250°（[DJI 用户手册](https://dl.djicdn.com/downloads/robomaster-s1/20220429UM/RoboMaster_S1_User_Manual_v1.8_EN.pdf)）。当前已有右向短时实机跟随证据：相对 yaw 约 71°时继续 15°/s 输入一秒，对地 yaw 与相对 yaw 之差增加约 13.8°，松手后保持稳定；不等同于全角度、双向或连续多圈验收。零轮速指令后 ESC 回传从持续同向十几至二十多 RPM 降为围绕零值波动，仍有单轮瞬时异常值；测试检查两秒各轮平均转速绝对值小于 8 RPM，不将该阈值等同于机械完全静止。纯水平转动及跟随期间对地 pitch 保持不变，相对底盘 pitch 有变化；尚需水平放置及现场观察排除支撑倾斜、机械微动，不能宣称所有路面上的起伏和怠转已经根治。
+软件联动沿用当前底盘/云台报文，不切换固件跟随模式：相对 yaw 超过 60°且用户继续向外转时开始同向底盘转向，60～90°线性增加权重，目标转速为云台输入两倍乘权重、限幅 ±60°/s；相对角度达到 230°时停止向外的云台输入，只由底盘转向释放余量。向内转动不触发跟随，松手、停止、租约/角度过期立即停止联动，不在空闲时追中。S1 云台 yaw 可控范围为 ±250°（[DJI 用户手册](https://dl.djicdn.com/downloads/robomaster-s1/20220429UM/RoboMaster_S1_User_Manual_v1.8_EN.pdf)）。双向短时实机测试在相对 yaw 约 ±70°时继续 ±15°/s 输入一秒，对地 yaw 与相对 yaw 之差分别变化约 +12.8°、−13.8°；两方向均完成松手归零检查，不等同于全角度或连续多圈验收。零轮速指令后 ESC 回传从持续同向十几至二十多 RPM 降为围绕零值波动，仍有单轮瞬时异常值；测试检查两秒各轮平均转速绝对值小于 8 RPM，不将该阈值等同于机械完全静止。纯水平转动及跟随期间对地 pitch 保持不变，相对底盘 pitch 有变化；尚需水平放置及现场观察排除支撑倾斜、机械微动，不能宣称所有路面上的起伏和怠转已经根治。
 
-Android 和桌面通过同一 App UDP 会话接收 H.264（外层类型 2）和 Opus（DUSS `3f:1d`），接收线程只入有界队列。Android 视频经 Annex-B 分片拼接、按 slice 首宏块组装完整访问单元后交给 `MediaCodec` 输出到 `SurfaceView`；音频按 48 kHz 单声道解码后送 `AudioTrack`。桌面使用独立 FFmpeg 子进程：H.264 通过管道解码为 1280×720 BGRA 帧送 Compose/Skia，Opus 包由 `OpusOgg` 添加 Ogg 页、粒度位置与 CRC 后通过管道解码为 48 kHz 单声道 PCM16，送 Java Sound `SourceDataLine`。不经过 Python、不落盘媒体；FFmpeg 由 PATH 或 `HANPPIE_FFMPEG` 定位，不包含在分发包。缺少解码器或队列溢出明确报错，不自动安装或降级。音视频解码生命周期独立，切换监听不重启视频；关闭时终止本应用持有的子进程并回收线程和播放设备。
+Android 和桌面通过同一 App UDP 会话接收 H.264（外层类型 2）和 Opus（DUSS `3f:1d`），接收线程只入有界队列。Android 视频经 Annex-B 分片拼接、按 slice 首宏块组装完整访问单元后交给 `MediaCodec` 输出到 `SurfaceView`；音频按 48 kHz 单声道解码后送 `AudioTrack`。桌面使用独立 FFmpeg 子进程：H.264 通过管道解码为 1280×720 BGRA 帧送 Compose/Skia，Opus 包由 `OpusOgg` 添加 Ogg 页、粒度位置与 CRC 后通过管道解码为 48 kHz 单声道 PCM16，送 Java Sound `SourceDataLine`。不经过 Python、不落盘媒体；FFmpeg 由 PATH 或 `HANPPIE_FFMPEG` 定位，不包含在分发包。缺少解码器或队列溢出明确报错，不自动安装或降级。音视频解码生命周期独立，切换监听不重启视频；关闭时终止本应用持有的子进程并回收线程和播放设备。 桌面串流启动时仍可能显示局部绿色的首帧，后续连续画面恢复；首帧到达时间不能当作完整可用画面的延迟，启动画面质量尚未验收。
 
 视频/监听显式开启，离页释放解码器和本地音频播放；媒体启停使用有序队列并绑定原会话，避免旧请求影响新连接。音频没有已验证的独立设备端停止命令，静音只停止本地接收/播放，关闭会话结束串流。当前不是双向通话。连接后进入全屏驾驶舱，导航收起；视频背景叠加准星、左右摇杆、发射和停止控件，可返回控制台。按窗口宽度显示键盘提示，保持手机触摸控件可达。桌面原生窗口失焦停止遥控，重新启用前清空按键和摇杆状态。
 
-已知 `48:08` 的 62 字节载荷提供电量及未标定浮点字段；电量大于 100 视为未知。诊断页不将未标定字段展示为可信位置/速度。Lab 自定义 `3f:a4` 消息并非任意脚本 stdout 或完成事件。遥测 UI 采样为 10 Hz，与网络周期独立。日志和报文仅保存在有界内存列表，启动不创建工作目录日志。
+已知 `48:08` 的 62 字节载荷提供电量及未标定浮点字段；电量大于 100 视为未知。诊断页不将未标定字段展示为可信位置/速度。云台角度以独立的类型化快照显示四个协议角度和原始状态字节，标记为“最近接收”，不与底盘原始字段互相覆盖；断开、失联或暂停连接时清除。Python Direct 保留原始值并提供角度属性，`diag` 的 direct 结果同时输出角度与状态字节。新增角度解析不改变遥控所用 yaw 的 ±360° 范围检查或 500 ms 过期归零。Lab 自定义 `3f:a4` 消息并非任意脚本 stdout 或完成事件。遥测 UI 采样为 10 Hz，与网络周期独立。日志和报文仅保存在有界内存列表，启动不创建工作目录日志。
 
-**对话智能体：** `ChatAgent` 使用 Koog `FunctionalAIAgent` 串行执行流式 LLM→工具→LLM 循环，每轮最多 8 次模型请求、总时限 120 秒（包含等待执行确认）、输出最多 4096 token。HTTP 使用显式 Ktor OkHttp 引擎，复用客户端连接池，不安装全轮自动重试或模型 fallback，关闭 OkHttp 连接失败自动重试。兼容接口采用 Chat Completions；地址、模型、密钥可配置，默认地址和模型来自 DTEmpower 当前配置（百炼兼容接口、`deepseek-v4-flash-0731`）。密钥仅保存在本次进程内存，桌面支持环境变量注入，不打包、不落日志、不保存至 Android Bundle；Android 暂未接入 Codex OAuth。
+**对话智能体：** `ChatAgent` 使用 Koog `FunctionalAIAgent` 串行执行流式 LLM→工具→LLM 循环，每轮最多 8 次模型请求、总时限 120 秒（包含等待执行确认）、输出最多 4096 token。HTTP 使用显式 Ktor OkHttp 引擎，复用客户端连接池，不安装全轮自动重试或模型 fallback，关闭 OkHttp 连接失败自动重试。兼容接口采用 Chat Completions；地址、模型、密钥可配置，默认地址和模型来自 DTEmpower 当前配置（百炼兼容接口、`deepseek-v4-flash-0731`）。设置页显式“保存设置”持久化地址、模型、API Key 和自动朗读偏好，启动时在独立 IO 协程恢复；配置存取不随机器人连接暂停取消。Android 用 AndroidKeyStore 中不可导出的 AES-256 密钥进行 GCM 加密，私有 SharedPreferences 只保存随机 IV 与密文，禁止应用备份；桌面通过 java-keyring 使用 macOS Keychain、Windows Credential Manager 或 Linux Secret Service/KWallet 保存单个配置项。桌面 Java Preferences 仅记录是否曾保存；未保存时不访问密钥链。存储不可用或数据不可解密时明确报错，不降级为明文，不覆盖原数据；清空 API Key 后保存可移除配置中的旧密钥。系统凭据存储不等同于隔离同一登录用户下的其他程序，尤其开发时共享 JDK、未签名分发与 Linux 解锁后的密钥环。桌面环境变量可覆盖已保存值，只在显式保存时写入；不打包密钥、不落日志、不保存至 Android Bundle。Android 暂未接入 Codex OAuth。
 
-每次用户输入创建新 run，并注入本会话已完成轮次的完整消息（含工具调用及结果），不将 Koog checkpoint 当作聊天历史。中断轮次记录已发生工具的结果/未知状态供下轮参考，不重放机内操作。上下文累计达到 100000 字符预算后要求新对话，不拆散工具调用和结果；对话可见记录最多 250 条，当前没有跨进程会话持久化。UI 显示可见文本流、工具过程、首字/本轮耗时，不展示模型内部推理；服务端异常正文不输出到 UI 或日志。
+每次用户输入创建新 run，并注入本会话已完成轮次的完整消息（含工具调用及结果），不将 Koog checkpoint 当作聊天历史。中断轮次记录已发生工具的结果/未知状态供下轮参考，不重放机内操作。上下文累计达到 100000 字符预算后要求新对话，不拆散工具调用和结果；对话可见记录最多 250 条，当前没有跨进程会话持久化。UI 显示可见文本流、工具过程、首字/本轮耗时，不展示模型内部推理；服务端异常仅显示异常类别或结构化 HTTP 状态码，正文与请求头不输出到 UI 或日志。
 
-工具为 `robot_status`、`execute_lab_python(source)`、`stop_lab`，不按自然语言动作逐个硬编码。执行 Python 的位置是 S1 Lab 解释器而非手机/电脑。执行前在界面呈现完整源码，只有用户确认后才上传及启动；工具等待共享 `LabController` 的真实调用返回。对话期间禁止手动切换目标、上传和启动，设备操作用原子 busy 状态互斥；手动停止会先取消对话。取消 LLM 不等于停止机内脚本，失联/部分启动仍报告未知结果。智能体没有视觉工具，不能回答实时观察环境的问题；不继承 Python 智能体的相机或媒体能力。
+工具为 `robot_status`、`execute_lab_python(source)`、`stop_lab`，不按自然语言动作逐个硬编码。执行 Python 的位置是 S1 Lab 解释器而非手机/电脑。执行前在界面呈现完整源码，只有用户确认后才上传及启动；工具等待共享 `LabController` 的真实调用返回。对话期间禁止手动切换目标、上传和启动，设备操作用原子 busy 状态互斥；手动停止会先取消对话。取消 LLM 不等于停止机内脚本，失联/部分启动仍报告未知结果。系统提示包含已核验的底盘、水弹及 `rm_module.Mobile.custom_msg_send` 回报接口和受限加载方式；消息回报不是通用脚本完成事件。智能体没有视觉工具，不能回答实时观察环境的问题；不继承 Python 智能体的相机或媒体能力。
 
 **验证边界：** 固定抓包向量、CRC/截断、DSP、遥测、回环 UDP、FTP、Lab 生命周期和桌面组件测试已通过；回环测试覆盖网络工厂用于身份/会话 UDP 以及 FTP 控制/数据连接。共享页面有 393 dp 手机尺寸编辑、导航、对话与设置截图检查，macOS 宽屏设备页与脚本页已实际打开检查。Android APK、测试包与 lint 构建通过。小米 13 / HyperOS 3（Android 16、1080×2400、440 dpi）已有四页面导航及脚本编辑测试；新对话页通过显式 shell 启动 Activity 的 instrumentation 测试，已导出并检查输入法弹出时的对话与模型设置真机截图。原有 ActivityScenario 启动方式在该手机上仍出现等待，脚本旋转补充测试尚未通过。Koog 离线测试覆盖多轮上下文、工具结果、执行确认、取消和截断；百炼真实兼容接口测试覆盖两轮上下文及模拟状态工具调用；另有以下实机执行验证。小米 13 在同一 Wi-Fi 下已验证 Android 到 S1 的连接、H.264 硬件解码与 Surface 像素提取、Opus 解码和播放接口写入。真实兼容模型调用、界面确认、Lab 上传启动、机内自定义标记回传及停止/断开通过端到端测试。短时云台触摸和红外触发通过 UI 命令路径测试，但不能替代运动角度/红外命中的物理验收；底盘行驶、水弹实射、音频主观听感、Windows/Linux 桌面实机和机器人热点与蜂窝并行联网尚未完成验证。手机锁屏遮挡了该轮整页截图，机器人画面单独从 Surface 提取并检查。macOS TTS 已验证正常播报流程；手机默认引擎为小米系统引擎，但 Android 实际播报与 Windows/Linux TTS 尚未完成实测。CI 包含 Android APK/lint 和三平台桌面测试/打包配置，本次未运行远程 CI。
 
-Android API 37 模拟器已安装运行当前 APK，页面测试覆盖语言切换、脚本编辑、诊断、对话和横屏保留未保存脚本，并检查稳定后的截图；系统旋转动画不受 Compose idle 控制，截图额外等待。测试包显式依赖 Espresso 3.7.0，避免传递依赖 3.5.0 调用失效的 InputManager 方法；Android CLI 的布局 instrumentation 与应用 instrumentation 不能同时占用 UiAutomation，运行页面测试前需停止前者。当前模拟器直连 S1 在 App 会话确认阶段超时，临时 UDP 回程映射也未通过，故该环境的音视频与机械分支尚未执行；此结果既不替代小米手机验收，也不证明模拟器普遍无法访问局域网。测试不依赖电脑代理作为 Android 产品运行路径。
+Android API 37 模拟器已安装运行当前 APK，页面测试覆盖语言切换、脚本编辑、诊断、对话和横屏保留未保存脚本，并检查稳定后的截图；系统旋转动画不受 Compose idle 控制，截图额外等待。测试包显式依赖 Espresso 3.7.0，避免传递依赖 3.5.0 调用失效的 InputManager 方法；Android CLI 的布局 instrumentation 与应用 instrumentation 不能同时占用 UiAutomation，运行页面测试前需停止前者。Emulator 37.1.11 的 Medium_Phone 在现有 SDK 命令行冷启动后，使用默认 NAT/DHCP（Wi-Fi 地址 10.0.2.16），无桥接、端口转发或应用代理，已通过 S1 FTP、App 会话、视频 Surface 像素提取、Opus 解码、短时云台触摸/方向键、Q/E 档位、Shift 缓行和 R 弹药切换测试；不含实际发射及轮速/姿态物理验收。截图存在首帧绿边、停止遥控后视频状态文字与保留画面不一致，媒体显示尚未完整验收。该结果不替代小米手机验收，Android 产品不依赖电脑代理。
 
 macOS 桌面实机测试覆盖 H.264 连续帧显示、Opus 解码与 Java Sound 写入、监听切换、WASD、键盘方向键和双摇杆、Esc 停止；测试默认不运动，遥控和 Lab 分别由独立环境变量授权，机械回归不发射弹药。真实兼容模型生成指定无运动脚本，经源码一致性核验后执行，并断言 S1 自定义标记回传，完成停止和断开。打包 `.app` 已实际启动检查设备发现、连接、持续视频、音频解码状态和电量显示；最小化前启用遥控、恢复后停用及发射按钮禁用状态已检查，断开后视频子进程退出已核对；音频主观听感及红外命中未做物理验收。FFmpeg 合成流测试覆盖 H.264/Opus 解码、Ogg CRC/页边界、缺失可执行文件错误和关闭状态；不将 macOS 结果外推为 Windows/Linux 实测。
 

@@ -25,6 +25,7 @@ from hanppie.diagnosis.runner import DiagnosisRunner, run_diagnosis
 from hanppie.diagnosis.session import DeviceSession
 from hanppie.lab.app import AppConnectionInfo
 from hanppie.lab.bridge import LabTelemetry
+from hanppie.lab.direct import DirectGimbalTelemetry
 from hanppie.lab.protocol import RobotBroadcast
 
 
@@ -266,11 +267,12 @@ class FakeDirectRobot:
         )
 
     def wait_for_gimbal(self, **_kwargs):
-        return SimpleNamespace(
+        return DirectGimbalTelemetry(
             received_at=1.0,
             sequence=self._next_sequence(),
             values=self.gimbal_values,
             flag=0,
+            payload_hex="",
         )
 
     def set_led(self, **_values):
