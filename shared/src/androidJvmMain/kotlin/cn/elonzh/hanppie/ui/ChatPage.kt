@@ -1,6 +1,7 @@
 package cn.elonzh.hanppie.ui
 
 import cn.elonzh.hanppie.resources.*
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
@@ -22,8 +23,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
@@ -61,37 +63,47 @@ internal fun ChatPage(model: ConsoleModel, modifier: Modifier = Modifier, onVoic
     val keyboard = LocalSoftwareKeyboardController.current
     val list = rememberLazyListState()
     LaunchedEffect(state.lines.size, state.streaming.length, state.approval) {
-        if (list.layoutInfo.totalItemsCount > 0) list.animateScrollToItem(list.layoutInfo.totalItemsCount - 1)
+        val count = list.layoutInfo.totalItemsCount
+        val lastVisible = list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+        if (count > 0 && !list.isScrollInProgress && lastVisible >= count - 2) list.animateScrollToItem(count - 1)
     }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Spacer(Modifier.weight(1f))
-            Button({ model.replySpeaker.stop(); model.chat.clear() }, enabled = !state.running && state.lines.isNotEmpty()) { Text(tr(Res.string.new_chat)) }
+            ComposerIcon(tr(Res.string.new_chat), "new", enabled = !state.running && state.lines.isNotEmpty()) { model.replySpeaker.stop(); model.chat.clear() }
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("chat-messages"), state = list,
             verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
             if (state.lines.isEmpty()) item {
                 Column(Modifier.padding(top = 28.dp, bottom = 24.dp)) {
                     Text(tr(Res.string.what_would_you_like_to_do), fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
-                    Text(tr(Res.string.chat_or_create_a_robot_script_together), Modifier.padding(top = 8.dp), color = Color(0xff78818d), fontSize = 14.sp)
                 }
             }
             items(state.lines) { line ->
-                Column(Modifier.fillMaxWidth().background(if (line.role == ChatRole.USER) Color(0xffe9efff) else Color.White,
+                Column(Modifier.fillMaxWidth().background(if (line.role == ChatRole.USER) MiuixTheme.colorScheme.secondaryContainer else MiuixTheme.colorScheme.surfaceContainer,
                     RoundedCornerShape(18.dp)).padding(16.dp)) {
-                    Text(tr(line.role.label), fontSize = 11.sp, color = Color(0xff78818d))
-                    SelectionContainer { Text(line.text, Modifier.padding(top = 6.dp), fontSize = if (line.role in listOf(ChatRole.TOOL, ChatRole.SCRIPT)) 12.sp else 15.sp,
-                        fontFamily = if (line.role == ChatRole.SCRIPT) FontFamily.Monospace else FontFamily.Default) }
-                    if (line.role == ChatRole.ASSISTANT) Text(tr(Res.string.read_aloud), Modifier.sizeIn(minHeight = 48.dp)
-                        .clickable(enabled = speech.available && !microphone.active, role = Role.Button) { model.replySpeaker.speak(line.text) }
-                        .padding(top = 14.dp), color = Color(0xff3868e8), fontSize = 12.sp)
+                    Text(tr(line.role.label), fontSize = 11.sp, color = if (line.role == ChatRole.ASSISTANT) MiuixTheme.colorScheme.onTertiaryContainer else MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                    if (line.role == ChatRole.SCRIPT || line.role == ChatRole.TOOL) {
+                        SelectionContainer { Text(line.text, Modifier.padding(top = 6.dp), fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace) }
+                    } else ChatMarkdown(line.text, Modifier.padding(top = 6.dp))
+                    if (line.role == ChatRole.ASSISTANT) ComposerIcon(tr(Res.string.read_aloud), "speaker",
+                        enabled = speech.available && !microphone.active) { model.replySpeaker.speak(line.text) }
                 }
             }
             if (state.running) item {
-                Text(state.streaming.ifBlank { if (state.approval != null) tr(Res.string.awaiting_approval) else tr(Res.string.hanppie_is_thinking) }, Modifier.padding(12.dp), fontSize = 15.sp)
+                if (state.streaming.isNotBlank()) key(state.lines) {
+                    Column(Modifier.fillMaxWidth().background(MiuixTheme.colorScheme.surfaceContainer,
+                        RoundedCornerShape(18.dp)).padding(16.dp)) {
+                        Text(tr(ChatRole.ASSISTANT.label), fontSize = 11.sp, color = MiuixTheme.colorScheme.onTertiaryContainer)
+                        StreamingReply(state.streaming, Modifier.padding(top = 6.dp))
+                    }
+                }
+                else Text(if (state.approval != null) tr(Res.string.awaiting_approval) else tr(Res.string.hanppie_is_thinking),
+                    Modifier.padding(12.dp), color = MiuixTheme.colorScheme.onTertiaryContainer)
             }
             state.approval?.let { source -> item {
-                Column(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(18.dp)).padding(16.dp)) {
+                Column(Modifier.fillMaxWidth().background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(18.dp)).padding(16.dp)) {
                     Text(tr(Res.string.run_this_script), fontWeight = FontWeight.SemiBold)
                     SelectionContainer { Text(source, Modifier.padding(vertical = 12.dp), fontSize = 12.sp, fontFamily = FontFamily.Monospace) }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -102,13 +114,12 @@ internal fun ChatPage(model: ConsoleModel, modifier: Modifier = Modifier, onVoic
             } }
         }
         if (speech.speaking) Button(model.replySpeaker::stop) { Text(tr(Res.string.stop_reading)) }
-        state.error?.let { Text(it, color = Color(0xffc64848), fontSize = 12.sp) }
-        microphone.error?.let { Text(it, color = Color(0xffc64848), fontSize = 12.sp) }
-        if (autoRead) speech.error?.let { Text(it, color = Color(0xffc64848), fontSize = 12.sp) }
+        state.error?.let { Text(it, color = MiuixTheme.colorScheme.error, fontSize = 12.sp) }
+        microphone.error?.let { Text(it, color = MiuixTheme.colorScheme.error, fontSize = 12.sp) }
+        if (autoRead) speech.error?.let { Text(it, color = MiuixTheme.colorScheme.error, fontSize = 12.sp) }
         if (microphone.active) Text(microphone.partial.ifBlank { if (microphone.processing) tr(Res.string.recognizing) else tr(Res.string.listening) }, fontSize = 13.sp)
-        state.elapsedMs?.let { Text(tr(Res.string.first_token_value_turn_value_ms,state.firstTokenMs?.let { "${it}ms" } ?: "—",it), fontSize = 11.sp, color = Color(0xff78818d)) }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
             TextField(input, { if (it.length <= 12000) input = it }, Modifier.weight(1f).testTag("chat-input"), label = tr(Res.string.message), maxLines = 4, enabled = !microphone.active)
 
             if (onVoiceInput != null) ComposerIcon(
@@ -139,14 +150,25 @@ internal fun ChatPage(model: ConsoleModel, modifier: Modifier = Modifier, onVoic
 @Composable
 private fun ComposerIcon(label: String, icon: String, enabled: Boolean, modifier: Modifier = Modifier,
                          primary: Boolean = false, onClick: () -> Unit) {
-    val background = if (primary) Color(0xff3868e8) else Color(0xffe9ecf2)
-    val ink = if (primary) Color.White else Color(0xff596577)
-    Box(modifier.size(48.dp).background(background.copy(alpha = if (enabled) 1f else .35f), RoundedCornerShape(16.dp))
-        .semantics { contentDescription = label }
-        .clickable(enabled = enabled, role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
+    val background = if (primary) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.surfaceContainerHigh
+    val ink = if (primary) MiuixTheme.colorScheme.onPrimary else MiuixTheme.colorScheme.onSurfaceVariantSummary
+    IconButton(onClick = onClick, enabled = enabled, cornerRadius = 14.dp,
+        modifier = modifier.size(48.dp).semantics { contentDescription = label; role = Role.Button; if (!enabled) disabled() },
+        backgroundColor = background.copy(alpha = if (enabled) 1f else .35f)) {
         Canvas(Modifier.size(24.dp)) {
             val w = size.width; val h = size.height; val stroke = 2.dp.toPx()
             when (icon) {
+                "new" -> {
+                    drawLine(ink, Offset(w*.5f,h*.2f), Offset(w*.5f,h*.8f),stroke)
+                    drawLine(ink, Offset(w*.2f,h*.5f), Offset(w*.8f,h*.5f),stroke)
+                }
+                "speaker" -> {
+                    drawRect(ink, Offset(w*.15f,h*.35f),Size(w*.2f,h*.3f))
+                    drawLine(ink,Offset(w*.35f,h*.35f),Offset(w*.55f,h*.2f),stroke)
+                    drawLine(ink,Offset(w*.55f,h*.2f),Offset(w*.55f,h*.8f),stroke)
+                    drawLine(ink,Offset(w*.55f,h*.8f),Offset(w*.35f,h*.65f),stroke)
+                    drawArc(ink,-60f,120f,false,Offset(w*.4f,h*.18f),Size(w*.5f,h*.64f),style=Stroke(stroke))
+                }
                 "mic" -> {
                     drawRoundRect(ink, Offset(w*.35f,h*.08f), Size(w*.3f,h*.5f),
                         androidx.compose.ui.geometry.CornerRadius(w*.15f), style = Stroke(stroke))

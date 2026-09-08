@@ -10,7 +10,7 @@ kotlin { jvmToolchain(21) }
 
 dependencies {
     implementation(project(":shared"))
-    implementation(compose.desktop.currentOs)
+    implementation(compose.desktop.currentOs) { exclude(group = "org.jetbrains.compose.material") }
     implementation(libs.coroutines.swing)
 }
 

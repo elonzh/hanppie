@@ -257,4 +257,25 @@
     <string name="script_awaiting_approval_not_uploaded_or_started">脚本待确认，尚未上传或启动。</string>
     <string name="value_started_result_unknown">%1$s：已开始，结果尚未知</string>
     <string name="value_failed_check_robot_state_and_do_not_retry">%1$s 失败；请检查设备状态，勿自动重试。%2$s</string>
+    <string name="stop_remote_short">停止</string>
+    <string name="rotate_for_remote">横屏后可遥控机器人</string>
+    <string name="appearance">外观</string>
+    <string name="theme">主题</string>
+    <string name="night_mode">夜间模式</string>
+    <string name="appearance_light">浅色</string>
+    <string name="appearance_dark">深色</string>
+    <string name="theme_native">miuix 原生</string>
+    <string name="theme_chappie">查派</string>
+    <string name="theme_ocean">海蓝</string>
+    <string name="theme_forest">森林</string>
+    <string name="theme_custom">自定义</string>
+    <string name="edit_palette">编辑配色</string>
+    <string name="appearance_done">完成</string>
+    <string name="light_accent">浅色 · 主色</string>
+    <string name="light_background">浅色 · 背景</string>
+    <string name="dark_accent">深色 · 主色</string>
+    <string name="dark_background">深色 · 背景</string>
+    <string name="color_hex_hint">使用 #RRGGBB 格式，文字颜色自动匹配。</string>
+    <string name="save_palette">应用配色</string>
+    <string name="revert_palette">还原修改</string>
 </resources>

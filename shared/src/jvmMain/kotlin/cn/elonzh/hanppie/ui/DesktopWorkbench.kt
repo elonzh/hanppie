@@ -12,7 +12,6 @@ import java.nio.file.Files
 import kotlinx.coroutines.*
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.window.WindowDialog
 
 internal fun ConsoleModel(persistSettings: Boolean = false): ConsoleModel = ConsoleModel(SystemSpeech(),
     settingsStore = if (persistSettings) DesktopSettingsStore() else null)
@@ -23,6 +22,12 @@ fun DesktopWorkbench(onExit: () -> Unit) {
         val preferences = java.util.prefs.Preferences.userRoot().node("cn/elonzh/hanppie/ui")
         Localization.initialize(java.util.Locale.getDefault().language, preferences.get("language", "system")) {
             preferences.put("language",it); preferences.flush()
+        }
+    }
+    val appearance = remember {
+        val preferences = java.util.prefs.Preferences.userRoot().node("cn/elonzh/hanppie/ui")
+        AppearanceController(AppearanceSettings.decode(preferences.get("appearance", null))) {
+            preferences.put("appearance", it); preferences.flush()
         }
     }
     val model = remember { ConsoleModel(persistSettings = true) }
@@ -41,7 +46,7 @@ fun DesktopWorkbench(onExit: () -> Unit) {
             window.addWindowFocusListener(listener)
             onDispose { window.removeWindowFocusListener(listener) }
         }
-        WorkbenchTheme {
+        WorkbenchTheme(appearance) {
             Console(model, document, onOpen = {
                 val file = chooseFile(false)
                 if (file != null) {
@@ -70,7 +75,7 @@ fun DesktopWorkbench(onExit: () -> Unit) {
                     }
                 }
             }, fileError = fileError)
-            WindowDialog(show = confirmExit, onDismissRequest = { confirmExit = false }, title = tr(Res.string.quit_hanppie),
+            WorkbenchDialog(show = confirmExit, onDismissRequest = { confirmExit = false }, title = tr(Res.string.quit_hanppie),
                 summary = tr(Res.string.unsaved_changes_will_be_lost_disconnecting_does_not_guarantee)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button({ confirmExit = false }) { Text(tr(Res.string.back)) }

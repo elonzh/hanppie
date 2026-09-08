@@ -23,6 +23,7 @@ kotlin {
             implementation(libs.koog.openai)
             implementation(libs.koog.ktor)
             implementation(libs.ktor.okhttp)
+            implementation(libs.coil.network)
         }
         named("androidMain") {
             dependsOn(androidJvmMain)
@@ -34,16 +35,18 @@ kotlin {
         }
         commonMain.dependencies {
             implementation(libs.compose.resources)
-            implementation(libs.miuix.ui)
+            implementation(libs.markdown.core)
+            implementation(libs.markdown.coil3)
+            implementation(libs.coil.compose)
             implementation(project(":packages:robot-core"))
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
-            implementation(libs.compose.material)
+            implementation(libs.miuix.ui)
             implementation(libs.coroutines.core)
         }
         jvmMain { dependsOn(androidJvmMain); dependencies {
             implementation(libs.java.keyring)
-            implementation(compose.desktop.currentOs)
+            implementation(compose.desktop.currentOs) { exclude(group = "org.jetbrains.compose.material") }
             implementation(libs.coroutines.swing)
         } }
         commonTest.dependencies { implementation(kotlin("test")) }

@@ -29,7 +29,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.*
-import top.yukonga.miuix.kmp.window.WindowDialog
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
 
@@ -89,6 +88,12 @@ fun AndroidWorkbench() {
         val preferences=context.getSharedPreferences("hanppie-ui", android.content.Context.MODE_PRIVATE)
         Localization.initialize(systemLanguage,preferences.getString("language","system")) {
             preferences.edit().putString("language",it).apply()
+        }
+    }
+    val appearance = remember(context.applicationContext) {
+        val preferences = context.getSharedPreferences("hanppie-ui", android.content.Context.MODE_PRIVATE)
+        AppearanceController(AppearanceSettings.decode(preferences.getString("appearance", null))) {
+            preferences.edit().putString("appearance", it).apply()
         }
     }
     val holder: AndroidWorkbenchModel = viewModel(factory = viewModelFactory {
@@ -158,8 +163,8 @@ fun AndroidWorkbench() {
             }
         }
     }
-    WorkbenchTheme {
-        WindowDialog(show = audioSettings, onDismissRequest = { audioSettings = false }, title = tr(Res.string.speech_services)) {
+    WorkbenchTheme(appearance) {
+        WorkbenchDialog(show = audioSettings, onDismissRequest = { audioSettings = false }, title = tr(Res.string.speech_services)) {
             androidx.compose.foundation.layout.Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(tr(Res.string.speech_recognition))
                 holder.speechInput.services().forEach { (id, label) ->
@@ -188,14 +193,14 @@ fun AndroidWorkbench() {
                 }) { Text(tr(Res.string.text_to_speech_settings)) }
             }
         }
-        WindowDialog(show = voiceDisclosure, onDismissRequest = { voiceDisclosure = false }, title = tr(Res.string.use_phone_microphone),
+        WorkbenchDialog(show = voiceDisclosure, onDismissRequest = { voiceDisclosure = false }, title = tr(Res.string.use_phone_microphone),
             summary = tr(Res.string.your_system_speech_service_may_process_audio_online_recognized)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button({ voiceDisclosure = false }) { Text(tr(Res.string.cancel)) }
                 Button({ voiceDisclosureAccepted = true; voiceDisclosure = false; startVoice() }) { Text(tr(Res.string.action_continue)) }
             }
         }
-        WindowDialog(show = confirmExit, onDismissRequest = { confirmExit = false }, title = tr(Res.string.quit_hanppie_2),
+        WorkbenchDialog(show = confirmExit, onDismissRequest = { confirmExit = false }, title = tr(Res.string.quit_hanppie_2),
             summary = tr(Res.string.unsaved_changes_will_be_lost_disconnecting_does_not_guarantee)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button({ confirmExit = false }) { Text(tr(Res.string.back)) }

@@ -257,4 +257,25 @@
     <string name="script_awaiting_approval_not_uploaded_or_started">Script awaiting approval; not uploaded or started.</string>
     <string name="value_started_result_unknown">%1$s: started, result unknown</string>
     <string name="value_failed_check_robot_state_and_do_not_retry">%1$s failed; check robot state and do not retry automatically. %2$s</string>
+    <string name="stop_remote_short">Stop</string>
+    <string name="rotate_for_remote">Rotate your device to control the robot</string>
+    <string name="appearance">Appearance</string>
+    <string name="theme">Theme</string>
+    <string name="night_mode">Night mode</string>
+    <string name="appearance_light">Light</string>
+    <string name="appearance_dark">Dark</string>
+    <string name="theme_native">miuix default</string>
+    <string name="theme_chappie">Chappie</string>
+    <string name="theme_ocean">Ocean</string>
+    <string name="theme_forest">Forest</string>
+    <string name="theme_custom">Custom</string>
+    <string name="edit_palette">Edit palette</string>
+    <string name="appearance_done">Done</string>
+    <string name="light_accent">Light · Accent</string>
+    <string name="light_background">Light · Background</string>
+    <string name="dark_accent">Dark · Accent</string>
+    <string name="dark_background">Dark · Background</string>
+    <string name="color_hex_hint">Use #RRGGBB. Text colors adapt automatically.</string>
+    <string name="save_palette">Apply colors</string>
+    <string name="revert_palette">Revert changes</string>
 </resources>

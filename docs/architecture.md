@@ -557,13 +557,17 @@ Hanppie 不修改 `/init.rc`、原厂启动脚本或 `/system` 持久文件。La
 
 模块边界遵循 [KMP 官方推荐结构](https://kotlinlang.org/docs/multiplatform/multiplatform-project-recommended-structure.html)：平台应用入口依赖共享库，共享库不反向依赖应用。共享 UI 包名为 `cn.elonzh.hanppie.ui`，只向入口暴露 `AndroidWorkbench` 和 `DesktopWorkbench`；内部状态与控制器不因拆分而公开。桌面共享库使用标准 `jvmMain` / `jvmTest`，跨 Android/JVM 的中间源集显式命名为 `androidJvmMain`。纯逻辑测试在 `commonTest`，JVM/UI 测试在共享库 `jvmTest`，Android instrumentation 在 `androidApp`；桌面启动及打包由 `desktopApp` 负责。协议库保留独立模块及其 `desktop` 目标。当前仅配置 Android/JVM 目标：UDP/FTP、同步资源格式化和部分智能体实现依赖 JVM，尚无 iOS target、Xcode 工程或 iOS 平台适配，不声明支持 iOS。
 
-构建使用 Kotlin 2.4.10、Compose Multiplatform 1.12.0、Miuix 0.9.3、Gradle 9.4.1、AGP 9.1.0，构建 JDK 21。AGP 版本同时受构建依赖和 IDEA Android 插件支持范围约束，命令行构建通过不代表 IDE 同步兼容。Android `compileSdk=37`（Miuix/Compose AAR 的最低编译要求）、`targetSdk=36`、`minSdk=26`；编译 SDK 不是手机必须运行的系统版本。客户端已接入 Koog 1.2.0 文字对话智能体，Android 支持系统语音输入，Android/桌面对话页支持回复朗读；未接入唤醒或手柄。Android 和桌面已接入机器人视频和麦克风下行播放；客户端向机器人上行音频尚未实现。
+构建使用 Kotlin 2.4.10、Compose Multiplatform 1.12.0、miuix 0.9.3、Gradle 9.4.1、AGP 9.1.0，构建 JDK 21。AGP 版本同时受构建依赖和 IDEA Android 插件支持范围约束，命令行构建通过不代表 IDE 同步兼容。Android `compileSdk=37`（Compose AAR 的最低编译要求）、`targetSdk=36`、`minSdk=26`；编译 SDK 不是手机必须运行的系统版本。客户端已接入 Koog 1.2.0 文字对话智能体，Android 支持系统语音输入，Android/桌面对话页支持回复朗读；未接入唤醒或手柄。Android 和桌面已接入机器人视频和麦克风下行播放；客户端向机器人上行音频尚未实现。
 
 编译 SDK 使用显式 `release(37) { minorApiLevel = 0 }`，对应 SDK Manager 的 `platforms;android-37.0`。AGP 9.1.0 对此发出超出已测试 SDK 36.1 范围的警告；当前 APK/Lint 构建通过，未屏蔽该警告。IDEA 当前已验证的同步组合为 AGP 9.1.0 + Gradle 9.4.1，Wrapper 的 `distributionUrl` 固定该 Gradle 版本；版本升级必须同时验证 IDE 模型导入与命令行构建，不能仅根据 Problems Report 是否生成判断成功或失败。IDEA 同步完成且 Android 运行入口可用，不将此视为资源预览等全部 IDE 能力的验收。
 
-页面按可用宽度响应：小于 720 dp 使用底部导航，宽屏使用侧栏；设备、脚本、诊断、对话、设置五个入口共享实现。麦克风与发送采用相邻的 48 dp 图标按钮；模型配置、自动朗读和语音服务入口统一收纳于独立设置页，没有独立语音页。聊天草稿在页间切换时保留。Android 使用 edge-to-edge，并应用系统安全区和 IME Insets。设备页在未连接时呈现连接入口、电量和接收帧，连接后切换为遥控和媒体面板；IPv4/AppID 放在手动连接弹窗；原始遥测、日志和报文位于诊断页。脚本使用顶部对齐的等宽编辑区，说明按需展开，操作按钮可换行。当前采用浅色主题，不声明深色模式已适配。
+页面按可用宽度响应：小于 720 dp 使用底部导航，宽屏使用侧栏；设备、脚本、诊断、对话、设置五个入口共享实现。麦克风与发送采用相邻的 48 dp 图标按钮；模型配置、自动朗读和语音服务入口统一收纳于独立设置页，没有独立语音页。聊天草稿在页间切换时保留。Android 使用 edge-to-edge，并应用系统安全区和 IME Insets。设备页在未连接时呈现连接入口、电量和接收帧，连接后保留概览并提供进入遥控入口；IPv4/AppID 放在手动连接弹窗；原始遥测、日志和报文位于诊断页。脚本使用顶部对齐的等宽编辑区，说明按需展开，操作按钮可换行。默认采用 miuix 原生配色并跟随系统明暗模式，视觉与文案规范见 [DESIGN.md](../DESIGN.md)。
 
-Miuix 提供按钮、输入框、卡片、复选框和弹窗。共享主题设置 `LocalSquircleEnabled=false` 使用其标准圆角渲染：0.9.3 的 squircle shader 与 Compose 1.12.0 的桌面 Skia 签名不兼容。脚本编辑器使用 Compose BasicTextField，避免将多行源码垂直居中。
+miuix 提供导航、按钮、输入框、卡片、开关和弹窗，`WorkbenchTheme` 统一设置 MiuixTheme，页面不使用 Material Design 组件。`LocalSquircleEnabled=false` 保持使用 miuix 标准圆角路径，避开 0.9.3 squircle shader 与 Compose 1.12.0 桌面 Skia 的 ABI 不兼容。脚本编辑器使用 Compose BasicTextField。设置语言使用下拉菜单，切换即时生效。
+
+`AppearanceController` 保存独立于连接与模型凭据的外观状态，默认原生主题与系统模式；支持查派、海蓝、森林和自定义预设，以及独立的浅色/深色/跟随系统选择。原生预设直接使用 miuix 的 `lightColorScheme()`/`darkColorScheme()`，其他预设提供成对色表；自定义分别存储两种模式的主色和背景，容器层次与文字对比色由共享主题派生。设置页内直接展示主题和夜间模式下拉行；选择自定义后原地展开编辑区，与设置页共用滚动容器，不打开配置弹窗。主题选择即时保存，自定义编辑合法且有变更时应用，还原修改恢复已保存值。外观以带版本的固定字段字符串保存到 Android `hanppie-ui` SharedPreferences / 桌面 `cn/elonzh/hanppie/ui` Java Preferences 的 `appearance` 键；缺失或无效记录使用默认值，不重建 ConsoleModel。Compose 系统明暗状态驱动跟随系统模式，Android 系统栏图标按当前背景亮度同步。
+
+对话通过 multiplatform-markdown-renderer 0.45.0 的无主题核心渲染，颜色与字阶来自 MiuixTheme，不依赖其 Material 适配模块，已完成消息使用 `rememberMarkdownState`；当前回复使用 `rememberStreamingMarkdownState`，将智能体累积字符串的新增后缀顺序追加到渲染器，每条新回复建立独立状态。Coil 3.5.0 与其 OkHttp 网络模块负责 Markdown 图片加载；机器人实时视频仍由平台视频解码器处理，不经 Coil。工具记录和待审批脚本保留原文，Markdown 不触发机器人执行。
 
 **GUI 国际化：** Android 和桌面共享 Compose Resources：`commonMain/composeResources/values/strings.xml` 为英文默认资源，`values-zh/strings.xml` 为简体中文，调用使用生成的 `Res.string` 类型安全标识；参数采用标准 `%1$s` 格式。`Localization.kt` 只管理应用语言偏好，JVM/Android 适配层通过官方资源 API 加载每种语言并缓存，首次加载同步等待资源读取，后续界面和同步服务回调只查内存并格式化，不反查译文或用原文作资源键。连接/脚本实时状态保存资源标识和参数，聊天角色使用枚举，连接地址为独立字段，业务判断不依赖显示语言。设置提供跟随系统、简体中文、English，切换即时重组，不重建 ConsoleModel、机器人连接或清空编辑器/对话。语言选择分别保存到桌面 Java Preferences `cn/elonzh/hanppie/ui` 与 Android 私有 SharedPreferences `hanppie-ui`，不保存模型凭据。首次跟随系统，中文区域使用简体中文，其他语言使用英文；桌面启动时读取系统语言，Android 随配置变化更新。导航、驾驶舱、设置、脚本界面、确认框、语音提示、媒体状态及已知错误有双语显示；系统/设备提供的原始错误、报文、脚本源码、用户输入和历史消息保持原文，不做推测翻译。Android 应用名称使用原生 `values` / `values-zh` 资源，按系统资源语言显示。Gradle 插件及第三方依赖版本统一声明在 `gradle/libs.versions.toml`。
 
@@ -595,7 +599,7 @@ GUI 的 WASD 与左摇杆使用镜头坐标：云台相对底盘 yaw 为 θ 时�
 
 Android 和桌面通过同一 App UDP 会话接收 H.264（外层类型 2）和 Opus（DUSS `3f:1d`），接收线程只入有界队列。Android 视频经 Annex-B 分片拼接、按 slice 首宏块组装完整访问单元后交给 `MediaCodec` 输出到 `SurfaceView`；音频按 48 kHz 单声道解码后送 `AudioTrack`。桌面使用独立 FFmpeg 子进程：H.264 通过管道解码为 1280×720 BGRA 帧送 Compose/Skia，Opus 包由 `OpusOgg` 添加 Ogg 页、粒度位置与 CRC 后通过管道解码为 48 kHz 单声道 PCM16，送 Java Sound `SourceDataLine`。不经过 Python、不落盘媒体；FFmpeg 由 PATH 或 `HANPPIE_FFMPEG` 定位，不包含在分发包。缺少解码器或队列溢出明确报错，不自动安装或降级。音视频解码生命周期独立，切换监听不重启视频；关闭时终止本应用持有的子进程并回收线程和播放设备。 桌面串流启动时仍可能显示局部绿色的首帧，后续连续画面恢复；首帧到达时间不能当作完整可用画面的延迟，启动画面质量尚未验收。
 
-视频/监听显式开启，离页释放解码器和本地音频播放；媒体启停使用有序队列并绑定原会话，避免旧请求影响新连接。音频没有已验证的独立设备端停止命令，静音只停止本地接收/播放，关闭会话结束串流。当前不是双向通话。连接后进入全屏驾驶舱，导航收起；视频背景叠加准星、左右摇杆、发射和停止控件，可返回控制台。按窗口宽度显示键盘提示，保持手机触摸控件可达。桌面原生窗口失焦停止遥控，重新启用前清空按键和摇杆状态。
+视频/监听显式开启，离页释放解码器和本地音频播放；媒体启停使用有序队列并绑定原会话，避免旧请求影响新连接。音频没有已验证的独立设备端停止命令，静音只停止本地接收/播放，关闭会话结束串流。当前不是双向通话。遥控界面独立于主导航，Android 进入时请求传感器横屏，离开恢复先前方向；系统返回先回设备页。平台忽略方向请求的大屏/多窗口仍按可用区域布局。圆形摇杆分布两侧，顶部显示电量、接收帧、相对朝向与独立停止按钮；启用开关和发射分离。快捷键提示在实际 KeyDown 后出现，触摸隐藏，不依据屏幕宽度。释放手势、取消、失焦和离开遥控继续沿用归零与待机逻辑。竖向窗口显示横屏提示并保持待机，方向请求被忽略时也不开放竖屏触摸控制。桌面原生窗口失焦停止遥控，重新启用前清空按键和摇杆状态。
 
 已知 `48:08` 的 62 字节载荷提供电量及未标定浮点字段；电量大于 100 视为未知。诊断页不将未标定字段展示为可信位置/速度。云台角度以独立的类型化快照显示四个协议角度和原始状态字节，标记为“最近接收”，不与底盘原始字段互相覆盖；断开、失联或暂停连接时清除。Python Direct 保留原始值并提供角度属性，`diag` 的 direct 结果同时输出角度与状态字节。新增角度解析不改变遥控所用 yaw 的 ±360° 范围检查或 500 ms 过期归零。Lab 自定义 `3f:a4` 消息并非任意脚本 stdout 或完成事件。遥测 UI 采样为 10 Hz，与网络周期独立。日志和报文仅保存在有界内存列表，启动不创建工作目录日志。
 
