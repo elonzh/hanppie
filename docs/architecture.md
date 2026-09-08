@@ -557,7 +557,9 @@ Hanppie 不修改 `/init.rc`、原厂启动脚本或 `/system` 持久文件。La
 
 模块边界遵循 [KMP 官方推荐结构](https://kotlinlang.org/docs/multiplatform/multiplatform-project-recommended-structure.html)：平台应用入口依赖共享库，共享库不反向依赖应用。共享 UI 包名为 `cn.elonzh.hanppie.ui`，只向入口暴露 `AndroidWorkbench` 和 `DesktopWorkbench`；内部状态与控制器不因拆分而公开。桌面共享库使用标准 `jvmMain` / `jvmTest`，跨 Android/JVM 的中间源集显式命名为 `androidJvmMain`。纯逻辑测试在 `commonTest`，JVM/UI 测试在共享库 `jvmTest`，Android instrumentation 在 `androidApp`；桌面启动及打包由 `desktopApp` 负责。协议库保留独立模块及其 `desktop` 目标。当前仅配置 Android/JVM 目标：UDP/FTP、同步资源格式化和部分智能体实现依赖 JVM，尚无 iOS target、Xcode 工程或 iOS 平台适配，不声明支持 iOS。
 
-构建使用 Kotlin 2.4.10、Compose Multiplatform 1.12.0、Miuix 0.9.3、Gradle 9.4.1、AGP 9.2.1，构建 JDK 21。Android `compileSdk=37`（Miuix/Compose AAR 的最低编译要求）、`targetSdk=36`、`minSdk=26`；编译 SDK 不是手机必须运行的系统版本。客户端已接入 Koog 1.2.0 文字对话智能体，Android 支持系统语音输入，Android/桌面对话页支持回复朗读；未接入唤醒或手柄。Android 和桌面已接入机器人视频和麦克风下行播放；客户端向机器人上行音频尚未实现。
+构建使用 Kotlin 2.4.10、Compose Multiplatform 1.12.0、Miuix 0.9.3、Gradle 9.4.1、AGP 9.1.0，构建 JDK 21。AGP 版本同时受构建依赖和 IDEA Android 插件支持范围约束，命令行构建通过不代表 IDE 同步兼容。Android `compileSdk=37`（Miuix/Compose AAR 的最低编译要求）、`targetSdk=36`、`minSdk=26`；编译 SDK 不是手机必须运行的系统版本。客户端已接入 Koog 1.2.0 文字对话智能体，Android 支持系统语音输入，Android/桌面对话页支持回复朗读；未接入唤醒或手柄。Android 和桌面已接入机器人视频和麦克风下行播放；客户端向机器人上行音频尚未实现。
+
+编译 SDK 使用显式 `release(37) { minorApiLevel = 0 }`，对应 SDK Manager 的 `platforms;android-37.0`。AGP 9.1.0 对此发出超出已测试 SDK 36.1 范围的警告；当前 APK/Lint 构建通过，未屏蔽该警告。IDEA 当前已验证的同步组合为 AGP 9.1.0 + Gradle 9.4.1，Wrapper 的 `distributionUrl` 固定该 Gradle 版本；版本升级必须同时验证 IDE 模型导入与命令行构建，不能仅根据 Problems Report 是否生成判断成功或失败。IDEA 同步完成且 Android 运行入口可用，不将此视为资源预览等全部 IDE 能力的验收。
 
 页面按可用宽度响应：小于 720 dp 使用底部导航，宽屏使用侧栏；设备、脚本、诊断、对话、设置五个入口共享实现。麦克风与发送采用相邻的 48 dp 图标按钮；模型配置、自动朗读和语音服务入口统一收纳于独立设置页，没有独立语音页。聊天草稿在页间切换时保留。Android 使用 edge-to-edge，并应用系统安全区和 IME Insets。设备页在未连接时呈现连接入口、电量和接收帧，连接后切换为遥控和媒体面板；IPv4/AppID 放在手动连接弹窗；原始遥测、日志和报文位于诊断页。脚本使用顶部对齐的等宽编辑区，说明按需展开，操作按钮可换行。当前采用浅色主题，不声明深色模式已适配。
 

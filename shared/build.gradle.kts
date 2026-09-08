@@ -10,7 +10,7 @@ kotlin {
     jvm()
     android {
         namespace = "cn.elonzh.hanppie.ui"
-        compileSdk = 37
+        compileSdk { version = release(37) { minorApiLevel = 0 } }
         buildToolsVersion = "36.1.0"
         minSdk = 26
         androidResources.enable = true

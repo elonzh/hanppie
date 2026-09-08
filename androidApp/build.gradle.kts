@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "cn.elonzh.hanppie"
-    compileSdk = 37
+    compileSdk { version = release(37) { minorApiLevel = 0 } }
     buildToolsVersion = "36.1.0"
     defaultConfig {
         applicationId = "cn.elonzh.hanppie"
