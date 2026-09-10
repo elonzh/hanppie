@@ -29,11 +29,12 @@ class ConsoleStateTest {
     }
 
     @Test fun lossInvalidatesUploadAndStaleTelemetry() {
-        val state = ConsoleState(connected = true, battery = 90, values = listOf("raw" to "1"),
+        val state = ConsoleState(connected = true, battery = 90, signalQuality = 36, values = listOf("raw" to "1"),
             gimbal = GimbalTelemetry(0.0,0.0,10.0,20.0,0),
             uploadedSource = "pass", executionUncertain = true).lost("timeout")
         assertFalse(state.connected)
         assertNull(state.battery)
+        assertNull(state.signalQuality)
         assertTrue(state.values.isEmpty())
         assertNull(state.gimbal)
         assertNull(state.uploadedSource)

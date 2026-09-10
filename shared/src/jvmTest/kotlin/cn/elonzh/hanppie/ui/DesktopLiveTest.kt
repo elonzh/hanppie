@@ -37,15 +37,18 @@ class DesktopLiveTest {
             rule.setContent { WorkbenchTheme {
                 Box(Modifier.requiredSize(1040.dp,760.dp)) { Console(model, mutableStateOf(EditorDocument())) }
             } }
+            assertEquals(3, model.driveGear.value, "Fresh console must start in the middle gear")
+            assertEquals(90, model.controlSettings.value.gimbalSpeed, "Fresh console must use the faster gimbal default")
             model.connect(ip!!,id!!)
             rule.waitUntil(15000) { model.state.value.connected && !model.state.value.busy }
-            rule.waitUntil(5000) { rule.onAllNodesWithText("开启视频").fetchSemanticsNodes().isNotEmpty() }
+            rule.waitUntil(10000) { model.state.value.signalQuality != null && model.state.value.gimbal != null }
             val videoStart = System.nanoTime()
-            rule.onNodeWithText("开启视频").performClick()
+            rule.onNodeWithTag("enter-remote").performClick()
             rule.waitUntil(20000) { rule.onAllNodesWithContentDescription("机器人实时画面").fetchSemanticsNodes().isNotEmpty() }
             println("Desktop video first frame ms=${(System.nanoTime()-videoStart)/1_000_000}")
+            println("Desktop signal=${model.state.value.signalQuality} gimbal=${model.state.value.gimbal}")
             screenshot("desktop-live-video")
-            rule.onNodeWithText("监听机器人").performClick()
+            rule.onNodeWithContentDescription("监听机器人").performClick()
             rule.waitUntil(20000) { rule.onAllNodesWithText("音频已解码", substring=true).fetchSemanticsNodes().isNotEmpty() }
             rule.waitUntil(10000) { rule.onAllNodesWithText("视频已解码 30 帧").fetchSemanticsNodes().isNotEmpty() }
             screenshot("desktop-live-audio")
@@ -55,6 +58,19 @@ class DesktopLiveTest {
                 rule.waitUntil(5000) { model.state.value.values.isNotEmpty() }
                 println("Remote idle telemetry=${model.state.value.values}")
                 screenshot("remote-before")
+                for ((key, gear) in listOf(Key.One to 1, Key.Two to 2, Key.Three to 3, Key.Four to 4, Key.Five to 5)) {
+                    rule.onNodeWithTag("remote-surface").performKeyInput { pressKey(key) }
+                    rule.waitUntil(2000) { model.driveGear.value == gear }
+                }
+                for ((key, sign) in listOf(Key.Q to 1, Key.E to -1)) {
+                    rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(key) }
+                    rule.waitUntil(2000) { model.remoteInput.value[2] * sign > 100.0 }
+                    Thread.sleep(200)
+                    rule.onNodeWithTag("remote-surface").performKeyInput { keyUp(key) }
+                    rule.waitUntil(2000) { model.remoteInput.value.all { it == 0.0 } }
+                    Thread.sleep(500)
+                }
+                screenshot("remote-gear-five-q-e")
                 rule.waitUntil(3000) { model.cameraYaw.value != null }
                 rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(Key.DirectionUp) }
                 rule.waitUntil(2000) { model.remoteInput.value[3] > 0 }
@@ -111,8 +127,8 @@ class DesktopLiveTest {
                 rule.waitUntil(3000) { !model.remoteEnabled.value }
                 rule.onNodeWithContentDescription("启用遥控").assertIsDisplayed()
             }
-            rule.onNodeWithText("静音").performClick()
-            rule.onNodeWithText("关闭视频").performClick()
+            rule.onNodeWithContentDescription("静音").performClick()
+            rule.onNodeWithContentDescription("关闭视频").performClick()
             if (System.getenv("HANPPIE_TEST_ALLOW_LAB") == "1") {
                 rule.onNodeWithContentDescription("返回控制台").performClick()
                 assertTrue(model.modelSettings.value.apiKey.isNotBlank(), "Real model credentials required for Lab test")

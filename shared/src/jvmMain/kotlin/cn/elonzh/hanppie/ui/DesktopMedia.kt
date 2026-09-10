@@ -3,6 +3,11 @@ package cn.elonzh.hanppie.ui
 import cn.elonzh.hanppie.resources.*
 
 import java.io.EOFException
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -111,4 +116,75 @@ internal class DesktopMedia(
         processes.forEach { it.waitFor(1,TimeUnit.SECONDS) }
         videoQueue.clear(); audioQueue.clear()
     }
+}
+
+internal fun saveDesktopPhoto(frame: ByteArray): String {
+    require(frame.size == 1280 * 720 * 4)
+    val output = desktopMediaPath("Pictures", "jpg")
+    val image = org.jetbrains.skia.Image.makeRaster(
+        org.jetbrains.skia.ImageInfo(1280, 720, org.jetbrains.skia.ColorType.BGRA_8888,
+            org.jetbrains.skia.ColorAlphaType.OPAQUE), frame, 1280 * 4)
+    val encoded = checkNotNull(image.encodeToData(org.jetbrains.skia.EncodedImageFormat.JPEG, 95))
+    try { Files.write(output, encoded.bytes) }
+    finally { encoded.close(); image.close() }
+    return output.toString()
+}
+
+/** Records already decoded frames, so recording can start at any displayed frame. */
+internal class DesktopVideoRecorder(
+    executable: String = System.getenv("HANPPIE_FFMPEG") ?: "ffmpeg",
+    private val output: Path = desktopMediaPath("Movies", "mp4"),
+) {
+    private val temporary = output.resolveSibling("${output.fileName}.part")
+    private val closing = AtomicBoolean(false)
+    private val errors = StringBuilder()
+    private val process = ProcessBuilder(executable, "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
+        "-f", "rawvideo", "-pix_fmt", "bgra", "-s", "1280x720", "-r", "30", "-i", "pipe:0", "-an",
+        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+        "-f", "mp4", temporary.toString()).start()
+    private val errorThread = thread(name = "hanppie-recorder-errors", isDaemon = true) {
+        process.errorStream.bufferedReader().useLines { lines ->
+            lines.forEach { line -> synchronized(errors) { if (errors.length < 4096) errors.appendLine(line) } }
+        }
+    }
+    private var frames = 0
+
+    @Synchronized fun frame(bytes: ByteArray) {
+        if (closing.get()) return
+        require(bytes.size == 1280 * 720 * 4)
+        process.outputStream.write(bytes)
+        frames++
+    }
+
+    fun finish(): String {
+        check(closing.compareAndSet(false, true)) { "Recording already finished" }
+        synchronized(this) { process.outputStream.close() }
+        if (!process.waitFor(15, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            check(process.waitFor(2, TimeUnit.SECONDS)) { "FFmpeg recorder did not stop" }
+        }
+        errorThread.join(1000)
+        val detail = synchronized(errors) { errors.toString().trim() }
+        if (frames == 0 || process.exitValue() != 0) {
+            Files.deleteIfExists(temporary)
+            error(detail.ifBlank { "FFmpeg did not produce a recording" })
+        }
+        Files.move(temporary, output, StandardCopyOption.REPLACE_EXISTING)
+        return output.toString()
+    }
+
+    fun discard() {
+        if (!closing.compareAndSet(false, true)) return
+        synchronized(this) { runCatching { process.outputStream.close() } }
+        process.destroyForcibly()
+        process.waitFor(2, TimeUnit.SECONDS)
+        Files.deleteIfExists(temporary)
+    }
+}
+
+private fun desktopMediaPath(folder: String, extension: String): Path {
+    val directory = Path.of(System.getProperty("user.home"), folder, "Hanppie")
+    Files.createDirectories(directory)
+    val stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS"))
+    return directory.resolve("Hanppie-$stamp.$extension")
 }

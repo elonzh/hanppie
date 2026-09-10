@@ -37,6 +37,40 @@ object RemoteControl {
             this[6]=0xdc.toByte()
         }
     }
+
+    /** S1 firing-channel muzzle LED payload for RM common LED command 0x3f:0x33. */
+    fun muzzleFireLed(enabled: Boolean): ByteArray =
+        (if (enabled) "40000000ff0001ffffff6401000100" else "40000000ff0000ffffff6401000100").hexBytes()
+
+    /** Visible S1 blaster LED payload for ProtoBlasterSetLed 0x3f:0x55. */
+    fun blasterLed(enabled: Boolean): ByteArray =
+        (if (enabled) "71ffffff0164006400" else "70ffffff0164006400").hexBytes()
+}
+
+object SpeakerAudio {
+    const val chunkBytes = 960
+    val playPayload = "0b040000010001000001".hexBytes()
+    private val transferId = "00000100".hexBytes()
+
+    fun start(packetCount: Int, totalBytes: Int): ByteArray {
+        require(packetCount in 1..0xffff && totalBytes in 1..0xffff)
+        return ByteArray(17).apply {
+            this[0] = 0
+            transferId.copyInto(this, 1)
+            put16(5, packetCount)
+            put16(7, totalBytes)
+        }
+    }
+
+    fun block(payload: ByteArray, index: Int): ByteArray {
+        require(payload.size <= chunkBytes && index in 0..0xffff)
+        return ByteArray(7 + payload.size).apply {
+            this[0] = (index ushr 8).toByte()
+            this[1] = index.toByte()
+            put16(5, payload.size)
+            payload.copyInto(this, 7)
+        }
+    }
 }
 
 /** Incremental Annex-B NAL splitter; retains split start codes and bounds corrupt streams. */

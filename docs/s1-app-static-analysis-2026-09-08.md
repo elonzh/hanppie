@@ -53,3 +53,11 @@ xcrun llvm-objdump --disassemble --demangle \
 - `task prek`：全部适用检查通过。
 - `task android:check`：Android Debug APK 构建和 lint 通过；未执行 Android 实机验收。
 - 检查日志及界面截图保存在本地 `.hanppie/app-analysis/2026-09-08/validation/`。
+
+## EP 打印模型复核（2026-09-11）
+
+安装包的 `resources.assets` 中另有一套 EP 工程形态显示层级。其 `EP_UCX` 根节点（Transform `20605`）包含 20 个非 `UCX_*`、非描边的显示网格；组装外形约为 `223.079 × 256.435 × 388.712 mm`。该层级表现的是整套工程形态机械臂与底盘外观，不是单独的扩展平台 CAD；合并网格存在 958 条开放边，继续只作为结构和外形参照。
+
+本次同时复核 `jeguzzi/robomaster_ros` 提交 `c05a39d7f0fa8b3b277aa74826aa92e202efc987` 的 MIT 许可 DAE/URDF。`endpoint_bracket.dae` 在合并 1 微米内的重合顶点后成为封闭网格，按 DAE 的米单位转为毫米后，外形约为 `39.984 × 52.418 × 40.969 mm`。`extension_base.dae` 原始网格有 108 条开放边：其中 8 对为约 3 mm 通孔的上下孔口，另外 3 个是四边面缺口；只补回对应孔壁和缺面后成为封闭网格，外形约为 `279.693 × 231.779 × 21.073 mm`。`extension_support.dae` 仍有无法无歧义消除的开放和重叠边界，只保留为 CAD 重建参照。
+
+可切片候选、未修复对照、来源文件、MIT 许可证、SHA-256、网格统计、预览和复现脚本保存在 `.hanppie/ep-print-candidates/2026-09-11/`，不加入版本控制。两份封闭 STL 只通过离线网格检查，尚未按实物孔距、板厚、公差、受力和打印材料完成试装验收；不能标注为 DJI 官方制造文件或实机适配完成。

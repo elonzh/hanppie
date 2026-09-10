@@ -40,7 +40,8 @@ internal class AndroidWorkbenchModel(app: Application) : ViewModel() {
         connectivity.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
     } ?: error(tr(Res.string.connect_to_the_robot_s_wi_fi_first))
     val speechInput = AndroidSpeechInput(app)
-    val model = ConsoleModel(AndroidSpeech(app), voiceInput = speechInput, settingsStore = AndroidSettingsStore(app), robotNetwork = {
+    val model = ConsoleModel(AndroidSpeech(app), voiceInput = speechInput, speakerInput = AndroidSpeakerInput(app),
+        settingsStore = AndroidSettingsStore(app), robotNetwork = {
         val network = wifiNetwork()
         object : RobotNetwork {
             override fun datagram() = DatagramSocket(null).apply { network.bindSocket(this) }
@@ -104,16 +105,31 @@ fun AndroidWorkbench() {
     var audioSettings by remember { mutableStateOf(false) }
     var selectedSpeechService by remember { mutableStateOf(holder.speechInput.selectedService()) }
     var voiceDisclosureAccepted by remember { mutableStateOf(false) }
+    var talkRequested by remember { mutableStateOf(false) }
     val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (holder.model.isForeground && holder.model.voicePageActive) {
             if (granted) holder.speechInput.start() else holder.speechInput.permissionDenied()
         }
+    }
+    val talkPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted && talkRequested && holder.model.isForeground) holder.model.beginPushToTalk()
+        else if (!granted) talkRequested = false
     }
     fun startVoice() {
         if (!holder.model.isForeground || !holder.model.voicePageActive) return
         holder.model.replySpeaker.stop()
         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) holder.speechInput.start()
         else microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+    }
+    fun startTalk() {
+        talkRequested = true
+        if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+            holder.model.beginPushToTalk()
+        else talkPermission.launch(Manifest.permission.RECORD_AUDIO)
+    }
+    fun stopTalk() {
+        talkRequested = false
+        holder.model.endPushToTalk()
     }
     var confirmExit by remember { mutableStateOf(false) }
     val state by holder.model.state.collectAsState()
@@ -209,6 +225,7 @@ fun AndroidWorkbench() {
         }
         Console(holder.model, holder.document, onOpen = { open.launch(arrayOf("text/*", "application/octet-stream", "application/x-python-code")) },
             onVoiceInput = { if (voiceDisclosureAccepted) startVoice() else voiceDisclosure = true },
+            onPushToTalkStart = ::startTalk, onPushToTalkStop = ::stopTalk,
             onSave = { saveSnapshot = holder.document.value.source; save.launch("script.py") }, fileError = holder.fileError,
             onSpeechSettings = { audioSettings = true })
     }

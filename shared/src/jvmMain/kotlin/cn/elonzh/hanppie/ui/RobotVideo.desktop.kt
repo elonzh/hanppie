@@ -10,24 +10,95 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.concurrent.thread
 import top.yukonga.miuix.kmp.basic.*
 
-@Composable internal actual fun RobotVideo(model: ConsoleModel, modifier: Modifier) {
-    var playing by remember { mutableStateOf(false) }
+@Composable internal actual fun RobotVideo(model: ConsoleModel, controls: RemoteMediaController, modifier: Modifier) {
+    var playing by remember { mutableStateOf(true) }
     var sound by remember { mutableStateOf(false) }
     var frame by remember { mutableStateOf<ImageBitmap?>(null) }
     var status by remember { mutableStateOf(tr(Res.string.video_off)) }
     var audioStatus by remember { mutableStateOf("") }
+    var captureStatus by remember { mutableStateOf("") }
+    var recording by remember { mutableStateOf(false) }
+    val latestFrame = remember { AtomicReference<ByteArray?>(null) }
+    val recorder = remember { AtomicReference<DesktopVideoRecorder?>(null) }
+    val uiScope = rememberCoroutineScope()
     val state by model.state.collectAsState()
+    val requests by controls.requests.collectAsState()
+
+    fun finishRecording() {
+        val active = recorder.getAndSet(null) ?: return
+        recording = false
+        captureStatus = tr(Res.string.saving_recording)
+        uiScope.launch {
+            val result = withContext(Dispatchers.IO) { runCatching { active.finish() } }
+            captureStatus = result.fold(
+                { tr(Res.string.video_saved_to_value, it) },
+                { tr(Res.string.recording_failed_value, it.message ?: it.javaClass.simpleName) })
+        }
+    }
+    fun takePhoto() {
+        val snapshot = latestFrame.get()?.copyOf() ?: return
+        if (!state.connected) return
+        captureStatus = tr(Res.string.saving_photo)
+        uiScope.launch {
+            val result = withContext(Dispatchers.IO) { runCatching { saveDesktopPhoto(snapshot) } }
+            captureStatus = result.fold(
+                { tr(Res.string.photo_saved_to_value, it) },
+                { tr(Res.string.photo_failed_value, it.message ?: it.javaClass.simpleName) })
+        }
+    }
+    fun toggleRecording() {
+        if (!state.connected || !playing) return
+        if (recording) finishRecording() else try {
+            recorder.set(DesktopVideoRecorder())
+            recording = true
+            captureStatus = tr(Res.string.recording)
+        } catch (error: Exception) {
+            captureStatus = tr(Res.string.recording_failed_value, error.message ?: error.javaClass.simpleName)
+        }
+    }
+    LaunchedEffect(requests.photo) { if (requests.photo > 0) takePhoto() }
+    LaunchedEffect(requests.recording) { if (requests.recording > 0) toggleRecording() }
+    LaunchedEffect(requests.robotMicrophone) {
+        if (requests.robotMicrophone > 0) { sound = !sound; if (sound) playing = true }
+    }
+
+    LaunchedEffect(playing, state.connected) {
+        if (!playing || !state.connected) finishRecording()
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            recorder.getAndSet(null)?.let { active -> thread(name = "hanppie-recorder-finish", isDaemon = true) { runCatching { active.finish() } } }
+        }
+    }
     DisposableEffect(playing, state.connected) {
-        frame = null; status = if (playing) tr(Res.string.waiting_for_video) else tr(Res.string.video_off)
+        if (!playing) { frame = null; latestFrame.set(null) }
+        status = if (playing) tr(Res.string.waiting_for_video) else tr(Res.string.video_off)
         var media: DesktopMedia? = null
         if (playing && state.connected) try {
             media = DesktopMedia(false, onVideo = { bytes ->
-                frame = org.jetbrains.skia.Image.makeRaster(
-                    org.jetbrains.skia.ImageInfo(1280,720,org.jetbrains.skia.ColorType.BGRA_8888,org.jetbrains.skia.ColorAlphaType.OPAQUE),
-                    bytes,1280*4).toComposeImageBitmap()
-            }, onStatus = { status = it })
+                latestFrame.set(bytes)
+                recorder.get()?.let { active -> runCatching { active.frame(bytes) }.onFailure { error ->
+                    if (recorder.compareAndSet(active, null)) {
+                        active.discard()
+                        uiScope.launch {
+                            recording = false
+                            captureStatus = tr(Res.string.recording_failed_value, error.message ?: error.javaClass.simpleName)
+                        }
+                    }
+                } }
+                uiScope.launch {
+                    frame = org.jetbrains.skia.Image.makeRaster(
+                        org.jetbrains.skia.ImageInfo(1280,720,org.jetbrains.skia.ColorType.BGRA_8888,org.jetbrains.skia.ColorAlphaType.OPAQUE),
+                        bytes,1280*4).toComposeImageBitmap()
+                }
+            }, onStatus = { message -> uiScope.launch { status = message } })
             model.videoSink = media::video
             model.startMedia(false)
         } catch (e: Exception) { status = e.message ?: tr(Res.string.could_not_start_media) }
@@ -37,7 +108,7 @@ import top.yukonga.miuix.kmp.basic.*
         audioStatus = ""
         var audio: DesktopMedia? = null
         if (playing && sound && state.connected) try {
-            audio = DesktopMedia(true, {}, { audioStatus = it }, videoEnabled = false)
+            audio = DesktopMedia(true, {}, { message -> uiScope.launch { audioStatus = message } }, videoEnabled = false)
             model.audioSink = audio::audio
             model.startMedia(true)
         } catch (e: Exception) { audioStatus = e.message ?: tr(Res.string.could_not_start_audio) }
@@ -49,11 +120,15 @@ import top.yukonga.miuix.kmp.basic.*
         }
         Column(Modifier.padding(start=12.dp,top=64.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            HudButton(if(playing) tr(Res.string.stop_video) else tr(Res.string.start_video),if(playing) tr(Res.string.stop_video) else tr(Res.string.start_video),state.connected) { playing = !playing }
-            HudButton(if(sound) tr(Res.string.mute) else tr(Res.string.listen),if(sound) tr(Res.string.mute) else tr(Res.string.listen),state.connected) { sound = !sound; if(sound) playing=true }
+            HudIconButton(if(playing) tr(Res.string.stop_video) else tr(Res.string.start_video), if(playing) "▣" else "□", state.connected) { playing = !playing }
+            HudIconButton(if(sound) tr(Res.string.mute) else tr(Res.string.listen), if(sound) "♫" else "♩", state.connected) { controls.toggleRobotMicrophone() }
+            HudIconButton(tr(Res.string.take_photo), "◉", state.connected && latestFrame.get() != null) { controls.takePhoto() }
+            HudIconButton(if(recording) tr(Res.string.stop_recording) else tr(Res.string.start_recording), if(recording) "■" else "●",
+                state.connected && playing && (recording || latestFrame.get() != null)) { controls.toggleRecording() }
         }
-        Text(status, color=Color.White)
-        if (sound) Text(audioStatus, color=Color.White)
+        Text(status, Modifier.widthIn(max = 420.dp), color=Color.White)
+        if (sound) Text(audioStatus, Modifier.widthIn(max = 420.dp), color=Color.White)
+        if (captureStatus.isNotBlank()) Text(captureStatus, Modifier.widthIn(max = 420.dp), color=Color.White, maxLines = 1)
         }
     }
 }

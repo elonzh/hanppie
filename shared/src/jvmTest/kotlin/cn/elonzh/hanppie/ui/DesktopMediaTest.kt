@@ -39,6 +39,7 @@ class DesktopMediaTest {
         val ffmpeg = System.getenv("HANPPIE_FFMPEG") ?: "ffmpeg"
         Assume.assumeTrue(runCatching { ProcessBuilder(ffmpeg,"-version").start().waitFor() == 0 }.getOrDefault(false))
         val file = Files.createTempFile("hanppie-test-", ".h264").toFile()
+        val recording = Files.createTempFile("hanppie-recording-", ".mp4").also { Files.deleteIfExists(it) }
         try {
             val generator = ProcessBuilder(ffmpeg,"-hide_banner","-loglevel","error","-y","-f","lavfi","-i",
                 "color=c=blue:s=1280x720:r=30","-t","2","-c:v","libx264","-tune","zerolatency","-f","h264",file.path).start()
@@ -54,6 +55,10 @@ class DesktopMediaTest {
                 assertTrue(media.running)
             } finally { media.close() }
             assertFalse(media.running)
-        } finally { file.delete() }
+            val recorder = DesktopVideoRecorder(ffmpeg, recording)
+            repeat(3) { recorder.frame(ByteArray(1280 * 720 * 4)) }
+            assertEquals(recording.toString(), recorder.finish())
+            assertTrue(Files.size(recording) > 0)
+        } finally { file.delete(); Files.deleteIfExists(recording) }
     }
 }

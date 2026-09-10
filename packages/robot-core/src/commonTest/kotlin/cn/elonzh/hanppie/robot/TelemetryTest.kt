@@ -3,6 +3,14 @@ package cn.elonzh.hanppie.robot
 import kotlin.test.*
 
 class TelemetryTest {
+    @Test fun wifiSignalQualityUsesTheNativePushValue() {
+        assertEquals(37, Telemetry.wifiSignalQuality(frame(0x07, 0x09, byteArrayOf(37))))
+        assertEquals(255, Telemetry.wifiSignalQuality(frame(0x07, 0x09, byteArrayOf(0xff.toByte(), 1))))
+        assertNull(Telemetry.wifiSignalQuality(frame(0x07, 0x09, byteArrayOf())))
+        assertNull(Telemetry.wifiSignalQuality(frame(0x07, 0x08, byteArrayOf(37))))
+        assertNull(Telemetry.wifiSignalQuality(frame(0x07, 0x09, byteArrayOf(37)).copy(valid = false)))
+    }
+
     @Test fun gimbalSubscriptionPreservesCapturedBytes() {
         assertEquals("00020a", GimbalSubscription.removePayload().hex())
         assertEquals("020a000001973c9bf7090002000a00", GimbalSubscription.addPayload().hex())

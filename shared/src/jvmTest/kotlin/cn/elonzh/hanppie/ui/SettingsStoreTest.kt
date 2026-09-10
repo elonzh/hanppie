@@ -4,11 +4,31 @@ import com.github.javakeyring.Keyring
 import cn.elonzh.hanppie.resources.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.encodeToString
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import kotlin.test.*
 
 class SettingsStoreTest {
+    @Test fun olderSettingsUseDefaultControlSensitivity() {
+        val restored = settingsJson.decodeFromString<SavedSettings>("""{"autoRead":true}""")
+        assertEquals(ControlSettings(90), restored.control)
+        assertEquals(KeyBinding(ControlKey.G), restored.control.shortcuts[ControlAction.SwitchAmmo])
+        assertEquals(KeyBinding(ControlKey.R, shift = true), restored.control.shortcuts[ControlAction.Recording])
+    }
+
+    @Test fun customMotionAndShortcutSettingsRoundTrip() {
+        val control = ControlSettings(
+            translationSpeeds = listOf(.1, .2, .3, .4, .5),
+            rotationSpeeds = listOf(20.0, 40.0, 60.0, 80.0, 100.0),
+            creepMultiplier = .5,
+            joystickDeadZone = .2,
+            shortcuts = ControlShortcuts().bind(ControlAction.Fire, KeyBinding(ControlKey.F)),
+        )
+        val restored = settingsJson.decodeFromString<SavedSettings>(settingsJson.encodeToString(SavedSettings(control = control)))
+        assertEquals(control, restored.control)
+    }
+
     @Test fun saveLoadAndFailureStatus() = runBlocking {
         var saved: SavedSettings? = null
         var fail = false
@@ -19,12 +39,13 @@ class SettingsStoreTest {
                 saved = settings
             }
         }
-        val expected = SavedSettings(ModelSettings(apiKey = "test-key"), true)
+        val expected = SavedSettings(ModelSettings(apiKey = "test-key"), true, ControlSettings(45))
         val model = ConsoleModel(SystemSpeech(), settingsStore = store)
         try {
             withTimeout(5000) { model.settingsBusy.first { !it } }
             model.modelSettings.value = expected.model
             model.autoReadReplies.value = expected.autoRead
+            model.controlSettings.value = expected.control
             model.saveSettings()
             withTimeout(5000) { model.settingsBusy.first { !it } }
             assertEquals(expected, saved)
@@ -38,6 +59,7 @@ class SettingsStoreTest {
             withTimeout(5000) { restored.settingsBusy.first { !it } }
             assertEquals(expected.model, restored.modelSettings.value)
             assertTrue(restored.autoReadReplies.value)
+            assertEquals(expected.control, restored.controlSettings.value)
         } finally { restored.close() }
     }
 

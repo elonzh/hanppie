@@ -14,6 +14,7 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
 
 internal fun ConsoleModel(persistSettings: Boolean = false): ConsoleModel = ConsoleModel(SystemSpeech(),
+    speakerInput = DesktopSpeakerInput(),
     settingsStore = if (persistSettings) DesktopSettingsStore() else null)
 
 @Composable

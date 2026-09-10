@@ -27,6 +27,12 @@ internal object GimbalSubscription {
 }
 
 object Telemetry {
+    /** RoboMaster App Wi-Fi quality push (cmdset 0x07, cmdid 0x09); the value is not dBm. */
+    fun wifiSignalQuality(frame: DussFrame): Int? {
+        if (!frame.valid || frame.set != 0x07 || frame.id != 0x09 || frame.payload.isEmpty()) return null
+        return frame.payload.u8(0)
+    }
+
     /** DDS subscription 0x0a: UID 0x00020009f79b3c97, SDK GimbalPosSubject. */
     fun gimbalYaw(frame: DussFrame): Double? {
         return gimbal(frame)?.yawDegrees?.takeIf { it in -360.0..360.0 }

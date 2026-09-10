@@ -15,6 +15,7 @@ import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import cn.elonzh.hanppie.robot.DussFrame
+import cn.elonzh.hanppie.resources.*
 import androidx.compose.ui.input.key.Key
 
 class ConsoleUiTest {
@@ -51,12 +52,19 @@ class ConsoleUiTest {
         val model=ConsoleModel()
         val width=mutableStateOf(740.dp)
         try {
+            model.state.value = ConsoleState(connected = true, battery = 82, signalQuality = 37,
+                gimbal = cn.elonzh.hanppie.robot.GimbalTelemetry(42.0, 0.0, 42.0, 0.0, 0))
             rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(width.value,393.dp)) { RemotePage(model) } } }
             rule.onNodeWithContentDescription("Chassis joystick").assertIsDisplayed()
             rule.onNodeWithContentDescription("Gimbal joystick").assertIsDisplayed()
             rule.onNodeWithContentDescription("Enable remote control").assertIsDisplayed()
             rule.onNodeWithContentDescription("Switch ammo").assertIsDisplayed()
-            rule.onNodeWithText("Gear 2").assertIsDisplayed()
+            rule.onNodeWithContentDescription("Stop video").assertIsDisplayed()
+            rule.onNodeWithContentDescription("Take photo").assertIsDisplayed()
+            rule.onNodeWithContentDescription("Start recording").assertIsDisplayed()
+            rule.onNodeWithText("Gear 3").assertIsDisplayed()
+            rule.onNodeWithContentDescription("Signal strength 37").assertIsDisplayed()
+            rule.onNodeWithContentDescription("Chassis and gimbal horizontal angle +42°").assertIsDisplayed()
             snapshot("phone-cockpit-en")
             rule.runOnIdle { width.value=1040.dp }
             rule.waitForIdle()
@@ -71,21 +79,29 @@ class ConsoleUiTest {
             rule.runOnIdle { model.remoteEnabled.value=true }
             rule.waitForIdle()
             fun tap(key: Key) { rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(key); keyUp(key) } }
-            tap(Key.Q); rule.waitUntil(2000) { model.driveGear.value==1 }
-            tap(Key.Q); assertEquals(1,model.driveGear.value)
-            tap(Key.E); rule.waitUntil(2000) { model.driveGear.value==2 }
+            tap(Key.One); rule.waitUntil(2000) { model.driveGear.value==1 }
             assertTrue(model.remoteInput.value.all { it==0.0 }, "Gear keys must not move or rotate")
+            rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(Key.Q) }
+            rule.waitUntil(2000) { model.remoteInput.value[2]==-30.0 }
+            rule.onNodeWithTag("remote-surface").performKeyInput { keyUp(Key.Q) }
+            rule.waitUntil(2000) { model.remoteInput.value.all { it==0.0 } }
+            tap(Key.NumPad5); rule.waitUntil(2000) { model.driveGear.value==5 }
+            rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(Key.E) }
+            rule.waitUntil(2000) { model.remoteInput.value[2]==150.0 }
+            rule.onNodeWithTag("remote-surface").performKeyInput { keyUp(Key.E) }
+            rule.waitUntil(2000) { model.remoteInput.value.all { it==0.0 } }
             rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(Key.W) }
-            rule.waitUntil(2000) { model.remoteInput.value[0]==.3 }
+            rule.waitUntil(2000) { model.remoteInput.value[0]==1.0 }
             rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(Key.ShiftLeft) }
-            rule.waitUntil(2000) { model.remoteInput.value[0]==.075 }
+            rule.waitUntil(2000) { model.remoteInput.value[0]==.25 }
             rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(Key.ShiftRight); keyUp(Key.ShiftLeft) }
-            rule.waitUntil(2000) { model.remoteInput.value[0]==.075 }
-            tap(Key.E); rule.waitUntil(2000) { model.remoteInput.value[0]==.15 }
+            rule.waitUntil(2000) { model.remoteInput.value[0]==.25 }
+            tap(Key.Three); rule.waitUntil(2000) { model.remoteInput.value[0]==.1625 }
             assertEquals(3,model.driveGear.value)
             rule.onNodeWithTag("remote-surface").performKeyInput { keyUp(Key.ShiftRight) }
-            rule.waitUntil(2000) { model.remoteInput.value[0]==.6 }
-            tap(Key.E); assertEquals(3,model.driveGear.value)
+            rule.waitUntil(2000) { model.remoteInput.value[0]==.65 }
+            rule.onNodeWithTag("remote-surface").performKeyInput { keyUp(Key.W) }
+            rule.waitUntil(2000) { model.remoteInput.value.all { it==0.0 } }
             tap(Key.Escape)
             rule.waitUntil(2000) { model.remoteInput.value.all { it==0.0 } && !model.remoteEnabled.value }
         } finally { model.close() }
@@ -99,6 +115,9 @@ class ConsoleUiTest {
             rule.onNodeWithContentDescription("云台 摇杆").assertIsDisplayed()
             rule.onNodeWithContentDescription("启用遥控").assertIsDisplayed()
             rule.onNodeWithContentDescription("切换弹药").assertIsDisplayed().performClick()
+            rule.onNodeWithContentDescription("关闭视频").assertIsDisplayed()
+            rule.onNodeWithContentDescription("拍照").assertIsDisplayed()
+            rule.onNodeWithContentDescription("开始录像").assertIsDisplayed()
             rule.onNodeWithContentDescription("水弹单发").assertIsDisplayed()
             snapshot("phone-game-controls")
         } finally { model.close() }
@@ -115,10 +134,10 @@ class ConsoleUiTest {
             assertEquals(0.0,model.remoteInput.value[2])
             rule.onNodeWithTag("remote-surface").performKeyInput { keyUp(androidx.compose.ui.input.key.Key.W) }
             rule.waitUntil(3000) { model.remoteInput.value.all { it == 0.0 } }
-            rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(androidx.compose.ui.input.key.Key.R) }
+            rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(androidx.compose.ui.input.key.Key.G) }
             rule.waitUntil(3000) { model.gelSelected.value }
-            rule.onNodeWithTag("remote-surface").performKeyInput { keyUp(androidx.compose.ui.input.key.Key.R) }
-            rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(androidx.compose.ui.input.key.Key.R); keyUp(androidx.compose.ui.input.key.Key.R) }
+            rule.onNodeWithTag("remote-surface").performKeyInput { keyUp(androidx.compose.ui.input.key.Key.G) }
+            rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(androidx.compose.ui.input.key.Key.G); keyUp(androidx.compose.ui.input.key.Key.G) }
             rule.waitUntil(3000) { !model.gelSelected.value }
             rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(androidx.compose.ui.input.key.Key.DirectionRight) }
             rule.waitUntil(3000) { model.remoteInput.value[4] > 0 }
@@ -336,13 +355,15 @@ class ConsoleUiTest {
             rule.onNodeWithText("对话").performClick()
             rule.onNodeWithText("设置").performClick()
             rule.onNodeWithText("自动朗读").assertExists()
+            rule.onNodeWithContentDescription("gimbal-sensitivity-selector").assertExists()
         } finally { model.close() }
     }
 
     @Test fun lostConnectionCanBeCleanedUp() {
         val model = ConsoleModel()
         try {
-            model.state.value = model.state.value.lost("fixture timeout")
+            model.state.value = model.state.value.lost("fixture timeout").copy(
+                reconnecting = true, statusMessage = uiText(Res.string.reconnecting_attempt_value, 2))
             rule.setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
             rule.onNodeWithText("断开 / 清理会话").assertIsEnabled().performClick()
             rule.waitUntil(3000) { model.state.value.status == "未连接" }
@@ -410,6 +431,23 @@ class ConsoleUiTest {
             rule.onNodeWithText("1.25", substring = false).assertExists()
             rule.onNodeWithText("脚本").performClick()
             rule.onNodeWithText("type=1 level=2 fixture robot message").assertExists()
+        } finally { model.close() }
+    }
+
+    @Test fun shortcutEditorCapturesAChordWithoutPopup() {
+        Localization.initialize("zh", null)
+        val model = ConsoleModel()
+        try {
+            rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(393.dp, 740.dp)) { SettingsPage(model) } } }
+            rule.onNodeWithText("控制快捷键").performScrollTo().performClick()
+            rule.onNodeWithText("切换弹药").performScrollTo().assertIsDisplayed()
+            rule.onNodeWithText("G", substring = false).performClick()
+            rule.onNodeWithTag("settings-page").performKeyInput {
+                keyDown(Key.ShiftLeft); keyDown(Key.F); keyUp(Key.F); keyUp(Key.ShiftLeft)
+            }
+            rule.waitUntil(2_000) {
+                model.controlSettings.value.shortcuts[ControlAction.SwitchAmmo] == KeyBinding(ControlKey.F, shift = true)
+            }
         } finally { model.close() }
     }
 }

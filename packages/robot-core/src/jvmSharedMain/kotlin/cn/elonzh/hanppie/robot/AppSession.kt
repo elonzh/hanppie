@@ -6,8 +6,10 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.SocketTimeoutException
 import java.security.SecureRandom
+import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
@@ -73,6 +75,11 @@ class AppSession(private val target: RobotTarget,
     }
     fun drive(x: Double, y: Double, z: Double, pitch: Double, yaw: Double, cameraRelative: Boolean = false) = synchronized(txLock) {
         check(remote && active.get()) { "遥控未启用" }
+        if (System.nanoTime() - lastReceivedNanos >= 500_000_000) {
+            clearMotionInput()
+            runCatching { sendNeutral(forceActuatorStop = true) }
+            error("500 毫秒未收到机器人数据，遥控已安全停止")
+        }
         controlPayload = RemoteControl.velocity(x, y, z)
         chassisYawInput = z
         gimbalInput = pitch to yaw
@@ -82,15 +89,70 @@ class AppSession(private val target: RobotTarget,
         inputDeadline = System.nanoTime() + 250_000_000
     }
     fun halt() = synchronized(txLock) {
-        inputDeadline = 0; triggerDeadline = 0; controlPayload = RemoteControl.velocity(0.0,0.0,0.0); gimbalPayload = RemoteControl.gimbalVelocity(0.0, 0.0)
-        cameraInput = 0.0 to 0.0
-        gimbalInput = 0.0 to 0.0; chassisYawInput = 0.0
+        clearMotionInput()
         if (active.get()) sendNeutral()
     }
+    /** Best-effort stop for explicit disconnect, link loss, and a newly restored session. */
+    fun safetyStop(repetitions: Int = 3) {
+        require(repetitions in 1..10)
+        synchronized(txLock) { clearMotionInput() }
+        repeat(repetitions) { index ->
+            synchronized(txLock) { if (active.get()) sendNeutral(forceActuatorStop = true) }
+            if (index + 1 < repetitions) Thread.sleep(20)
+        }
+    }
+    private fun clearMotionInput() {
+        inputDeadline = 0; triggerDeadline = 0
+        controlPayload = RemoteControl.velocity(0.0,0.0,0.0)
+        gimbalPayload = RemoteControl.gimbalVelocity(0.0, 0.0)
+        cameraInput = 0.0 to 0.0
+        gimbalInput = 0.0 to 0.0; chassisYawInput = 0.0
+    }
     /** S1 rm_module.Gun.set_cmd_fire routes 3f:51 to hdvt_uav_id (900 -> 0x09), not EP's 0x17. */
-    fun fireGelOnce(): Int = synchronized(txLock) {
-        check(remote && active.get() && !labRunning) { "遥控未启用" }
-        send(9, 0x40, 0x3f, 0x51, byteArrayOf(1))
+    suspend fun fireGelOnce(): Int = withContext(Dispatchers.IO) {
+        var fireLedEnabled = false
+        var blasterLedEnabled = false
+        try {
+            val fireSequence = synchronized(txLock) {
+                check(remote && active.get() && !labRunning) { "遥控未启用" }
+                send(9, 0x40, 0x3f, 0x33, RemoteControl.muzzleFireLed(true))
+                fireLedEnabled = true
+                send(0x17, 0x40, 0x3f, 0x55, RemoteControl.blasterLed(true))
+                blasterLedEnabled = true
+                send(9, 0x40, 0x3f, 0x51, byteArrayOf(1))
+            }
+            delay(400)
+            fireSequence
+        } finally {
+            if (fireLedEnabled || blasterLedEnabled) synchronized(txLock) {
+                if (active.get()) runCatching {
+                    if (blasterLedEnabled) send(0x17, 0x40, 0x3f, 0x55, RemoteControl.blasterLed(false))
+                    if (fireLedEnabled) send(9, 0x40, 0x3f, 0x33, RemoteControl.muzzleFireLed(false))
+                }
+            }
+        }
+    }
+
+    /** Upload a bounded, length-prefixed Opus clip and play it on the S1 speaker. */
+    suspend fun playSpeaker(encoded: ByteArray): Int = withContext(Dispatchers.IO) {
+        require(encoded.isNotEmpty()) { "对讲录音为空" }
+        require(encoded.size <= 0xffff) { "对讲录音过长" }
+        val chunks = encoded.asList().chunked(SpeakerAudio.chunkBytes).map { part -> part.toByteArray() }
+        synchronized(txLock) {
+            check(remote && active.get() && !labRunning) { "遥控未启用" }
+            send(9, 0x40, 0x3f, 0x5f, SpeakerAudio.start(chunks.size, encoded.size))
+            Thread.sleep(55)
+            chunks.forEachIndexed { index, chunk ->
+                send(9, 0x00, 0x00, 0x09, SpeakerAudio.block(chunk, index))
+                if (index + 1 < chunks.size) Thread.sleep(6)
+            }
+            Thread.sleep(55)
+            send(9, 0x40, 0x3f, 0x5f,
+                byteArrayOf(2) + MessageDigest.getInstance("MD5").digest(encoded))
+            Thread.sleep(107)
+            send(9, 0x40, 0x3f, 0xb3, SpeakerAudio.playPayload)
+        }
+        chunks.size
     }
     suspend fun exitRemote() = withContext(Dispatchers.IO) {
         modeMutex.withLock {
@@ -227,14 +289,14 @@ class AppSession(private val target: RobotTarget,
         seq
     }
 
-    private fun sendNeutral() = synchronized(txLock) {
+    private fun sendNeutral(forceActuatorStop: Boolean = false) = synchronized(txLock) {
         val seq = sequence
         sequence = (sequence + 1) and 65535
         val fresh = remote && System.nanoTime() < inputDeadline
         val payload = if (remote && System.nanoTime() < triggerDeadline) "0000042000010840000230".hexBytes()
             else Protocol.neutral
         sendPacket(envelope.control(Protocol.duss(2, 9, 0, 1, 4, payload, seq)))
-        if (remote) {
+        if (remote || forceActuatorStop) {
             var velocity = if (fresh) controlPayload else RemoteControl.velocity(0.0,0.0,0.0)
             var gimbal = if(fresh) gimbalPayload else RemoteControl.gimbalVelocity(0.0,0.0)
             if (fresh && cameraRelative) {
@@ -242,7 +304,7 @@ class AppSession(private val target: RobotTarget,
                 val body = angle?.let { RemoteControl.cameraVelocity(cameraInput.first, cameraInput.second, it) }
                     ?: (0.0 to 0.0)
                 val follow = RemoteControl.follow(angle, gimbalInput.second)
-                velocity = RemoteControl.velocity(body.first, body.second, (chassisYawInput + follow.chassisYaw).coerceIn(-60.0,60.0))
+                velocity = RemoteControl.velocity(body.first, body.second, chassisYawInput + follow.chassisYaw)
                 gimbal = RemoteControl.gimbalVelocity(gimbalInput.first, follow.gimbalYaw)
             }
             // S1 ChassisCtrl.stop uses wheel RPM zero, not body velocity zero.
@@ -296,13 +358,13 @@ class AppSession(private val target: RobotTarget,
                 }
             }
         } catch (error: Exception) {
-            if (active.get()) runCatching { halt() }
+            if (active.get()) runCatching { safetyStop() }
             if (active.getAndSet(false)) onLost(error.message ?: error.javaClass.simpleName)
         } finally { socket?.close() }
     }
 
     override fun close() {
-        if (active.get()) runCatching { halt() }
+        if (active.get()) runCatching { safetyStop() }
         if (active.get() && remote) runCatching { send(0xc3,0x40,0x3f,0x19,byteArrayOf(0)) }
         active.set(false)
         socket?.close()

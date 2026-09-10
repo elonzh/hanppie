@@ -49,6 +49,8 @@ internal fun Console(
     fileError: String? = null,
     onSpeechSettings: (() -> Unit)? = null,
     onVoiceInput: (() -> Unit)? = null,
+    onPushToTalkStart: (() -> Unit)? = null,
+    onPushToTalkStop: (() -> Unit)? = null,
 ) {
     val renderState = remember(model) { model.state.sample(100) }
     val state by renderState.collectAsState(initial = model.state.value)
@@ -68,7 +70,8 @@ internal fun Console(
     var cockpit by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state.connected) { if (!state.connected) cockpit = false }
     if(cockpit && state.connected) {
-        RemotePage(model,Modifier.fillMaxSize().safeDrawingPadding(),onBack={cockpit=false})
+        RemotePage(model, Modifier.fillMaxSize().safeDrawingPadding(), onBack = { cockpit=false },
+            onPushToTalkStart = onPushToTalkStart, onPushToTalkStop = onPushToTalkStop)
         return
     }
 
@@ -112,7 +115,7 @@ internal fun Console(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(6.dp).background(if (state.connected) Color(0xff32aa78) else Color(0xffaab1bb), RoundedCornerShape(50)))
                             Spacer(Modifier.width(6.dp))
-                            Text(if (state.connected) tr(Res.string.connected) else tr(Res.string.disconnected), fontSize = 12.sp, color = Muted)
+                            Text(if (state.connected) tr(Res.string.connected) else state.status, fontSize = 12.sp, color = Muted)
                         }
                     }
                     if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
@@ -138,7 +141,7 @@ internal fun Console(
                                             Button({ cockpit = true }, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("enter-remote"), colors = ButtonDefaults.buttonColorsPrimary()) { Text(tr(Res.string.fullscreen_cockpit)) }
                                             Spacer(Modifier.height(12.dp))
                                         }
-                                        if (state.connected || state.statusMessage.resource == Res.string.connection_lost) {
+                                        if (state.connected || state.reconnecting || state.statusMessage.resource == Res.string.connection_lost) {
                                             Button(model::disconnect, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("disconnect-robot"), enabled = !state.busy) { Text(tr(Res.string.disconnect_close_session)) }
                                         } else {
                                             Button(model::discover, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("discover-robot"), enabled = !state.busy,
@@ -157,6 +160,7 @@ internal fun Console(
                             item {
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Metric(tr(Res.string.battery), state.battery?.let { "$it%" } ?: "—", Modifier.weight(1f))
+                                    Metric(tr(Res.string.signal), state.signalQuality?.toString() ?: "—", Modifier.weight(1f))
                                     Metric(tr(Res.string.packets), state.packets.toString(), Modifier.weight(1f))
                                 }
                             }
