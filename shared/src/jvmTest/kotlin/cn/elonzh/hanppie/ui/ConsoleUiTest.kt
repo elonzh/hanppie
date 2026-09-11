@@ -203,8 +203,11 @@ class ConsoleUiTest {
             rule.onNodeWithText("搜索设备").assertIsDisplayed()
             snapshot("phone-device")
             rule.onNodeWithText("脚本").performClick()
+            rule.onNodeWithTag("script-library").assertIsDisplayed()
+            rule.onNodeWithTag("script-new").performClick()
             rule.onNodeWithTag("script-editor").assertIsDisplayed().performTextReplacement("def start():\n    pass")
-            rule.onNodeWithText("停止脚本").assertIsDisplayed()
+            rule.onNodeWithTag("script-save").assertIsDisplayed()
+            rule.onNodeWithText("运行脚本").assertIsDisplayed()
             snapshot("phone-script")
         } finally { model.close() }
     }
@@ -383,11 +386,11 @@ class ConsoleUiTest {
         try {
             rule.setContent { WorkbenchTheme { Console(model, document) } }
             rule.onNodeWithText("脚本").performClick()
+            rule.onNodeWithTag("script-new").performClick()
             rule.onNodeWithTag("script-editor").performTextReplacement("def start():\n    pass\n")
             rule.onNodeWithText("新脚本 · 未保存").assertExists()
-            rule.onNodeWithText("上传（不启动）").assertIsNotEnabled()
-            rule.onNodeWithText("执行已上传脚本").assertIsNotEnabled()
-            rule.onNodeWithText("打开 .py").performClick()
+            rule.onNodeWithText("运行脚本").assertIsNotEnabled()
+            rule.onNodeWithTag("script-import").performClick()
             rule.onNodeWithText("替换未保存的脚本？").assertExists()
             rule.onNodeWithText("返回").performClick()
             rule.onNodeWithText("替换未保存的脚本？").assertDoesNotExist()
@@ -424,6 +427,8 @@ class ConsoleUiTest {
             // Subsequent chassis messages must not overwrite the gimbal sample.
             model.receive(DussFrame(20, 9, 2, 3, 0, 0x48, 8, payload, true))
             val message = "fixture robot message".encodeToByteArray()
+            model.state.value = model.state.value.copy(scriptTitle = "fixture",
+                scriptRunPhase = ScriptRunPhase.RUNNING, scriptStartedAtEpochMillis = System.currentTimeMillis())
             model.receive(DussFrame(20, 9, 2, 2, 0, 0x3f, 0xa4,
                 byteArrayOf(1, 2, message.size.toByte(), 0) + message, true))
             rule.setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
@@ -437,8 +442,109 @@ class ConsoleUiTest {
             rule.onNodeWithText("raw[0] / offset 26").assertExists()
             rule.onNodeWithText("1.25", substring = false).assertExists()
             rule.onNodeWithText("脚本").performClick()
-            rule.onNodeWithText("type=1 level=2 fixture robot message").assertExists()
+            rule.onNodeWithTag("script-run-screen").assertIsDisplayed()
+            rule.onNodeWithText("fixture robot message").assertExists()
         } finally { model.close() }
+    }
+
+    @Test fun activeScriptAndLatestOutputRemainVisibleAcrossPages() {
+        val model = ConsoleModel()
+        val runId = "0123456789abcdef"
+        val width = mutableStateOf(393.dp)
+        val height = mutableStateOf(740.dp)
+        try {
+            model.state.value = model.state.value.copy(
+                connected = true,
+                scriptRunId = runId,
+                scriptTitle = "好奇哨兵",
+                scriptRunPhase = ScriptRunPhase.STARTING,
+                scriptStartedAtEpochMillis = System.currentTimeMillis(),
+                scriptMessage = uiText(Res.string.waiting_for_script_start),
+            )
+            fun message(kind: String, text: String = ""): DussFrame {
+                val value = "__HANPPIE_RUN__|$runId|$kind|$text".encodeToByteArray()
+                return DussFrame(20, 9, 2, 2, 0, 0x3f, 0xa4,
+                    byteArrayOf(0, 0, value.size.toByte(), 0) + value, true)
+            }
+            model.receive(message("STARTED"))
+            val output = "Sentry scan 2/3: left".encodeToByteArray()
+            model.receive(DussFrame(20, 9, 2, 3, 0, 0x3f, 0xa4,
+                byteArrayOf(0, 0, output.size.toByte(), 0) + output, true))
+            rule.setContent { WorkbenchTheme {
+                Box(Modifier.requiredSize(width.value, height.value)) { Console(model, mutableStateOf(EditorDocument())) }
+            } }
+            rule.onNodeWithTag("script-run-banner").assertIsDisplayed()
+            rule.onNodeWithText("好奇哨兵").assertIsDisplayed()
+            rule.onNodeWithText("Sentry scan 2/3: left").assertIsDisplayed()
+            snapshot("active-script-global-status")
+            rule.onNodeWithTag("script-run-banner").performClick()
+            rule.onNodeWithTag("script-run-screen").assertIsDisplayed()
+            rule.onNodeWithTag("script-run-log").assertIsDisplayed()
+            rule.onNodeWithText("运行日志").assertIsDisplayed()
+            rule.onNodeWithText("我的脚本").assertDoesNotExist()
+            snapshot("active-script-run-phone")
+            rule.runOnIdle { width.value = 320.dp; height.value = 568.dp }
+            rule.waitForIdle()
+            rule.onNodeWithTag("script-run-screen").assertIsDisplayed()
+            rule.onNodeWithTag("script-run-log").assertIsDisplayed()
+            rule.onNodeWithText("Sentry scan 2/3: left").assertIsDisplayed()
+            snapshot("active-script-run-compact-phone")
+            rule.runOnIdle { width.value = 1040.dp; height.value = 760.dp }
+            rule.waitForIdle()
+            rule.onNodeWithTag("script-run-screen").assertIsDisplayed()
+            rule.onNodeWithText("Sentry scan 2/3: left").assertIsDisplayed()
+            snapshot("active-script-run-desktop")
+            rule.runOnIdle { width.value = 740.dp; height.value = 393.dp }
+            rule.waitForIdle()
+            rule.onNodeWithTag("script-run-screen").assertIsDisplayed()
+            rule.onNodeWithTag("script-run-log").assertIsDisplayed()
+            rule.onNodeWithText("Sentry scan 2/3: left").assertIsDisplayed()
+            snapshot("active-script-run-landscape")
+        } finally { model.close() }
+    }
+
+    @Test fun presetCanBeSavedRenamedAndDeletedFromScriptLibrary() {
+        Localization.initialize("zh", null)
+        val model = ConsoleModel()
+        val document = mutableStateOf(EditorDocument())
+        try {
+            rule.waitUntil(3_000) { !model.scriptLibrary.state.value.loading }
+            rule.setContent { WorkbenchTheme {
+                Box(Modifier.requiredSize(393.dp, 740.dp)) { Console(model, document) }
+            } }
+            rule.onNodeWithText("脚本").performClick()
+            rule.onNodeWithText("我的脚本").assertIsDisplayed()
+            rule.onNodeWithText("预置脚本").performScrollTo().assertIsDisplayed()
+            snapshot("phone-script-library")
+            rule.onNodeWithContentDescription("script-preset-battery-mood-show").performScrollTo().performClick()
+            rule.onNodeWithTag("script-editor").assertIsDisplayed()
+            rule.onNodeWithText("Python 3.6.6").assertDoesNotExist()
+            rule.runOnIdle { assertTrue(document.value.source.contains("get_battery_percentage")) }
+            rule.onNodeWithTag("script-back").performClick()
+            rule.onNodeWithText("替换未保存的脚本？").assertDoesNotExist()
+            rule.onNodeWithTag("script-library").assertIsDisplayed()
+            rule.onNodeWithContentDescription("script-preset-battery-mood-show").performScrollTo().performClick()
+            snapshot("phone-script-preset-editor")
+            rule.onNodeWithTag("script-save").performClick()
+            rule.onNodeWithContentDescription("script-name").performTextReplacement("我的电量脚本")
+            rule.onNodeWithText("保存", substring = false).performClick()
+            rule.waitUntil(3_000) { model.scriptLibrary.state.value.scripts.singleOrNull()?.name == "我的电量脚本" }
+            val id = model.scriptLibrary.state.value.scripts.single().id
+            rule.onNodeWithTag("script-back").performClick()
+            rule.onNodeWithText("我的电量脚本").assertIsDisplayed()
+            rule.onNodeWithTag("script-rename-$id").performClick()
+            rule.onNodeWithContentDescription("script-name").performTextReplacement("电量检查")
+            rule.onNodeWithText("保存", substring = false).performClick()
+            rule.waitUntil(3_000) { model.scriptLibrary.state.value.scripts.singleOrNull()?.name == "电量检查" }
+            rule.onNodeWithTag("script-delete").performClick()
+            rule.onNodeWithText("删除脚本？").assertIsDisplayed()
+            rule.onAllNodesWithText("删除", substring = false).onLast().performClick()
+            rule.waitUntil(3_000) { model.scriptLibrary.state.value.scripts.isEmpty() }
+            rule.onNodeWithTag("script-library").assertIsDisplayed()
+        } finally {
+            model.close()
+            Localization.initialize("zh", null)
+        }
     }
 
     @Test fun shortcutEditorCapturesAChordWithoutPopup() {

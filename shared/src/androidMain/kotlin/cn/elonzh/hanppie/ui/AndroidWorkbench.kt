@@ -41,7 +41,9 @@ internal class AndroidWorkbenchModel(app: Application) : ViewModel() {
     } ?: error(tr(Res.string.connect_to_the_robot_s_wi_fi_first))
     val speechInput = AndroidSpeechInput(app)
     val model = ConsoleModel(AndroidSpeech(app), voiceInput = speechInput, speakerInput = AndroidSpeakerInput(app),
-        settingsStore = AndroidSettingsStore(app), robotNetwork = {
+        settingsStore = AndroidSettingsStore(app),
+        scriptStore = JsonScriptStore(app.filesDir.toPath().resolve("script-library-v1.json")),
+        robotNetwork = {
         val network = wifiNetwork()
         object : RobotNetwork {
             override fun datagram() = DatagramSocket(null).apply { network.bindSocket(this) }
@@ -172,7 +174,6 @@ fun AndroidWorkbench() {
                     withContext(Dispatchers.IO) {
                         requireNotNull(context.contentResolver.openOutputStream(uri, "wt")).bufferedWriter().use { it.write(snapshot) }
                     }
-                    holder.document.value = holder.document.value.saved(snapshot, "script.py")
                     holder.fileError = null
                 } catch (error: Exception) { holder.fileError = error.message }
                 finally { holder.document.value = holder.document.value.copy(busy = false) }
@@ -223,10 +224,13 @@ fun AndroidWorkbench() {
                 Button({ (context as? Activity)?.finish() }) { Text(tr(Res.string.quit_anyway)) }
             }
         }
-        Console(holder.model, holder.document, onOpen = { open.launch(arrayOf("text/*", "application/octet-stream", "application/x-python-code")) },
+        Console(holder.model, holder.document, onImport = { open.launch(arrayOf("text/*", "application/octet-stream", "application/x-python-code")) },
             onVoiceInput = { if (voiceDisclosureAccepted) startVoice() else voiceDisclosure = true },
             onPushToTalkStart = ::startTalk, onPushToTalkStop = ::stopTalk,
-            onSave = { saveSnapshot = holder.document.value.source; save.launch("script.py") }, fileError = holder.fileError,
+            onExport = {
+                saveSnapshot = holder.document.value.source
+                save.launch(suggestedScriptFileName(holder.document.value.displayName))
+            }, fileError = holder.fileError, onFileError = { holder.fileError = it },
             onSpeechSettings = { audioSettings = true })
     }
 }

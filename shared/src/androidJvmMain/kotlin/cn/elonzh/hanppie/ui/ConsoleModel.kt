@@ -15,6 +15,7 @@ internal class ConsoleModel(
     private val speakerInput: SpeakerInput = NoSpeakerInput(),
     private val robotNetwork: () -> RobotNetwork = { RobotNetwork.Default },
     private val settingsStore: SettingsStore? = null,
+    scriptStore: ScriptStore = MemoryScriptStore(),
     private val prepareNetwork: () -> Unit = {},
 ) {
     val replySpeaker = ReplySpeaker(speech)
@@ -30,10 +31,12 @@ internal class ConsoleModel(
     )
     val modelSettings = MutableStateFlow(defaultModelSettings())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val scriptLibrary = ScriptLibrary(scriptStore)
     private val settingsScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val settingsBusy = MutableStateFlow(settingsStore != null)
     val settingsMessage = MutableStateFlow<UiText?>(null)
     init {
+        scope.launch { scriptLibrary.load() }
         if (settingsStore != null) settingsScope.launch {
             try {
                 settingsStore.load()?.let {
@@ -121,10 +124,9 @@ internal class ConsoleModel(
     @Volatile var videoSink: ((ByteArray) -> Unit)? = null
     @Volatile var audioSink: ((ByteArray) -> Unit)? = null
     fun enableRemote() = work {
-        check(!state.value.executionUncertain) { tr(Res.string.stop_the_lab_script_first) }
+        check(!state.value.scriptRunPhase.mayBeExecuting) { tr(Res.string.stop_the_lab_script_first) }
         checkNotNull(session).enterRemote()
         lab?.invalidateMode()
-        state.update { it.copy(uploadedSource = null, scriptMessage = uiText(Res.string.remote_control_upload_the_script_again_before_running)) }
         remoteEnabled.value = true
     }
     fun haltRemote() {
@@ -157,7 +159,7 @@ internal class ConsoleModel(
     }
     fun fireGel() = work {
         check(remoteEnabled.value) { tr(Res.string.enable_remote_control_first) }
-        check(!state.value.executionUncertain) { tr(Res.string.stop_the_lab_script_first) }
+        check(!state.value.scriptRunPhase.mayBeExecuting) { tr(Res.string.stop_the_lab_script_first) }
         val sequence = checkNotNull(session).fireGelOnce()
         log(tr(Res.string.gel_fire_command_sent_seq_value_physical_firing_unconfirmed,sequence))
     }
@@ -206,21 +208,16 @@ internal class ConsoleModel(
     val chat = ChatAgent(
         status = { state.value.let { "${it.status}; battery=${it.battery}; script=${it.scriptStatus}; messages=${it.scriptMessages.takeLast(12)}" } },
         execute = { source -> agentOperation {
-            check(!state.value.executionUncertain) { tr(Res.string.stop_the_script_with_unknown_state_first) }
+            check(!state.value.scriptRunPhase.mayBeExecuting) { tr(Res.string.stop_the_script_with_unknown_state_first) }
             haltRemote()
             session?.exitRemote()
-            val controller = checkNotNull(lab) { tr(Res.string.robot_is_not_connected) }
-            check(!state.value.executionUncertain) { tr(Res.string.stop_the_script_with_unknown_state_first) }
-            state.update { it.copy(uploadedSource = null, scriptMessage = uiText(Res.string.uploading)) }
-            controller.upload(source, "Hanppie-Agent")
-            state.update { it.copy(uploadedSource = source, executionUncertain = true, scriptMessage = uiText(Res.string.sending_start_command_result_unconfirmed)) }
-            controller.start()
-            state.update { it.copy(scriptMessage = uiText(Res.string.start_command_sent_completion_unconfirmed)) }
-            tr(Res.string.upload_confirmed_and_start_command_sent_action_execution_and)
+            startScript(source, "Hanppie-Agent")
+            tr(Res.string.script_started_progress_and_completion_will_be_reported)
         } },
         stopRobot = { agentOperation {
             checkNotNull(lab) { tr(Res.string.robot_is_not_connected) }.stop()
-            state.update { it.copy(executionUncertain = false, scriptMessage = uiText(Res.string.stop_command_sent)) }
+            state.update { it.copy(scriptRunPhase = ScriptRunPhase.STOPPED,
+                scriptMessage = uiText(Res.string.script_stopped), scriptFinishedAtEpochMillis = System.currentTimeMillis()) }
             tr(Res.string.stop_command_sent_robot_stop_is_unconfirmed)
         } },
     )
@@ -229,8 +226,7 @@ internal class ConsoleModel(
         check(acceptingWork && state.value.connected) { tr(Res.string.robot_disconnected_or_app_not_in_foreground) }
         val snapshot = state.value
         check(!snapshot.busy && state.compareAndSet(snapshot, snapshot.copy(busy = true))) { tr(Res.string.another_operation_is_in_progress) }
-        return try { block() } finally { state.update { it.copy(busy = false,
-            scriptMessage = if (it.scriptMessage.resource == Res.string.uploading) uiText(Res.string.upload_unconfirmed) else it.scriptMessage) } }
+        return try { block() } finally { state.update { it.copy(busy = false) } }
     }
 
     fun setForeground(foreground: Boolean) {
@@ -256,7 +252,6 @@ internal class ConsoleModel(
                 val message = error.message ?: error.javaClass.simpleName
                 log(tr(Res.string.error_value,message))
                 state.update { it.copy(error = message) }
-                state.update { if (it.scriptMessage.resource == Res.string.uploading) it.copy(scriptMessage = uiText(Res.string.upload_failed)) else it }
             } finally { state.update { it.copy(busy = false) } }
         }
     }
@@ -374,28 +369,58 @@ internal class ConsoleModel(
         reconnectJob = null
         haltRemote()
         session?.close(); session = null; lab = null
-        state.update { it.copy(connected = false, connectedAddress = null, reconnecting = false,
-            statusMessage = uiText(Res.string.disconnected), error = null, uploadedSource = null,
-            scriptMessage = uiText(Res.string.session_ended_robot_state_unknown), battery = null,
-            signalQuality = null, values = emptyList(), gimbal = null) }
+        state.update {
+            val uncertain = it.scriptRunPhase.mayBeExecuting
+            it.copy(connected = false, connectedAddress = null, reconnecting = false,
+                statusMessage = uiText(Res.string.disconnected), error = null,
+                scriptRunPhase = if (uncertain) ScriptRunPhase.UNKNOWN else it.scriptRunPhase,
+                scriptMessage = if (uncertain) uiText(Res.string.session_ended_robot_state_unknown) else it.scriptMessage,
+                battery = null, signalQuality = null, values = emptyList(), gimbal = null)
+        }
         log(tr(Res.string.connection_closed_scripts_on_the_robot_may_still_be))
     }
 
-    fun upload(source: String) = work {
+    fun runScript(source: String, title: String) = work {
         haltRemote(); session?.exitRemote()
-        state.update { it.copy(uploadedSource = null, scriptMessage = uiText(Res.string.uploading)) }
-        checkNotNull(lab) { tr(Res.string.robot_is_not_connected) }.upload(source, "Hanppie-Desktop")
-        state.update { it.copy(uploadedSource = source, scriptMessage = uiText(Res.string.upload_confirmed_not_started)) }
+        startScript(source, title)
     }
-    fun start() = work {
-        state.update { it.copy(executionUncertain = true, scriptMessage = uiText(Res.string.sending_start_command_result_unconfirmed)) }
-        checkNotNull(lab) { tr(Res.string.robot_is_not_connected) }.start()
-        state.update { it.copy(scriptMessage = uiText(Res.string.start_command_sent_completion_unconfirmed)) }
+
+    private suspend fun startScript(source: String, title: String) {
+        val controller = checkNotNull(lab) { tr(Res.string.robot_is_not_connected) }
+        val startedAt = System.currentTimeMillis()
+        state.update { it.copy(scriptRunId = null, scriptTitle = title,
+            scriptRunPhase = ScriptRunPhase.UPLOADING, scriptStartedAtEpochMillis = startedAt,
+            scriptFinishedAtEpochMillis = null, scriptMessage = uiText(Res.string.uploading), scriptMessages = emptyList()) }
+        val upload = try {
+            controller.upload(source, title)
+        } catch (error: Exception) {
+            state.update { it.copy(scriptRunPhase = ScriptRunPhase.FAILED,
+                scriptFinishedAtEpochMillis = System.currentTimeMillis(), scriptMessage = uiText(Res.string.upload_failed)) }
+            throw error
+        }
+        state.update { it.copy(scriptRunId = upload.runId, scriptRunPhase = ScriptRunPhase.STARTING,
+            scriptMessage = uiText(Res.string.waiting_for_script_start)) }
+        try {
+            controller.start()
+        } catch (error: Exception) {
+            state.update { it.copy(scriptRunPhase = ScriptRunPhase.UNKNOWN,
+                scriptMessage = uiText(Res.string.script_start_state_unknown)) }
+            throw error
+        }
     }
+
     fun stop() = work(allowDuringChat = true) {
         chat.cancelAndJoin()
-        checkNotNull(lab) { tr(Res.string.robot_is_not_connected) }.stop()
-        state.update { it.copy(scriptMessage = uiText(Res.string.stop_command_sent), executionUncertain = false) }
+        state.update { it.copy(scriptRunPhase = ScriptRunPhase.STOPPING, scriptMessage = uiText(Res.string.stopping_script)) }
+        try {
+            checkNotNull(lab) { tr(Res.string.robot_is_not_connected) }.stop()
+            state.update { it.copy(scriptRunPhase = ScriptRunPhase.STOPPED,
+                scriptMessage = uiText(Res.string.script_stopped), scriptFinishedAtEpochMillis = System.currentTimeMillis()) }
+        } catch (error: Exception) {
+            state.update { it.copy(scriptRunPhase = ScriptRunPhase.UNKNOWN,
+                scriptMessage = uiText(Res.string.script_stop_state_unknown)) }
+            throw error
+        }
     }
 
     internal fun receive(frame: DussFrame) {
@@ -408,14 +433,56 @@ internal class ConsoleModel(
             listOf(tr(Res.string.heading_like_uncalibrated) to it.headingLike.toString()) +
                 it.raw.mapIndexed { index, value -> "raw[$index] / offset ${26 + index * 4}" to value.toString() }
         }
-        val message = Telemetry.labMessage(frame)?.let { "type=${it.type} level=${it.level} ${it.text}" }
+        val message = Telemetry.labMessage(frame)
+        val runEvent = message?.let { LabRunProtocol.decode(it.text) }
+        val eventRunId = runEvent?.runId
+        val eventType = runEvent?.type
         state.update { old -> old.copy(packets = old.packets + 1,
             frames = (old.frames + line).takeLast(250),
             battery = if (motion == null) old.battery else motion.batteryPercent,
             signalQuality = signalQuality ?: old.signalQuality,
             gimbal = gimbal ?: old.gimbal,
-            scriptMessages = if (message == null) old.scriptMessages else (old.scriptMessages + message).takeLast(200),
+            scriptMessages = when {
+                runEvent == null && message != null -> (old.scriptMessages + message.text).takeLast(200)
+                else -> old.scriptMessages
+            },
+            scriptRunPhase = if (eventRunId == old.scriptRunId && eventType == LabRunEventType.STARTED)
+                ScriptRunPhase.RUNNING else old.scriptRunPhase,
+            scriptMessage = if (eventRunId == old.scriptRunId && eventType == LabRunEventType.STARTED)
+                uiText(Res.string.script_running) else old.scriptMessage,
             values = values ?: old.values) }
+        runEvent?.let { event ->
+            if (event.runId == state.value.scriptRunId &&
+                (event.type == LabRunEventType.COMPLETED || event.type == LabRunEventType.FAILED)) {
+                finishReportedRun(event)
+            }
+        }
+    }
+
+    private fun finishReportedRun(event: LabRunEvent) {
+        val snapshot = state.value
+        if (snapshot.scriptRunId != event.runId || snapshot.scriptRunPhase == ScriptRunPhase.COMPLETING ||
+            !snapshot.scriptRunPhase.mayBeExecuting) return
+        if (!state.compareAndSet(snapshot, snapshot.copy(scriptRunPhase = ScriptRunPhase.COMPLETING,
+                scriptMessage = uiText(Res.string.finishing_completed_script)))) return
+        scope.launch {
+            try {
+                val accepted = lab?.complete(event.runId) == true
+                if (!accepted) return@launch
+                val phase = if (event.type == LabRunEventType.COMPLETED) ScriptRunPhase.COMPLETED else ScriptRunPhase.FAILED
+                val message = if (phase == ScriptRunPhase.COMPLETED) uiText(Res.string.script_completed) else
+                    uiText(Res.string.script_failed_value, event.text.ifBlank { tr(Res.string.unknown_error) })
+                state.update { current -> if (current.scriptRunId == event.runId) current.copy(
+                    scriptRunPhase = phase, scriptMessage = message,
+                    scriptFinishedAtEpochMillis = System.currentTimeMillis()) else current }
+            } catch (error: Exception) {
+                val message = error.message ?: error.javaClass.simpleName
+                log(tr(Res.string.error_value, message))
+                state.update { current -> if (current.scriptRunId == event.runId) current.copy(
+                    scriptRunPhase = ScriptRunPhase.UNKNOWN,
+                    scriptMessage = uiText(Res.string.completed_marker_received_but_cleanup_failed)) else current }
+            }
+        }
     }
 
     fun clearLogs() { state.update { it.copy(logs = emptyList(), frames = emptyList()) } }
@@ -427,9 +494,14 @@ internal class ConsoleModel(
         chat.cancelAndJoin()
         scope.coroutineContext[Job]?.children?.toList()?.forEach { it.cancelAndJoin() }
         session?.close(); session = null; lab = null
-        state.update { it.copy(connected = false, connectedAddress = null, reconnecting = false, busy = false, statusMessage = uiText(Res.string.disconnected), uploadedSource = null,
-            executionUncertain = false, battery = null, signalQuality = null, values = emptyList(), gimbal = null,
-            scriptMessage = uiText(Res.string.connection_closed_robot_state_unknown)) }
+        state.update {
+            val uncertain = it.scriptRunPhase.mayBeExecuting
+            it.copy(connected = false, connectedAddress = null, reconnecting = false, busy = false,
+                statusMessage = uiText(Res.string.disconnected), battery = null, signalQuality = null,
+                values = emptyList(), gimbal = null,
+                scriptRunPhase = if (uncertain) ScriptRunPhase.UNKNOWN else it.scriptRunPhase,
+                scriptMessage = if (uncertain) uiText(Res.string.connection_closed_robot_state_unknown) else it.scriptMessage)
+        }
     }
     fun close() { connectionRevision++; desiredTarget = null; reconnectJob?.cancel(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); replySpeaker.close(); chat.close(); session?.close(); speech.close(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); settingsScope.cancel(); scope.cancel() }
 }

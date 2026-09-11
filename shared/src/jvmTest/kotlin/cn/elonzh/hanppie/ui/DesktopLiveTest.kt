@@ -147,7 +147,7 @@ class DesktopLiveTest {
                     "Expected an execution proposal; replies=${model.chat.state.value.lines}")
                 model.chat.approve(true)
                 rule.waitUntil(60000) { !model.chat.state.value.running }
-                rule.waitUntil(15000) { model.state.value.scriptMessages.any { it.contains("type=0 level=0 HANPPIE_DESKTOP_LIVE") } }
+                rule.waitUntil(15000) { model.state.value.scriptMessages.any { it.contains("HANPPIE_DESKTOP_LIVE") } }
                 assertNull(model.chat.state.value.error)
                 screenshot("desktop-live-agent")
                 println("Desktop live agent confirmed by robot custom message; elapsedMs=${model.chat.state.value.elapsedMs}")

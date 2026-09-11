@@ -105,9 +105,8 @@ class RobotLiveUiTest {
             rule.onNodeWithText("确认执行").performScrollTo().performClick()
             rule.waitUntil(60000) { rule.onAllNodesWithContentDescription("取消").fetchSemanticsNodes().isEmpty() }
             rule.onNodeWithText("脚本", substring = false).performClick()
-            rule.waitUntil(10000) { rule.onAllNodesWithText("type=0 level=0 HANPPIE_LIVE_2", substring = false).fetchSemanticsNodes().isNotEmpty() }
-            rule.onNodeWithText("停止脚本").performClick()
-            rule.waitUntil(10000) { rule.onAllNodesWithText("停止命令已发送").fetchSemanticsNodes().isNotEmpty() }
+            rule.waitUntil(10000) { rule.onAllNodesWithText("HANPPIE_LIVE_2", substring = true).fetchSemanticsNodes().isNotEmpty() }
+            rule.waitUntil(10000) { rule.onAllNodesWithText("运行完成", substring = false).fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithText("对话", substring = false).performClick()
             rule.onNodeWithTag("chat-input").performTextReplacement("继续，无运动无发射。在机内计算 7*8，沿用刚才的自定义消息回报方式，将计算结果以 HANPPIE_CALC_56 的格式发回来。不要复用上轮脚本的固定回报内容。")
             rule.onNodeWithContentDescription("发送").performClick()
@@ -115,8 +114,8 @@ class RobotLiveUiTest {
             rule.onNodeWithText("确认执行").performScrollTo().performClick()
             rule.waitUntil(60000) { rule.onAllNodesWithContentDescription("取消").fetchSemanticsNodes().isEmpty() }
             rule.onNodeWithText("脚本", substring = false).performClick()
-            rule.waitUntil(10000) { rule.onAllNodesWithText("type=0 level=0 HANPPIE_CALC_56").fetchSemanticsNodes().isNotEmpty() }
-            rule.onNodeWithText("停止脚本").performClick()
+            rule.waitUntil(10000) { rule.onAllNodesWithText("HANPPIE_CALC_56", substring = true).fetchSemanticsNodes().isNotEmpty() }
+            rule.waitUntil(10000) { rule.onAllNodesWithText("运行完成", substring = false).fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithText("设备").performClick()
         }
         rule.onNodeWithContentDescription("断开 / 清理会话").performClick()

@@ -28,6 +28,7 @@ class PhoneUiTest {
         rule.onNodeWithContentDescription("language-zh").performClick()
         rule.onNodeWithText("语言", substring=false).assertIsDisplayed()
         rule.onNodeWithText("脚本").performClick()
+        rule.onNodeWithTag("script-new").performClick()
         rule.onNodeWithTag("script-editor").performTextReplacement("def start():\n    print('Hello S1')")
         rule.onNodeWithText("新脚本 · 未保存").assertExists()
         screenshot("script-keyboard")
@@ -45,6 +46,15 @@ class PhoneUiTest {
         rule.onNodeWithTag("script-editor").assertIsDisplayed()
         screenshot("script-landscape")
         rule.runOnUiThread { rule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
+    }
+
+    @Test fun systemBackReturnsFromUnmodifiedPresetWithoutDiscardDialog() {
+        rule.onNodeWithText("脚本").performClick()
+        rule.onNodeWithContentDescription("script-preset-battery-mood-show").performScrollTo().performClick()
+        rule.onNodeWithTag("script-editor").assertIsDisplayed()
+        rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
+        rule.onNodeWithTag("script-library").assertIsDisplayed()
+        rule.onNodeWithText("替换未保存的脚本？").assertDoesNotExist()
     }
 
     private fun screenshot(name: String) {

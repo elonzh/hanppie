@@ -156,7 +156,7 @@ internal fun RemotePage(
                 }
             }
             Spacer(Modifier.weight(1f))
-            if (connected.executionUncertain) HudButton(tr(Res.string.stop_script), tr(Res.string.stop_script), action = model::stop)
+            if (connected.canStop) HudButton(tr(Res.string.stop_script), tr(Res.string.stop_script), action = model::stop)
             Button(model::haltRemote, colors = ButtonDefaults.buttonColors(
                 color = colors.errorContainer, contentColor = colors.onErrorContainer),
                 modifier = Modifier.semantics { contentDescription = tr(Res.string.stop_remote_control) }) {

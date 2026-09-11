@@ -24,17 +24,20 @@ class LabController internal constructor(private val session: LabChannel,
     private var entered = false
     private var program: LabProgram? = null
     private var digest: ByteArray? = null
+    private var runId: String? = null
     private var startRequested = false
-    fun invalidateMode() { check(!startRequested); entered = false; program = null; digest = null }
+    fun invalidateMode() { check(!startRequested); entered = false; program = null; digest = null; runId = null }
 
-    suspend fun upload(source: String, title: String): String = mutex.withLock {
+    suspend fun upload(source: String, title: String): LabUpload = mutex.withLock {
         check(session.connected) { "机器人未连接" }
         check(!startRequested) { "请先停止已启动的脚本，再上传新脚本" }
+        require(source.isNotBlank()) { "脚本不能为空" }
         val random = SecureRandom()
-        val candidate = LabProgram(source, ByteArray(16).also(random::nextBytes).hex(),
-            ByteArray(8).also(random::nextBytes).hex(), title)
+        val candidateRunId = ByteArray(8).also(random::nextBytes).hex()
+        val candidate = LabProgram(LabRunProtocol.instrument(source, candidateRunId),
+            ByteArray(16).also(random::nextBytes).hex(), candidateRunId, title)
         val bytes = candidate.dsp(LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd")))
-        program = null; digest = null
+        program = null; digest = null; runId = null
         if (!entered) {
             session.labMode()
             session.send(9, 0, 0x3f, 4, "020302".hexBytes())
@@ -45,6 +48,10 @@ class LabController internal constructor(private val session: LabChannel,
             session.send(9, 0x40, 0x3f, 0x57)
             entered = true
         }
+        // A previous client can leave the native single slot marked as running after its Python
+        // start() has returned. Running a replacement explicitly ends that stale native run first.
+        session.send(0xc9, 0x80, 0x3f, 0xba, byteArrayOf(0), sender = 0x42); delay(52)
+        session.labMode()
         session.send(9, 0x40, 0x3f, 0x4c, byteArrayOf(0)); delay(20)
         session.send(0xa9, 0x40, 0x3f, 0xa3, candidate.metadata(0x21)); delay(20)
         session.send(0xa9, 0x40, 0x3f, 0xa3, candidate.guidMetadata()); delay(20)
@@ -54,12 +61,12 @@ class LabController internal constructor(private val session: LabChannel,
         delay(500)
         check(session.connected) { "上传期间机器人连接已断开" }
         val hash = MessageDigest.getInstance("MD5").digest(bytes)
-        program = candidate; digest = hash
+        program = candidate; digest = hash; runId = candidateRunId
         log("FTP 已确认上传 ${bytes.size} 字节，MD5 ${hash.hex()}")
-        hash.hex()
+        LabUpload(hash.hex(), candidateRunId)
     }
 
-    suspend fun start() = mutex.withLock {
+    suspend fun start(): String = mutex.withLock {
         check(entered && session.connected) { "Lab 会话未就绪" }
         check(!startRequested) { "启动命令已经发送；如需重跑，请先停止脚本" }
         val current = checkNotNull(program) { "请先上传脚本" }
@@ -71,18 +78,32 @@ class LabController internal constructor(private val session: LabChannel,
         session.send(0xa9, 0x40, 0x3f, 0xa3, current.metadata(0x52)); delay(20)
         session.send(0xc9, 0x80, 0x3f, 0xba, byteArrayOf(0), sender = 0x42); delay(20)
         session.send(0xc9, 0x80, 0x3f, 0xab, byteArrayOf(1))
-        log("启动命令已发送；需结合机器人回报确认脚本执行结果")
+        log("启动命令已发送；等待机内运行标记")
+        checkNotNull(runId)
     }
 
     suspend fun stop() = mutex.withLock {
         check(session.connected) { "机器人未连接，无法发送停止命令" }
+        finishLocked()
+        log("停止命令已发送")
+    }
+
+    /** Clear the native Lab run after a matching terminal marker; stale markers cannot stop a newer run. */
+    suspend fun complete(completedRunId: String): Boolean = mutex.withLock {
+        if (!startRequested || runId != completedRunId) return@withLock false
+        check(session.connected) { "机器人未连接，无法结束已完成的脚本" }
+        finishLocked()
+        log("已收到机内完成标记并结束 Lab 运行")
+        true
+    }
+
+    private suspend fun finishLocked() {
         program?.let {
             session.send(0xa9, 0x40, 0x3f, 0xa3, it.metadata(0x55)); delay(52)
         }
         session.send(0xc9, 0x80, 0x3f, 0xba, byteArrayOf(0), sender = 0x42)
         startRequested = false
         session.labMode()
-        log("停止命令已发送")
     }
 
     companion object {
@@ -105,3 +126,5 @@ class LabController internal constructor(private val session: LabChannel,
         }
     }
 }
+
+data class LabUpload(val digest: String, val runId: String)

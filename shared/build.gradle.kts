@@ -43,6 +43,7 @@ kotlin {
             implementation(libs.compose.foundation)
             implementation(libs.miuix.ui)
             implementation(libs.coroutines.core)
+            implementation(libs.serialization.json)
         }
         jvmMain { dependsOn(androidJvmMain); dependencies {
             implementation(libs.java.keyring)

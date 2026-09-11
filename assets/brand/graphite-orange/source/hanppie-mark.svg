@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Hanppie robot head">
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 18 17 5M44 18l5-12" stroke="#20242B" stroke-width="6"/>
+    <path d="M17 5h0M49 6h0" stroke="#DF6B38" stroke-width="3"/>
+    <path d="M13 22 20 15h24l7 7 3 25-9 11H19L10 47Z" fill="#F7F3EA" stroke="#20242B" stroke-width="3"/>
+    <path d="M13 29h38v17l-7 7H20l-7-7Z" fill="#20242B"/>
+    <path d="M17 32h12v8H17zm18 0h12v8H35z" fill="#688B99"/>
+    <path d="M19 35h2m4 0h2m10 0h2m4 0h2" stroke="#B9D2DA" stroke-width="2"/>
+    <circle cx="32" cy="45" r="6" fill="#11161C" stroke="#688B99" stroke-width="2"/>
+    <circle cx="32" cy="45" r="2" fill="#DF6B38"/>
+  </g>
+</svg>

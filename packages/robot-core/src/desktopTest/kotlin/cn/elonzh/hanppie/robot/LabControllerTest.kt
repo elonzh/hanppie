@@ -27,21 +27,23 @@ class LabControllerTest {
         val channel = Channel()
         var uploaded = byteArrayOf()
         val controller = LabController(channel, { uploaded = it.copyOf() })
-        val hash = controller.upload("def start():\n    pass\n", "fixture")
+        val upload = controller.upload("def start():\n    pass\n", "fixture")
+        val hash = upload.digest
         assertEquals(MessageDigest.getInstance("MD5").digest(uploaded).hex(), hash)
+        assertTrue(uploaded.decodeToString().contains("__HANPPIE_RUN__|${upload.runId}|"))
         assertFalse(channel.commands.any { it.id == 0xab })
         val metadata = channel.commands.first { it.id == 0xa3 }.payload
         assertEquals(0x21, metadata[0].toInt())
         val size = channel.commands.single { it.id == 0xa1 }.payload
         val declared = (0..3).fold(0) { value, index -> value or ((size[index + 4].toInt() and 255) shl (index * 8)) }
         assertEquals(uploaded.size, declared)
-        controller.start()
+        assertEquals(upload.runId, controller.start())
         assertTrue(channel.running)
         assertContentEquals(byteArrayOf(1, 0) + hash.hexBytes(), channel.commands.single { it.id == 0xa2 }.payload)
         assertEquals(listOf(0xa2, 0xa3, 0xba, 0xab), channel.commands.takeLast(4).map { it.id })
         assertContentEquals(metadata.copyOfRange(1, metadata.size), channel.commands.takeLast(3).first().payload.drop(1).toByteArray())
         assertFailsWith<IllegalStateException> { controller.start() }
-        assertFailsWith<IllegalStateException> { controller.upload("pass", "replacement") }
+        assertFailsWith<IllegalStateException> { controller.upload("def start():\n    pass\n", "replacement") }
         controller.stop()
         assertFalse(channel.running)
         assertEquals(0x55, channel.commands.takeLast(2).first().payload[0].toInt())
@@ -51,10 +53,23 @@ class LabControllerTest {
         controller.stop()
     }
 
+    @Test fun matchingCompletionClearsRunAndStaleCompletionDoesNot() = runBlocking {
+        val channel = Channel()
+        val controller = LabController(channel, {})
+        val upload = controller.upload("def start():\n    pass\n", "fixture")
+        controller.start()
+        assertFalse(controller.complete("0000000000000000"))
+        assertTrue(channel.running)
+        assertTrue(controller.complete(upload.runId))
+        assertFalse(channel.running)
+        controller.upload("def start():\n    pass\n", "next")
+        Unit
+    }
+
     @Test fun failedTransferCannotStart() = runBlocking {
         val channel = Channel()
         val controller = LabController(channel, { throw IOException("FTP unavailable") })
-        assertFailsWith<IOException> { controller.upload("pass", "fixture") }
+        assertFailsWith<IOException> { controller.upload("def start():\n    pass\n", "fixture") }
         assertFailsWith<IllegalStateException> { controller.start() }
         assertFalse(channel.commands.any { it.id == 0xa2 || it.id == 0xab })
     }
@@ -62,12 +77,12 @@ class LabControllerTest {
     @Test fun partialStartRequiresStopBeforeRetry() = runBlocking {
         val channel = Channel()
         val controller = LabController(channel, {})
-        controller.upload("pass", "fixture")
+        controller.upload("def start():\n    pass\n", "fixture")
         channel.failId = 0xa2
         assertFailsWith<IOException> { controller.start() }
         channel.failId = null
         assertFailsWith<IllegalStateException> { controller.start() }
-        assertFailsWith<IllegalStateException> { controller.upload("pass", "replacement") }
+        assertFailsWith<IllegalStateException> { controller.upload("def start():\n    pass\n", "replacement") }
         controller.stop()
         controller.start()
         controller.stop()

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import androidx.compose.runtime.*
@@ -18,18 +17,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.sample
 import top.yukonga.miuix.kmp.basic.*
 
@@ -44,9 +42,10 @@ private val labels get() = listOf(tr(Res.string.robot), tr(Res.string.script), t
 internal fun Console(
     model: ConsoleModel,
     document: MutableState<EditorDocument>,
-    onOpen: () -> Unit = {},
-    onSave: () -> Unit = {},
+    onImport: () -> Unit = {},
+    onExport: () -> Unit = {},
     fileError: String? = null,
+    onFileError: (String?) -> Unit = {},
     onSpeechSettings: (() -> Unit)? = null,
     onVoiceInput: (() -> Unit)? = null,
     onPushToTalkStart: (() -> Unit)? = null,
@@ -63,9 +62,6 @@ internal fun Console(
     var manual by rememberSaveable { mutableStateOf(false) }
     var ip by rememberSaveable { mutableStateOf("") }
     var appId by rememberSaveable { mutableStateOf("") }
-    var confirmOpen by remember { mutableStateOf(false) }
-    var armed by remember(document.value.source) { mutableStateOf(false) }
-    var details by rememberSaveable { mutableStateOf(false) }
     var diagnosticTab by rememberSaveable { mutableStateOf(0) }
     var cockpit by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state.connected) { if (!state.connected) cockpit = false }
@@ -87,14 +83,6 @@ internal fun Console(
             }
         }
     }
-    WorkbenchDialog(show = confirmOpen, onDismissRequest = { confirmOpen = false }, title = tr(Res.string.replace_unsaved_script),
-        summary = tr(Res.string.your_changes_have_not_been_saved)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button({ confirmOpen = false }, Modifier.weight(1f).heightIn(min = 48.dp)) { Text(tr(Res.string.back)) }
-            Button({ confirmOpen = false; onOpen() }, Modifier.weight(1f).heightIn(min = 48.dp)) { Text(tr(Res.string.choose_file)) }
-        }
-    }
-
     BoxWithConstraints(Modifier.fillMaxSize().background(CanvasColor).safeDrawingPadding().imePadding()) {
         val compact = maxWidth < 720.dp
         Row(Modifier.fillMaxSize()) {
@@ -109,17 +97,19 @@ internal fun Console(
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Column(Modifier.weight(1f).fillMaxWidth().widthIn(max = 1080.dp)
                     .padding(horizontal = if (compact) 20.dp else 28.dp)) {
-                    Row(Modifier.fillMaxWidth().height(72.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(if (selectedTab == 0) tr(Res.string.my_robot) else labels[selectedTab], fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Ink)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(6.dp).background(if (state.connected) Color(0xff32aa78) else Color(0xffaab1bb), RoundedCornerShape(50)))
-                            Spacer(Modifier.width(6.dp))
-                            Text(if (state.connected) tr(Res.string.connected) else state.status, fontSize = 12.sp, color = Muted)
+                    if (selectedTab != 1) {
+                        Row(Modifier.fillMaxWidth().height(72.dp), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(if (selectedTab == 0) tr(Res.string.my_robot) else labels[selectedTab], fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Ink)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(6.dp).background(if (state.connected) Color(0xff32aa78) else Color(0xffaab1bb), RoundedCornerShape(50)))
+                                Spacer(Modifier.width(6.dp))
+                                Text(if (state.connected) tr(Res.string.connected) else state.status, fontSize = 12.sp, color = Muted)
+                            }
                         }
+                        if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
+                        (fileError ?: state.error)?.let { Text(it, Modifier.padding(vertical = 8.dp), color = MiuixTheme.colorScheme.error, fontSize = 13.sp) }
                     }
-                    if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
-                    (fileError ?: state.error)?.let { Text(it, Modifier.padding(vertical = 8.dp), color = MiuixTheme.colorScheme.error, fontSize = 13.sp) }
                     when (selectedTab) {
                         3 -> pageState.SaveableStateProvider("chat") { ChatPage(model, Modifier.weight(1f), onVoiceInput) { navigate(4) } }
                         4 -> SettingsPage(model, Modifier.weight(1f), onSpeechSettings)
@@ -168,40 +158,7 @@ internal fun Console(
                                 Text(tr(Res.string.connect_your_phone_or_computer_to_the_same_wi), fontSize = 12.sp, color = Muted)
                             }
                         }
-                        1 -> Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text((document.value.path?.substringAfterLast('/') ?: tr(Res.string.new_script)) + if (document.value.dirty) tr(Res.string.unsaved) else "", fontSize = 14.sp)
-                                    Text("Python 3.6", fontSize = 11.sp, color = Muted)
-                                }
-                                Button({ if (document.value.dirty) confirmOpen = true else onOpen() }, enabled = !document.value.busy,
-                                    insideMargin = PaddingValues(12.dp, 8.dp)) { Text(tr(Res.string.open_py), fontSize = 13.sp) }
-                                Spacer(Modifier.width(6.dp))
-                                Button(onSave, enabled = !document.value.busy, insideMargin = PaddingValues(12.dp, 8.dp)) { Text(tr(Res.string.save_py), fontSize = 13.sp) }
-                            }
-                            Box(Modifier.weight(1f).fillMaxWidth().background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(20.dp)).padding(16.dp)) {
-                                BasicTextField(document.value.source, { document.value = document.value.copy(source = it) },
-                                    Modifier.fillMaxSize().testTag("script-editor").verticalScroll(rememberScrollState()),
-                                    enabled = !document.value.busy, cursorBrush = SolidColor(Accent),
-                                    textStyle = TextStyle(color = Ink, fontSize = 14.sp, lineHeight = 23.sp, fontFamily = FontFamily.Monospace))
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(if (armed) androidx.compose.ui.state.ToggleableState.On else androidx.compose.ui.state.ToggleableState.Off, { armed = !armed })
-                                Text(tr(Res.string.allow_this_script_to_run), Modifier.padding(start = 8.dp).weight(1f), fontSize = 13.sp)
-                                Text(tr(Res.string.execution_details), Modifier.clickable { details = !details }.padding(8.dp), color = Muted, fontSize = 12.sp)
-                            }
-                            if (details) Text(tr(Res.string.scripts_may_move_the_robot_upload_again_after_editing), fontSize = 12.sp, color = Muted)
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button({ model.upload(document.value.source) }, enabled = state.canUpload(document.value.source)) { Text(tr(Res.string.upload_only), fontSize = 13.sp) }
-                                Button(model::start, enabled = state.canStart(document.value.source, armed), colors = ButtonDefaults.buttonColorsPrimary()) { Text(tr(Res.string.run_uploaded_script), fontSize = 13.sp) }
-                                Button(model::stop, enabled = state.canStop) { Text(tr(Res.string.stop_script), fontSize = 13.sp) }
-                            }
-                            Text(state.scriptStatus, fontSize = 12.sp, color = Muted)
-                            if (state.scriptMessages.isNotEmpty()) LazyColumn(Modifier.heightIn(max = 64.dp)) {
-                                items(state.scriptMessages.takeLast(10)) { Text(it, fontSize = 11.sp, fontFamily = FontFamily.Monospace) }
-                            }
-                            Spacer(Modifier.height(4.dp))
-                        }
+                        1 -> ScriptPage(model, document, compact, onImport, onExport, fileError, onFileError)
                         2 -> Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 listOf(tr(Res.string.logs), tr(Res.string.telemetry), tr(Res.string.packets_2)).forEachIndexed { index, label ->
@@ -244,12 +201,64 @@ internal fun Console(
 
                     }
                 }
+                if (selectedTab != 1) {
+                    ScriptRunBanner(state, onOpen = { navigate(1) }, onStop = model::stop)
+                }
                 if (compact) NavigationBar(Modifier.testTag("bottom-navigation"),
                     color = MiuixTheme.colorScheme.surfaceVariant, defaultWindowInsetsPadding = false) {
                     labels.forEachIndexed { index, label ->
                         NavigationBarItem(selected = selectedTab == index, onClick = { navigate(index) },
                             icon = navigationIcons[index], label = label)
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScriptRunBanner(state: ConsoleState, onOpen: () -> Unit, onStop: () -> Unit) {
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    val active = state.scriptRunPhase.active
+    val recentTerminal = state.scriptFinishedAtEpochMillis?.let { now - it < 8_000 } == true
+    LaunchedEffect(active, state.scriptFinishedAtEpochMillis) {
+        while (active || state.scriptFinishedAtEpochMillis?.let { now - it < 8_000 } == true) {
+            delay(1_000)
+            now = System.currentTimeMillis()
+        }
+    }
+    if (!active && !recentTerminal) return
+    val elapsed = state.scriptStartedAtEpochMillis?.let { ((now - it).coerceAtLeast(0) / 1_000) }
+    val elapsedText = elapsed?.let { "%d:%02d".format(it / 60, it % 60) }
+    Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
+        .testTag("script-run-banner").clickable(onClick = onOpen),
+        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainerHigh),
+        insideMargin = PaddingValues(0.dp)) {
+        Column {
+            if (active) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(8.dp).background(scriptRunColor(state.scriptRunPhase), RoundedCornerShape(50)))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(state.scriptTitle ?: tr(Res.string.script), fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(listOfNotNull(state.scriptStatus, elapsedText).joinToString(" · "), fontSize = 11.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                    state.scriptMessages.lastOrNull()?.let {
+                        Text(it, fontSize = 11.sp, maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                    }
+                }
+                if (state.canStop) {
+                    WorkbenchIconButton(
+                        label = tr(Res.string.stop_script),
+                        glyph = WorkbenchGlyph.STOP,
+                        onClick = onStop,
+                        danger = true,
+                        tag = "script-banner-stop",
+                    )
                 }
             }
         }

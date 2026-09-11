@@ -9,12 +9,13 @@ class EditorDocumentTest {
         assertTrue(initial.copy(source = "pass\n").dirty)
         assertFalse(initial.copy(source = "pass\n").copy(source = "pass").dirty)
     }
-    @Test fun saveOnlyMarksWrittenSnapshotAsSaved() {
-        val edited = EditorDocument("old").copy(source = "newer")
-        val saved = edited.saved("old", "/script.py")
-        assertTrue(saved.dirty)
-        assertEquals("newer", saved.source)
-        assertEquals("/script.py", saved.path)
-        assertFalse(saved.saved("newer", "/script.py").dirty)
+    @Test fun storingTheReturnedLibrarySnapshotClearsDirtyState() {
+        val original = StoredScript("id", "Demo", "old", 1, 1)
+        val edited = EditorDocument.from(original).copy(source = "newer")
+        assertTrue(edited.dirty)
+        val stored = edited.stored(original.copy(source = "newer", updatedAtEpochMillis = 2))
+        assertFalse(stored.dirty)
+        assertEquals("newer", stored.source)
+        assertEquals("Demo", stored.displayName)
     }
 }

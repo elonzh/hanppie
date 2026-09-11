@@ -6,12 +6,12 @@ import top.yukonga.miuix.kmp.theme.darkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme
 
 class AppearanceTest {
-    @Test fun defaultsUseUnmodifiedNativeColorsAndFollowSystem() {
+    @Test fun defaultsUseGraphiteOrangeAndFollowSystem() {
         val settings = AppearanceSettings.decode(null)
-        assertEquals(ThemePreset.NATIVE, settings.preset)
+        assertEquals(ThemePreset.CHAPPIE, settings.preset)
         assertEquals(NightMode.SYSTEM, settings.nightMode)
         for (dark in listOf(false, true)) {
-            val expected = if (dark) darkColorScheme() else lightColorScheme()
+            val expected = if (dark) GraphiteOrangeDarkColors else GraphiteOrangeLightColors
             val actual = appearanceColors(settings, dark)
             assertEquals(expected.primary, actual.primary)
             assertEquals(expected.background, actual.background)
@@ -35,6 +35,30 @@ class AppearanceTest {
         assertEquals(custom, restored.settings.custom)
         assertEquals(rgbColor(custom.lightAccent), appearanceColors(controller.settings, false).primary)
         assertEquals(rgbColor(custom.darkBackground), appearanceColors(controller.settings, true).background)
+    }
+
+    @Test fun nativePresetKeepsUnmodifiedMiuixColors() {
+        val settings = AppearanceSettings(preset = ThemePreset.NATIVE)
+        for (dark in listOf(false, true)) {
+            val expected = if (dark) darkColorScheme() else lightColorScheme()
+            val actual = appearanceColors(settings, dark)
+            assertEquals(expected.primary, actual.primary)
+            assertEquals(expected.background, actual.background)
+            assertEquals(expected.surfaceContainer, actual.surfaceContainer)
+            assertEquals(expected.onSurface, actual.onSurface)
+        }
+    }
+
+    @Test fun chappieUsesGraphiteOrangePaletteInBothModes() {
+        val settings = AppearanceSettings(preset = ThemePreset.CHAPPIE)
+        val light = appearanceColors(settings, dark = false)
+        val dark = appearanceColors(settings, dark = true)
+        assertEquals(HanppieDesignTokens.Light.Accent, light.primary)
+        assertEquals(HanppieDesignTokens.Light.Background, light.background)
+        assertEquals(HanppieDesignTokens.Light.Surface, light.surfaceContainer)
+        assertEquals(HanppieDesignTokens.Dark.Accent, dark.primary)
+        assertEquals(HanppieDesignTokens.Dark.Background, dark.background)
+        assertEquals(HanppieDesignTokens.Dark.Surface, dark.surfaceContainer)
     }
 
     @Test fun invalidSavedSettingsRecoverAndInvalidEditsCannotBeApplied() {

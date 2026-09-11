@@ -15,36 +15,11 @@ import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme
 
-private val ChappieColors = darkColorScheme(
-    primary = Color(0xffed7b43), onPrimary = Color(0xff27150b),
-    primaryVariant = Color(0xff493025), onPrimaryVariant = Color(0xffffb58a),
-    primaryContainer = Color(0xffed7b43), onPrimaryContainer = Color(0xff27150b),
-    disabledPrimary = Color(0xff493025), disabledOnPrimary = Color(0xffa98470),
-    disabledPrimaryButton = Color(0xff493025), disabledOnPrimaryButton = Color(0xffa98470),
-    secondary = Color(0xff344159), onSecondary = Color(0xffe6ebf2),
-    secondaryVariant = Color(0xff29334a), onSecondaryVariant = Color(0xffe6ebf2),
-    secondaryContainer = Color(0xff344159), onSecondaryContainer = Color(0xffa9b3c4),
-    secondaryContainerVariant = Color(0xff29334a), onSecondaryContainerVariant = Color(0xffa9b3c4),
-    disabledSecondary = Color(0xff1b2230), disabledOnSecondary = Color(0xff7c8ba5),
-    disabledSecondaryVariant = Color(0xff1b2230), disabledOnSecondaryVariant = Color(0xff7c8ba5),
-    tertiaryContainer = Color(0xff173b4a), onTertiaryContainer = Color(0xff83d5f3),
-    background = Color(0xff11151d), onBackground = Color(0xffe6ebf2),
-    onBackgroundVariant = Color(0xffa9b3c4),
-    surface = Color(0xff11151d), onSurface = Color(0xffe6ebf2),
-    surfaceVariant = Color(0xff161c27), onSurfaceSecondary = Color(0xffa9b3c4),
-    onSurfaceVariantSummary = Color(0xffa9b3c4), onSurfaceVariantActions = Color(0xffacb9d2),
-    surfaceContainer = Color(0xff1b2230), onSurfaceContainer = Color(0xffe6ebf2),
-    onSurfaceContainerVariant = Color(0xffa9b3c4),
-    surfaceContainerHigh = Color(0xff29334a), onSurfaceContainerHigh = Color(0xffa9b3c4),
-    surfaceContainerHighest = Color(0xff344159), onSurfaceContainerHighest = Color(0xffe6ebf2),
-    outline = Color(0xff46536c), dividerLine = Color(0xff46536c),
-    error = Color(0xffffb4ab), onError = Color(0xff690005),
-    errorContainer = Color(0xff73322c), onErrorContainer = Color(0xffffdad6),
-)
-
 internal fun appearanceColors(settings: AppearanceSettings, dark: Boolean): Colors {
     if (settings.preset == ThemePreset.NATIVE) return if (dark) darkColorScheme() else lightColorScheme()
-    if (settings.preset == ThemePreset.CHAPPIE && dark) return ChappieColors
+    if (settings.preset == ThemePreset.CHAPPIE) {
+        return if (dark) GraphiteOrangeDarkColors else GraphiteOrangeLightColors
+    }
     val palette = when (settings.preset) {
         ThemePreset.CHAPPIE -> CustomPalette()
         ThemePreset.OCEAN -> CustomPalette("#286EA8", "#F2F7FC", "#72BCF5", "#111923")

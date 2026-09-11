@@ -9,13 +9,28 @@ import androidx.compose.ui.window.*
 import java.awt.FileDialog
 import java.awt.Frame
 import java.nio.file.Files
+import java.nio.file.Path
 import kotlinx.coroutines.*
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
 
 internal fun ConsoleModel(persistSettings: Boolean = false): ConsoleModel = ConsoleModel(SystemSpeech(),
     speakerInput = DesktopSpeakerInput(),
-    settingsStore = if (persistSettings) DesktopSettingsStore() else null)
+    settingsStore = if (persistSettings) DesktopSettingsStore() else null,
+    scriptStore = if (persistSettings) JsonScriptStore(desktopScriptLibraryPath()) else MemoryScriptStore())
+
+private fun desktopScriptLibraryPath(): Path {
+    val home = Path.of(System.getProperty("user.home"))
+    val os = System.getProperty("os.name").lowercase()
+    val directory = when {
+        os.contains("mac") -> home.resolve("Library/Application Support/Hanppie")
+        os.contains("win") -> System.getenv("APPDATA")?.let(Path::of)?.resolve("Hanppie")
+            ?: home.resolve("AppData/Roaming/Hanppie")
+        else -> System.getenv("XDG_DATA_HOME")?.takeIf { it.isNotBlank() }?.let(Path::of)?.resolve("hanppie")
+            ?: home.resolve(".local/share/hanppie")
+    }
+    return directory.resolve("script-library-v1.json")
+}
 
 @Composable
 fun DesktopWorkbench(onExit: () -> Unit) {
@@ -48,7 +63,7 @@ fun DesktopWorkbench(onExit: () -> Unit) {
             onDispose { window.removeWindowFocusListener(listener) }
         }
         WorkbenchTheme(appearance) {
-            Console(model, document, onOpen = {
+            Console(model, document, onImport = {
                 val file = chooseFile(false)
                 if (file != null) {
                     document.value = document.value.copy(busy = true)
@@ -61,21 +76,20 @@ fun DesktopWorkbench(onExit: () -> Unit) {
                         finally { document.value = document.value.copy(busy = false) }
                     }
                 }
-            }, onSave = {
-                val file = chooseFile(true)
+            }, onExport = {
+                val file = chooseFile(true, suggestedScriptFileName(document.value.displayName))
                 if (file != null) {
                     val snapshot = document.value.source
                     document.value = document.value.copy(busy = true)
                     scope.launch {
                         try {
                             withContext(Dispatchers.IO) { Files.writeString(file.toPath(), snapshot) }
-                            document.value = document.value.saved(snapshot, file.absolutePath)
                             fileError = null
                         } catch (error: Exception) { fileError = error.message }
                         finally { document.value = document.value.copy(busy = false) }
                     }
                 }
-            }, fileError = fileError)
+            }, fileError = fileError, onFileError = { fileError = it })
             WorkbenchDialog(show = confirmExit, onDismissRequest = { confirmExit = false }, title = tr(Res.string.quit_hanppie),
                 summary = tr(Res.string.unsaved_changes_will_be_lost_disconnecting_does_not_guarantee)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -87,11 +101,11 @@ fun DesktopWorkbench(onExit: () -> Unit) {
     }
 }
 
-private fun chooseFile(save: Boolean): java.io.File? {
+private fun chooseFile(save: Boolean, suggestedName: String? = null): java.io.File? {
     val dialog = FileDialog(null as Frame?, if (save) tr(Res.string.save_python_script) else tr(Res.string.open_python_script),
         if (save) FileDialog.SAVE else FileDialog.LOAD)
     try {
-        dialog.file = if (save) "script.py" else "*.py"
+        dialog.file = if (save) suggestedName ?: "script.py" else "*.py"
         dialog.isVisible = true
         return dialog.file?.let { java.io.File(dialog.directory, it) }
     } finally { dialog.dispose() }

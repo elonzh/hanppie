@@ -21,9 +21,14 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "Hanppie"
             packageVersion = "0.1.0"
-            macOS { packageVersion = "1.0.0" }
             description = "RoboMaster S1 控制台"
             vendor = "Hanppie"
+            windows { iconFile.set(project.file("src/main/resources/icons/hanppie.ico")) }
+            linux { iconFile.set(project.file("src/main/resources/icons/hanppie.png")) }
+            macOS {
+                packageVersion = "1.0.0"
+                iconFile.set(project.file("src/main/resources/icons/hanppie.icns"))
+            }
         }
     }
 }

@@ -12,8 +12,8 @@ internal enum class NightMode { SYSTEM, LIGHT, DARK;
 }
 
 internal data class CustomPalette(
-    val lightAccent: String = "#C45F2C", val lightBackground: String = "#F4F6FA",
-    val darkAccent: String = "#ED7B43", val darkBackground: String = "#11151D",
+    val lightAccent: String = "#DF6B38", val lightBackground: String = "#F3F5F7",
+    val darkAccent: String = "#E0713C", val darkBackground: String = "#11161C",
 ) {
     fun isValid() = listOf(lightAccent, lightBackground, darkAccent, darkBackground).all {
         Regex("#[0-9a-fA-F]{6}").matches(it)
@@ -21,7 +21,7 @@ internal data class CustomPalette(
 }
 
 internal data class AppearanceSettings(
-    val preset: ThemePreset = ThemePreset.NATIVE,
+    val preset: ThemePreset = ThemePreset.CHAPPIE,
     val nightMode: NightMode = NightMode.SYSTEM,
     val custom: CustomPalette = CustomPalette(),
 ) {

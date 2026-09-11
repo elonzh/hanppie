@@ -5,41 +5,37 @@ import cn.elonzh.hanppie.robot.GimbalTelemetry
 
 class ConsoleStateTest {
     @Test fun disconnectedNeverEnablesDeviceWrites() {
-        val state = ConsoleState(uploadedSource = "pass")
-        assertFalse(state.canUpload("pass"))
-        assertFalse(state.canStart("pass", true))
+        val state = ConsoleState()
+        assertFalse(state.canRun("pass"))
         assertFalse(state.canStop)
     }
 
-    @Test fun startRequiresArmAndExactUploadedSource() {
-        val state = ConsoleState(connected = true, uploadedSource = "pass")
-        assertTrue(state.canStart("pass", true))
-        assertFalse(state.canStart("pass", false))
-        assertFalse(state.canStart("pass\n", true))
-        assertFalse(state.copy(uploadedSource = null).canStart("pass", true))
-        assertFalse(state.copy(busy = true).canStart("pass", true))
+    @Test fun runButtonIsTheExplicitActionAndRequiresNonBlankSource() {
+        val state = ConsoleState(connected = true)
+        assertTrue(state.canRun("pass"))
+        assertFalse(state.canRun(""))
+        assertFalse(state.copy(busy = true).canRun("pass"))
     }
 
-    @Test fun uncertainStartAllowsStopButNotReplayOrOverwrite() {
-        val state = ConsoleState(connected = true, uploadedSource = "pass", executionUncertain = true)
-        assertFalse(state.canStart("pass", true))
-        assertFalse(state.canUpload("new source"))
+    @Test fun activeOrUnknownRunAllowsStopButNotAnotherRun() {
+        val state = ConsoleState(connected = true, scriptRunPhase = ScriptRunPhase.RUNNING)
+        assertFalse(state.canRun("pass"))
         assertTrue(state.canStop)
-        assertTrue(state.copy(executionUncertain = false).canUpload("new source"))
+        assertTrue(state.copy(scriptRunPhase = ScriptRunPhase.COMPLETED).canRun("pass"))
+        assertFalse(state.copy(scriptRunPhase = ScriptRunPhase.COMPLETING).canStop)
     }
 
-    @Test fun lossInvalidatesUploadAndStaleTelemetry() {
+    @Test fun lossInvalidatesStaleTelemetryAndRunPermission() {
         val state = ConsoleState(connected = true, battery = 90, signalQuality = 36, values = listOf("raw" to "1"),
             gimbal = GimbalTelemetry(0.0,0.0,10.0,20.0,0),
-            uploadedSource = "pass", executionUncertain = true).lost("timeout")
+            scriptRunPhase = ScriptRunPhase.RUNNING).lost("timeout")
         assertFalse(state.connected)
         assertNull(state.battery)
         assertNull(state.signalQuality)
         assertTrue(state.values.isEmpty())
         assertNull(state.gimbal)
-        assertNull(state.uploadedSource)
-        assertTrue(state.executionUncertain)
-        assertFalse(state.canStart("pass", true))
+        assertEquals(ScriptRunPhase.UNKNOWN, state.scriptRunPhase)
+        assertFalse(state.canRun("pass"))
         assertFalse(state.canStop)
         assertEquals("timeout", state.error)
     }

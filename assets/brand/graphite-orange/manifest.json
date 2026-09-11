@@ -1,0 +1,23 @@
+{
+  "name": "Hanppie Graphite Orange",
+  "version": 1,
+  "designAuthority": "../../../DESIGN.md",
+  "source": {
+    "appIcon": "source/app-icon-master.png",
+    "companion": "source/hanppie-companion-master.png",
+    "smallMark": "source/hanppie-mark.svg",
+    "expressions": {
+      "STANDBY": "source/hanppie-expression-standby.svg",
+      "ACTIVE": "source/hanppie-expression-active.svg",
+      "RECORDING": "source/hanppie-expression-recording.svg",
+      "TALKING": "source/hanppie-expression-talking.svg"
+    }
+  },
+  "runtime": {
+    "composeResources": "../../../shared/src/commonMain/composeResources/drawable",
+    "androidLauncher": "../../../androidApp/src/main/res",
+    "desktopIcons": "../../../desktopApp/src/main/resources/icons",
+    "themeTokens": "../../../shared/src/commonMain/kotlin/cn/elonzh/hanppie/ui/HanppieDesignTokens.kt"
+  },
+  "export": "./export.sh"
+}
