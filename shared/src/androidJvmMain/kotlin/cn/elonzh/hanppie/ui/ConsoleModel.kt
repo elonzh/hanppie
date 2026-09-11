@@ -23,11 +23,12 @@ internal class ConsoleModel(
     var voicePageActive = false
     val isForeground: Boolean get() = acceptingWork
     val state = MutableStateFlow(ConsoleState())
-    val modelSettings = MutableStateFlow(ModelSettings(
+    private fun defaultModelSettings() = ModelSettings(
         endpoint = System.getenv("HANPPIE_LLM_ENDPOINT") ?: ModelSettings().endpoint,
         model = System.getenv("HANPPIE_LLM_MODEL") ?: ModelSettings().model,
         apiKey = System.getenv("HANPPIE_LLM_API_KEY") ?: "",
-    ))
+    )
+    val modelSettings = MutableStateFlow(defaultModelSettings())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val settingsScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val settingsBusy = MutableStateFlow(settingsStore != null)
@@ -50,29 +51,54 @@ internal class ConsoleModel(
         }
     }
     fun saveSettings() {
-        val store = settingsStore ?: return
-        if (!settingsBusy.compareAndSet(false, true)) return
         val snapshot = SavedSettings(modelSettings.value, autoReadReplies.value, controlSettings.value)
+        persistSettings(snapshot, Res.string.settings_saved)
+    }
+    fun restoreDefaultSettings() {
+        val defaults = SavedSettings()
+        modelSettings.value = defaultModelSettings()
+        autoReadReplies.value = defaults.autoRead
+        controlSettings.value = defaults.control
+        // Environment overrides stay effective at runtime but are never copied into persistent storage by reset.
+        persistSettings(defaults, Res.string.default_settings_restored)
+    }
+    private fun persistSettings(snapshot: SavedSettings, success: org.jetbrains.compose.resources.StringResource) {
+        val store = settingsStore
+        if (store == null) {
+            settingsMessage.value = uiText(success)
+            return
+        }
+        if (!settingsBusy.compareAndSet(false, true)) return
         settingsMessage.value = null
         settingsScope.launch {
             try {
                 // Saving a blank key intentionally clears the previously stored credential.
                 if (snapshot.model.apiKey.isNotBlank()) snapshot.model.validate()
                 store.save(snapshot)
-                settingsMessage.value = uiText(Res.string.settings_saved)
+                settingsMessage.value = uiText(success)
             } catch (_: Exception) {
                 settingsMessage.value = uiText(Res.string.settings_save_failed)
             } finally { settingsBusy.value = false }
         }
     }
     private data class MediaRequest(val session: AppSession, val start: Boolean, val audio: Boolean)
+    private data class LedRequest(val session: AppSession, val color: RobotLedColor?)
     private val mediaRequests = kotlinx.coroutines.channels.Channel<MediaRequest>(16)
+    private val ledRequests = kotlinx.coroutines.channels.Channel<LedRequest>(kotlinx.coroutines.channels.Channel.CONFLATED)
     private val mediaScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     init {
         mediaScope.launch {
             for (request in mediaRequests) if (request.session.connected) {
                 runCatching { request.session.media(request.start, request.audio) }
                     .onFailure { log(tr(Res.string.media_request_failed_value,it.message)) }
+            }
+        }
+        mediaScope.launch {
+            for (request in ledRequests) if (request.session === session && request.session.connected) {
+                runCatching {
+                    val color = request.color
+                    request.session.setLed(color?.red ?: 0, color?.green ?: 0, color?.blue ?: 0, color != null)
+                }.onFailure { log(tr(Res.string.led_request_failed_value, it.message)) }
             }
         }
     }
@@ -170,6 +196,11 @@ internal class ConsoleModel(
     fun stopMedia() {
         videoSink = null; audioSink = null
         session?.let { if (mediaRequests.trySend(MediaRequest(it, false, false)).isFailure) log(tr(Res.string.media_stop_queue_is_full)) }
+    }
+    fun setRemoteLed(color: RobotLedColor?) {
+        val current = session ?: return
+        if (acceptingWork && ledRequests.trySend(LedRequest(current, color)).isFailure)
+            log(tr(Res.string.led_request_failed_value, tr(Res.string.request_queue_is_closed)))
     }
     @Volatile private var acceptingWork = true
     val chat = ChatAgent(
@@ -400,5 +431,5 @@ internal class ConsoleModel(
             executionUncertain = false, battery = null, signalQuality = null, values = emptyList(), gimbal = null,
             scriptMessage = uiText(Res.string.connection_closed_robot_state_unknown)) }
     }
-    fun close() { connectionRevision++; desiredTarget = null; reconnectJob?.cancel(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); replySpeaker.close(); chat.close(); session?.close(); speech.close(); mediaRequests.close(); mediaScope.cancel(); settingsScope.cancel(); scope.cancel() }
+    fun close() { connectionRevision++; desiredTarget = null; reconnectJob?.cancel(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); replySpeaker.close(); chat.close(); session?.close(); speech.close(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); settingsScope.cancel(); scope.cancel() }
 }

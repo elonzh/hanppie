@@ -170,6 +170,10 @@ class AppSession(private val target: RobotTarget,
         check(remote && active.get()) { "遥控未启用" }
         triggerDeadline = System.nanoTime() + 120_000_000
     }
+    fun setLed(red: Int, green: Int, blue: Int, enabled: Boolean = true) = synchronized(txLock) {
+        check(active.get()) { "机器人未连接" }
+        send(9, 0x40, 0x3f, 0x33, RemoteControl.led(red, green, blue, enabled))
+    }
     fun media(start: Boolean, audio: Boolean = false) {
         if (start) send(1, 0x40, 2, 0x18, "0403000000".hexBytes())
         for (control in if (start) listOf(1, 2) else listOf(2, 1))

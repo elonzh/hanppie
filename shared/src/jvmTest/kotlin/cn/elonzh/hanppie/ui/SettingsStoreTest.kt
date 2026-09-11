@@ -15,6 +15,7 @@ class SettingsStoreTest {
         assertEquals(ControlSettings(90), restored.control)
         assertEquals(KeyBinding(ControlKey.G), restored.control.shortcuts[ControlAction.SwitchAmmo])
         assertEquals(KeyBinding(ControlKey.R, shift = true), restored.control.shortcuts[ControlAction.Recording])
+        assertEquals(RemoteLedSettings(), restored.control.remoteLeds)
     }
 
     @Test fun customMotionAndShortcutSettingsRoundTrip() {
@@ -24,9 +25,37 @@ class SettingsStoreTest {
             creepMultiplier = .5,
             joystickDeadZone = .2,
             shortcuts = ControlShortcuts().bind(ControlAction.Fire, KeyBinding(ControlKey.F)),
+            remoteLeds = RemoteLedSettings(active = RobotLedColor(1, 2, 3)),
         )
         val restored = settingsJson.decodeFromString<SavedSettings>(settingsJson.encodeToString(SavedSettings(control = control)))
         assertEquals(control, restored.control)
+        assertEquals("#010203", restored.control.remoteLeds.active.hex)
+        assertEquals(RobotLedColor(0xab, 0xcd, 0xef), RobotLedColor.parse("#aBcDeF"))
+        assertNull(RobotLedColor.parse("abcdef"))
+        assertEquals(RemoteLedState.TALKING, remoteLedState(enabled = true, recording = true, talking = true))
+        assertEquals(RemoteLedState.RECORDING, remoteLedState(enabled = true, recording = true, talking = false))
+        assertEquals(RemoteLedState.ACTIVE, remoteLedState(enabled = true, recording = false, talking = false))
+        assertEquals(RemoteLedState.STANDBY, remoteLedState(enabled = false, recording = false, talking = false))
+    }
+
+    @Test fun restoreDefaultsClearsPersistedSettings() = runBlocking {
+        var saved: SavedSettings? = SavedSettings(ModelSettings(apiKey = "secret"), true,
+            ControlSettings(remoteLeds = RemoteLedSettings(active = RobotLedColor(1, 2, 3))))
+        val store = object : SettingsStore {
+            override fun load() = saved
+            override fun save(settings: SavedSettings) { saved = settings }
+        }
+        val model = ConsoleModel(SystemSpeech(), settingsStore = store)
+        try {
+            withTimeout(5_000) { model.settingsBusy.first { !it } }
+            model.restoreDefaultSettings()
+            withTimeout(5_000) { model.settingsBusy.first { !it } }
+            assertEquals(SavedSettings(), saved)
+            assertFalse(model.autoReadReplies.value)
+            assertEquals(ControlSettings(), model.controlSettings.value)
+            assertEquals(cn.elonzh.hanppie.resources.Res.string.default_settings_restored,
+                model.settingsMessage.value?.resource)
+        } finally { model.close() }
     }
 
     @Test fun saveLoadAndFailureStatus() = runBlocking {

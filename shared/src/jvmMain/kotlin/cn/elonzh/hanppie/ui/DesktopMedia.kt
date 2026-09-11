@@ -20,6 +20,7 @@ internal class DesktopMedia(
     private val onVideo: (ByteArray) -> Unit,
     private val onStatus: (String) -> Unit,
     private val pcmSink: ((ByteArray, Int) -> Unit)? = null,
+    private val playAudio: Boolean = pcmSink == null,
     executable: String = System.getenv("HANPPIE_FFMPEG") ?: "ffmpeg",
     videoEnabled: Boolean = true,
 ) : AutoCloseable {
@@ -64,7 +65,7 @@ internal class DesktopMedia(
                 writer(audio, audioQueue, ogg::packet)
                 threads += thread(name = "hanppie-audio-output", isDaemon = true) {
                     try {
-                        if (pcmSink == null) {
+                        if (playAudio) {
                             val format = AudioFormat(48000f,16,1,true,false)
                             val output = AudioSystem.getSourceDataLine(format)
                             line = output; output.open(format, 9600); output.start()
@@ -73,7 +74,8 @@ internal class DesktopMedia(
                         while (active.get()) {
                             val n = audio.inputStream.readNBytes(bytes, 0, bytes.size)
                             if (n == 0 || n % 2 != 0) throw EOFException(tr(Res.string.audio_decoder_exited))
-                            if (pcmSink != null) pcmSink.invoke(bytes,n) else line?.write(bytes,0,n)
+                            pcmSink?.invoke(bytes,n)
+                            if (playAudio) line?.write(bytes,0,n)
                             count += n
                             if (count == n.toLong() || count % 19200 == 0L) onStatus(tr(Res.string.audio_value_decoded_bytes,count))
                         }
@@ -132,22 +134,27 @@ internal fun saveDesktopPhoto(frame: ByteArray): String {
 
 /** Records already decoded frames, so recording can start at any displayed frame. */
 internal class DesktopVideoRecorder(
-    executable: String = System.getenv("HANPPIE_FFMPEG") ?: "ffmpeg",
+    private val executable: String = System.getenv("HANPPIE_FFMPEG") ?: "ffmpeg",
     private val output: Path = desktopMediaPath("Movies", "mp4"),
+    private val withAudio: Boolean = false,
 ) {
     private val temporary = output.resolveSibling("${output.fileName}.part")
+    private val videoTemporary = output.resolveSibling("${output.fileName}.video.part")
+    private val audioTemporary = output.resolveSibling("${output.fileName}.audio.pcm")
     private val closing = AtomicBoolean(false)
     private val errors = StringBuilder()
     private val process = ProcessBuilder(executable, "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
         "-f", "rawvideo", "-pix_fmt", "bgra", "-s", "1280x720", "-r", "30", "-i", "pipe:0", "-an",
         "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
-        "-f", "mp4", temporary.toString()).start()
+        "-f", "mp4", videoTemporary.toString()).start()
+    private val audioOutput = if (withAudio) Files.newOutputStream(audioTemporary) else null
     private val errorThread = thread(name = "hanppie-recorder-errors", isDaemon = true) {
         process.errorStream.bufferedReader().useLines { lines ->
             lines.forEach { line -> synchronized(errors) { if (errors.length < 4096) errors.appendLine(line) } }
         }
     }
     private var frames = 0
+    private var audioBytes = 0L
 
     @Synchronized fun frame(bytes: ByteArray) {
         if (closing.get()) return
@@ -156,9 +163,19 @@ internal class DesktopVideoRecorder(
         frames++
     }
 
+    @Synchronized fun audio(bytes: ByteArray, size: Int = bytes.size) {
+        if (closing.get() || !withAudio) return
+        require(size in 0..bytes.size && size % 2 == 0)
+        audioOutput?.write(bytes, 0, size)
+        audioBytes += size
+    }
+
     fun finish(): String {
         check(closing.compareAndSet(false, true)) { "Recording already finished" }
-        synchronized(this) { process.outputStream.close() }
+        synchronized(this) {
+            process.outputStream.close()
+            audioOutput?.close()
+        }
         if (!process.waitFor(15, TimeUnit.SECONDS)) {
             process.destroyForcibly()
             check(process.waitFor(2, TimeUnit.SECONDS)) { "FFmpeg recorder did not stop" }
@@ -166,19 +183,60 @@ internal class DesktopVideoRecorder(
         errorThread.join(1000)
         val detail = synchronized(errors) { errors.toString().trim() }
         if (frames == 0 || process.exitValue() != 0) {
-            Files.deleteIfExists(temporary)
+            cleanupTemporaryFiles()
             error(detail.ifBlank { "FFmpeg did not produce a recording" })
         }
-        Files.move(temporary, output, StandardCopyOption.REPLACE_EXISTING)
-        return output.toString()
+        try {
+            if (withAudio) {
+                check(audioBytes > 0) { tr(Res.string.no_robot_audio_recorded) }
+                muxAudio()
+            } else {
+                Files.move(videoTemporary, temporary, StandardCopyOption.REPLACE_EXISTING)
+            }
+            Files.move(temporary, output, StandardCopyOption.REPLACE_EXISTING)
+            return output.toString()
+        } catch (error: Exception) {
+            Files.deleteIfExists(output)
+            throw error
+        } finally {
+            cleanupTemporaryFiles()
+        }
     }
 
     fun discard() {
         if (!closing.compareAndSet(false, true)) return
-        synchronized(this) { runCatching { process.outputStream.close() } }
+        synchronized(this) {
+            runCatching { process.outputStream.close() }
+            runCatching { audioOutput?.close() }
+        }
         process.destroyForcibly()
         process.waitFor(2, TimeUnit.SECONDS)
+        cleanupTemporaryFiles()
+    }
+
+    private fun muxAudio() {
+        val mux = ProcessBuilder(executable, "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
+            "-i", videoTemporary.toString(), "-f", "s16le", "-ar", "48000", "-ac", "1", "-i", audioTemporary.toString(),
+            "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-af", "apad", "-shortest", "-movflags", "+faststart",
+            "-f", "mp4", temporary.toString()).start()
+        val muxErrors = StringBuilder()
+        val muxErrorThread = thread(name = "hanppie-recorder-mux-errors", isDaemon = true) {
+            mux.errorStream.bufferedReader().useLines { lines ->
+                lines.forEach { line -> if (muxErrors.length < 4096) muxErrors.appendLine(line) }
+            }
+        }
+        if (!mux.waitFor(15, TimeUnit.SECONDS)) {
+            mux.destroyForcibly()
+            check(mux.waitFor(2, TimeUnit.SECONDS)) { "FFmpeg audio muxer did not stop" }
+        }
+        muxErrorThread.join(1000)
+        check(mux.exitValue() == 0) { muxErrors.toString().trim().ifBlank { "FFmpeg did not mux robot audio" } }
+    }
+
+    private fun cleanupTemporaryFiles() {
         Files.deleteIfExists(temporary)
+        Files.deleteIfExists(videoTemporary)
+        Files.deleteIfExists(audioTemporary)
     }
 }
 

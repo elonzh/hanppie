@@ -41,6 +41,10 @@
     <string name="api_key">API Key</string>
     <string name="save_settings">保存设置</string>
     <string name="settings_saved">已保存</string>
+    <string name="default_settings_restored">已恢复默认设置</string>
+    <string name="restore_defaults">恢复默认</string>
+    <string name="restore_default_settings_question">恢复所有默认设置？</string>
+    <string name="restore_default_settings_summary">语言、外观、模型服务、自动朗读、控制参数、快捷键和 LED 颜色都会恢复默认值；已保存的 API Key 将被清除。</string>
     <string name="settings_load_failed">读取配置失败，请检查系统凭据存储。</string>
     <string name="settings_save_failed">保存失败，请检查配置与系统凭据存储。</string>
     <string name="read_assistant_replies_automatically">自动朗读智能体回复</string>
@@ -58,6 +62,12 @@
     <string name="degrees_per_second">°/s</string>
     <string name="creep_multiplier">慢行倍率</string>
     <string name="joystick_dead_zone">摇杆死区</string>
+    <string name="remote_led_colors">机器人 LED 状态颜色</string>
+    <string name="remote_led_colors_summary">进入驾驶舱后按当前状态显示；对讲优先于录像，离开驾驶舱时关闭。</string>
+    <string name="remote_led_standby">待机</string>
+    <string name="remote_led_active">遥控中</string>
+    <string name="remote_led_recording">录像中</string>
+    <string name="remote_led_talking">对讲中</string>
     <string name="control_shortcuts">控制快捷键</string>
     <string name="press_a_key">按下新按键</string>
     <string name="action_forward">前进</string>
@@ -126,6 +136,8 @@
     <string name="remote_stopped_connection_unresponsive">机器人数据中断，遥控已停止</string>
     <string name="media_request_queue_is_full">媒体请求队列已满</string>
     <string name="media_stop_queue_is_full">媒体停止队列已满</string>
+    <string name="request_queue_is_closed">请求队列已关闭</string>
+    <string name="led_request_failed_value">LED 状态更新失败：%1$s</string>
     <string name="stop_the_script_with_unknown_state_first">请先停止状态未确认的脚本</string>
     <string name="robot_is_not_connected">机器人未连接</string>
     <string name="uploading">正在上传</string>
@@ -212,6 +224,9 @@
     <string name="recording_already_running">录像已经开始</string>
     <string name="recording_already_finished">录像已经结束</string>
     <string name="no_key_frame_recorded">尚未收到可写入的 H.264 关键帧</string>
+    <string name="no_robot_audio_recorded">已开启机器人麦克风，但录像期间没有收到可写入的音频</string>
+    <string name="audio_encoder_did_not_stop">音频编码器未正常结束</string>
+    <string name="audio_encoder_not_accepting_input">音频编码器未接收输入</string>
     <string name="video_queue_overflow_restart_video">视频输入积压，请重新开启视频</string>
     <string name="audio_queue_overflow_restart_listening">音频输入积压，请重新开启监听</string>
     <string name="video_decoder_exited">视频解码器已退出</string>

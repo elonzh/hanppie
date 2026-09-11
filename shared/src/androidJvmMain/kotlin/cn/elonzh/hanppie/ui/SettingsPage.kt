@@ -5,6 +5,8 @@ import cn.elonzh.hanppie.resources.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
@@ -31,9 +33,29 @@ internal fun SettingsPage(model: ConsoleModel, modifier: Modifier = Modifier, on
     val chat by model.chat.state.collectAsState()
     val settingsBusy by model.settingsBusy.collectAsState()
     val settingsMessage by model.settingsMessage.collectAsState()
+    val appearance = LocalAppearance.current
     var capturing by remember { mutableStateOf<ControlAction?>(null) }
     var shortcutsExpanded by remember { mutableStateOf(false) }
+    var confirmDefaults by remember { mutableStateOf(false) }
     val shortcutFocus = remember { FocusRequester() }
+    WorkbenchDialog(show = confirmDefaults, onDismissRequest = { confirmDefaults = false },
+        title = tr(Res.string.restore_default_settings_question),
+        summary = tr(Res.string.restore_default_settings_summary)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button({ confirmDefaults = false }, Modifier.weight(1f).heightIn(min = 48.dp)) {
+                Text(tr(Res.string.cancel))
+            }
+            Button({
+                confirmDefaults = false
+                model.voiceInput.cancel(); model.replySpeaker.stop()
+                Localization.select("system"); model.speech.languageChanged()
+                appearance.update(AppearanceSettings())
+                model.restoreDefaultSettings()
+            }, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.buttonColorsPrimary()) {
+                Text(tr(Res.string.restore_defaults))
+            }
+        }
+    }
     Column(modifier.fillMaxWidth().testTag("settings-page").verticalScroll(rememberScrollState())
         .focusRequester(shortcutFocus).onPreviewKeyEvent { event ->
             val action = capturing ?: return@onPreviewKeyEvent false
@@ -89,6 +111,28 @@ internal fun SettingsPage(model: ConsoleModel, modifier: Modifier = Modifier, on
                 }
             }
         }
+        Text(tr(Res.string.remote_led_colors), fontSize = 15.sp)
+        Text(tr(Res.string.remote_led_colors_summary), fontSize = 12.sp,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            RemoteLedColorField(tr(Res.string.remote_led_standby), "remote-led-standby", control.remoteLeds.standby,
+                Modifier.widthIn(min = 250.dp, max = 340.dp).weight(1f)) { color ->
+                model.controlSettings.value = control.copy(remoteLeds = control.remoteLeds.copy(standby = color))
+            }
+            RemoteLedColorField(tr(Res.string.remote_led_active), "remote-led-active", control.remoteLeds.active,
+                Modifier.widthIn(min = 250.dp, max = 340.dp).weight(1f)) { color ->
+                model.controlSettings.value = control.copy(remoteLeds = control.remoteLeds.copy(active = color))
+            }
+            RemoteLedColorField(tr(Res.string.remote_led_recording), "remote-led-recording", control.remoteLeds.recording,
+                Modifier.widthIn(min = 250.dp, max = 340.dp).weight(1f)) { color ->
+                model.controlSettings.value = control.copy(remoteLeds = control.remoteLeds.copy(recording = color))
+            }
+            RemoteLedColorField(tr(Res.string.remote_led_talking), "remote-led-talking", control.remoteLeds.talking,
+                Modifier.widthIn(min = 250.dp, max = 340.dp).weight(1f)) { color ->
+                model.controlSettings.value = control.copy(remoteLeds = control.remoteLeds.copy(talking = color))
+            }
+        }
         Card(Modifier.fillMaxWidth().clickable {
             shortcutsExpanded = !shortcutsExpanded
             if (!shortcutsExpanded) capturing = null
@@ -129,12 +173,40 @@ internal fun SettingsPage(model: ConsoleModel, modifier: Modifier = Modifier, on
                 if (onSpeechSettings != null) Button(onSpeechSettings) { Text(tr(Res.string.speech_services)) }
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(model::saveSettings, colors = ButtonDefaults.buttonColorsPrimary(), enabled = !settingsBusy && !chat.running) { Text(tr(Res.string.save_settings)) }
+                Button({ confirmDefaults = true }, enabled = !settingsBusy && !chat.running,
+                    modifier = Modifier.semantics { contentDescription = "restore-default-settings" }) {
+                    Text(tr(Res.string.restore_defaults))
+                }
+                Button(model::saveSettings, colors = ButtonDefaults.buttonColorsPrimary(), enabled = !settingsBusy && !chat.running) {
+                    Text(tr(Res.string.save_settings))
+                }
                 settingsMessage?.let { Text(it.resolve(), fontSize = 13.sp) }
             }
         }
 
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun RemoteLedColorField(label: String, tag: String, value: RobotLedColor, modifier: Modifier,
+                                onValid: (RobotLedColor) -> Unit) {
+    var draft by remember(value) { mutableStateOf(value.hex) }
+    val parsed = RobotLedColor.parse(draft)
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TextField(draft, { text ->
+                if (text.length <= 7) {
+                    draft = text.uppercase()
+                    RobotLedColor.parse(draft)?.let(onValid)
+                }
+            }, label = label, singleLine = true,
+                modifier = Modifier.weight(1f).semantics { contentDescription = tag })
+            Box(Modifier.size(32.dp).background(rgbColor((parsed ?: value).hex), RoundedCornerShape(8.dp)))
+        }
+        if (parsed == null) Text(tr(Res.string.color_hex_hint), fontSize = 12.sp,
+            color = MiuixTheme.colorScheme.error)
     }
 }
 

@@ -22,6 +22,9 @@ class RemoteControlTest {
         assertFailsWith<IllegalArgumentException> { RemoteControl.velocity(Double.NaN,0.0,0.0) }
     }
     @Test fun muzzleFireLedMatchesDirectRobotPayload() {
+        assertEquals("3f000000ff007101020300e803e803", RemoteControl.led(1, 2, 3).hex())
+        assertEquals("3f000000ff007000000000e803e803", RemoteControl.led(0, 0, 0, enabled = false).hex())
+        assertFailsWith<IllegalArgumentException> { RemoteControl.led(256, 0, 0) }
         assertEquals("40000000ff0001ffffff6401000100", RemoteControl.muzzleFireLed(true).hex())
         assertEquals("40000000ff0000ffffff6401000100", RemoteControl.muzzleFireLed(false).hex())
         assertEquals("71ffffff0164006400", RemoteControl.blasterLed(true).hex())

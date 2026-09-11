@@ -50,6 +50,7 @@ internal fun RemotePage(
     val talking by model.talking.collectAsState()
     val talkBusy by model.talkBusy.collectAsState()
     val mediaControls = remember { RemoteMediaController() }
+    val mediaState by mediaControls.state.collectAsState()
     var left by remember { mutableStateOf(Offset.Zero) }
     var right by remember { mutableStateOf(Offset.Zero) }
     var keys by remember { mutableStateOf(setOf<Key>()) }
@@ -60,7 +61,16 @@ internal fun RemotePage(
     val currentGear by rememberUpdatedState(gear)
     val currentControl by rememberUpdatedState(control)
     val creeping = Key.ShiftLeft in keys || Key.ShiftRight in keys
-    DisposableEffect(model) { onDispose { (onPushToTalkStop ?: model::endPushToTalk)(); model.leaveRemote(); model.stopMedia() } }
+    val ledState = remoteLedState(enabled, mediaState.recording, talking || talkBusy)
+    LaunchedEffect(connected.connected, ledState, control.remoteLeds) {
+        if (connected.connected) model.setRemoteLed(control.remoteLeds.color(ledState))
+    }
+    DisposableEffect(model) { onDispose {
+        (onPushToTalkStop ?: model::endPushToTalk)()
+        model.setRemoteLed(null)
+        model.leaveRemote()
+        model.stopMedia()
+    } }
     LaunchedEffect(enabled) {
         if (enabled) focus.requestFocus()
         else { keys = emptySet(); left = Offset.Zero; right = Offset.Zero }

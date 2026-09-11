@@ -356,6 +356,13 @@ class ConsoleUiTest {
             rule.onNodeWithText("设置").performClick()
             rule.onNodeWithText("自动朗读").assertExists()
             rule.onNodeWithContentDescription("gimbal-sensitivity-selector").assertExists()
+            rule.onNodeWithContentDescription("remote-led-standby").performScrollTo().performTextReplacement("#010203")
+            rule.runOnIdle { assertEquals(RobotLedColor(1, 2, 3), model.controlSettings.value.remoteLeds.standby) }
+            rule.onNodeWithContentDescription("remote-led-talking").performScrollTo().assertExists()
+            rule.onNodeWithContentDescription("restore-default-settings").performScrollTo().assertIsEnabled().performClick()
+            rule.onNodeWithText("恢复所有默认设置？").assertIsDisplayed()
+            rule.onNodeWithText("取消").performClick()
+            rule.onNodeWithText("恢复所有默认设置？").assertDoesNotExist()
         } finally { model.close() }
     }
 

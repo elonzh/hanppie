@@ -55,10 +55,15 @@ class DesktopMediaTest {
                 assertTrue(media.running)
             } finally { media.close() }
             assertFalse(media.running)
-            val recorder = DesktopVideoRecorder(ffmpeg, recording)
+            val recorder = DesktopVideoRecorder(ffmpeg, recording, withAudio = true)
             repeat(3) { recorder.frame(ByteArray(1280 * 720 * 4)) }
+            recorder.audio(ByteArray(9_600))
             assertEquals(recording.toString(), recorder.finish())
             assertTrue(Files.size(recording) > 0)
+            val audioTrack = ProcessBuilder(ffmpeg,"-hide_banner","-loglevel","error","-i",recording.toString(),
+                "-map","0:a:0","-f","null","-").start()
+            assertTrue(audioTrack.waitFor(10, TimeUnit.SECONDS))
+            assertEquals(0, audioTrack.exitValue(), "Saved MP4 must contain a decodable robot microphone track")
         } finally { file.delete(); Files.deleteIfExists(recording) }
     }
 }

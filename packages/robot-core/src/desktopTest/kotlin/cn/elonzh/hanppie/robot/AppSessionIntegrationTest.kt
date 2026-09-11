@@ -57,6 +57,13 @@ class AppSessionIntegrationTest {
                 assertTrue(sent.drop(safetyMark).count {
                     it.receiver == 4 && it.set == 4 && it.id == 0x0c && it.payload.contentEquals(RemoteControl.gimbalVelocity(0.0, 0.0))
                 } >= 3)
+                val ledMark = sent.size
+                session.setLed(1, 2, 3)
+                withTimeout(1_000) {
+                    while (sent.drop(ledMark).none { it.receiver == 9 && it.set == 0x3f && it.id == 0x33 }) delay(10)
+                }
+                assertContentEquals(RemoteControl.led(1, 2, 3),
+                    sent.drop(ledMark).last { it.receiver == 9 && it.set == 0x3f && it.id == 0x33 }.payload)
                 session.enterRemote()
                 val idleMark = sent.size
                 session.drive(-0.0,0.0,-0.0,0.0,0.0)

@@ -41,6 +41,10 @@
     <string name="api_key">API Key</string>
     <string name="save_settings">Save settings</string>
     <string name="settings_saved">Saved</string>
+    <string name="default_settings_restored">Default settings restored</string>
+    <string name="restore_defaults">Restore defaults</string>
+    <string name="restore_default_settings_question">Restore all defaults?</string>
+    <string name="restore_default_settings_summary">Language, appearance, model service, auto-read, controls, shortcuts, and LED colors will return to defaults. The saved API key will be cleared.</string>
     <string name="settings_load_failed">Could not read saved settings. Check system credential storage.</string>
     <string name="settings_save_failed">Could not save. Check settings and system credential storage.</string>
     <string name="read_assistant_replies_automatically">Read assistant replies automatically</string>
@@ -58,6 +62,12 @@
     <string name="degrees_per_second">°/s</string>
     <string name="creep_multiplier">Creep multiplier</string>
     <string name="joystick_dead_zone">Joystick dead zone</string>
+    <string name="remote_led_colors">Robot LED state colors</string>
+    <string name="remote_led_colors_summary">Shown by state after entering the cockpit. Intercom takes priority over recording; LEDs turn off when leaving.</string>
+    <string name="remote_led_standby">Standby</string>
+    <string name="remote_led_active">Remote active</string>
+    <string name="remote_led_recording">Recording</string>
+    <string name="remote_led_talking">Intercom</string>
     <string name="control_shortcuts">Control shortcuts</string>
     <string name="press_a_key">Press a key</string>
     <string name="action_forward">Forward</string>
@@ -126,6 +136,8 @@
     <string name="remote_stopped_connection_unresponsive">Robot data stopped; remote control was stopped</string>
     <string name="media_request_queue_is_full">Media request queue is full</string>
     <string name="media_stop_queue_is_full">Media stop queue is full</string>
+    <string name="request_queue_is_closed">Request queue is closed</string>
+    <string name="led_request_failed_value">Could not update LED state: %1$s</string>
     <string name="stop_the_script_with_unknown_state_first">Stop the script with unknown state first</string>
     <string name="robot_is_not_connected">Robot is not connected</string>
     <string name="uploading">Uploading</string>
@@ -212,6 +224,9 @@
     <string name="recording_already_running">Recording already running</string>
     <string name="recording_already_finished">Recording already finished</string>
     <string name="no_key_frame_recorded">No writable H.264 key frame received</string>
+    <string name="no_robot_audio_recorded">Robot microphone was enabled, but no writable audio arrived during the recording</string>
+    <string name="audio_encoder_did_not_stop">Audio encoder did not stop cleanly</string>
+    <string name="audio_encoder_not_accepting_input">Audio encoder did not accept input</string>
     <string name="video_queue_overflow_restart_video">Video queue overflow; restart video</string>
     <string name="audio_queue_overflow_restart_listening">Audio queue overflow; restart listening</string>
     <string name="video_decoder_exited">Video decoder exited</string>

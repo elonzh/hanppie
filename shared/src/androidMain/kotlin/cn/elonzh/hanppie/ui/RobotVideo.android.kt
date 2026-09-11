@@ -37,7 +37,12 @@ import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.*
 
 /** Codec work never runs on the UDP receiver or UI thread. Queues are bounded. */
-internal class RobotDecoder(private val surface: Surface, private val audio: Boolean, private val report: (String, Boolean) -> Unit) : AutoCloseable {
+internal class RobotDecoder(
+    private val surface: Surface,
+    private val audio: Boolean,
+    private val report: (String, Boolean) -> Unit,
+    private val onRecordingStopped: () -> Unit = {},
+) : AutoCloseable {
     private val videoQueue = ArrayBlockingQueue<ByteArray>(256)
     private val audioQueue = ArrayBlockingQueue<ByteArray>(64)
     private val active = AtomicBoolean(true)
@@ -47,7 +52,7 @@ internal class RobotDecoder(private val surface: Surface, private val audio: Boo
     fun audio(bytes: ByteArray) { if (audio && !audioQueue.offer(bytes)) { audioQueue.poll(); audioQueue.offer(bytes) } }
     @Synchronized fun startRecording(context: Context) {
         check(recorder.get() == null) { tr(Res.string.recording_already_running) }
-        val next = AndroidVideoRecorder(context)
+        val next = AndroidVideoRecorder(context, audio)
         recorder.set(next)
     }
     @Synchronized fun stopRecording(): String? = recorder.getAndSet(null)?.finish()
@@ -77,9 +82,13 @@ internal class RobotDecoder(private val surface: Surface, private val audio: Boo
                     val frame = units.accept(nal) ?: continue
                     val decoder = codec ?: continue
                     recorder.get()?.let { activeRecorder ->
-                        runCatching { activeRecorder.frame(frame, sps, pps, stamp) }.onFailure { error ->
-                            if (recorder.compareAndSet(activeRecorder, null)) activeRecorder.discard()
-                            report(tr(Res.string.recording_failed_value, error.message ?: error.javaClass.simpleName), false)
+                        runCatching { activeRecorder.frame(frame, sps, pps, System.nanoTime() / 1_000) }.onFailure { error ->
+                            if (recorder.compareAndSet(activeRecorder, null)) {
+                                activeRecorder.discard()
+                                onRecordingStopped()
+                                report(tr(Res.string.recording_failed_value,
+                                    error.message ?: error.javaClass.simpleName), false)
+                            }
                         }
                     }
                     val index = decoder.dequeueInputBuffer(10000)
@@ -125,6 +134,19 @@ internal class RobotDecoder(private val surface: Surface, private val audio: Boo
                 var output = codec.dequeueOutputBuffer(info, 10000)
                 while (output >= 0) {
                     codec.getOutputBuffer(output)?.let { buffer ->
+                        buffer.position(info.offset); buffer.limit(info.offset + info.size)
+                        val pcm = ByteArray(info.size)
+                        buffer.get(pcm)
+                        recorder.get()?.let { activeRecorder ->
+                            runCatching { activeRecorder.audio(pcm, System.nanoTime() / 1_000) }.onFailure { error ->
+                                if (recorder.compareAndSet(activeRecorder, null)) {
+                                    activeRecorder.discard()
+                                    onRecordingStopped()
+                                    report(tr(Res.string.recording_failed_value,
+                                        error.message ?: error.javaClass.simpleName), false)
+                                }
+                            }
+                        }
                         buffer.position(info.offset); buffer.limit(info.offset + info.size)
                         val written = track.write(buffer, info.size, AudioTrack.WRITE_BLOCKING)
                         check(written >= 0) { tr(Res.string.audio_playback_failed_value,written) }
@@ -191,37 +213,80 @@ private class AndroidVideoOutput(private val context: Context) {
     }
 }
 
-private class AndroidVideoRecorder(context: Context) {
+private class AndroidVideoRecorder(context: Context, private val withAudio: Boolean) {
+    private data class Sample(val bytes: ByteArray, val timestamp: Long, val flags: Int)
+
     private val output = AndroidVideoOutput(context.applicationContext)
     private val muxer = output.muxer
-    private var track = -1
+    private val audioEncoder = if (withAudio) MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC).apply {
+        val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, 48_000, 1).apply {
+            setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
+            setInteger(MediaFormat.KEY_BIT_RATE, 96_000)
+            setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 8_192)
+        }
+        configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+        start()
+    } else null
+    private val pendingVideo = ArrayDeque<Sample>()
+    private val pendingAudio = ArrayDeque<Sample>()
+    private var videoTrack = -1
+    private var audioTrack = -1
     private var started = false
     private var closed = false
-    private var firstTimestamp = 0L
-    private var samples = 0
+    private var firstTimestamp = -1L
+    private var videoSamples = 0
+    private var audioSamples = 0
+    private var audioInputs = 0
+    private var lastAudioTimestamp = 0L
 
     @Synchronized fun frame(bytes: ByteArray, sps: ByteArray?, pps: ByteArray?, timestamp: Long) {
         if (closed) return
         val sample = bytes.withoutNalTypes(setOf(7, 8))
         val keyFrame = sample.hasNalType(5)
-        if (!started) {
+        if (videoTrack < 0) {
             if (!keyFrame || sps == null || pps == null) return
             val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, 1280, 720).apply {
                 setByteBuffer("csd-0", ByteBuffer.wrap(sps))
                 setByteBuffer("csd-1", ByteBuffer.wrap(pps))
                 setInteger(MediaFormat.KEY_FRAME_RATE, 30)
             }
-            track = muxer.addTrack(format)
-            muxer.start()
-            started = true
+            videoTrack = muxer.addTrack(format)
             firstTimestamp = timestamp
+            startMuxerIfReady()
         }
-        val info = MediaCodec.BufferInfo().apply {
-            set(0, sample.size, (timestamp - firstTimestamp).coerceAtLeast(0),
-                if (keyFrame) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0)
+        val next = Sample(sample, timestamp, if (keyFrame) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0)
+        if (started) write(videoTrack, next) else {
+            check(pendingVideo.size < 300) { tr(Res.string.no_robot_audio_recorded) }
+            pendingVideo.addLast(next)
         }
-        muxer.writeSampleData(track, ByteBuffer.wrap(sample), info)
-        samples++
+    }
+
+    @Synchronized fun audio(bytes: ByteArray, timestamp: Long) {
+        if (closed || !withAudio || bytes.isEmpty()) return
+        require(bytes.size % 2 == 0)
+        val encoder = checkNotNull(audioEncoder)
+        var offset = 0
+        var attempts = 0
+        while (offset < bytes.size) {
+            drainAudio(end = false)
+            val index = encoder.dequeueInputBuffer(10_000)
+            if (index < 0) {
+                check(++attempts < 100) { tr(Res.string.audio_encoder_not_accepting_input) }
+                continue
+            }
+            attempts = 0
+            val buffer = checkNotNull(encoder.getInputBuffer(index)).apply { clear() }
+            var size = minOf(buffer.remaining(), bytes.size - offset)
+            size -= size % 2
+            check(size > 0)
+            buffer.put(bytes, offset, size)
+            val sampleTimestamp = timestamp + (offset / 2L) * 1_000_000L / 48_000L
+            encoder.queueInputBuffer(index, 0, size, sampleTimestamp, 0)
+            offset += size
+            audioInputs += size
+            lastAudioTimestamp = sampleTimestamp + (size / 2L) * 1_000_000L / 48_000L
+        }
+        drainAudio(end = false)
     }
 
     @Synchronized fun finish(): String {
@@ -229,11 +294,18 @@ private class AndroidVideoRecorder(context: Context) {
         closed = true
         var success = false
         try {
-            check(started && samples > 0) { tr(Res.string.no_key_frame_recorded) }
+            if (withAudio) {
+                check(audioInputs > 0) { tr(Res.string.no_robot_audio_recorded) }
+                finishAudio()
+            }
+            check(started && videoSamples > 0) { tr(Res.string.no_key_frame_recorded) }
+            check(!withAudio || audioSamples > 0) { tr(Res.string.no_robot_audio_recorded) }
             muxer.stop()
             success = true
             return output.displayPath
         } finally {
+            runCatching { audioEncoder?.stop() }
+            audioEncoder?.release()
             val releaseResult = runCatching { muxer.release() }
             output.complete(success)
             releaseResult.getOrThrow()
@@ -243,9 +315,84 @@ private class AndroidVideoRecorder(context: Context) {
     @Synchronized fun discard() {
         if (closed) return
         closed = true
+        runCatching { audioEncoder?.stop() }
+        audioEncoder?.release()
         if (started) runCatching { muxer.stop() }
         runCatching { muxer.release() }
         runCatching { output.complete(false) }
+    }
+
+    private fun finishAudio() {
+        val encoder = checkNotNull(audioEncoder)
+        var attempts = 0
+        while (true) {
+            val index = encoder.dequeueInputBuffer(10_000)
+            if (index >= 0) {
+                encoder.queueInputBuffer(index, 0, 0, lastAudioTimestamp, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                break
+            }
+            check(++attempts < 100) { tr(Res.string.audio_encoder_did_not_stop) }
+        }
+        drainAudio(end = true)
+    }
+
+    private fun drainAudio(end: Boolean) {
+        val encoder = checkNotNull(audioEncoder)
+        val info = MediaCodec.BufferInfo()
+        var emptyPolls = 0
+        while (true) {
+            val index = encoder.dequeueOutputBuffer(info, if (end) 10_000 else 0)
+            when {
+                index == MediaCodec.INFO_TRY_AGAIN_LATER -> {
+                    if (!end || ++emptyPolls >= 100) {
+                        check(!end) { tr(Res.string.audio_encoder_did_not_stop) }
+                        return
+                    }
+                }
+                index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                    check(audioTrack < 0)
+                    audioTrack = muxer.addTrack(encoder.outputFormat)
+                    startMuxerIfReady()
+                }
+                index >= 0 -> {
+                    emptyPolls = 0
+                    if (info.size > 0 && info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0) {
+                        val buffer = checkNotNull(encoder.getOutputBuffer(index)).apply {
+                            position(info.offset); limit(info.offset + info.size)
+                        }
+                        val encoded = ByteArray(info.size)
+                        buffer.get(encoded)
+                        val sample = Sample(encoded, info.presentationTimeUs, info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM.inv())
+                        if (started) write(audioTrack, sample) else {
+                            check(pendingAudio.size < 300) { tr(Res.string.no_key_frame_recorded) }
+                            pendingAudio.addLast(sample)
+                        }
+                    }
+                    val eos = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
+                    encoder.releaseOutputBuffer(index, false)
+                    if (eos) return
+                }
+            }
+        }
+    }
+
+    private fun startMuxerIfReady() {
+        if (started || videoTrack < 0 || (withAudio && audioTrack < 0)) return
+        muxer.start()
+        started = true
+        pendingVideo.forEach { write(videoTrack, it) }
+        pendingVideo.clear()
+        pendingAudio.filter { it.timestamp >= firstTimestamp }.forEach { write(audioTrack, it) }
+        pendingAudio.clear()
+    }
+
+    private fun write(track: Int, sample: Sample) {
+        if (sample.timestamp < firstTimestamp) return
+        val info = MediaCodec.BufferInfo().apply {
+            set(0, sample.bytes.size, sample.timestamp - firstTimestamp, sample.flags)
+        }
+        muxer.writeSampleData(track, ByteBuffer.wrap(sample.bytes), info)
+        if (track == videoTrack) videoSamples++ else audioSamples++
     }
 }
 
@@ -318,11 +465,14 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
         if (!recording) try {
             activeDecoder.startRecording(context)
             recording = true
+            controls.recording(true)
             captureStatus = tr(Res.string.recording_waiting_for_key_frame)
         } catch (error: Exception) {
+            controls.recording(false)
             captureStatus = tr(Res.string.recording_failed_value, error.message ?: error.javaClass.simpleName)
         } else {
             recording = false
+            controls.recording(false)
             captureStatus = tr(Res.string.saving_recording)
             uiScope.launch {
                 val saved = withContext(Dispatchers.IO) { runCatching { activeDecoder.stopRecording() } }
@@ -335,19 +485,20 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
     LaunchedEffect(requests.photo) { if (requests.photo > 0) takePhoto() }
     LaunchedEffect(requests.recording) { if (requests.recording > 0) toggleRecording() }
     LaunchedEffect(requests.robotMicrophone) {
-        if (requests.robotMicrophone > 0) { sound = !sound; if (sound) playing = true }
+        if (requests.robotMicrophone > 0 && !recording) { sound = !sound; if (sound) playing = true }
     }
     DisposableEffect(surface, playing, sound, state.connected) {
         status = if (playing) tr(Res.string.waiting_for_video) else tr(Res.string.video_off)
         audioStatus = if (sound) tr(Res.string.waiting_for_audio) else ""
-        val activeDecoder = if (surface != null && playing && state.connected) RobotDecoder(surface!!, sound) { message, isAudio ->
-            uiScope.launch { if (isAudio) audioStatus = message else status = message }
-        } else null
+        val activeDecoder = if (surface != null && playing && state.connected) RobotDecoder(surface!!, sound,
+            report = { message, isAudio -> uiScope.launch { if (isAudio) audioStatus = message else status = message } },
+            onRecordingStopped = { uiScope.launch { recording = false; controls.recording(false) } }) else null
         decoder = activeDecoder
         if (activeDecoder != null) { model.videoSink = activeDecoder::video; model.audioSink = activeDecoder::audio; model.startMedia(sound) }
         onDispose {
             if (decoder === activeDecoder) decoder = null
             recording = false
+            controls.recording(false)
             if (activeDecoder != null) { model.stopMedia(); activeDecoder.close() }
         }
     }
@@ -363,7 +514,8 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
         Column(Modifier.padding(start=12.dp,top=64.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             HudIconButton(if(playing) tr(Res.string.stop_video) else tr(Res.string.start_video), if(playing) "▣" else "□", state.connected) { playing = !playing }
-            HudIconButton(if(sound) tr(Res.string.mute) else tr(Res.string.listen), if(sound) "♫" else "♩", state.connected) { controls.toggleRobotMicrophone() }
+            HudIconButton(if(sound) tr(Res.string.mute) else tr(Res.string.listen), if(sound) "♫" else "♩",
+                state.connected && !recording) { controls.toggleRobotMicrophone() }
             HudIconButton(tr(Res.string.take_photo), "◉", state.connected && playing && surfaceView != null) { controls.takePhoto() }
             HudIconButton(if(recording) tr(Res.string.stop_recording) else tr(Res.string.start_recording), if(recording) "■" else "●",
                 state.connected && playing && decoder != null) { controls.toggleRecording() }

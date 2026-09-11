@@ -38,6 +38,20 @@ object RemoteControl {
         }
     }
 
+    /** S1 armor LEDs through RM common LED command 0x3f:0x33. */
+    fun led(red: Int, green: Int, blue: Int, enabled: Boolean = true): ByteArray {
+        require(red in 0..255 && green in 0..255 && blue in 0..255)
+        return byteArrayOf(
+            0x3f, 0, 0, 0, // all armor LEDs
+            0xff.toByte(), 0, // all subcomponents
+            (if (enabled) 0x71 else 0x70).toByte(),
+            red.toByte(), green.toByte(), blue.toByte(),
+            0, // repeat count
+            0xe8.toByte(), 0x03, // one-second on interval (unused for solid)
+            0xe8.toByte(), 0x03, // one-second off interval (unused for solid)
+        )
+    }
+
     /** S1 firing-channel muzzle LED payload for RM common LED command 0x3f:0x33. */
     fun muzzleFireLed(enabled: Boolean): ByteArray =
         (if (enabled) "40000000ff0001ffffff6401000100" else "40000000ff0000ffffff6401000100").hexBytes()

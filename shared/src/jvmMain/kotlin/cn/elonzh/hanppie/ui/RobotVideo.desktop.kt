@@ -34,6 +34,7 @@ import top.yukonga.miuix.kmp.basic.*
     fun finishRecording() {
         val active = recorder.getAndSet(null) ?: return
         recording = false
+        controls.recording(false)
         captureStatus = tr(Res.string.saving_recording)
         uiScope.launch {
             val result = withContext(Dispatchers.IO) { runCatching { active.finish() } }
@@ -56,17 +57,19 @@ import top.yukonga.miuix.kmp.basic.*
     fun toggleRecording() {
         if (!state.connected || !playing) return
         if (recording) finishRecording() else try {
-            recorder.set(DesktopVideoRecorder())
+            recorder.set(DesktopVideoRecorder(withAudio = sound))
             recording = true
+            controls.recording(true)
             captureStatus = tr(Res.string.recording)
         } catch (error: Exception) {
+            controls.recording(false)
             captureStatus = tr(Res.string.recording_failed_value, error.message ?: error.javaClass.simpleName)
         }
     }
     LaunchedEffect(requests.photo) { if (requests.photo > 0) takePhoto() }
     LaunchedEffect(requests.recording) { if (requests.recording > 0) toggleRecording() }
     LaunchedEffect(requests.robotMicrophone) {
-        if (requests.robotMicrophone > 0) { sound = !sound; if (sound) playing = true }
+        if (requests.robotMicrophone > 0 && !recording) { sound = !sound; if (sound) playing = true }
     }
 
     LaunchedEffect(playing, state.connected) {
@@ -74,6 +77,7 @@ import top.yukonga.miuix.kmp.basic.*
     }
     DisposableEffect(Unit) {
         onDispose {
+            controls.recording(false)
             recorder.getAndSet(null)?.let { active -> thread(name = "hanppie-recorder-finish", isDaemon = true) { runCatching { active.finish() } } }
         }
     }
@@ -89,6 +93,7 @@ import top.yukonga.miuix.kmp.basic.*
                         active.discard()
                         uiScope.launch {
                             recording = false
+                            controls.recording(false)
                             captureStatus = tr(Res.string.recording_failed_value, error.message ?: error.javaClass.simpleName)
                         }
                     }
@@ -108,7 +113,8 @@ import top.yukonga.miuix.kmp.basic.*
         audioStatus = ""
         var audio: DesktopMedia? = null
         if (playing && sound && state.connected) try {
-            audio = DesktopMedia(true, {}, { message -> uiScope.launch { audioStatus = message } }, videoEnabled = false)
+            audio = DesktopMedia(true, {}, { message -> uiScope.launch { audioStatus = message } },
+                pcmSink = { bytes, size -> recorder.get()?.audio(bytes, size) }, playAudio = true, videoEnabled = false)
             model.audioSink = audio::audio
             model.startMedia(true)
         } catch (e: Exception) { audioStatus = e.message ?: tr(Res.string.could_not_start_audio) }
@@ -121,7 +127,8 @@ import top.yukonga.miuix.kmp.basic.*
         Column(Modifier.padding(start=12.dp,top=64.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             HudIconButton(if(playing) tr(Res.string.stop_video) else tr(Res.string.start_video), if(playing) "▣" else "□", state.connected) { playing = !playing }
-            HudIconButton(if(sound) tr(Res.string.mute) else tr(Res.string.listen), if(sound) "♫" else "♩", state.connected) { controls.toggleRobotMicrophone() }
+            HudIconButton(if(sound) tr(Res.string.mute) else tr(Res.string.listen), if(sound) "♫" else "♩",
+                state.connected && !recording) { controls.toggleRobotMicrophone() }
             HudIconButton(tr(Res.string.take_photo), "◉", state.connected && latestFrame.get() != null) { controls.takePhoto() }
             HudIconButton(if(recording) tr(Res.string.stop_recording) else tr(Res.string.start_recording), if(recording) "■" else "●",
                 state.connected && playing && (recording || latestFrame.get() != null)) { controls.toggleRecording() }
