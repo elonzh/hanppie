@@ -9,21 +9,22 @@ import android.media.MediaCodec
 import android.media.MediaFormat
 import android.media.MediaRecorder
 import java.io.ByteArrayOutputStream
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.concurrent.thread
 
 internal class AndroidSpeakerInput(private val context: Context) : SpeakerInput {
-    private val recording = AtomicBoolean(false)
-    private var audioRecord: AudioRecord? = null
-    private var worker: Thread? = null
-    private var pcm = ByteArrayOutputStream()
+    private val capture = BoundedPcmCapture(::createDevice, ::encodeAndroidSpeakerPcm)
 
-    @Synchronized override fun start(onReady: () -> Unit) {
+    override fun start(onReady: () -> Unit) {
         check(context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             "需要麦克风权限才能对讲"
         }
-        check(recording.compareAndSet(false, true)) { "对讲已在录音" }
-        pcm = ByteArrayOutputStream()
+        capture.start(onReady)
+    }
+
+    override fun finish(): ByteArray = capture.finish()
+
+    override fun cancel() = capture.cancel()
+
+    private fun createDevice(): PcmCaptureDevice {
         val minimum = AudioRecord.getMinBufferSize(12_000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         check(minimum > 0) { "设备不支持 12 kHz 单声道录音" }
         val recorder = AudioRecord.Builder()
@@ -31,51 +32,18 @@ internal class AndroidSpeakerInput(private val context: Context) : SpeakerInput 
             .setAudioFormat(AudioFormat.Builder().setSampleRate(12_000)
                 .setChannelMask(AudioFormat.CHANNEL_IN_MONO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
             .setBufferSizeInBytes(maxOf(minimum * 2, 1_920)).build()
-        check(recorder.state == AudioRecord.STATE_INITIALIZED) { "麦克风初始化失败" }
         try {
-            recorder.startRecording()
-            audioRecord = recorder
-            worker = thread(name = "hanppie-push-to-talk", isDaemon = true) {
-                val buffer = ByteArray(480)
-                var ready = false
-                val maximum = 12_000 * 2 * 15
-                while (recording.get() && pcm.size() < maximum) {
-                    val count = recorder.read(buffer, 0, minOf(buffer.size, maximum - pcm.size()))
-                    if (count > 0) {
-                        synchronized(pcm) { pcm.write(buffer, 0, count) }
-                        if (!ready) { ready = true; onReady() }
-                    }
-                }
-                recording.set(false)
+            check(recorder.state == AudioRecord.STATE_INITIALIZED) { "麦克风初始化失败" }
+            return object : PcmCaptureDevice {
+                override fun start() = recorder.startRecording()
+                override fun read(buffer: ByteArray, length: Int): Int = recorder.read(buffer, 0, length)
+                override fun stop() = recorder.stop()
+                override fun close() = recorder.release()
             }
-        } catch (error: Exception) {
-            recording.set(false)
+        } catch (error: Throwable) {
             recorder.release()
             throw error
         }
-    }
-
-    override fun finish(): ByteArray {
-        val wasRecording = recording.getAndSet(false)
-        check(wasRecording || worker != null) { "对讲未开始" }
-        runCatching { audioRecord?.stop() }
-        audioRecord?.release()
-        worker?.join(1_000)
-        audioRecord = null
-        worker = null
-        val captured = synchronized(pcm) { pcm.toByteArray() }
-        require(captured.size >= 480) { "对讲录音过短" }
-        return encodeAndroidSpeakerPcm(captured)
-    }
-
-    override fun cancel() {
-        recording.set(false)
-        runCatching { audioRecord?.stop() }
-        audioRecord?.release()
-        worker?.join(1_000)
-        audioRecord = null
-        worker = null
-        pcm.reset()
     }
 }
 

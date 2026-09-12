@@ -1,7 +1,8 @@
 package cn.elonzh.hanppie.ui
 
 import java.io.ByteArrayOutputStream
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import javax.sound.sampled.AudioFormat
 import javax.sound.sampled.AudioSystem
 import javax.sound.sampled.TargetDataLine
@@ -10,83 +11,96 @@ import kotlin.concurrent.thread
 internal class DesktopSpeakerInput(
     private val executable: String = System.getenv("HANPPIE_FFMPEG") ?: "ffmpeg",
     private val lineFactory: (AudioFormat) -> TargetDataLine = AudioSystem::getTargetDataLine,
-    private val encoder: (ByteArray) -> ByteArray = { encodeDesktopSpeakerPcm(it, executable) },
+    encoder: ((ByteArray) -> ByteArray)? = null,
+    private val encoderTimeoutMillis: Long = 10_000,
+    private val processFactory: (List<String>) -> Process = { ProcessBuilder(it).start() },
 ) : SpeakerInput {
-    private val recording = AtomicBoolean(false)
-    private var line: TargetDataLine? = null
-    private var worker: Thread? = null
-    private var pcm = ByteArrayOutputStream()
-
-    @Synchronized override fun start(onReady: () -> Unit) {
-        check(recording.compareAndSet(false, true)) { "对讲已在录音" }
-        pcm = ByteArrayOutputStream()
-        val format = AudioFormat(12_000f, 16, 1, true, false)
-        val input = try { lineFactory(format) } catch (error: Exception) { recording.set(false); throw error }
-        try {
-            input.open(format, maxOf(1_920, input.bufferSize))
-            input.start()
-            line = input
-            worker = thread(name = "hanppie-push-to-talk", isDaemon = true) {
-                val buffer = ByteArray(480)
-                var ready = false
-                val maximum = 12_000 * 2 * 15
-                while (recording.get() && pcm.size() < maximum) {
-                    val count = input.read(buffer, 0, minOf(buffer.size, maximum - pcm.size()))
-                    if (count > 0) {
-                        synchronized(pcm) { pcm.write(buffer, 0, count) }
-                        if (!ready) { ready = true; onReady() }
-                    }
+    private val format = AudioFormat(12_000f, 16, 1, true, false)
+    private val activeEncoderProcess = AtomicReference<Process?>()
+    private val pcmEncoder = encoder ?: { pcm: ByteArray ->
+        encodeDesktopSpeakerPcm(pcm, executable, encoderTimeoutMillis, processFactory, activeEncoderProcess::set)
+    }
+    private val capture = BoundedPcmCapture(
+        deviceFactory = {
+            val input = lineFactory(format)
+            object : PcmCaptureDevice {
+                override fun start() {
+                    input.open(format, maxOf(1_920, input.bufferSize))
+                    input.start()
                 }
-                recording.set(false)
+
+                override fun read(buffer: ByteArray, length: Int): Int = input.read(buffer, 0, length)
+                override fun stop() = input.stop()
+                override fun close() = input.close()
             }
-        } catch (error: Exception) {
-            recording.set(false)
-            runCatching { input.close() }
-            throw error
-        }
-    }
+        },
+        encoder = pcmEncoder,
+    )
 
-    override fun finish(): ByteArray {
-        val wasRecording = recording.getAndSet(false)
-        check(wasRecording || worker != null) { "对讲未开始" }
-        runCatching { line?.stop() }
-        line?.close()
-        worker?.join(1_000)
-        line = null
-        worker = null
-        val captured = synchronized(pcm) { pcm.toByteArray() }
-        require(captured.size >= 480) { "对讲录音过短" }
-        return encoder(captured)
-    }
-
+    override fun start(onReady: () -> Unit) = capture.start(onReady)
+    override fun finish(): ByteArray = capture.finish()
     override fun cancel() {
-        recording.set(false)
-        runCatching { line?.stop() }
-        line?.close()
-        worker?.join(1_000)
-        line = null
-        worker = null
-        pcm.reset()
+        activeEncoderProcess.getAndSet(null)?.destroyForcibly()
+        capture.cancel()
     }
 }
 
-internal fun encodeDesktopSpeakerPcm(pcm: ByteArray, executable: String = "ffmpeg"): ByteArray {
+internal fun encodeDesktopSpeakerPcm(
+    pcm: ByteArray,
+    executable: String = "ffmpeg",
+    timeoutMillis: Long = 10_000,
+    processFactory: (List<String>) -> Process = { ProcessBuilder(it).start() },
+    onProcessChanged: (Process?) -> Unit = {},
+): ByteArray {
     require(pcm.isNotEmpty() && pcm.size % 2 == 0)
-    val process = ProcessBuilder(executable, "-hide_banner", "-loglevel", "error", "-nostdin",
+    val command = listOf(executable, "-hide_banner", "-loglevel", "error", "-nostdin",
         "-f", "s16le", "-ar", "12000", "-ac", "1", "-i", "pipe:0",
         "-c:a", "libopus", "-application", "voip", "-frame_duration", "20",
-        "-b:a", "10k", "-vbr", "on", "-f", "opus", "pipe:1").start()
+        "-b:a", "10k", "-vbr", "on", "-f", "opus", "pipe:1")
+    val process = processFactory(command)
+    onProcessChanged(process)
+    val ogg = ByteArrayOutputStream()
     val errors = ByteArrayOutputStream()
-    val errorReader = thread(isDaemon = true) { process.errorStream.use { it.copyTo(errors) } }
-    val writer = thread(isDaemon = true) {
-        process.outputStream.use { it.write(pcm) }
+    val streamFailure = AtomicReference<Throwable?>()
+    val outputReader = thread(isDaemon = true) {
+        runCatching { process.inputStream.use { it.copyTo(ogg) } }
+            .onFailure { streamFailure.compareAndSet(null, it) }
     }
-    val ogg = process.inputStream.use { it.readBytes() }
-    writer.join(2_000)
-    val exit = process.waitFor()
-    errorReader.join(1_000)
-    check(exit == 0) { errors.toString(Charsets.UTF_8).trim().ifBlank { "FFmpeg Opus 编码失败" } }
-    return opusPacketsFromOgg(ogg)
+    val errorReader = thread(isDaemon = true) {
+        runCatching { process.errorStream.use { it.copyTo(errors) } }
+            .onFailure { streamFailure.compareAndSet(null, it) }
+    }
+    val writer = thread(isDaemon = true) {
+        runCatching { process.outputStream.use { it.write(pcm) } }
+            .onFailure { streamFailure.compareAndSet(null, it) }
+    }
+    try {
+        check(process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)) { "FFmpeg Opus 编码超时" }
+        writer.join(1_000)
+        outputReader.join(1_000)
+        errorReader.join(1_000)
+        check(process.exitValue() == 0) {
+            errors.toString(Charsets.UTF_8).trim().ifBlank { "FFmpeg Opus 编码失败" }
+        }
+        streamFailure.get()?.let { throw IllegalStateException("FFmpeg 数据传输失败", it) }
+        return opusPacketsFromOgg(ogg.toByteArray())
+    } finally {
+        onProcessChanged(null)
+        process.outputStream.closeQuietly()
+        process.inputStream.closeQuietly()
+        process.errorStream.closeQuietly()
+        if (process.isAlive) {
+            process.destroy()
+            if (!process.waitFor(500, TimeUnit.MILLISECONDS)) process.destroyForcibly()
+        }
+        writer.join(1_000)
+        outputReader.join(1_000)
+        errorReader.join(1_000)
+    }
+}
+
+private fun AutoCloseable.closeQuietly() {
+    runCatching { close() }
 }
 
 internal fun opusPacketsFromOgg(ogg: ByteArray): ByteArray {
