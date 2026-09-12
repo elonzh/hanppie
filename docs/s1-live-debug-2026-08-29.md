@@ -11,7 +11,7 @@
 
 ## 1. 执行范围与证据索引
 
-本次联调依次记录了设备身份与 AppID 解析（第 2 节）、当时比较的三条通信链路（第 3 节），以及 USB 保护、App/Lab、ADB、SDK proxy、回滚和官方 SDK 探针的实际命令与输出（第 4 节）。这些是后续实现的来源证据，不构成当前能力矩阵；当前等级只在 [`architecture.md` 的能力矩阵](./architecture.md#711-当前能力矩阵) 中维护。
+本次联调依次记录了设备身份与 AppID 解析（第 2 节）、当时比较的三条通信链路（第 3 节），以及 USB 保护、App/Lab、ADB、SDK proxy、回滚和官方 SDK 探针的实际命令与输出（第 4 节）。这些是后续实现的来源证据，不构成当前能力矩阵；当前等级只在 [`architecture.md` 的能力矩阵](./architecture.md#111-当前能力矩阵) 中维护。
 
 ## 2. 设备与网络身份
 
@@ -40,7 +40,7 @@ protocol_appid = decimal_appid.to_bytes(8, "little").decode("ascii")
 
 ## 3. 当时比较的通信链路
 
-本轮实际操作了 App/Lab 和临时 SDK proxy 两条网络链路；S.BUS、CAN 与 ROS 2 只来自同期调研，没有在本轮接线或运行。各机制的当前分层和 Hanppie 采用方式见 [`architecture.md`](./architecture.md#6-外部扩展机制与生态)，本记录不维护推荐组合。
+本轮实际操作了 App/Lab 和临时 SDK proxy 两条网络链路；S.BUS、CAN 与 ROS 2 只来自同期调研，没有在本轮接线或运行。各机制的当前分层见 [`architecture-robomaster.md`](./architecture-robomaster.md#6-外部扩展机制与生态)，Hanppie 的采用方式见 [`architecture.md`](./architecture.md)，本记录不维护推荐组合。
 
 ## 4. 实际调试过程
 
@@ -294,7 +294,7 @@ top_led_off=True
 
 ## 6. 当时采用的安全措施
 
-本节只记录本轮操作条件。项目当前安全边界以 [`architecture.md`](./architecture.md#713-安全与恢复模型) 为准。
+本节只记录本轮操作条件。项目当前安全边界以 [`architecture.md`](./architecture.md#113-安全与恢复模型) 为准。
 
 ### 当时首要风险
 

@@ -16,13 +16,14 @@ Each document has one responsibility so that a conclusion is never maintained in
 
 | Document | Sole responsibility |
 | --- | --- |
-| [Technical architecture](./docs/architecture.md) (Chinese) | The only source of truth for current hardware/software architecture, protocols, capability status, Hanppie mechanisms, and safety boundaries |
+| [Hanppie technical architecture](./docs/architecture.md) (Chinese) | The only source of truth for current project structure, implementation, capability status, and safety boundaries |
+| [RoboMaster S1 architecture, protocols, and research](./docs/architecture-robomaster.md) (Chinese) | The only source of truth for native S1 hardware, firmware, protocols, and external ecosystem |
 | README | Installation, command usage, and navigation |
 | [Initial recovery log](./docs/s1-live-debug-2026-08-29.md), [App/Lab regression log](./docs/s1-live-regression-2026-08-30.md), [AppEnvelope direct-control log](./docs/s1-direct-control-2026-08-31.md) | Commands, output, failures, and measurements from a dated run; never the current conclusion |
 | [Early research report](./docs/robomaster-s1-revival-report.md) | Historical research into S.BUS, SocketCAN, vcan, ROS 2, and alternative approaches |
 | [`src/robomaster/UPSTREAM.md`](./src/robomaster/UPSTREAM.md) | Provenance and maintenance boundary of the bundled DJI SDK fork |
 
-Before using physical hardware, read the architecture's [safety and recovery model](./docs/architecture.md#713-安全与恢复模型). Its [capability matrix](./docs/architecture.md#711-当前能力矩阵) is the sole current status table.
+Before using physical hardware, read the architecture's [safety and recovery model](./docs/architecture.md#113-安全与恢复模型). Its [capability matrix](./docs/architecture.md#111-当前能力矩阵) is the sole current status table.
 
 ## Installation
 
@@ -44,9 +45,9 @@ Connecting opens a full-screen cockpit with a video background and touch control
 Click a discovered robot to connect, or select manual connection and enter an explicit IPv4/AppID. The script tab manages local scripts and editable copies of five multi-step presets, with import/export, rename, and delete operations. Choosing **Run script** is the execution intent: the app overwrites the single `python_raw.dsp` with the current source and starts it without a second confirmation checkbox. Starting a script opens a focused execution view where lifecycle state and output sent through `log_ctrl.print_msg(...)` take priority; returning to the editor does not stop the script, and a global status strip keeps the active run and Stop action visible on other pages. Normal return or failure closes the onboard run automatically, while a lost connection is reported as unknown. Gimbal and chassis demonstrations are visibly marked, run for a finite number of rounds, and require clear space.
 Use **朗读** beside an assistant reply to read it aloud. Linux requires a configured Speech Dispatcher (`spd-say`).
 For Android, configure the SDK managed by IDEA in the ignored `local.properties`, install API 37 and Build Tools 36.1.0, and run `task android:check`. The APK is at `androidApp/build/outputs/apk/debug/androidApp-debug.apk`.
-See the [client architecture](./docs/architecture.md#730-单体仓库与-kotlin-多平台客户端) for current implementation and verification boundaries.
+See the [client architecture](./docs/architecture.md#130-单体仓库与-kotlin-多平台客户端) for current implementation and verification boundaries.
 
-On Android or desktop, open **设置**, enter an OpenAI-compatible API URL, model and API key, then send messages. Settings and conversation history last only for the current process. Connect a specific robot in **设备** before requesting scripts, and review the generated source before confirming execution. Cancelling a conversation does not stop an onboard script; use **脚本 → 停止脚本** for that.
+On Android or desktop, open **设置**, enter an OpenAI-compatible API URL, model and API key, then send messages. Settings are restored on the next launch; conversation history lasts only for the current process. Connect a specific robot in **设备** before requesting scripts, and review the generated source before confirming execution. Cancelling a conversation does not stop an onboard script; use **脚本 → 停止脚本** for that.
 
 On Android, the microphone icon beside Send records through the phone's system speech service after consent and microphone permission. Review the recognized draft before sending it. **朗读** reads an assistant message, **设置 → 自动朗读** enables reading subsequent completed replies, and **停止朗读** interrupts playback. This uses phone audio, not the robot microphone or speaker. The system recognition service may process audio online; the app does not install or switch system services automatically.
 
@@ -55,7 +56,7 @@ The [Chinese usage guide](./README.md#桌面程序) also documents opt-in, no-mo
 
 ### Python tools
 
-On Android and desktop, entering the full-screen cockpit establishes the direct-control channel; with no input it sends only zero values. Use the left chassis stick and right gimbal stick. Touch controls provide direct gear `1–5` at the lower left, plus ammunition selection and direct fire at the lower right. On a keyboard, use WASD to move, Q/E to rotate in place, `1–5` to select a gear, arrow keys to aim, G to switch ammunition, Space to fire, and Esc to return to the console. Outward aiming beyond the follow threshold engages software chassis turning; release stops it. Physical follow behavior is not yet validated; see [architecture boundaries](./docs/architecture.md). Infrared is selected by default; switching never fires. Gel beads use a direct single-shot command, not a Lab script. Leaving the cockpit or losing desktop window focus zeros input and exits the current direct-control channel. Returning to the foreground cockpit restores the channel with cleared keys and sticks. Audio/video are robot-to-app only, not two-way calling.
+On Android and desktop, entering the full-screen cockpit establishes the direct-control channel; with no input it sends only zero values. Use the left chassis stick and right gimbal stick. Touch controls provide direct gear `1–5` at the lower left, plus ammunition selection and direct fire at the lower right. On a keyboard, use WASD to move, Q/E to rotate in place, `1–5` to select a gear, arrow keys to aim, G to switch ammunition, Space to fire, and Esc to return to the console. Outward aiming beyond the follow threshold engages software chassis turning; release stops it. Physical follow behavior is not yet validated; see [architecture boundaries](./docs/architecture.md). Infrared is selected by default; switching never fires. Gel beads use a direct single-shot command, not a Lab script. Leaving the cockpit or losing desktop window focus zeros input and exits the current direct-control channel. Returning to the foreground cockpit restores the channel with cleared keys and sticks. Robot audio/video supports downstream playback plus push-to-talk clips that record while held and send on release; it is not full-duplex calling.
 
 Python 3.10 is the development and test baseline. [uv](https://docs.astral.sh/uv/) manages the environment, while [Task](https://taskfile.dev/) is the optional unified task runner.
 
@@ -101,7 +102,7 @@ uv run hanppie diag \
   --allow-gel
 ```
 
-The complete check order, evidence levels, and cleanup mechanism are maintained only in the [architecture diagnosis section](./docs/architecture.md#710-cli完整诊断与质量边界). Motion, infrared, and gel firing require three independent explicit gates.
+The complete check order, evidence levels, and cleanup mechanism are maintained only in the [architecture diagnosis section](./docs/architecture.md#110-cli完整诊断与质量边界). Motion, infrared, and gel firing require three independent explicit gates.
 
 Output defaults to `.hanppie/diagnosis/<timestamp>/report.md` and `events.jsonl`. The directory is ignored by Git, and its files are evidence for that run only. Architecture conclusions remain in the architecture document. Selecting `adb` or `system` temporarily exposes root ADB; cleanup always reboots the robot and confirms that TCP 5555 has closed. There is no compatibility option to skip this cleanup.
 
@@ -129,7 +130,7 @@ finally:
     robot.close()
 ```
 
-The current API, capabilities, and open gaps are maintained only in the [technical architecture](./docs/architecture.md#711-当前能力矩阵). Gamepad, Web, and ROS 2 input layers are not implemented yet and must eventually feed a control arbiter rather than drive actuators directly.
+The current API, capabilities, and open gaps are maintained only in the [technical architecture](./docs/architecture.md#111-当前能力矩阵). Gamepad, Web, and ROS 2 input layers are not implemented yet and must eventually feed a control arbiter rather than drive actuators directly.
 
 ## Codex MCP conversation control
 
@@ -158,7 +159,7 @@ The server exposes connection, status, Python-context, Python-execution, and dis
 
 Installation and startup have no motion, infrared, or gel permission switches. Chassis, gimbal, and infrared use the normal `DirectRobot` `robot.arm()` and lease API. Gel firing is available as `result = robot.fire_gel()` or `robot.fire("gel")`; MCP switches to the verified Lab/Bridge path and waits for its execution result. A failed Lab transition is retried and attempts to restore the previous Direct connection; shared LED and stop operations do not cause unnecessary backend switches. Every successful or failed call still neutralizes and disarms without closing a healthy connection. A timeout kills the worker and the next call creates a new connection. Velocity multiplied by duration is not proof of an exact angle or distance; multi-stage code can call `checkpoint("stage", ...)` after each completed stage. Execution failures are returned as MCP tool errors so Codex does not mistake them for successful completion.
 
-This is arbitrary Python execution for a trusted local user, not a security sandbox. Starting MCP, completing its handshake, and listing tools do not write files. The first actual Hanppie tool call activates `.hanppie/mcp/sessions/<session-id>/`: `server.log` contains server and worker events, `calls.jsonl` stores paired `started` and `completed` events under one `call_id`, and `calls/<run-id>/` contains files, images, and checkpoints produced by that Python call. `get_python_context` is itself a tool call, so it activates recording and reports the version, actual facade signatures, capability boundaries, and active paths; `--artifact-dir` changes the whole root. Call records contain submitted Python source and returned content and should be managed as local execution records. The [technical architecture](./docs/architecture.md#734-codex-mcp-与持久-host-python-worker) is authoritative for execution, cleanup, and concurrency boundaries.
+This is arbitrary Python execution for a trusted local user, not a security sandbox. Starting MCP, completing its handshake, and listing tools do not write files. The first actual Hanppie tool call activates `.hanppie/mcp/sessions/<session-id>/`: `server.log` contains server and worker events, `calls.jsonl` stores paired `started` and `completed` events under one `call_id`, and `calls/<run-id>/` contains files, images, and checkpoints produced by that Python call. `get_python_context` is itself a tool call, so it activates recording and reports the version, actual facade signatures, capability boundaries, and active paths; `--artifact-dir` changes the whole root. Call records contain submitted Python source and returned content and should be managed as local execution records. The [technical architecture](./docs/architecture.md#135-codex-mcp-与持久-host-python-worker) is authoritative for execution, cleanup, and concurrency boundaries.
 
 ## Xiaohanpi voice agent
 
@@ -192,7 +193,7 @@ Local `faster-whisper` performs transcription (the default `small` model is down
 
 For example, say “小憨批，观察一下附近有些什么东西？” to capture and describe the S1's current forward camera view. Follow-ups do not need the wake phrase during the default 45-second active window. “退下” returns to sleep; “停止”, “停下”, and “别动” use a local stop path against an existing connection without waiting for the model. Repeat `--wake-phrase` for aliases, use `--active-timeout` to change the conversation window, select the microphone with `--audio-device`, select a local Whisper model with `--local-transcription-model`, or disable speech playback with `--no-tts`.
 
-`--prompt` bypasses wake-word matching and disables audio input and playback. Execution failures return a nonzero exit code and stop subsequent prompts. Conversation and tool records are written to `.hanppie/agent/` only after a wake-up or prompt execution. See the [technical architecture](./docs/architecture.md#735-唤醒词连续对话与-langgraph-智能体) for data boundaries, LangGraph state, generated-code policy, and verification limits.
+`--prompt` bypasses wake-word matching and disables audio input and playback. Execution failures return a nonzero exit code and stop subsequent prompts. Conversation and tool records are written to `.hanppie/agent/` only after a wake-up or prompt execution. See the [technical architecture](./docs/architecture.md#136-唤醒词连续对话与-langgraph-智能体) for data boundaries, LangGraph state, generated-code policy, and verification limits.
 
 ## Development toolchain
 

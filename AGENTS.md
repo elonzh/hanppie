@@ -1,6 +1,6 @@
 # AGENTS.md
 
-- 架构、协议、能力边界或工作原理变化时，必须同步更新 `docs/architecture.md`。
+- Hanppie 架构、能力边界或工作原理变化时，必须同步更新 `docs/architecture.md`；RoboMaster 原生架构、调查或协议结论变化时，必须同步更新 `docs/architecture-robomaster.md`。
 - 不随意重构 `src/hanppie/runtime` 或 `resources` 中的恢复内容，只做有证据的必要修改。
 - `src/robomaster` 是 Apache-2.0 上游 fork；保留官方导入接口、版权头和来源记录，只做有测试或实机证据的 S1 适配。
 - `src/hanppie/lab` 是 Hanppie 自有的 App/Lab 实现；协议修改需有报文或真机证据，机内载荷保持 Python 3.6 语法兼容、显式 arm 和失联归零。
@@ -9,8 +9,8 @@
 - 不提交设备备份、序列号、凭据、厂商二进制或自动生成的实机日志。
 - 单体仓库依赖统一管理，比如 gradle 使用 libs.versions.toml 统一声明依赖
 - 需要注重长期可维护性，不要随意四处堆砌文档，禁止重复维护同一结论。同一事实应当只有一个权威文档，其他文档引用它即可。这样可以减少多处同步和互相漂移。不要随意添加无意义的兜底和测试，功能设计与开发要考虑消融实验确保是必要和有价值的
-- 当前技术结论只写入 `docs/architecture.md`；README 只维护安装和用法，日期化联调记录及 `diag` 报告只保存单次证据。
-- `docs/architecture.md` 正文只描述当前事实、当前实现和当前边界；已废弃方案、旧命令、迁移过程和历史取舍只留在日期化记录或 Git 历史中。
+- Hanppie 当前实现与能力结论只写入 `docs/architecture.md`，RoboMaster 原生架构、调查与协议结论只写入 `docs/architecture-robomaster.md`；README 只维护安装和用法，日期化联调记录及 `diag` 报告只保存单次证据。
+- `docs/architecture.md` 与 `docs/architecture-robomaster.md` 正文只描述各自归属的当前事实、当前实现和当前边界；已废弃方案、旧命令、迁移过程和历史取舍只留在日期化记录或 Git 历史中。
 - 禁止用模糊表述把现状和计划混写在一起。
 - Git 提交消息遵循约定式提交规范，并使用中文说明。
 - 客户端软件支持桌面端和移动端，UI 交互要针对不同平台做相对应的优化。

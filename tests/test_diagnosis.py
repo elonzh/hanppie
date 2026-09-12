@@ -125,6 +125,7 @@ def test_recorder_keeps_complete_local_evidence(tmp_path: Path) -> None:
     assert "AA:BB:CC:DD:EE:FF" in log
     assert "secret-id" in log + report
     assert "docs/architecture.md" in report
+    assert "docs/architecture-robomaster.md" in report
     json.loads(log)
 
 

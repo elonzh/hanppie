@@ -1,6 +1,6 @@
 # RoboMaster macOS 安装包静态分析记录（2026-09-08）
 
-本文保存本次输入、证据定位、落地范围和验证结果；当前协议结论统一见 [架构文档 5.3.5](architecture.md#535-macos-客户端静态分析边界)，客户端行为见 [7.3.0](architecture.md#730-单体仓库与-kotlin-多平台客户端)。
+本文保存本次输入、证据定位、落地范围和验证结果；当前协议结论统一见 [RoboMaster 架构文档 5.3.5](architecture-robomaster.md#535-macos-客户端静态分析边界)，客户端行为见 [Hanppie 架构 1.3.0](architecture.md#130-单体仓库与-kotlin-多平台客户端)。
 
 ## 输入与工具
 

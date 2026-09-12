@@ -47,7 +47,7 @@ class DiagnosisRecorder:
             "# RoboMaster S1 实机诊断报告",
             "",
             "> 本文件只保存本次诊断证据，不维护项目的长期技术结论。",
-            "> 当前架构、协议和能力结论以 `docs/architecture.md` 为唯一权威来源。",
+            "> Hanppie 当前实现与能力结论见 `docs/architecture.md`；RoboMaster 原生架构与协议结论见 `docs/architecture-robomaster.md`。",
             "",
             "## 执行元数据",
             "",

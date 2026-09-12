@@ -16,13 +16,14 @@ Hanppie 是一个面向 DJI RoboMaster S1 的开源保存与电脑编程工具�
 
 | 文档 | 唯一职责 |
 | --- | --- |
-| [技术架构](./docs/architecture.md) | 当前软硬件架构、协议、能力状态、项目机制和安全边界的唯一权威来源 |
+| [Hanppie 技术架构](./docs/architecture.md) | 当前项目结构、实现机制、能力状态和安全边界的唯一权威来源 |
+| [RoboMaster S1 架构、协议与调查](./docs/architecture-robomaster.md) | S1 原生硬件、固件、协议和外部生态的唯一权威来源 |
 | README | 安装、命令用法和文档导航 |
 | [初次恢复记录](./docs/s1-live-debug-2026-08-29.md)、[App/Lab 回归记录](./docs/s1-live-regression-2026-08-30.md)、[AppEnvelope 直控记录](./docs/s1-direct-control-2026-08-31.md) | 特定日期的命令、输出、故障和测量证据，不维护当前结论 |
 | [早期调研报告](./docs/robomaster-s1-revival-report.md) | S.BUS、SocketCAN、vcan、ROS 2 和备选路线的历史调研 |
 | [`src/robomaster/UPSTREAM.md`](./src/robomaster/UPSTREAM.md) | 内置 DJI SDK fork 的来源与改动边界 |
 
-使用实机前请先阅读技术架构中的[安全与恢复模型](./docs/architecture.md#713-安全与恢复模型)；当前验证状态只查看其中的[能力矩阵](./docs/architecture.md#711-当前能力矩阵)。
+使用实机前请先阅读技术架构中的[安全与恢复模型](./docs/architecture.md#113-安全与恢复模型)；当前验证状态只查看其中的[能力矩阵](./docs/architecture.md#111-当前能力矩阵)。
 
 ## 安装
 
@@ -51,11 +52,11 @@ Android 模拟器使用默认 NAT/DHCP 即可尝试直连机器人，不要把�
 "$ANDROID_HOME/emulator/emulator" -avd <上一步的设备名称> -no-snapshot-load
 ```
 
-`ANDROID_HOME` 指向 IDEA 使用的同一套 SDK。不要为此额外安装 SDK。当前验证边界见[客户端架构](./docs/architecture.md#730-单体仓库与-kotlin-多平台客户端)。
+`ANDROID_HOME` 指向 IDEA 使用的同一套 SDK。不要为此额外安装 SDK。当前验证边界见[客户端架构](./docs/architecture.md#130-单体仓库与-kotlin-多平台客户端)。
 
 ### 桌面程序
 
-Android 和桌面连接后进入驾驶舱即建立直控通道，使用左侧底盘、右侧云台摇杆；未输入时只发送零值。触摸端可在左下直接选择五档速度，在右下切换红外/水弹并发射当前弹药。键盘使用 WASD 移动、Q/E 原地转向、数字 `1–5` 选档、方向键控制云台、G 切换弹药、空格发射、Esc 返回控制台；云台向外转过一定角度时底盘开始软件联动，松手停止；机械效果仍待实机验证，见[架构边界](./docs/architecture.md)。默认红外，切换弹药本身不会发射；水弹使用直控单发命令，不运行 Lab 脚本。离开驾驶舱或桌面窗口失焦会立即归零并退出当前直控；切回前台且驾驶舱取得焦点后自动恢复通道，按键和摇杆从零开始。音视频为机器人下行播放，不是双向通话。
+Android 和桌面连接后进入驾驶舱即建立直控通道，使用左侧底盘、右侧云台摇杆；未输入时只发送零值。触摸端可在左下直接选择五档速度，在右下切换红外/水弹并发射当前弹药。键盘使用 WASD 移动、Q/E 原地转向、数字 `1–5` 选档、方向键控制云台、G 切换弹药、空格发射、Esc 返回控制台；云台向外转过一定角度时底盘开始软件联动，松手停止；机械效果仍待实机验证，见[架构边界](./docs/architecture.md)。默认红外，切换弹药本身不会发射；水弹使用直控单发命令，不运行 Lab 脚本。离开驾驶舱或桌面窗口失焦会立即归零并退出当前直控；切回前台且驾驶舱取得焦点后自动恢复通道，按键和摇杆从零开始。机器人音视频支持下行播放，并提供按住采集、松开发送的扬声器短片对讲，不是实时双工通话。
 
 桌面音视频需要安装支持 H.264、Opus 的 FFmpeg，将 `ffmpeg` 加入应用进程的 PATH，或以 `HANPPIE_FFMPEG` 环境变量指定可执行文件绝对路径（macOS Homebrew 通常为 `/opt/homebrew/bin/ffmpeg`）。分发包不包含 FFmpeg；Android 使用系统解码器，不需要 FFmpeg。
 
@@ -72,7 +73,7 @@ Android 和桌面连接后进入驾驶舱即建立直控通道，使用左侧底
 在“脚本”页从“我的脚本”或“预置脚本”进入编辑器；“保存到脚本库”持久化当前脚本，“导出 .py”另存副本。预置脚本包含电量心情秀、彩虹音阶、好奇哨兵、方形巡演和胜利舞会，每次运行会执行有限轮次；涉及云台或底盘动作的脚本会直接标明风险，使用前仍需检查完整源码并留出安全空间。
 连接机器人后直接点击“运行脚本”；软件会先把当前源码覆盖上传到唯一的 `python_raw.dsp`，再发送启动命令，不把这个单一运行槽位包装成程序管理。启动后进入以运行状态和 `log_ctrl.print_msg(...)` 输出为主体的运行界面；返回编辑器不会停止脚本，切换到其他页面后仍可从全局状态条查看并返回。正常返回或报错会自动结束机内运行态，仍在运行时可手动停止；断开连接后无法确认机内状态，会明确标为未知。
 在“对话”页点击回复旁的“朗读”播报文字。Linux 需要已安装并配置 Speech Dispatcher（`spd-say`）。
-能力与验证边界以[客户端架构](./docs/architecture.md#730-单体仓库与-kotlin-多平台客户端)为准。
+能力与验证边界以[客户端架构](./docs/architecture.md#130-单体仓库与-kotlin-多平台客户端)为准。
 
 Android 和桌面均可进入“设置”，填写兼容 API 地址、模型及 API Key，点击“保存设置”；地址、模型、密钥和自动朗读选项将在下次启动恢复。清空 API Key 再保存可移除已保存的密钥。保存失败会显示提示，不会改为明文存储。聊天记录仅保留本次运行；“新对话”清空上下文。需要控制机器人时先在“设备”页连接指定目标，在聊天中检查生成的完整脚本并“确认执行”。“取消”仅取消对话；停止机内脚本使用“脚本”页的“停止脚本”。
 
@@ -141,7 +142,7 @@ uv run hanppie diag \
   --allow-gel
 ```
 
-完整检查顺序、证据层级和安全清理机制只在[技术架构的诊断章节](./docs/architecture.md#710-cli完整诊断与质量边界)维护。机械、红外和水弹必须通过三个独立选项显式授权。
+完整检查顺序、证据层级和安全清理机制只在[技术架构的诊断章节](./docs/architecture.md#110-cli完整诊断与质量边界)维护。机械、红外和水弹必须通过三个独立选项显式授权。
 
 默认输出位于 `.hanppie/diagnosis/<timestamp>/report.md` 和 `events.jsonl`。该目录不会进入 Git，报告只表示本次运行证据；技术结论仍只更新到架构文档。涉及 `adb` 或 `system` 时会临时开放 root ADB，并在结束时重启机器人、确认 TCP 5555 已关闭，不提供跳过安全清理的兼容选项。
 
@@ -169,7 +170,7 @@ finally:
     robot.close()
 ```
 
-当前 API、能力与未完成项只在[技术架构](./docs/architecture.md#711-当前能力矩阵)维护。手柄、Web 和 ROS 2 输入层尚未实现，不能绕过未来的控制仲裁层直接驱动执行器。
+当前 API、能力与未完成项只在[技术架构](./docs/architecture.md#111-当前能力矩阵)维护。手柄、Web 和 ROS 2 输入层尚未实现，不能绕过未来的控制仲裁层直接驱动执行器。
 
 ## Codex MCP 对话控制
 
@@ -198,7 +199,7 @@ MCP 提供连接、状态、Python 上下文、Python 执行和断开工具。�
 
 安装和启动没有动作、红外或水弹权限选项。底盘、云台和红外直接使用 `DirectRobot` 的正常 `robot.arm()` 与租约 API；水弹调用 `result = robot.fire_gel()` 或 `robot.fire("gel")`，MCP 会切换到已验证的 Lab/Bridge 路径并等待执行结果。Lab 切换失败会重试并尝试恢复原 Direct 连接；共享灯光和 stop 不会触发无意义的后端切换。每次调用正常或异常结束仍会归零并 `disarm()`，但健康连接不会关闭；超时会结束整个 worker，并在下一次调用时重建连接。速度乘以持续时间不是精确角度或距离证明，多阶段动作可在每个完成点调用 `checkpoint("阶段名", ...)` 保留部分进度。执行失败会以 MCP 工具错误返回，便于 Codex 直接识别失败而不是误判为完成。
 
-这是面向可信本地用户的任意 Python 代码执行入口，不是安全沙箱。MCP 启动、握手和列出工具不会写文件；首次实际调用 Hanppie 工具后才会创建 `.hanppie/mcp/sessions/<session-id>/`。`server.log` 保存服务与 worker 运行日志，`calls.jsonl` 为每次调用保存同一 `call_id` 的 `started`/`completed` 事件，`calls/<run-id>/` 保存该次 Python 调用生成的文件、图片和检查点。`get_python_context` 本身也算一次调用，会激活记录并返回当前版本、真实 facade 签名、能力边界和记录路径；`--artifact-dir` 可以整体修改这个根目录。调用记录包含提交的 Python 源码和返回内容，应按本机运行记录管理。完整执行边界、清理和并发限制只在[技术架构](./docs/architecture.md#734-codex-mcp-与持久-host-python-worker)维护。
+这是面向可信本地用户的任意 Python 代码执行入口，不是安全沙箱。MCP 启动、握手和列出工具不会写文件；首次实际调用 Hanppie 工具后才会创建 `.hanppie/mcp/sessions/<session-id>/`。`server.log` 保存服务与 worker 运行日志，`calls.jsonl` 为每次调用保存同一 `call_id` 的 `started`/`completed` 事件，`calls/<run-id>/` 保存该次 Python 调用生成的文件、图片和检查点。`get_python_context` 本身也算一次调用，会激活记录并返回当前版本、真实 facade 签名、能力边界和记录路径；`--artifact-dir` 可以整体修改这个根目录。调用记录包含提交的 Python 源码和返回内容，应按本机运行记录管理。完整执行边界、清理和并发限制只在[技术架构](./docs/architecture.md#135-codex-mcp-与持久-host-python-worker)维护。
 
 ## 小憨批语音智能体
 
@@ -229,7 +230,7 @@ uv run hanppie agent run --auth codex \
   --reasoning-effort low --model-timeout 30 -p "把装甲灯设为蓝色常亮"
 ```
 
-模型访问权限由账户决定；参数或模型不支持时直接报错，不自动切换。计时口径与当前性能边界见[技术架构](./docs/architecture.md#735-唤醒词连续对话与-langgraph-智能体)。
+模型访问权限由账户决定；参数或模型不支持时直接报错，不自动切换。计时口径与当前性能边界见[技术架构](./docs/architecture.md#136-唤醒词连续对话与-langgraph-智能体)。
 
 Codex 模式由 Hanppie 自己执行 device-code OAuth、刷新凭据，并以 Bearer token 直接流式请求 ChatGPT 的 Codex Responses 后端；没有 Codex CLI、`codex exec` 或 App Server 子进程。凭据默认原子写入 `~/.hanppie/auth.json`，在 POSIX 上权限为 `0600`，`HANPPIE_HOME` 可修改目录；`hanppie agent logout` 只删除这份本地凭据。请求使用 `store=false`，连续上下文由 Hanppie 在内存中重放，默认模型为 `gpt-5.6-sol`，也可用 `--codex-model` 覆盖。该消费者后端不是 OpenAI Platform 公共 API，兼容性取决于当前 Codex OAuth 协议。
 
@@ -237,7 +238,7 @@ Codex 模式由 Hanppie 自己执行 device-code OAuth、刷新凭据，并以 B
 
 例如说“小憨批，观察一下附近有些什么东西？”，智能体会读取 S1 当前前向相机帧并用视觉模型回答。唤醒后的默认 45 秒内可以直接追问；说“退下”可让会话休眠，活动会话中的“停止”“停下”“别动”会走不等待大模型的已有连接停止路径。`--wake-phrase` 可重复配置别名，`--active-timeout` 调整连续对话窗口，`--audio-device` 选择电脑音频输入设备，`--local-transcription-model` 选择本地 Whisper 模型，`--no-tts` 关闭语音播放。
 
-`--prompt` 无需唤醒，禁用音频输入和播放；执行失败返回非零退出码，并停止后续 prompt。对话和调用记录在实际唤醒或执行 prompt 后写入 `.hanppie/agent/`。完整数据边界、LangGraph 状态、代码策略和验证边界见[技术架构](./docs/architecture.md#735-唤醒词连续对话与-langgraph-智能体)。
+`--prompt` 无需唤醒，禁用音频输入和播放；执行失败返回非零退出码，并停止后续 prompt。对话和调用记录在实际唤醒或执行 prompt 后写入 `.hanppie/agent/`。完整数据边界、LangGraph 状态、代码策略和验证边界见[技术架构](./docs/architecture.md#136-唤醒词连续对话与-langgraph-智能体)。
 
 ## 开发工具链
 
@@ -252,7 +253,7 @@ task hooks      # 安装 prek hooks
 task prek       # 对全部文件执行 hooks
 ```
 
-项目约束见 [`AGENTS.md`](./AGENTS.md)。架构、协议、能力边界或项目机制发生变化时，只在技术架构中维护结论；实机运行则生成新的证据报告。
+项目约束见 [`AGENTS.md`](./AGENTS.md)。Hanppie 实现与能力结论只在[技术架构](./docs/architecture.md)维护，RoboMaster 原生架构与协议结论只在[专项文档](./docs/architecture-robomaster.md)维护；实机运行则生成新的证据报告。
 
 ## 许可证
 

@@ -10,7 +10,7 @@ data class GimbalTelemetry(
     val yawDegrees: Double, val pitchDegrees: Double, val status: Int,
 )
 
-/** Fixed, packet-tested App subscription; see docs/architecture.md section 5.3.5. */
+/** Fixed, packet-tested App subscription; see docs/architecture-robomaster.md section 5.3.5. */
 internal object GimbalSubscription {
     const val messageId = 0x0a
     const val uid = 0x00020009f79b3c97L

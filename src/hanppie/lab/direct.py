@@ -16,7 +16,7 @@ _PAIR_HASH_1 = b"ba7dc15a96c84f408e436c7bca716ae67b2188f68100b217"
 _PAIR_HASH_2 = b"ca01dd0a449f4c8f844008cc9aa9140e56b47e09372be5b2"
 
 # Fixed App subscription, corroborated by the macOS SubscribeManager and SDK.
-# See docs/architecture.md, macOS client analysis; preserve the captured bytes.
+# See docs/architecture-robomaster.md, macOS client analysis; preserve the captured bytes.
 _GIMBAL_SUBSCRIPTION_ID = 0x0A
 _GIMBAL_SUBSCRIPTION_UID = 0x00020009F79B3C97
 _GIMBAL_SUBSCRIPTION_HZ = 10
