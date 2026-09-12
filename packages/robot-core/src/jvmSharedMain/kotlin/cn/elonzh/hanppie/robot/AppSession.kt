@@ -9,6 +9,7 @@ import java.security.SecureRandom
 import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
@@ -64,7 +65,7 @@ class AppSession(private val target: RobotTarget,
             mode = "0b0300"
             for (c in remoteSetup + remoteEffects) {
                 if (c.control) sendNeutral() else send(c.receiver, c.attr, c.set, c.id, c.payload.hexBytes(), flags = c.flags.hexBytes())
-                Thread.sleep(10)
+                delay(10)
             }
             send(0xc3, 0x40, 0x3f, 0x19, byteArrayOf(1))
             send(0xc3, 0x40, 0x3f, 0x28, byteArrayOf(0))
@@ -160,7 +161,7 @@ class AppSession(private val target: RobotTarget,
         halt()
         if (remote && connected) for (c in remoteExit) {
             if (c.control) sendNeutral() else send(c.receiver, c.attr, c.set, c.id, c.payload.hexBytes(), flags = c.flags.hexBytes())
-            Thread.sleep(10)
+            delay(10)
         }
         if (connected) send(0xc3,0x40,0x3f,0x19,byteArrayOf(0))
         remote = false; normalMode()
@@ -195,6 +196,7 @@ class AppSession(private val target: RobotTarget,
                     socket.soTimeout = 200
                     val deadline = System.nanoTime() + timeoutMillis * 1_000_000
                     while (System.nanoTime() < deadline) {
+                        coroutineContext.ensureActive()
                         val packet = DatagramPacket(ByteArray(2048), 2048)
                         try {
                             socket.receive(packet)
@@ -246,7 +248,7 @@ class AppSession(private val target: RobotTarget,
                 check(connected) { "初始化期间连接中断" }
                 if (command.control) sendNeutral() else send(command.receiver, 0x40, command.set,
                     command.id, command.payload.hexBytes(), flags = command.flags.hexBytes())
-                Thread.sleep(if (command.control) 20 else 6)
+                delay(if (command.control) 20 else 6)
             }
             onLog("App 会话已建立：${target.ip}:${target.remotePort}")
             coroutineContext.ensureActive()
@@ -256,7 +258,7 @@ class AppSession(private val target: RobotTarget,
         }
     }
 
-    private fun claimIdentity() {
+    private suspend fun claimIdentity() {
         network.datagram().use { udp ->
             udp.reuseAddress = true
             udp.broadcast = true
@@ -266,6 +268,7 @@ class AppSession(private val target: RobotTarget,
             val deadline = System.nanoTime() + 4_000_000_000
             var nextSend = 0L
             while (System.nanoTime() < deadline) {
+                currentCoroutineContext().ensureActive()
                 if (System.nanoTime() >= nextSend) {
                     udp.send(DatagramPacket(claim, claim.size, destination, 56789))
                     nextSend = System.nanoTime() + 1_000_000_000

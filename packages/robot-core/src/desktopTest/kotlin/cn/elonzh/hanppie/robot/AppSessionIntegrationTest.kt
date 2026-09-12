@@ -5,14 +5,43 @@ import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.SocketTimeoutException
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlin.concurrent.thread
 import kotlin.test.*
 
 class AppSessionIntegrationTest {
+    @Test fun identityClaimRespondsToCoroutineCancellation() = runBlocking {
+        val opened = CountDownLatch(1)
+        val socket = AtomicReference<DatagramSocket>()
+        val network = object : RobotNetwork {
+            override fun datagram() = DatagramSocket(null).also {
+                socket.set(it)
+                opened.countDown()
+            }
+        }
+        val session = AppSession(RobotTarget("127.0.0.1", "12345678", localPort = 0), network = network)
+        try {
+            val connection = launch(Dispatchers.IO) { session.connect() }
+            assertTrue(opened.await(2, TimeUnit.SECONDS))
+            connection.cancel()
+            withTimeout(1_000) { connection.join() }
+
+            assertTrue(connection.isCancelled)
+            assertTrue(socket.get().isClosed)
+            assertFalse(session.connected)
+        } finally {
+            session.close()
+        }
+    }
+
     @Test fun loopbackHandshakeSetupTelemetryAndClose() = runBlocking {
         DatagramSocket(0, InetAddress.getByName("127.0.0.1")).use { robot ->
             robot.soTimeout = 100
