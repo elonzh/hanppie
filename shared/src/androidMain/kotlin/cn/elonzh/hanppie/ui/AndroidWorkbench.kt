@@ -21,6 +21,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
@@ -234,7 +236,7 @@ fun AndroidWorkbench() {
                     audioSettings = false
                     try { context.startActivity(Intent("com.android.settings.TTS_SETTINGS")) }
                     catch (_: Exception) { holder.fileError = tr(Res.string.could_not_open_text_to_speech_settings) }
-                }) { Text(tr(Res.string.text_to_speech_settings)) }
+                }, modifier = Modifier.testTag("open-tts-settings")) { Text(tr(Res.string.text_to_speech_settings)) }
             }
         }
         WorkbenchDialog(show = voiceDisclosure, onDismissRequest = { voiceDisclosure = false }, title = tr(Res.string.use_phone_microphone),

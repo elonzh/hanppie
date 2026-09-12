@@ -1,24 +1,28 @@
 package cn.elonzh.hanppie
 
-import android.graphics.Bitmap
-import android.os.ParcelFileDescriptor
+import android.content.IntentFilter
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
-import java.io.File
+import org.junit.After
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 
-/** Launch through shell on HyperOS, where instrumentation-originated activity launches can stall. */
+/** Local chat behavior only; the external TTS settings Intent is intercepted before launch. */
 class PhoneChatUiTest {
-    @get:Rule val rule = createEmptyComposeRule()
+    private val localeRule = TestLocaleRule()
+    val rule = createEmptyComposeRule()
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(localeRule).around(rule)
+    private var activity: AutoCloseable? = null
+
+    @Before fun launchActivity() { activity = launchMainActivityForTest() }
+    @After fun closeActivity() { activity?.close(); activity = null }
 
     @Test fun chatPageAndKeyboard() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(
-            "am start -W -n cn.elonzh.hanppie/.MainActivity"
-        )).use { it.readBytes() }
-        rule.waitUntil(15000) { rule.onAllNodesWithText("对话").fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("bottom-navigation").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithContentDescription("对话").performClick()
         rule.onNodeWithText("语音", substring = false).assertDoesNotExist()
         rule.onNodeWithContentDescription("语音输入").assertIsDisplayed().performClick()
@@ -28,26 +32,20 @@ class PhoneChatUiTest {
         rule.onNodeWithContentDescription("发送").assertIsDisplayed()
         screenshot("chat-keyboard")
         rule.onNodeWithContentDescription("设置").performClick()
-        rule.onNodeWithText("API Key").assertIsDisplayed()
+        rule.onNodeWithText("API Key").performScrollTo().assertIsDisplayed()
         screenshot("chat-settings")
-        rule.onNodeWithText("语音服务").performClick()
-        rule.onNodeWithText("系统朗读设置").performClick()
-        rule.waitUntil(10000) {
-            fun contains(node: android.view.accessibility.AccessibilityNodeInfo?): Boolean {
-                if (node == null) return false
-                if (node.text?.toString() == "文字转语音设置") return true
-                return (0 until node.childCount).any { contains(node.getChild(it)) }
-            }
-            contains(instrumentation.uiAutomation.rootInActiveWindow)
+        rule.onNodeWithText("语音服务").performScrollTo().performClick()
+        val monitor = instrumentation.addMonitor(IntentFilter("com.android.settings.TTS_SETTINGS"), null, true)
+        try {
+            rule.onNodeWithTag("open-tts-settings").performClick()
+            rule.waitUntil(5_000) { monitor.hits == 1 }
+        } finally {
+            instrumentation.removeMonitor(monitor)
         }
     }
 
     private fun screenshot(name: String) {
         rule.waitForIdle()
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val image = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
-        val destination = File(instrumentation.targetContext.getExternalFilesDir(null), "ui-$name.png")
-        destination.outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        image.recycle()
+        captureActivityScreenshot(name)
     }
 }

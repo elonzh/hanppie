@@ -31,7 +31,7 @@ tasks:
       - uv run pytest
 
   check:
-    desc: Run all required local quality gates
+    desc: Run offline source, Python, and Kotlin/JVM quality gates
     cmds:
       - task: lint
       - task: test
@@ -51,6 +51,19 @@ tasks:
     desc: Build and lint the Android APK using the configured Android SDK
     cmds:
       - '{{if eq OS "windows"}}.\gradlew.bat{{else}}./gradlew{{end}} :androidApp:assembleDebug :androidApp:lintDebug'
+
+  android:test:
+    desc: Run local Android UI tests on a connected emulator or device (robot live test remains opt-in)
+    cmds:
+      - '{{if eq OS "windows"}}.\gradlew.bat{{else}}./gradlew{{end}} :androidApp:connectedDebugAndroidTest'
+
+  full-check:
+    desc: Run all local quality gates, including Android build, lint, and connected UI tests
+    cmds:
+      - task: check
+      - task: android:check
+      - task: android:test
+      - task: prek
 
   desktop:package:
     desc: Build a self-contained desktop application for the current OS

@@ -1,19 +1,18 @@
 package cn.elonzh.hanppie
 
-import android.graphics.Bitmap
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
-import androidx.test.platform.app.InstrumentationRegistry
-import java.io.File
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 
 /** Exercises only local UI; never discovers, connects to, or moves a robot. */
 class PhoneUiTest {
-    @get:Rule val rule = createAndroidComposeRule<MainActivity>()
-
+    private val localeRule = TestLocaleRule()
+    val rule = createAndroidComposeRule<MainActivity>()
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(localeRule).around(rule)
 
     @Test fun phonePagesAndKeyboard() {
         rule.onNodeWithTag("bottom-navigation").assertIsDisplayed()
@@ -62,10 +61,6 @@ class PhoneUiTest {
         // Compose idle does not wait for SurfaceFlinger rotation/page animations.
         Thread.sleep(700)
         rule.waitForIdle()
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val image = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
-        val destination = File(instrumentation.targetContext.getExternalFilesDir(null), "ui-$name.png")
-        destination.outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        image.recycle()
+        captureActivityScreenshot(name)
     }
 }

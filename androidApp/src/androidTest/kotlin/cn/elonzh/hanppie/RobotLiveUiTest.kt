@@ -1,24 +1,30 @@
 package cn.elonzh.hanppie
 
-import android.os.ParcelFileDescriptor
 import android.graphics.Bitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.*
 import org.junit.Assume.assumeTrue
+import org.junit.rules.RuleChain
 import java.io.File
 
 /** Explicit target only. Default path receives video, but never moves or fires. */
 class RobotLiveUiTest {
-    @get:Rule val rule = createEmptyComposeRule()
+    private val localeRule = TestLocaleRule()
+    val rule = createEmptyComposeRule()
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(localeRule).around(rule)
+    private var activity: AutoCloseable? = null
+
+    @After fun closeActivity() { activity?.close(); activity = null }
+
     @Test fun targetConnectionAndVideo() {
         val inst = InstrumentationRegistry.getInstrumentation()
         val args = InstrumentationRegistry.getArguments()
         val ip = args.getString("robotIp")
         val appId = args.getString("robotAppId")
         assumeTrue(ip != null && appId != null)
-        ParcelFileDescriptor.AutoCloseInputStream(inst.uiAutomation.executeShellCommand("am start -W -n cn.elonzh.hanppie/.MainActivity")).use { it.readBytes() }
+        activity = launchMainActivityForTest()
         rule.waitUntil(10000) { rule.onAllNodesWithText("手动连接").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("手动连接").performClick()
         rule.onNodeWithText("机器人 IPv4").performTextReplacement(ip!!)
@@ -76,9 +82,7 @@ class RobotLiveUiTest {
             rule.waitUntil(15000) { rule.onAllNodesWithText("音频已解码", substring = true).fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithContentDescription("静音").performClick()
         }
-        val bitmap = requireNotNull(inst.uiAutomation.takeScreenshot())
-        File(inst.targetContext.getExternalFilesDir(null), "robot-video.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) }
-        bitmap.recycle()
+        captureActivityScreenshot("robot-video")
         rule.onNodeWithContentDescription("关闭视频").performClick()
         rule.onNodeWithContentDescription("返回控制台").performClick()
         if (args.getString("agent") == "1") {

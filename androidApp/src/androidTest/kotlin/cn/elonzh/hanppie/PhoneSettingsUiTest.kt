@@ -10,10 +10,13 @@ import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 
 /** No network or robot use. Optional private input file is consumed without printing the key. */
 class PhoneSettingsUiTest {
-    @get:Rule val rule = createEmptyComposeRule()
+    private val localeRule = TestLocaleRule()
+    val rule = createEmptyComposeRule()
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(localeRule).around(rule)
 
     @Test fun saveAndRestoreAfterActivityIsDestroyed() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
