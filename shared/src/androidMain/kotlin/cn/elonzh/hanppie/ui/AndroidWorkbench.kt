@@ -7,12 +7,14 @@ import android.app.Activity
 import android.Manifest
 import android.content.pm.PackageManager
 import android.content.Intent
+import android.content.ActivityNotFoundException
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import cn.elonzh.hanppie.robot.RobotNetwork
 import java.net.DatagramSocket
 import android.net.wifi.WifiManager
 import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,6 +30,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.core.content.FileProvider
+import java.io.File
 import kotlinx.coroutines.*
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
@@ -180,6 +184,29 @@ fun AndroidWorkbench() {
             }
         }
     }
+    var robotUploadDirectory by remember { mutableStateOf<String?>(null) }
+    var robotDownloadEntry by remember { mutableStateOf<cn.elonzh.hanppie.robot.RobotFileEntry?>(null) }
+    val robotUpload = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val directory = robotUploadDirectory
+        robotUploadDirectory = null
+        if (uri != null && directory != null) {
+            val name = runCatching {
+                context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+                    if (it.moveToFirst()) it.getString(0) else null
+                }
+            }.getOrNull() ?: uri.lastPathSegment?.substringAfterLast('/') ?: "upload.bin"
+            holder.model.uploadRobotFile(directory, name) {
+                requireNotNull(context.contentResolver.openInputStream(uri))
+            }
+        }
+    }
+    val robotDownload = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        val entry = robotDownloadEntry
+        robotDownloadEntry = null
+        if (uri != null && entry != null) holder.model.downloadRobotFile(entry) {
+            requireNotNull(context.contentResolver.openOutputStream(uri, "w"))
+        }
+    }
     WorkbenchTheme(appearance) {
         WorkbenchDialog(show = audioSettings, onDismissRequest = { audioSettings = false }, title = tr(Res.string.speech_services)) {
             androidx.compose.foundation.layout.Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -231,6 +258,37 @@ fun AndroidWorkbench() {
                 saveSnapshot = holder.document.value.source
                 save.launch(suggestedScriptFileName(holder.document.value.displayName))
             }, fileError = holder.fileError, onFileError = { holder.fileError = it },
-            onSpeechSettings = { audioSettings = true })
+            onSpeechSettings = { audioSettings = true },
+            onRobotFileUpload = { directory ->
+                robotUploadDirectory = directory
+                robotUpload.launch(arrayOf("*/*"))
+            },
+            onRobotFileDownload = { entry ->
+                robotDownloadEntry = entry
+                robotDownload.launch(entry.name)
+            },
+            onRobotFileOpen = { entry ->
+                val directory = File(context.cacheDir, "robot-files").apply { mkdirs() }
+                directory.listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 24 * 60 * 60 * 1000L }
+                    ?.forEach { it.delete() }
+                val extension = entry.name.substringAfterLast('.', "").takeIf {
+                    it.isNotBlank() && it.length <= 12 && it.all(Char::isLetterOrDigit)
+                }?.let { ".$it" }
+                val temporary = File.createTempFile("open-", extension, directory)
+                holder.model.openRobotFile(entry, { temporary.outputStream() }) {
+                    holder.scope.launch {
+                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", temporary)
+                        val mimeType = extension?.drop(1)?.lowercase()?.let(MimeTypeMap.getSingleton()::getMimeTypeFromExtension)
+                            ?: "application/octet-stream"
+                        try {
+                            context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mimeType)
+                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                            holder.fileError = null
+                        } catch (_: ActivityNotFoundException) {
+                            holder.fileError = tr(Res.string.no_application_can_open_this_file)
+                        }
+                    }
+                }
+            })
     }
 }

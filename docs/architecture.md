@@ -231,7 +231,9 @@ flowchart LR
 
 这些 init 服务均声明为 `disabled`，含义是“不随 Android service class 自动启动”，不是永久禁用；它们由 `dji.*` 属性显式启动。**代码/实测**
 
-启动脚本还启动匿名可写 FTP：`busybox tcpsvd -vE 0 21 busybox ftpd -w /ftp`。`/ftp` 是指向 `/data/ftp` 的符号链接，因此 FTP 21 暴露的是持久数据分区。该服务没有应用层认证，只应在可信隔离网络使用。**代码**
+启动脚本还启动匿名可写 FTP：`busybox tcpsvd -vE 0 21 busybox ftpd -w /ftp`。`/ftp` 是指向 `/data/ftp` 的符号链接，因此 FTP 21 暴露的是持久数据分区。实机根目录包含 `blackbox`、`flyctrl`、`python`、`upgrade`、`v2` 和 `workspace` 等内部服务数据，不是用户媒体库；服务没有应用层认证，只应在可信隔离网络使用。实机 `FEAT` 只报告 `EPSV`、`PASV`、`REST STREAM`、`MDTM` 和 `SIZE`，不支持 UTF-8，非 ASCII 名称会退化为问号。Hanppie 的内部文件页只把这个 FTP chroot 表现为 `/`，不会把它映射成 Android `/system`、完整 `/data` 或任意 root 文件系统。**代码/实测**
+
+RoboMaster macOS 1.1.5 客户端中的媒体库由 `DJILocalAlbumController` 管理主机本地照片和视频，不是 FTP 根目录浏览器；黑匣子导出则会先向 S1 发送带 `isDecrypt=true` 的准备请求，再进入 FTP 下载。实机也确认普通 FTP 对非空上传进行了确定性的分组变换：输入长度 `1/15/16/17/31/32/33/46` 字节时，回读长度分别为 `16/16/32/32/32/48/48/48` 字节，相同明文得到相同回读内容。公开 DSP 容器密钥不能解开该结果。因此裸 FTP 只提供内部数据搬运，不提供原厂工作流中的通用解密语义；Hanppie 可以浏览、传输和把原始数据交给系统应用，但不能承诺这些数据可直接作为普通音频、视频或日志打开。**客户端静态分析/实测**
 
 ### 4.3 关键程序与文件
 
@@ -350,6 +352,8 @@ Lab 程序不是裸 `.py` 文件，而是 `.dsp` XML 容器，主要包含：
 - `code_type=python`；
 - `<python_code><![CDATA[...]]></python_code>` 中的用户 Python；
 - 可选 Scratch 描述和音频资源。
+
+恢复的机内解析器为自定义音频保留十个逻辑 ID `0x10010..0x10019`，从 DSP 的 `<audio>` 节点读取名称、类型、MD5、`modify` 和可选 `audio_data`。RoboMaster macOS 1.1.5 客户端上传前先查询 DSP 与音频资源 MD5；已匹配的音频会把 `modify` 置为 false 并省略数据，未匹配资源随 DSP 继续上传。因此内置音效 ID、Host PCM 临时对讲和 Lab 自定义音频是三条不同路径；自定义音频不是 FTP 根目录中可任意播放的普通媒体库，机内转换后的缓存位置和清理策略仍缺少运行时证据。**代码/客户端静态分析**
 
 兼容客户端先发送 GUID、sign 和字节数等 DUSS 元数据，再以匿名 FTP 把文件写到 `/python/python_raw.dsp`。由于 `/ftp -> /data/ftp`，对应机内文件是 `/data/ftp/python/python_raw.dsp`。FTP 成功只证明文件已写入，不能证明程序已经注册或执行。**代码/实测**
 
@@ -551,13 +555,13 @@ Hanppie 不修改 `/init.rc`、原厂启动脚本或 `/system` 持久文件。La
 | --- | --- |
 | `androidApp` | 独立 Android 应用入口、系统显示模式、权限声明、APK 与真机 UI 测试；只依赖 `shared`，不依赖桌面应用 |
 | `desktopApp` | 独立 Kotlin/JVM 应用入口、Compose application 生命周期及原生桌面打包；只依赖 `shared` |
-| `shared` | KMP 共享 UI 库，无应用 `main` 或打包任务。`commonMain` 保存平台无关状态、接口、主题与 Compose Resources；`androidJvmMain` 在 Android/JVM 间共享页面、会话和智能体；`androidMain` 与 `jvmMain` 提供各平台窗口/生命周期、文件选择、媒体、语音和凭据实现 |
-| `packages/robot-core` | `commonMain` 实现 DUSS CRC、App 封包、广播解析、Lab DSP 容器和遥测；`jvmSharedMain` 在 Android/JVM 上复用 UDP、Apache Commons Net FTP 与 Lab 生命周期 |
+| `shared` | KMP 共享 UI 库，无应用 `main` 或打包任务。`commonMain` 保存平台无关状态、接口、主题与 Compose Resources；`androidJvmMain` 在 Android/JVM 间共享 Navigation 3 路由、页面、会话和智能体；`androidMain` 与 `jvmMain` 提供各平台窗口/生命周期、文件选择、媒体、语音和凭据实现 |
+| `packages/robot-core` | `commonMain` 实现 DUSS CRC、App 封包、广播解析、Lab DSP 容器和遥测；`jvmSharedMain` 在 Android/JVM 上复用 UDP、Apache Commons Net FTP、受约束的机内文件访问与 Lab 生命周期 |
 | `src/hanppie`、`src/robomaster`、`tests` | 现有 Python 工具、SDK fork 和回归测试，不受客户端拆分影响 |
 
-模块边界遵循 [KMP 官方推荐结构](https://kotlinlang.org/docs/multiplatform/multiplatform-project-recommended-structure.html)：平台应用入口依赖共享库，共享库不反向依赖应用。共享 UI 包名为 `cn.elonzh.hanppie.ui`，只向入口暴露 `AndroidWorkbench` 和 `DesktopWorkbench`；内部状态与控制器不因拆分而公开。桌面共享库使用标准 `jvmMain` / `jvmTest`，跨 Android/JVM 的中间源集显式命名为 `androidJvmMain`。纯逻辑测试在 `commonTest`，JVM/UI 测试在共享库 `jvmTest`，Android instrumentation 在 `androidApp`；桌面启动及打包由 `desktopApp` 负责。协议库保留独立模块及其 `desktop` 目标。当前仅配置 Android/JVM 目标：UDP/FTP、同步资源格式化和部分智能体实现依赖 JVM，尚无 iOS target、Xcode 工程或 iOS 平台适配，不声明支持 iOS。
+模块边界遵循 [KMP 官方推荐结构](https://kotlinlang.org/docs/multiplatform/multiplatform-project-recommended-structure.html)：平台应用入口依赖共享库，共享库不反向依赖应用。共享 UI 包名为 `cn.elonzh.hanppie.ui`，只向入口暴露 `AndroidWorkbench` 和 `DesktopWorkbench`；内部状态与控制器不因拆分而公开。一级页面与全屏驾驶舱使用 JetBrains Compose Multiplatform 发布的 Navigation 3 `NavKey`、可序列化 `NavBackStack` 和 `NavDisplay`；Android 配置变化与桌面重组共享同一路由实现，返回驾驶舱会弹出目的地而不是修改独立布尔状态。桌面共享库使用标准 `jvmMain` / `jvmTest`，跨 Android/JVM 的中间源集显式命名为 `androidJvmMain`。纯逻辑测试在 `commonTest`，JVM/UI 测试在共享库 `jvmTest`，Android instrumentation 在 `androidApp`；桌面启动及打包由 `desktopApp` 负责。协议库保留独立模块及其 `desktop` 目标。当前仅配置 Android/JVM 目标：UDP/FTP、同步资源格式化和部分智能体实现依赖 JVM，尚无 iOS target、Xcode 工程或 iOS 平台适配，不声明支持 iOS。
 
-构建使用 Kotlin 2.4.10、Compose Multiplatform 1.12.0、miuix 0.9.3、Gradle 9.4.1、AGP 9.1.0，构建 JDK 21。AGP 版本同时受构建依赖和 IDEA Android 插件支持范围约束，命令行构建通过不代表 IDE 同步兼容。Android `compileSdk=37`（Compose AAR 的最低编译要求）、`targetSdk=36`、`minSdk=26`；编译 SDK 不是手机必须运行的系统版本。客户端已接入 Koog 1.2.0 文字对话智能体，Android 支持系统语音输入，Android/桌面对话页支持回复朗读；未接入唤醒或手柄。Android 和桌面已接入机器人视频、麦克风下行播放，以及按住采集、松开发送的机器人扬声器短片对讲；对讲不是实时双工语音。
+构建使用 Kotlin 2.4.10、Compose Multiplatform 1.12.0、Navigation 3 1.1.1、miuix 0.9.3、Compose Icons Lucide 2.2.1、Gradle 9.4.1、AGP 9.1.0，构建 JDK 21。通用工作台操作图标由 Lucide `ImageVector` 提供，Miuix `Icon` 负责着色和呈现；品牌与业务专用符号仍由 Compose Resources 管理。AGP 版本同时受构建依赖和 IDEA Android 插件支持范围约束，命令行构建通过不代表 IDE 同步兼容。Android `compileSdk=37`（Compose AAR 的最低编译要求）、`targetSdk=36`、`minSdk=26`；编译 SDK 不是手机必须运行的系统版本。客户端已接入 Koog 1.2.0 文字对话智能体，Android 支持系统语音输入，Android/桌面对话页支持回复朗读；未接入唤醒或手柄。Android 和桌面已接入机器人视频、麦克风下行播放，以及按住采集、松开发送的机器人扬声器短片对讲；对讲不是实时双工语音。
 
 编译 SDK 使用显式 `release(37) { minorApiLevel = 0 }`，对应 SDK Manager 的 `platforms;android-37.0`。AGP 9.1.0 对此发出超出已测试 SDK 36.1 范围的警告；当前 APK/Lint 构建通过，未屏蔽该警告。IDEA 当前已验证的同步组合为 AGP 9.1.0 + Gradle 9.4.1，Wrapper 的 `distributionUrl` 固定该 Gradle 版本；版本升级必须同时验证 IDE 模型导入与命令行构建，不能仅根据 Problems Report 是否生成判断成功或失败。IDEA 同步完成且 Android 运行入口可用，不将此视为资源预览等全部 IDE 能力的验收。
 
@@ -567,9 +571,9 @@ Hanppie 不修改 `/init.rc`、原厂启动脚本或 `/system` 持久文件。La
 
 miuix 提供导航、按钮、输入框、卡片、开关和弹窗，`WorkbenchTheme` 统一设置 MiuixTheme，页面不使用 Material Design 组件。`LocalSquircleEnabled=false` 保持使用 miuix 标准圆角路径，避开 0.9.3 squircle shader 与 Compose 1.12.0 桌面 Skia 的 ABI 不兼容。脚本编辑器使用 Compose BasicTextField。设置语言使用下拉菜单，切换即时生效。
 
-桌面入口在支持 AWT Taskbar 图标设置的平台上从 classpath 加载 `icons/hanppie.png` 并设置运行进程图标，覆盖 Gradle／IDE 开发启动；macOS Gradle 启动名为 Hanppie。Compose Window 使用资源库中的 `hanppie_app_icon.png`，原生安装包继续通过平台配置引用 PNG／ICO／ICNS。上述资源均由品牌导出脚本生成。功能 SVG 的唯一母版位于 `assets/brand/graphite-orange/source/icons/`，`HanppieSymbol` 负责资源映射，HUD 和普通页面负责语义着色；媒体请求仍统一经 `RemoteMediaController`，图标替换不更改请求或协议。
+桌面入口在支持 AWT Taskbar 图标设置的平台上从 classpath 加载 `icons/hanppie.png` 并设置运行进程图标，覆盖 Gradle／IDE 开发启动；macOS Gradle 启动名为 Hanppie。Compose Window 使用资源库中的 `hanppie_app_icon.png`，原生安装包继续通过平台配置引用 PNG／ICO／ICNS。上述品牌资源均由品牌导出脚本生成。一级导航、普通页面、对话和遥控 HUD 的通用静态图标全部由 Compose Icons Lucide 提供，并通过唯一的 `WorkbenchGlyph` 语义映射交给 Miuix `Icon` 着色；资源库不再保存同义功能 SVG。准星叠层、可变信号条、摇杆和底盘相对相机朝向属于实时状态可视化，继续由 Compose Canvas 绘制。媒体请求仍统一经 `RemoteMediaController`，图标替换不更改请求或协议。
 
-`AppearanceController` 只保存独立于连接与模型凭据的显示模式，支持跟随系统、浅色和深色，默认跟随系统。软件主题固定为 Graphite Orange，不再提供 miuix 原生、查派、海蓝、森林等预设或自定义色板；浅色/深色色表集中在 `HanppieDesignTokens.kt`，页面不动态派生主题。设置页只显示一个显示模式下拉行。显示模式以版本 2 的固定字段字符串保存到 Android `hanppie-ui` SharedPreferences / 桌面 `cn/elonzh/hanppie/ui` Java Preferences 的 `appearance` 键；读取版本 1 记录时只迁移其中的明暗模式并丢弃旧主题和自定义色值，缺失或无效记录使用默认值，不重建 ConsoleModel。Compose 系统明暗状态驱动跟随系统模式，Android 系统栏图标按当前背景亮度同步。设置页的全局“恢复默认”经过二次确认后同时恢复语言、显示模式、模型服务、自动朗读、控制参数、快捷键和 LED 状态色，并从平台凭据存储清除已保存的 API Key；环境变量覆盖保持生效但不会被重置操作复制进持久化配置。品牌头像、小标记、15 个功能 SVG 和四种点阵表情通过 Compose Resources 共享；侧栏复用共享机器人头像，驾驶舱状态只显示一处点阵表情。设备页不绘制虚构的 S1 外形。`DevicePage` 将设备身份、连接动作、三项状态和现有页面入口分层呈现；宽屏连接动作限制为 260 dp 列，窄屏纵排。对话空状态使用共享品牌头像，脚本与诊断空状态使用线性文件图标。
+`AppearanceController` 只保存独立于连接与模型凭据的显示模式，支持跟随系统、浅色和深色，默认跟随系统。软件主题固定为 Graphite Orange，不再提供 miuix 原生、查派、海蓝、森林等预设或自定义色板；浅色/深色色表集中在 `HanppieDesignTokens.kt`，页面不动态派生主题。设置页只显示一个显示模式下拉行。显示模式以版本 2 的固定字段字符串保存到 Android `hanppie-ui` SharedPreferences / 桌面 `cn/elonzh/hanppie/ui` Java Preferences 的 `appearance` 键；读取版本 1 记录时只迁移其中的明暗模式并丢弃旧主题和自定义色值，缺失或无效记录使用默认值，不重建 ConsoleModel。Compose 系统明暗状态驱动跟随系统模式，Android 系统栏图标按当前背景亮度同步。设置页的全局“恢复默认”经过二次确认后同时恢复语言、显示模式、模型服务、自动朗读、控制参数、快捷键和 LED 状态色，并从平台凭据存储清除已保存的 API Key；环境变量覆盖保持生效但不会被重置操作复制进持久化配置。品牌头像、小标记和四种点阵表情通过 Compose Resources 共享；侧栏复用共享机器人头像，驾驶舱状态只显示一处点阵表情。设备页不绘制虚构的 S1 外形。`DevicePage` 将设备身份、连接动作、三项状态和现有页面入口分层呈现；宽屏连接动作限制为 260 dp 列，窄屏纵排。对话空状态使用共享品牌头像，脚本与诊断空状态使用 Lucide 文件图标。
 
 对话通过 multiplatform-markdown-renderer 0.45.0 的无主题核心渲染，颜色与字阶来自 MiuixTheme，不依赖其 Material 适配模块，已完成消息使用 `rememberMarkdownState`；当前回复使用 `rememberStreamingMarkdownState`，将智能体累积字符串的新增后缀顺序追加到渲染器，每条新回复建立独立状态。Coil 3.5.0 与其 OkHttp 网络模块负责 Markdown 图片加载；机器人实时视频仍由平台视频解码器处理，不经 Coil。工具记录和待审批脚本保留原文，Markdown 不触发机器人执行。
 
@@ -597,7 +601,11 @@ UDP 会话只接受指定机器人地址，身份交换与持久 App 会话复�
 
 前台已建立的会话失联后，GUI 立即撤销遥控授权、清除输入和旧遥测，并以 `0.5/1/2/4/8 s`、上限 8 秒的退避持续重连同一目标。每次尝试重新完成身份交换和 App 会话握手；成功后先发送停止帧，再发布已连接状态并重建 Lab 控制器。重连不会恢复遥控授权，也不确认失联前的机内脚本状态；重连后再次运行仍会先上传当前源码。用户显式断开、应用退到后台或关闭应用会取消重连。停留在驾驶舱时，默认开启的视频随连接恢复。完全断开 Wi-Fi 或机器人失电时，主机停止帧无法送达；当前实现只能利用短租约、旧会话尽力发送和 S1 已观察到的会话失联行为，仍需按第 8 章覆盖更多断网场景做物理停车验收。
 
-被动发现不主动接管。GUI 不把唯一的机内上传位置表现为程序管理；点击“运行脚本”本身就是执行意图，不再要求额外复选框。客户端先结束可能由旧客户端遗留的原生运行态，再把当前源码写入 `python/python_raw.dsp`，以 FTP 成功应答确认传输并完成 DSP MD5 注册，最后发送启动命令；再次运行其他脚本会覆盖该文件。客户端为每次运行生成随机标识，将源码中第一个顶层 `def start()` 改为内部入口，并注入唯一的 `start()` 包装器；包装器经已实机验证的 Lab 自定义消息通道依次报告 `STARTED`、`COMPLETED` 或 `FAILED`。收到匹配运行标识的结束事件后，客户端发送结束 metadata 和原生 runtime stop，清除单一槽位并把界面更新为完成或失败；旧运行的迟到事件不能结束新运行。普通脚本日志必须显式调用 `log_ctrl.print_msg(...)`，客户端不替换固件全局 `print`，也不把任意 stdout 推定为日志。点击运行后脚本页切换为独立运行界面，集中展示运行阶段、名称、耗时和本次运行保留的最近 200 条输出；日志可选择、自动跟随最新输出并占据主要剩余空间，手机竖屏采用上下布局，小屏横屏和宽屏采用状态、日志左右分栏。返回编辑器不停止脚本；其他一级页面在运行期间显示可点击的全局状态条、最近输出和停止入口，结束状态继续显示 8 秒。启动/停止命令的发送本身仍不是完成证据；失联时保留运行名称和输出但将状态标为未知。启动注册部分失败后禁止直接重试或覆盖上传，必须先结束可能的运行态。当前不从机器人枚举、下载或删除程序，也不把文件存在推定为已注册或正在运行；切换遥控或重连后不保留可再次启动的上传态。
+被动发现不主动接管。GUI 不把唯一的机内上传位置表现为程序管理；点击“运行脚本”本身就是执行意图，不再要求额外复选框。客户端先结束可能由旧客户端遗留的原生运行态，再把当前源码写入 `python/python_raw.dsp`，以 FTP 成功应答确认传输并完成 DSP MD5 注册，最后发送启动命令；再次运行其他脚本会覆盖该文件。客户端为每次运行生成随机标识，将源码中第一个顶层 `def start()` 改为内部入口，并注入唯一的 `start()` 包装器；包装器经已实机验证的 Lab 自定义消息通道依次报告 `STARTED`、`COMPLETED` 或 `FAILED`。收到匹配运行标识的结束事件后，客户端发送结束 metadata 和原生 runtime stop，清除单一槽位并把界面更新为完成或失败；旧运行的迟到事件不能结束新运行。普通脚本日志必须显式调用 `log_ctrl.print_msg(...)`，客户端不替换固件全局 `print`，也不把任意 stdout 推定为日志。点击运行后脚本页切换为独立运行界面，集中展示运行阶段、名称、耗时和本次运行保留的最近 200 条输出；日志可选择、自动跟随最新输出并占据主要剩余空间，手机竖屏采用上下布局，小屏横屏和宽屏采用状态、日志左右分栏。返回编辑器不停止脚本；其他一级页面在运行期间显示可点击的全局状态条、最近输出和停止入口，结束状态继续显示 8 秒。启动/停止命令的发送本身仍不是完成证据；失联时保留运行名称和输出但将状态标为未知。启动注册部分失败后禁止直接重试或覆盖上传，必须先结束可能的运行态。文件页可以枚举和下载 FTP 数据树，但不会把 DSP 文件存在推定为已注册或正在运行；`/python/python_raw.dsp` 作为 Lab 当前上传槽位禁止通过文件页上传覆盖、重命名或删除，切换遥控或重连后仍不保留可再次启动的上传态。
+
+`RobotFileSystem` 为每次操作建立短生命周期的匿名 FTP 连接，使用被选中 Wi-Fi 的 socket factory、被动模式和二进制传输；逻辑绝对路径始终锚定在 FTP chroot，拒绝 `.`、`..`、斜杠、反斜杠、控制字符、非 ASCII 和超长名称，也不跟随列表中的符号链接进入目录。上传选择器取得的非 ASCII 名称会转换为可预测的 ASCII 名称，避免固件静默生成问号文件名。目录列表包含隐藏项并按“目录优先、名称排序”返回；上传和下载流式传输，不把整文件载入内存。同名上传使用 `name-2.ext` 等空闲名称，重命名不覆盖已有目标，目录删除只允许 FTP 服务确认的空目录，不提供递归删除。
+
+实机对长度 `1/15/16/17/31/32/33/46` 字节的临时文件探测显示，FTP 存储的非空数据会稳定变为 `16/16/32/32/32/48/48/48` 字节；相同明文得到相同字节，标准 DSP AES-CBC 密钥和 IV 不能解开该层内容。零字节文件保持为空。由此，列表、目录和名称操作可按普通 FTP 语义管理，但 `RETR` 得到的是原始机内数据，不能宣称是上传明文的无损回读，也不能把扩展名视为可播放音频。快速打开仍作为内部排障快捷方式：先流式下载到应用私有缓存，再以只读 URI 或桌面系统关联交给外部应用；系统可能因内容不可识别而拒绝打开。Android 使用系统 Storage Access Framework，桌面使用原生文件对话框；缓存不是机内文件的同步副本。由于匿名 FTP 是可信隔离网内的维护接口，内部文件不与设备控制入口并列，而是作为诊断页 Miuix `TabRow` 的第四项；前三项仍为日志、遥测和报文。断开、失联、应用退到后台或关闭时取消当前文件操作并清除列表。FTP 成功只证明数据树变更，不等于音频已转换、DSP 已注册或程序已执行。**代码/离线 FTP 回环测试/实机**
 
 **遥控与媒体：** `RemoteCommands` 移植 App 进入/退出序列；App 会话保持 50 Hz 中性 control 心跳，底盘非零速度使用独立 DUSS `3f:21` 的 `<fff>` 命令，目标为 `host2byte(3,6)=0xC3`；进入遥控时设置该模块 `3f:19=01`、`3f:28=00`。底盘全零（包括浮点负零）改发 `3f:20` 四个 int16 零转速，与恢复的 `ChassisCtrl._set_chassis_stop` 一致，避免车身速度零指令下持续的轮速输出。App `01:04` 心跳载荷保持 11 字节，不在其中发送底盘速度结构。云台采用 S1 `rm_module.Gimbal.set_accel_ctrl` 对应的 `04:0c` 七字节 `<hhhB>`：yaw、roll=0、pitch（0.1°/s）和控制字 `0xdc`；UI 向上/向右分别对应 pitch/yaw 正值。遥控期间以 50 Hz 发送当前输入或零速，进入遥控、松手、停止和租约过期持续发零。实机 15°/s、200 ms 右转约 3°；持续清零覆盖单个 UDP 停止包丢失，但不证明固件自身无漂移。
 
@@ -631,7 +639,7 @@ Android 和桌面通过同一 App UDP 会话接收 H.264（外层类型 2）和 
 
 工具为 `robot_status`、`execute_lab_python(source)`、`stop_lab`，不按自然语言动作逐个硬编码。执行 Python 的位置是 S1 Lab 解释器而非手机/电脑。执行前在界面呈现完整源码，只有用户确认后才上传及启动；工具等待共享 `LabController` 的真实调用返回。对话期间禁止手动切换目标、上传和启动，设备操作用原子 busy 状态互斥；手动停止会先取消对话。取消 LLM 不等于停止机内脚本，失联/部分启动仍报告未知结果。系统提示包含已核验的底盘、水弹及 `rm_module.Mobile.custom_msg_send` 回报接口和受限加载方式；消息回报不是通用脚本完成事件。智能体没有视觉工具，不能回答实时观察环境的问题；不继承 Python 智能体的相机或媒体能力。
 
-**验证边界：** 固定抓包向量、CRC/截断、DSP、遥测、回环 UDP、FTP、Lab 生命周期和桌面组件测试已通过；回环测试覆盖网络工厂用于身份/会话 UDP 以及 FTP 控制/数据连接。共享页面有 393 dp 手机尺寸编辑、导航、对话与设置截图检查，macOS 宽屏设备页与脚本页已实际打开检查。Android APK、测试包与 lint 构建通过。小米 13 / HyperOS 3（Android 16、1080×2400、440 dpi）已有四页面导航及脚本编辑测试；新对话页通过显式 shell 启动 Activity 的 instrumentation 测试，已导出并检查输入法弹出时的对话与模型设置真机截图。原有 ActivityScenario 启动方式在该手机上仍出现等待，脚本旋转补充测试尚未通过。Koog 离线测试覆盖多轮上下文、工具结果、执行确认、取消和截断；百炼真实兼容接口测试覆盖两轮上下文及模拟状态工具调用；另有以下实机执行验证。小米 13 在同一 Wi-Fi 下已验证 Android 到 S1 的连接、H.264 硬件解码与 Surface 像素提取、Opus 解码和播放接口写入。真实兼容模型调用、界面确认、Lab 上传启动、机内自定义标记回传及停止/断开通过端到端测试。短时云台触摸和红外触发通过 UI 命令路径测试，但不能替代运动角度/红外命中的物理验收；底盘行驶、水弹实射、音频主观听感、Windows/Linux 桌面实机和机器人热点与蜂窝并行联网尚未完成验证。手机锁屏遮挡了该轮整页截图，机器人画面单独从 Surface 提取并检查。macOS TTS 已验证正常播报流程；手机默认引擎为小米系统引擎，但 Android 实际播报与 Windows/Linux TTS 尚未完成实测。CI 包含 Android APK/lint 和三平台桌面测试/打包配置，本次未运行远程 CI。
+**验证边界：** 固定抓包向量、CRC/截断、DSP、遥测、回环 UDP、FTP、Lab 生命周期和桌面组件测试已通过；回环测试覆盖网络工厂用于身份/会话 UDP 以及 FTP 控制/数据连接，内部文件回环另覆盖目录列表、ASCII 名称转换、同名安全上传、流式下载、重命名、新建和非递归删除。共享页面有 393 dp 手机尺寸编辑、导航、对话、设置与内部文件截图检查，macOS 宽屏设备页、脚本页与内部文件页已实际渲染检查。Android APK、测试包与 lint 构建通过。小米 13 / HyperOS 3（Android 16、1080×2400、440 dpi）已有四页面导航及脚本编辑测试；新对话页通过显式 shell 启动 Activity 的 instrumentation 测试，已导出并检查输入法弹出时的对话与模型设置真机截图。原有 ActivityScenario 启动方式在该手机上仍出现等待，脚本旋转补充测试尚未通过。Koog 离线测试覆盖多轮上下文、工具结果、执行确认、取消和截断；百炼真实兼容接口测试覆盖两轮上下文及模拟状态工具调用；另有以下实机执行验证。当前 S1 已实测发现、FTP 根目录列举、临时目录创建、ASCII/非 ASCII 上传、下载、重命名、删除和清理；名称与内容边界按上一段记录，所有临时目录均确认清除。临时 root ADB 的调查均在结束时关闭 TCP 5555、重启设备并确认 App 广播恢复。小米 13 在同一 Wi-Fi 下已验证 Android 到 S1 的连接、H.264 硬件解码与 Surface 像素提取、Opus 解码和播放接口写入；本次没有可用物理 Android 手机，未在真机 App UI 内重复内部文件流程。真实兼容模型调用、界面确认、Lab 上传启动、机内自定义标记回传及停止/断开通过端到端测试。短时云台触摸和红外触发通过 UI 命令路径测试，但不能替代运动角度/红外命中的物理验收；底盘行驶、水弹实射、音频主观听感、Windows/Linux 桌面实机和机器人热点与蜂窝并行联网尚未完成验证。手机锁屏遮挡了该轮整页截图，机器人画面单独从 Surface 提取并检查。macOS TTS 已验证正常播报流程；手机默认引擎为小米系统引擎，但 Android 实际播报与 Windows/Linux TTS 尚未完成实测。CI 包含 Android APK/lint 和三平台桌面测试/打包配置，本次未运行远程 CI。
 
 Android API 37 模拟器已安装运行当前 APK，页面测试覆盖语言切换、脚本编辑、诊断、对话和横屏保留未保存脚本，并检查稳定后的截图；系统旋转动画不受 Compose idle 控制，截图额外等待。测试包显式依赖 Espresso 3.7.0，避免传递依赖 3.5.0 调用失效的 InputManager 方法；Android CLI 的布局 instrumentation 与应用 instrumentation 不能同时占用 UiAutomation，运行页面测试前需停止前者。Emulator 37.1.11 的 Medium_Phone 在现有 SDK 命令行冷启动后，使用默认 NAT/DHCP（Wi-Fi 地址 10.0.2.16），无桥接、端口转发或应用代理，已通过 S1 FTP、App 会话、视频 Surface 像素提取、Opus 解码、短时云台触摸/方向键测试；当前数字 `1–5` 选档、Q/E 原地转向、信号质量和水弹灯效尚未做该轮模拟器/真机验收，也不含实际发射及轮速/姿态物理验收。截图存在首帧绿边，媒体显示尚未完整验收。该结果不替代小米手机验收，Android 产品不依赖电脑代理。
 

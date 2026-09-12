@@ -29,6 +29,7 @@ kotlin {
             dependsOn(androidJvmMain)
             dependencies {
                 implementation(libs.androidx.activity.compose)
+                implementation(libs.androidx.core)
                 implementation(libs.androidx.lifecycle.viewmodel.compose)
                 implementation(libs.androidx.lifecycle.runtime.compose)
             }
@@ -42,6 +43,8 @@ kotlin {
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.miuix.ui)
+            implementation(libs.navigation3.ui)
+            implementation(libs.compose.icons.lucide)
             implementation(libs.coroutines.core)
             implementation(libs.serialization.json)
         }

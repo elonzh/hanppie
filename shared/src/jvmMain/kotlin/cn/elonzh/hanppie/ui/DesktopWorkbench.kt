@@ -8,6 +8,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.*
 import java.awt.FileDialog
 import java.awt.Frame
+import java.awt.Desktop
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlinx.coroutines.*
@@ -107,7 +108,34 @@ fun DesktopWorkbench(onExit: () -> Unit) {
                         finally { document.value = document.value.copy(busy = false) }
                     }
                 }
-            }, fileError = fileError, onFileError = { fileError = it })
+            }, fileError = fileError, onFileError = { fileError = it },
+                onRobotFileUpload = { directory ->
+                    chooseRobotFile(save = false)?.let { file ->
+                        model.uploadRobotFile(directory, file.name) { Files.newInputStream(file.toPath()) }
+                    }
+                },
+                onRobotFileDownload = { entry ->
+                    chooseRobotFile(save = true, suggestedName = entry.name)?.let { file ->
+                        model.downloadRobotFile(entry) { Files.newOutputStream(file.toPath()) }
+                    }
+                },
+                onRobotFileOpen = { entry ->
+                    val extension = entry.name.substringAfterLast('.', "").takeIf {
+                        it.isNotBlank() && it.length <= 12 && it.all(Char::isLetterOrDigit)
+                    }?.let { ".$it" }
+                    val temporary = Files.createTempFile("hanppie-open-", extension).also { it.toFile().deleteOnExit() }
+                    model.openRobotFile(entry, { Files.newOutputStream(temporary) }) {
+                        scope.launch {
+                            try {
+                                check(Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN))
+                                Desktop.getDesktop().open(temporary.toFile())
+                                fileError = null
+                            } catch (_: Exception) {
+                                fileError = tr(Res.string.no_application_can_open_this_file)
+                            }
+                        }
+                    }
+                })
             WorkbenchDialog(show = confirmExit, onDismissRequest = { confirmExit = false }, title = tr(Res.string.quit_hanppie),
                 summary = tr(Res.string.unsaved_changes_will_be_lost_disconnecting_does_not_guarantee)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -124,6 +152,16 @@ private fun chooseFile(save: Boolean, suggestedName: String? = null): java.io.Fi
         if (save) FileDialog.SAVE else FileDialog.LOAD)
     try {
         dialog.file = if (save) suggestedName ?: "script.py" else "*.py"
+        dialog.isVisible = true
+        return dialog.file?.let { java.io.File(dialog.directory, it) }
+    } finally { dialog.dispose() }
+}
+
+private fun chooseRobotFile(save: Boolean, suggestedName: String? = null): java.io.File? {
+    val dialog = FileDialog(null as Frame?, if (save) tr(Res.string.download) else tr(Res.string.upload_file),
+        if (save) FileDialog.SAVE else FileDialog.LOAD)
+    try {
+        if (save) dialog.file = suggestedName ?: "download.bin"
         dialog.isVisible = true
         return dialog.file?.let { java.io.File(dialog.directory, it) }
     } finally { dialog.dispose() }

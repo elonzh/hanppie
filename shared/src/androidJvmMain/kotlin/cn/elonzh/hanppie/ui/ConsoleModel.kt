@@ -3,6 +3,8 @@ package cn.elonzh.hanppie.ui
 import cn.elonzh.hanppie.resources.*
 
 import cn.elonzh.hanppie.robot.*
+import java.io.InputStream
+import java.io.OutputStream
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.*
@@ -35,6 +37,7 @@ internal class ConsoleModel(
     private val settingsScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val settingsBusy = MutableStateFlow(settingsStore != null)
     val settingsMessage = MutableStateFlow<UiText?>(null)
+    val robotFilesState = MutableStateFlow(RobotFilesState())
     init {
         scope.launch { scriptLibrary.load() }
         if (settingsStore != null) settingsScope.launch {
@@ -107,6 +110,8 @@ internal class ConsoleModel(
     }
     @Volatile private var session: AppSession? = null
     private var lab: LabController? = null
+    @Volatile private var robotFiles: RobotFileSystem? = null
+    private var robotFileJob: Job? = null
     @Volatile private var desiredTarget: RobotTarget? = null
     @Volatile private var connectionRevision = 0L
     private var reconnectJob: Job? = null
@@ -240,6 +245,109 @@ internal class ConsoleModel(
         if (acceptingWork && ledRequests.trySend(LedRequest(current, color)).isFailure)
             log(tr(Res.string.led_request_failed_value, tr(Res.string.request_queue_is_closed)))
     }
+
+    fun refreshRobotFiles(path: String = robotFilesState.value.path) = fileWork(uiText(Res.string.refreshing_robot_files)) { files ->
+        val normalized = RobotFileSystem.normalizePath(path)
+        val entries = files.list(normalized)
+        robotFilesState.value.copy(path = normalized, entries = entries, selectedPath = null,
+            message = uiText(Res.string.file_count_value, entries.size))
+    }
+
+    fun selectRobotFile(entry: RobotFileEntry?) {
+        if (robotFilesState.value.busy) return
+        robotFilesState.update { it.copy(selectedPath = entry?.path) }
+    }
+
+    fun openRobotDirectory(entry: RobotFileEntry) {
+        if (entry.isDirectory) refreshRobotFiles(entry.path)
+    }
+
+    fun openRobotParentDirectory() {
+        val path = robotFilesState.value.path
+        if (path != "/") refreshRobotFiles(path.substringBeforeLast('/', "").ifEmpty { "/" })
+    }
+
+    fun uploadRobotFile(directory: String, name: String, source: () -> InputStream) =
+        fileWork(uiText(Res.string.uploading_file_value, name)) { files ->
+            val uploaded = source().use { files.upload(directory, name, it) }
+            val entries = files.list(directory)
+            robotFilesState.value.copy(path = directory, entries = entries, selectedPath = uploaded.path,
+                message = if (uploaded.name == name) uiText(Res.string.file_uploaded_value, uploaded.name)
+                else uiText(Res.string.file_uploaded_as_value, uploaded.name))
+        }
+
+    fun downloadRobotFile(entry: RobotFileEntry, destination: () -> OutputStream) =
+        fileWork(uiText(Res.string.downloading_file_value, entry.name)) { files ->
+            check(entry.isRegularFile) { tr(Res.string.only_regular_files_can_be_downloaded) }
+            destination().use { files.download(entry.path, it) }
+            robotFilesState.value.copy(selectedPath = entry.path,
+                message = uiText(Res.string.file_downloaded_value, entry.name))
+        }
+
+    fun openRobotFile(entry: RobotFileEntry, destination: () -> OutputStream, onDownloaded: () -> Unit) =
+        fileWork(uiText(Res.string.opening_file_value, entry.name)) { files ->
+            check(entry.isRegularFile) { tr(Res.string.only_regular_files_can_be_downloaded) }
+            destination().use { files.download(entry.path, it) }
+            onDownloaded()
+            robotFilesState.value.copy(selectedPath = entry.path,
+                message = uiText(Res.string.file_ready_to_open_value, entry.name))
+        }
+
+    fun createRobotDirectory(name: String) = fileWork(uiText(Res.string.creating_folder_value, name)) { files ->
+        val current = robotFilesState.value.path
+        val created = files.createDirectory(current, name)
+        robotFilesState.value.copy(entries = files.list(current), selectedPath = created.path,
+            message = uiText(Res.string.folder_created_value, created.name))
+    }
+
+    fun renameRobotFile(entry: RobotFileEntry, newName: String) =
+        fileWork(uiText(Res.string.renaming_file_value, entry.name)) { files ->
+            val current = robotFilesState.value.path
+            val renamed = files.rename(entry.path, newName)
+            robotFilesState.value.copy(entries = files.list(current), selectedPath = renamed,
+                message = uiText(Res.string.file_renamed_value, newName))
+        }
+
+    fun deleteRobotFile(entry: RobotFileEntry) = fileWork(uiText(Res.string.deleting_file_value, entry.name)) { files ->
+        val current = robotFilesState.value.path
+        files.delete(entry)
+        robotFilesState.value.copy(entries = files.list(current), selectedPath = null,
+            message = uiText(Res.string.file_deleted_value, entry.name))
+    }
+
+    private fun fileWork(operation: UiText, action: suspend (RobotFileSystem) -> RobotFilesState) {
+        if (!acceptingWork || !state.value.connected) {
+            robotFilesState.update { it.copy(error = tr(Res.string.robot_is_not_connected)) }
+            return
+        }
+        val files = robotFiles ?: run {
+            robotFilesState.update { it.copy(error = tr(Res.string.robot_file_service_unavailable)) }
+            return
+        }
+        if (robotFileJob?.isActive == true) return
+        robotFilesState.update { it.copy(busy = true, operation = operation, error = null, message = null) }
+        robotFileJob = scope.launch {
+            try {
+                val next = action(files)
+                if (robotFiles === files && state.value.connected) robotFilesState.value = next.copy(busy = false, operation = null, error = null)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                if (robotFiles === files) robotFilesState.update {
+                    it.copy(busy = false, operation = null, error = error.message ?: error.javaClass.simpleName)
+                }
+            }
+        }
+    }
+
+    private fun clearRobotFiles() {
+        val files = robotFiles
+        robotFiles = null
+        robotFileJob?.cancel()
+        robotFileJob = null
+        files?.close()
+        robotFilesState.value = RobotFilesState()
+    }
     @Volatile private var acceptingWork = true
     val chat = ChatAgent(
         status = { state.value.let { "${it.status}; battery=${it.battery}; script=${it.scriptStatus}; messages=${it.scriptMessages.takeLast(12)}" } },
@@ -325,6 +433,8 @@ internal class ConsoleModel(
             check(revision == connectionRevision) { tr(Res.string.connection_cancelled) }
             session = candidate
             lab = LabController(candidate, target, ::log, network)
+            robotFiles = RobotFileSystem(target, network)
+            robotFilesState.value = RobotFilesState()
             desiredTarget = target
             state.update { it.copy(connected = true, connectedAddress = target.ip, reconnecting = false,
                 statusMessage = uiText(Res.string.connected_to_value,target.ip), error = null) }
@@ -355,6 +465,7 @@ internal class ConsoleModel(
             if (session !== candidate || desiredTarget != target) return@launch
             session = null
             lab = null
+            clearRobotFiles()
             candidate.close()
             log(reason)
             state.update { it.lost(reason).copy(busy = false, reconnecting = acceptingWork) }
@@ -383,6 +494,8 @@ internal class ConsoleModel(
                     ensureActive()
                     check(acceptingWork && desiredTarget == target && connectionRevision == revision)
                     lab = LabController(candidate, target, ::log, network)
+                    robotFiles = RobotFileSystem(target, network)
+                    robotFilesState.value = RobotFilesState()
                     state.update { it.copy(connected = true, connectedAddress = target.ip, reconnecting = false,
                         statusMessage = uiText(Res.string.reconnected_to_value, target.ip), error = null) }
                     log(tr(Res.string.reconnected_to_value, target.ip))
@@ -411,6 +524,7 @@ internal class ConsoleModel(
         reconnectJob = null
         haltRemote()
         session?.close(); session = null; lab = null
+        clearRobotFiles()
         state.update {
             val uncertain = it.scriptRunPhase.mayBeExecuting
             it.copy(connected = false, connectedAddress = null, reconnecting = false,
@@ -536,6 +650,7 @@ internal class ConsoleModel(
         chat.cancelAndJoin()
         scope.coroutineContext[Job]?.children?.toList()?.forEach { it.cancelAndJoin() }
         session?.close(); session = null; lab = null
+        clearRobotFiles()
         state.update {
             val uncertain = it.scriptRunPhase.mayBeExecuting
             it.copy(connected = false, connectedAddress = null, reconnecting = false, busy = false,
@@ -545,5 +660,5 @@ internal class ConsoleModel(
                 scriptMessage = if (uncertain) uiText(Res.string.connection_closed_robot_state_unknown) else it.scriptMessage)
         }
     }
-    fun close() { connectionRevision++; desiredTarget = null; reconnectJob?.cancel(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); replySpeaker.close(); chat.close(); session?.close(); speech.close(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); settingsScope.cancel(); scope.cancel() }
+    fun close() { connectionRevision++; desiredTarget = null; reconnectJob?.cancel(); clearRobotFiles(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); replySpeaker.close(); chat.close(); session?.close(); speech.close(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); settingsScope.cancel(); scope.cancel() }
 }

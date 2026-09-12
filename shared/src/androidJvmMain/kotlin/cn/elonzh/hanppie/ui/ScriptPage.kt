@@ -348,7 +348,7 @@ private fun ScriptLibraryView(
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer)) {
                     Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        HanppieIcon(HanppieSymbol.File, MiuixTheme.colorScheme.onSurfaceVariantSummary, Modifier.size(32.dp))
+                        WorkbenchIcon(WorkbenchGlyph.FILE_TEXT, MiuixTheme.colorScheme.onSurfaceVariantSummary, Modifier.size(32.dp))
                         Text(tr(Res.string.no_saved_scripts), color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 13.sp)
                     }
                 }

@@ -18,8 +18,6 @@ ffmpeg -loglevel error -y -i "$source_dir/hanppie-companion-master.png" \
   -vf "scale=512:512:force_original_aspect_ratio=decrease,format=rgba" \
   "$compose_dir/hanppie_companion.png"
 
-cp "$source_dir"/icons/*.svg "$compose_dir/"
-
 cp "$source_dir/hanppie-mark.svg" "$compose_dir/hanppie_mark.svg"
 for state in standby active recording talking; do
   cp "$source_dir/hanppie-expression-$state.svg" "$compose_dir/hanppie_expression_$state.svg"
@@ -73,15 +71,10 @@ cat > "$asset_dir/preview.html" <<'HTML'
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f3f5f7;color:#20242b;font:15px/1.6 system-ui,sans-serif}main{max-width:1100px;margin:auto;padding:40px 24px}header{display:flex;align-items:center;justify-content:space-between;gap:20px}h1{font-size:30px;line-height:1.2}h2{margin-top:36px;font-size:20px}a{color:#713016}section{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px}figure{margin:0;background:white;border-radius:20px;padding:24px;text-align:center}figure img{width:120px;height:120px;object-fit:contain}figcaption{font-size:12px;color:#5c6670;overflow-wrap:anywhere;margin-top:14px}.symbols figure{background:#1c232b}.symbols img{width:32px;height:32px}.symbols figcaption{color:#b7c0c8}.expressions img{width:100%;height:64px}.identity{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}.app{border-radius:24px}small{color:#5c6670}
 </style><main><header><div><small>HANPPIE / GRAPHITE ORANGE</small><h1>设计元素 · 程序素材</h1></div><a href="../../../DESIGN.md">完整设计规范 ↗</a></header>
-<p>直接引用导出母版。程序以相同 SVG 进行语义着色；应用图标下方另列 32px、64px 预览。</p>
+<p>直接引用品牌与状态母版；通用界面图标由 Compose Icons Lucide 提供。应用图标下方另列 32px、64px 预览。</p>
 <section class="identity"><figure><img class="app" src="source/app-icon-master.png"><figcaption>通用应用图标母版</figcaption></figure><figure><img src="source/app-icon-macos.png"><figcaption>macOS · 透明留白圆角母版</figcaption></figure><figure><img src="source/hanppie-companion-master.png"><figcaption>透明伙伴头像</figcaption></figure><figure><img src="source/hanppie-mark.svg"><figcaption>导航小标记</figcaption></figure><figure><img class="app" style="width:32px;height:32px" src="source/app-icon-macos.png"> <img class="app" style="width:64px;height:64px" src="source/app-icon-macos.png"><figcaption>32 / 64 px</figcaption></figure></section>
-<h2>功能图标</h2><section class="symbols">
 HTML
-for svg in "$source_dir"/icons/*.svg; do
-  name=$(basename "$svg")
-  printf '<figure><img src="source/icons/%s"><figcaption>%s</figcaption></figure>\n' "$name" "$name" >> "$asset_dir/preview.html"
-done
-printf '%s\n' '</section><h2>点阵状态</h2><section class="expressions symbols">' >> "$asset_dir/preview.html"
+printf '%s\n' '<h2>点阵状态</h2><section class="expressions symbols">' >> "$asset_dir/preview.html"
 for state in standby active recording talking; do
   printf '<figure><img src="source/hanppie-expression-%s.svg"><figcaption>%s</figcaption></figure>\n' "$state" "$state" >> "$asset_dir/preview.html"
 done

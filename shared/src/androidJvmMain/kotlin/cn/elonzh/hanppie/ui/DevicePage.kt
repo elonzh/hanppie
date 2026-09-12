@@ -43,7 +43,7 @@ internal fun DevicePage(model: ConsoleModel, state: ConsoleState, compact: Boole
         items(state.devices) { device ->
             Button({ model.connect(device.ip, device.appId) }, Modifier.fillMaxWidth().heightIn(min = 56.dp),
                 enabled = !state.connected && !state.busy) {
-                HanppieIcon(HanppieSymbol.Connect)
+                WorkbenchIcon(WorkbenchGlyph.CONNECT)
                 Text("S1  ·  ${device.ip}", Modifier.weight(1f).padding(horizontal = 12.dp))
                 Text(tr(Res.string.connect))
             }
@@ -52,21 +52,21 @@ internal fun DevicePage(model: ConsoleModel, state: ConsoleState, compact: Boole
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 if (maxWidth / fontScale < 300.dp) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        DeviceMetric(HanppieSymbol.Battery, tr(Res.string.battery), state.battery?.let { "$it%" } ?: "—", Modifier.fillMaxWidth(), inline = true)
-                        DeviceMetric(HanppieSymbol.Signal, tr(Res.string.signal), state.signalQuality?.toString() ?: "—", Modifier.fillMaxWidth(), inline = true)
-                        DeviceMetric(HanppieSymbol.File, tr(Res.string.script), state.scriptStatus, Modifier.fillMaxWidth(), inline = true)
+                        DeviceMetric(WorkbenchGlyph.BATTERY, tr(Res.string.battery), state.battery?.let { "$it%" } ?: "—", Modifier.fillMaxWidth(), inline = true)
+                        DeviceMetric(WorkbenchGlyph.SIGNAL, tr(Res.string.signal), state.signalQuality?.toString() ?: "—", Modifier.fillMaxWidth(), inline = true)
+                        DeviceMetric(WorkbenchGlyph.FILE_TEXT, tr(Res.string.script), state.scriptStatus, Modifier.fillMaxWidth(), inline = true)
                     }
                 } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    DeviceMetric(HanppieSymbol.Battery, tr(Res.string.battery), state.battery?.let { "$it%" } ?: "—", Modifier.weight(1f))
-                    DeviceMetric(HanppieSymbol.Signal, tr(Res.string.signal), state.signalQuality?.toString() ?: "—", Modifier.weight(1f))
-                    DeviceMetric(HanppieSymbol.File, tr(Res.string.script), state.scriptStatus, Modifier.weight(1f))
+                    DeviceMetric(WorkbenchGlyph.BATTERY, tr(Res.string.battery), state.battery?.let { "$it%" } ?: "—", Modifier.weight(1f))
+                    DeviceMetric(WorkbenchGlyph.SIGNAL, tr(Res.string.signal), state.signalQuality?.toString() ?: "—", Modifier.weight(1f))
+                    DeviceMetric(WorkbenchGlyph.FILE_TEXT, tr(Res.string.script), state.scriptStatus, Modifier.weight(1f))
                 }
             }
         }
         if (!state.connected) item {
             Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                HanppieIcon(HanppieSymbol.Connect, colors.onSurfaceVariantSummary, Modifier.size(20.dp))
+                WorkbenchIcon(WorkbenchGlyph.CONNECT, colors.onSurfaceVariantSummary, Modifier.size(20.dp))
                 Text(tr(Res.string.connect_your_phone_or_computer_to_the_same_wi), fontSize = 13.sp,
                     color = colors.onSurfaceVariantSummary)
             }
@@ -120,7 +120,7 @@ private fun DeviceActions(model: ConsoleModel, state: ConsoleState, onManual: ()
         } else {
             Button(model::discover, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("discover-robot"), enabled = !state.busy,
                 colors = ButtonDefaults.buttonColorsPrimary()) {
-                HanppieIcon(HanppieSymbol.Search, MiuixTheme.colorScheme.onPrimary)
+                WorkbenchIcon(WorkbenchGlyph.SEARCH, MiuixTheme.colorScheme.onPrimary)
                 Spacer(Modifier.width(10.dp)); Text(tr(if (state.busy) Res.string.searching else Res.string.find_robots))
             }
             Button(onManual, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("manual-connect")) {
@@ -135,22 +135,22 @@ private fun DeviceActions(model: ConsoleModel, state: ConsoleState, onManual: ()
 private fun CockpitEntry(onRemote: () -> Unit) {
         Button(onRemote, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("enter-remote"),
             colors = ButtonDefaults.buttonColorsPrimary()) {
-            HanppieIcon(HanppieSymbol.Crosshair, MiuixTheme.colorScheme.onPrimary)
+            WorkbenchIcon(WorkbenchGlyph.CROSSHAIR, MiuixTheme.colorScheme.onPrimary)
             Spacer(Modifier.width(10.dp)); Text(tr(Res.string.fullscreen_cockpit))
         }
 }
 
 @Composable
-private fun DeviceMetric(symbol: HanppieSymbol, label: String, value: String, modifier: Modifier, inline: Boolean = false) {
+private fun DeviceMetric(symbol: WorkbenchGlyph, label: String, value: String, modifier: Modifier, inline: Boolean = false) {
     val colors = MiuixTheme.colorScheme
     Card(modifier, insideMargin = PaddingValues(0.dp), colors = CardDefaults.defaultColors(color = colors.surfaceContainer)) {
         if (inline) Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            HanppieIcon(symbol, colors.onSurfaceVariantSummary, Modifier.size(20.dp))
+            WorkbenchIcon(symbol, colors.onSurfaceVariantSummary, Modifier.size(20.dp))
             Text(label, Modifier.weight(1f), fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
             Text(value, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
         } else Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            HanppieIcon(symbol, colors.onSurfaceVariantSummary, Modifier.size(20.dp))
+            WorkbenchIcon(symbol, colors.onSurfaceVariantSummary, Modifier.size(20.dp))
             Text(value, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
             Text(label, fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
         }

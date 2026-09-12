@@ -3,10 +3,6 @@ package cn.elonzh.hanppie.ui
 import cn.elonzh.hanppie.resources.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-import androidx.compose.foundation.Canvas
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.background
@@ -70,7 +66,8 @@ internal fun ChatPage(model: ConsoleModel, modifier: Modifier = Modifier, onVoic
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Spacer(Modifier.weight(1f))
-            ComposerIcon(tr(Res.string.new_chat), "new", enabled = !state.running && state.lines.isNotEmpty()) { model.replySpeaker.stop(); model.chat.clear() }
+            ComposerIcon(tr(Res.string.new_chat), WorkbenchGlyph.ADD,
+                enabled = !state.running && state.lines.isNotEmpty()) { model.replySpeaker.stop(); model.chat.clear() }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(Modifier.fillMaxSize().padding(end = 12.dp).testTag("chat-messages"), state = list,
@@ -91,7 +88,7 @@ internal fun ChatPage(model: ConsoleModel, modifier: Modifier = Modifier, onVoic
                             SelectionContainer { Text(line.text, Modifier.padding(top = 6.dp), fontSize = 12.sp,
                                 fontFamily = FontFamily.Monospace) }
                         } else ChatMarkdown(line.text, Modifier.padding(top = 6.dp))
-                        if (line.role == ChatRole.ASSISTANT) ComposerIcon(tr(Res.string.read_aloud), "speaker",
+                        if (line.role == ChatRole.ASSISTANT) ComposerIcon(tr(Res.string.read_aloud), WorkbenchGlyph.SPEAKER,
                             enabled = speech.available && !microphone.active) { model.replySpeaker.speak(line.text) }
                     }
                 }
@@ -130,14 +127,15 @@ internal fun ChatPage(model: ConsoleModel, modifier: Modifier = Modifier, onVoic
 
             if (onVoiceInput != null) ComposerIcon(
                 if (!microphone.active) tr(Res.string.voice_input) else if (microphone.processing) tr(Res.string.cancel_recognition) else tr(Res.string.finish_recording),
-                if (microphone.active) "stop" else "mic", enabled = !state.running,
+                if (microphone.active) WorkbenchGlyph.STOP else WorkbenchGlyph.MICROPHONE, enabled = !state.running,
                 modifier = Modifier.testTag("voice-input"),
             ) {
                 if (microphone.active) {
                     if (microphone.processing) model.voiceInput.cancel() else model.voiceInput.finish()
                 } else { model.replySpeaker.stop(); onVoiceInput() }
             }
-            ComposerIcon(if (state.running) tr(Res.string.cancel) else tr(Res.string.send), if (state.running) "stop" else "send",
+            ComposerIcon(if (state.running) tr(Res.string.cancel) else tr(Res.string.send),
+                if (state.running) WorkbenchGlyph.STOP else WorkbenchGlyph.SEND,
                 enabled = state.running || (input.isNotBlank() && !microphone.active), primary = true) {
                 model.replySpeaker.stop()
                 if (state.running) model.chat.cancel()
@@ -154,40 +152,13 @@ internal fun ChatPage(model: ConsoleModel, modifier: Modifier = Modifier, onVoic
 
 
 @Composable
-private fun ComposerIcon(label: String, icon: String, enabled: Boolean, modifier: Modifier = Modifier,
+private fun ComposerIcon(label: String, icon: WorkbenchGlyph, enabled: Boolean, modifier: Modifier = Modifier,
                          primary: Boolean = false, onClick: () -> Unit) {
     val background = if (primary) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.surfaceContainerHigh
     val ink = if (primary) MiuixTheme.colorScheme.onPrimary else MiuixTheme.colorScheme.onSurfaceVariantSummary
     IconButton(onClick = onClick, enabled = enabled, cornerRadius = 14.dp,
         modifier = modifier.size(48.dp).semantics { contentDescription = label; role = Role.Button; if (!enabled) disabled() },
         backgroundColor = background.copy(alpha = if (enabled) 1f else .35f)) {
-        Canvas(Modifier.size(24.dp)) {
-            val w = size.width; val h = size.height; val stroke = 2.dp.toPx()
-            when (icon) {
-                "new" -> {
-                    drawLine(ink, Offset(w*.5f,h*.2f), Offset(w*.5f,h*.8f),stroke)
-                    drawLine(ink, Offset(w*.2f,h*.5f), Offset(w*.8f,h*.5f),stroke)
-                }
-                "speaker" -> {
-                    drawRect(ink, Offset(w*.15f,h*.35f),Size(w*.2f,h*.3f))
-                    drawLine(ink,Offset(w*.35f,h*.35f),Offset(w*.55f,h*.2f),stroke)
-                    drawLine(ink,Offset(w*.55f,h*.2f),Offset(w*.55f,h*.8f),stroke)
-                    drawLine(ink,Offset(w*.55f,h*.8f),Offset(w*.35f,h*.65f),stroke)
-                    drawArc(ink,-60f,120f,false,Offset(w*.4f,h*.18f),Size(w*.5f,h*.64f),style=Stroke(stroke))
-                }
-                "mic" -> {
-                    drawRoundRect(ink, Offset(w*.35f,h*.08f), Size(w*.3f,h*.5f),
-                        androidx.compose.ui.geometry.CornerRadius(w*.15f), style = Stroke(stroke))
-                    drawArc(ink, 0f, 180f, false, Offset(w*.18f,h*.2f), Size(w*.64f,h*.58f), style = Stroke(stroke))
-                    drawLine(ink,Offset(w*.5f,h*.78f),Offset(w*.5f,h*.95f),stroke)
-                }
-                "stop" -> drawRoundRect(ink,Offset(w*.23f,h*.23f),Size(w*.54f,h*.54f),androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()))
-                else -> {
-                    drawLine(ink,Offset(w*.5f,h*.82f),Offset(w*.5f,h*.18f),stroke)
-                    drawLine(ink,Offset(w*.5f,h*.18f),Offset(w*.23f,h*.45f),stroke)
-                    drawLine(ink,Offset(w*.5f,h*.18f),Offset(w*.77f,h*.45f),stroke)
-                }
-            }
-        }
+        WorkbenchIcon(icon, ink)
     }
 }

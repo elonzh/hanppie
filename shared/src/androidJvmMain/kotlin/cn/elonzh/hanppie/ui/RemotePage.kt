@@ -178,8 +178,8 @@ internal fun RemotePage(
         }
         Row(Modifier.align(Alignment.TopStart).padding(HanppieDesignTokens.RemoteEdgePadding),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            onBack?.let { back -> HudIconButton(tr(Res.string.back_to_console), HanppieSymbol.Back, action = back) }
-            if (connected.canStop) HudIconButton(tr(Res.string.stop_script), HanppieSymbol.Stop, action = model::stop)
+            onBack?.let { back -> HudIconButton(tr(Res.string.back_to_console), WorkbenchGlyph.BACK, action = back) }
+            if (connected.canStop) HudIconButton(tr(Res.string.stop_script), WorkbenchGlyph.STOP, action = model::stop)
         }
         val leftHudWidth = (if (onBack != null) 48 else 0) + (if (connected.canStop) 56 else 0)
         val mediaHudWidth = 216
@@ -234,9 +234,9 @@ internal fun RemotePage(
             horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 HudIconButton(if (gelSelected) tr(Res.string.fire_one_gel_bead) else tr(Res.string.fire_infrared),
-                    HanppieSymbol.Crosshair, enabled = enabled && !connected.busy, selected = true,
+                    WorkbenchGlyph.CROSSHAIR, enabled = enabled && !connected.busy, selected = true,
                     action = model::fireSelected)
-                HudButton(tr(Res.string.switch_ammo), if (gelSelected) tr(Res.string.gel) else tr(Res.string.ir), symbol = HanppieSymbol.Packets) {
+                HudButton(tr(Res.string.switch_ammo), if (gelSelected) tr(Res.string.gel) else tr(Res.string.ir), symbol = WorkbenchGlyph.PACKETS) {
                     model.switchAmmo(); focus.requestFocus()
                 }
             }
@@ -355,7 +355,7 @@ private fun SignalIndicator(quality: Int?, compact: Boolean = false) {
 }
 
 @Composable internal fun HudButton(label: String, text: String, enabled: Boolean = true,
-                                   selected: Boolean = false, modifier: Modifier = Modifier, symbol: HanppieSymbol? = null, action: () -> Unit) {
+                                   selected: Boolean = false, modifier: Modifier = Modifier, symbol: WorkbenchGlyph? = null, action: () -> Unit) {
     Button(onClick = action, enabled = enabled,
         modifier = modifier.heightIn(min = HanppieDesignTokens.TouchTarget).semantics { contentDescription = label },
         insideMargin = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
@@ -363,7 +363,7 @@ private fun SignalIndicator(quality: Int?, compact: Boolean = false) {
             color = (if (selected) MiuixTheme.colorScheme.primary else HanppieDesignTokens.RemoteHudSurface).copy(alpha = .94f),
             contentColor = if (selected) MiuixTheme.colorScheme.onPrimary else HanppieDesignTokens.RemoteHudContent)) {
         symbol?.let {
-            HanppieIcon(it, if (selected) MiuixTheme.colorScheme.onPrimary else HanppieDesignTokens.RemoteHudContent,
+            WorkbenchIcon(it, if (selected) MiuixTheme.colorScheme.onPrimary else HanppieDesignTokens.RemoteHudContent,
                 Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
         }
@@ -371,12 +371,12 @@ private fun SignalIndicator(quality: Int?, compact: Boolean = false) {
     }
 }
 
-@Composable internal fun HudIconButton(label: String, symbol: HanppieSymbol, enabled: Boolean = true,
+@Composable internal fun HudIconButton(label: String, symbol: WorkbenchGlyph, enabled: Boolean = true,
     selected: Boolean = false, action: () -> Unit) {
     val colors = MiuixTheme.colorScheme
     val surface = if (selected && enabled) colors.primary else HanppieDesignTokens.RemoteHudSurface.copy(alpha = .88f)
     val ink = when {
-        symbol == HanppieSymbol.Record || symbol == HanppieSymbol.Stop -> Color(0xffff7165)
+        symbol == WorkbenchGlyph.RECORD || symbol == WorkbenchGlyph.STOP -> Color(0xffff7165)
         selected && enabled -> colors.onPrimary
         else -> HanppieDesignTokens.RemoteHudContent
     }
@@ -384,6 +384,6 @@ private fun SignalIndicator(quality: Int?, compact: Boolean = false) {
         modifier = Modifier.size(HanppieDesignTokens.TouchTarget)
             .border(1.dp, Color.White.copy(alpha = .22f), CircleShape)
             .semantics { contentDescription = label }, backgroundColor = surface) {
-        HanppieIcon(symbol, ink.copy(alpha = if (enabled) 1f else .45f))
+        WorkbenchIcon(symbol, ink.copy(alpha = if (enabled) 1f else .45f))
     }
 }

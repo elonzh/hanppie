@@ -12,7 +12,6 @@
       "RECORDING": "source/hanppie-expression-recording.svg",
       "TALKING": "source/hanppie-expression-talking.svg"
     },
-    "symbols": "source/icons/hanppie_*.svg",
     "appIconGeneration": {
       "tool": "built-in imagegen",
       "prompt": "Production app icon refinement of this EXACT approved Hanppie robot head. Preserve same identity and frontal symmetrical face with asymmetrical two antennas, warm ivory armor, black graphite visor, central camera lens. Replace bright cyan with muted slate blue #688B99 on eyes and ear bands. Flat full-bleed uniform mechanical orange #DF6B38 background, NO checkerboard, no border, no text, no letters, no rounded outer corners. Head entire silhouette centered at 78 percent of square canvas width AND height, with generous equal orange safe margins on ALL edges including above antennas and below jaw. Simplify overly fine metal reflections for small size legibility. 1024x1024 square opaque PNG. Same approved character, no changes to face anatomy, not a new robot."

@@ -516,11 +516,11 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
         Column(Modifier.align(Alignment.TopEnd).padding(end = HanppieDesignTokens.RemoteEdgePadding,
             top = HanppieDesignTokens.RemoteEdgePadding), horizontalAlignment = Alignment.End) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HudIconButton(if(playing) tr(Res.string.stop_video) else tr(Res.string.start_video), if(playing) HanppieSymbol.Video else HanppieSymbol.VideoOff, state.connected) { playing = !playing }
-                HudIconButton(if(sound) tr(Res.string.mute) else tr(Res.string.listen), if(sound) HanppieSymbol.Speaker else HanppieSymbol.Muted,
+                HudIconButton(if(playing) tr(Res.string.stop_video) else tr(Res.string.start_video), if(playing) WorkbenchGlyph.VIDEO else WorkbenchGlyph.VIDEO_OFF, state.connected) { playing = !playing }
+                HudIconButton(if(sound) tr(Res.string.mute) else tr(Res.string.listen), if(sound) WorkbenchGlyph.SPEAKER else WorkbenchGlyph.MUTED,
                     state.connected && !recording) { controls.toggleRobotMicrophone() }
-                HudIconButton(tr(Res.string.take_photo), HanppieSymbol.Camera, state.connected && playing && surfaceView != null) { controls.takePhoto() }
-                HudIconButton(if(recording) tr(Res.string.stop_recording) else tr(Res.string.start_recording), if(recording) HanppieSymbol.Stop else HanppieSymbol.Record,
+                HudIconButton(tr(Res.string.take_photo), WorkbenchGlyph.CAMERA, state.connected && playing && surfaceView != null) { controls.takePhoto() }
+                HudIconButton(if(recording) tr(Res.string.stop_recording) else tr(Res.string.start_recording), if(recording) WorkbenchGlyph.STOP else WorkbenchGlyph.RECORD,
                     state.connected && playing && decoder != null) { controls.toggleRecording() }
             }
             Text(status, Modifier.widthIn(max = 300.dp), color = Color.White, fontSize = 11.sp, maxLines = 1)
