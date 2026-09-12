@@ -25,12 +25,13 @@ class RobotLiveUiTest {
         rule.onNodeWithText("AppID · 8 位十六进制").performTextReplacement(appId!!)
         rule.onNodeWithText("连接", substring = false).performClick()
         try {
-            rule.waitUntil(20000) { rule.onAllNodesWithText("开启视频").fetchSemanticsNodes().isNotEmpty() }
+            rule.waitUntil(20000) { rule.onAllNodesWithText("开始操控").fetchSemanticsNodes().isNotEmpty() }
         } catch (failure: Throwable) {
             println(rule.onRoot().printToString())
             throw failure
         }
-        rule.onNodeWithText("开启视频").performClick()
+        rule.onNodeWithText("开始操控").performClick()
+        rule.onNodeWithContentDescription("关闭视频").assertIsDisplayed()
         rule.waitUntil(15000) { rule.onAllNodesWithText("视频已解码", substring = true).fetchSemanticsNodes().isNotEmpty() }
         var videoView: android.view.SurfaceView? = null
         inst.runOnMainSync {
@@ -52,14 +53,10 @@ class RobotLiveUiTest {
         File(inst.targetContext.getExternalFilesDir(null), "robot-camera.png").outputStream().use { decoded.compress(Bitmap.CompressFormat.PNG,100,it) }
         decoded.recycle()
         if (args.getString("remote") == "1") {
-            rule.onNodeWithContentDescription("启用遥控").performClick()
-            rule.waitUntil(10000) { rule.onAllNodesWithContentDescription("停止遥控").fetchSemanticsNodes().isNotEmpty() }
-            rule.onNodeWithTag("remote-surface").performKeyInput { pressKey(androidx.compose.ui.input.key.Key.Q) }
-            rule.onNodeWithText("1 档").assertIsDisplayed()
-            rule.onNodeWithTag("remote-surface").performKeyInput { pressKey(androidx.compose.ui.input.key.Key.E) }
-            rule.onNodeWithText("2 档").assertIsDisplayed()
+            rule.onNodeWithContentDescription("1 档").performClick()
+            rule.onNodeWithContentDescription("2 档").performClick()
             rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(androidx.compose.ui.input.key.Key.ShiftLeft) }
-            rule.onNodeWithText("2 档 · 缓行").assertIsDisplayed()
+            rule.onNodeWithText("2 档").assertIsDisplayed()
             rule.onNodeWithTag("remote-surface").performKeyInput { keyUp(androidx.compose.ui.input.key.Key.ShiftLeft) }
             rule.onNodeWithContentDescription("云台 摇杆").performTouchInput {
                 down(center); moveTo(center + androidx.compose.ui.geometry.Offset(18f,0f))
@@ -73,26 +70,24 @@ class RobotLiveUiTest {
             rule.onNodeWithContentDescription("水弹单发").assertIsDisplayed()
             rule.onNodeWithTag("remote-surface").performKeyInput { pressKey(androidx.compose.ui.input.key.Key.R) }
             rule.onNodeWithContentDescription("红外开火").assertIsDisplayed()
-            rule.onNodeWithContentDescription("停止遥控").performClick()
-            rule.onNodeWithContentDescription("启用遥控").assertIsDisplayed()
         }
         if (args.getString("audio") == "1") {
-            rule.onNodeWithText("监听机器人").performClick()
+            rule.onNodeWithContentDescription("监听机器人").performClick()
             rule.waitUntil(15000) { rule.onAllNodesWithText("音频已解码", substring = true).fetchSemanticsNodes().isNotEmpty() }
-            rule.onNodeWithText("静音").performClick()
+            rule.onNodeWithContentDescription("静音").performClick()
         }
         val bitmap = requireNotNull(inst.uiAutomation.takeScreenshot())
         File(inst.targetContext.getExternalFilesDir(null), "robot-video.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) }
         bitmap.recycle()
-        rule.onNodeWithText("关闭视频").performClick()
+        rule.onNodeWithContentDescription("关闭视频").performClick()
+        rule.onNodeWithContentDescription("返回控制台").performClick()
         if (args.getString("agent") == "1") {
-            rule.onNodeWithContentDescription("返回控制台").performClick()
             val keyFile = File(inst.targetContext.filesDir, "live-test-key")
             val apiKey = keyFile.readText().trim()
             keyFile.delete()
-            rule.onNodeWithText("设置").performClick()
+            rule.onNodeWithContentDescription("设置").performClick()
             rule.onNodeWithText("API Key").performTextReplacement(apiKey)
-            rule.onNodeWithText("对话").performClick()
+            rule.onNodeWithContentDescription("对话").performClick()
             val script = """def start():
     builtins = rm_define.__dict__["__builtins__"]
     importer = builtins["__import__"] if isinstance(builtins, dict) else builtins.__import__
@@ -104,20 +99,20 @@ class RobotLiveUiTest {
             rule.waitUntil(60000) { rule.onAllNodesWithText("确认执行").fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithText("确认执行").performScrollTo().performClick()
             rule.waitUntil(60000) { rule.onAllNodesWithContentDescription("取消").fetchSemanticsNodes().isEmpty() }
-            rule.onNodeWithText("脚本", substring = false).performClick()
+            rule.onNodeWithContentDescription("脚本").performClick()
             rule.waitUntil(10000) { rule.onAllNodesWithText("HANPPIE_LIVE_2", substring = true).fetchSemanticsNodes().isNotEmpty() }
             rule.waitUntil(10000) { rule.onAllNodesWithText("运行完成", substring = false).fetchSemanticsNodes().isNotEmpty() }
-            rule.onNodeWithText("对话", substring = false).performClick()
+            rule.onNodeWithContentDescription("对话").performClick()
             rule.onNodeWithTag("chat-input").performTextReplacement("继续，无运动无发射。在机内计算 7*8，沿用刚才的自定义消息回报方式，将计算结果以 HANPPIE_CALC_56 的格式发回来。不要复用上轮脚本的固定回报内容。")
             rule.onNodeWithContentDescription("发送").performClick()
             rule.waitUntil(60000) { rule.onAllNodesWithText("确认执行").fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithText("确认执行").performScrollTo().performClick()
             rule.waitUntil(60000) { rule.onAllNodesWithContentDescription("取消").fetchSemanticsNodes().isEmpty() }
-            rule.onNodeWithText("脚本", substring = false).performClick()
+            rule.onNodeWithContentDescription("脚本").performClick()
             rule.waitUntil(10000) { rule.onAllNodesWithText("HANPPIE_CALC_56", substring = true).fetchSemanticsNodes().isNotEmpty() }
             rule.waitUntil(10000) { rule.onAllNodesWithText("运行完成", substring = false).fetchSemanticsNodes().isNotEmpty() }
-            rule.onNodeWithText("设备").performClick()
+            rule.onNodeWithContentDescription("设备").performClick()
         }
-        rule.onNodeWithContentDescription("断开 / 清理会话").performClick()
+        rule.onNodeWithContentDescription("断开连接").performClick()
     }
 }

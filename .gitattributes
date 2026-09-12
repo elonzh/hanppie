@@ -7,3 +7,4 @@
 assets/brand/graphite-orange/source/app-icon-master.png filter=lfs diff=lfs merge=lfs -text
 assets/brand/graphite-orange/source/hanppie-companion-master.png filter=lfs diff=lfs merge=lfs -text
 desktopApp/src/main/resources/icons/hanppie.icns filter=lfs diff=lfs merge=lfs -text
+assets/brand/graphite-orange/source/app-icon-macos.png filter=lfs diff=lfs merge=lfs -text

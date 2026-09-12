@@ -9,7 +9,7 @@ internal enum class ControlAction {
     RotateCounterclockwise, RotateClockwise,
     GimbalUp, GimbalDown, GimbalLeft, GimbalRight,
     Gear1, Gear2, Gear3, Gear4, Gear5,
-    Creep, Fire, SwitchAmmo, Photo, Recording, PushToTalk, RobotMicrophone, Stop,
+    Fire, SwitchAmmo, Photo, Recording, PushToTalk, RobotMicrophone, Stop,
 }
 
 @Serializable
@@ -66,7 +66,7 @@ internal data class KeyBinding(val key: ControlKey, val shift: Boolean = false) 
     val label: String get() = if (shift && key != ControlKey.Shift) "Shift + ${key.label}" else key.label
 }
 
-@Serializable
+@Serializable(with = ControlShortcutsSerializer::class)
 internal data class ControlShortcuts(
     val bindings: Map<ControlAction, KeyBinding> = defaults(),
 ) {
@@ -90,7 +90,6 @@ internal data class ControlShortcuts(
             ControlAction.Gear3 to KeyBinding(ControlKey.Digit3),
             ControlAction.Gear4 to KeyBinding(ControlKey.Digit4),
             ControlAction.Gear5 to KeyBinding(ControlKey.Digit5),
-            ControlAction.Creep to KeyBinding(ControlKey.Shift),
             ControlAction.Fire to KeyBinding(ControlKey.Space),
             ControlAction.SwitchAmmo to KeyBinding(ControlKey.G),
             ControlAction.Photo to KeyBinding(ControlKey.R),
@@ -120,3 +119,20 @@ internal fun ControlShortcuts.edgeAction(key: Key, shiftHeld: Boolean): ControlA
 
 internal fun ControlShortcuts.supports(key: Key): Boolean =
     key == Key.Escape || ControlAction.entries.any { this[it].key.matches(key) }
+
+@Serializable
+private data class StoredControlShortcuts(val bindings: Map<String, KeyBinding> = emptyMap())
+
+/** Ignore removed actions without discarding the user's other shortcuts or settings. */
+internal object ControlShortcutsSerializer : kotlinx.serialization.KSerializer<ControlShortcuts> {
+    private val delegate = StoredControlShortcuts.serializer()
+    override val descriptor = delegate.descriptor
+    override fun serialize(encoder: kotlinx.serialization.encoding.Encoder, value: ControlShortcuts) =
+        delegate.serialize(encoder, StoredControlShortcuts(value.bindings.mapKeys { it.key.name }))
+    override fun deserialize(decoder: kotlinx.serialization.encoding.Decoder): ControlShortcuts {
+        val saved = delegate.deserialize(decoder)
+        return ControlShortcuts(saved.bindings.mapNotNull { (name, binding) ->
+            ControlAction.entries.find { it.name == name }?.let { it to binding }
+        }.toMap())
+    }
+}

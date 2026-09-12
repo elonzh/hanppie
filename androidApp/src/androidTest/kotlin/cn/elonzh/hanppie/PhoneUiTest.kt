@@ -17,9 +17,9 @@ class PhoneUiTest {
 
     @Test fun phonePagesAndKeyboard() {
         rule.onNodeWithTag("bottom-navigation").assertIsDisplayed()
-        rule.onNodeWithText("搜索设备").assertIsDisplayed()
+        rule.onNodeWithText("查找设备").assertIsDisplayed()
         screenshot("device")
-        rule.onNodeWithText("设置").performClick()
+        rule.onNodeWithContentDescription("设置").performClick()
         rule.onNodeWithContentDescription("language-selector").performClick()
         rule.onNodeWithContentDescription("language-en").performClick()
         rule.onNodeWithText("Language", substring=false).assertIsDisplayed()
@@ -27,19 +27,19 @@ class PhoneUiTest {
         rule.onNodeWithContentDescription("language-selector").performClick()
         rule.onNodeWithContentDescription("language-zh").performClick()
         rule.onNodeWithText("语言", substring=false).assertIsDisplayed()
-        rule.onNodeWithText("脚本").performClick()
+        rule.onNodeWithContentDescription("脚本").performClick()
         rule.onNodeWithTag("script-new").performClick()
         rule.onNodeWithTag("script-editor").performTextReplacement("def start():\n    print('Hello S1')")
         rule.onNodeWithText("新脚本 · 未保存").assertExists()
         screenshot("script-keyboard")
         rule.runOnUiThread { rule.activity.window.insetsController?.hide(android.view.WindowInsets.Type.ime()) }
-        rule.onNodeWithText("诊断").performClick()
+        rule.onNodeWithContentDescription("诊断").performClick()
         rule.onNodeWithText("暂无记录").assertIsDisplayed()
         screenshot("diagnostics")
-        rule.onNodeWithText("对话").performClick()
+        rule.onNodeWithContentDescription("对话").performClick()
         rule.onNodeWithContentDescription("语音输入").assertIsDisplayed()
         screenshot("chat")
-        rule.onNodeWithText("脚本").performClick()
+        rule.onNodeWithContentDescription("脚本").performClick()
         rule.runOnUiThread { rule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
         rule.waitUntil(5000) { rule.activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE }
         rule.onNodeWithText("新脚本 · 未保存").assertExists()
@@ -49,7 +49,7 @@ class PhoneUiTest {
     }
 
     @Test fun systemBackReturnsFromUnmodifiedPresetWithoutDiscardDialog() {
-        rule.onNodeWithText("脚本").performClick()
+        rule.onNodeWithContentDescription("脚本").performClick()
         rule.onNodeWithContentDescription("script-preset-battery-mood-show").performScrollTo().performClick()
         rule.onNodeWithTag("script-editor").assertIsDisplayed()
         rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }

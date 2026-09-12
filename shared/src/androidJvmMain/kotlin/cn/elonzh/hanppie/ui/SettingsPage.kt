@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -23,6 +24,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.color.api.toHsv
+import kotlin.math.roundToInt
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
@@ -103,9 +106,6 @@ internal fun SettingsPage(model: ConsoleModel, modifier: Modifier = Modifier, on
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CompactNumberField(control.creepMultiplier, tr(Res.string.creep_multiplier), Modifier.weight(1f)) { value ->
-                    runCatching { control.copy(creepMultiplier = value) }.onSuccess { model.controlSettings.value = it }
-                }
                 CompactNumberField(control.joystickDeadZone, tr(Res.string.joystick_dead_zone), Modifier.weight(1f)) { value ->
                     runCatching { control.copy(joystickDeadZone = value) }.onSuccess { model.controlSettings.value = it }
                 }
@@ -116,19 +116,19 @@ internal fun SettingsPage(model: ConsoleModel, modifier: Modifier = Modifier, on
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            RemoteLedColorField(tr(Res.string.remote_led_standby), "remote-led-standby", control.remoteLeds.standby,
+            RemoteLedColorPicker(tr(Res.string.remote_led_standby), "remote-led-standby", control.remoteLeds.standby,
                 Modifier.widthIn(min = 250.dp, max = 340.dp).weight(1f)) { color ->
                 model.controlSettings.value = control.copy(remoteLeds = control.remoteLeds.copy(standby = color))
             }
-            RemoteLedColorField(tr(Res.string.remote_led_active), "remote-led-active", control.remoteLeds.active,
+            RemoteLedColorPicker(tr(Res.string.remote_led_active), "remote-led-active", control.remoteLeds.active,
                 Modifier.widthIn(min = 250.dp, max = 340.dp).weight(1f)) { color ->
                 model.controlSettings.value = control.copy(remoteLeds = control.remoteLeds.copy(active = color))
             }
-            RemoteLedColorField(tr(Res.string.remote_led_recording), "remote-led-recording", control.remoteLeds.recording,
+            RemoteLedColorPicker(tr(Res.string.remote_led_recording), "remote-led-recording", control.remoteLeds.recording,
                 Modifier.widthIn(min = 250.dp, max = 340.dp).weight(1f)) { color ->
                 model.controlSettings.value = control.copy(remoteLeds = control.remoteLeds.copy(recording = color))
             }
-            RemoteLedColorField(tr(Res.string.remote_led_talking), "remote-led-talking", control.remoteLeds.talking,
+            RemoteLedColorPicker(tr(Res.string.remote_led_talking), "remote-led-talking", control.remoteLeds.talking,
                 Modifier.widthIn(min = 250.dp, max = 340.dp).weight(1f)) { color ->
                 model.controlSettings.value = control.copy(remoteLeds = control.remoteLeds.copy(talking = color))
             }
@@ -189,26 +189,58 @@ internal fun SettingsPage(model: ConsoleModel, modifier: Modifier = Modifier, on
 }
 
 @Composable
-private fun RemoteLedColorField(label: String, tag: String, value: RobotLedColor, modifier: Modifier,
-                                onValid: (RobotLedColor) -> Unit) {
-    var draft by remember(value) { mutableStateOf(value.hex) }
-    val parsed = RobotLedColor.parse(draft)
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+internal fun RemoteLedColorPicker(label: String, tag: String, value: RobotLedColor, modifier: Modifier,
+                                  onValid: (RobotLedColor) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Button({ open = true }, modifier.heightIn(min = 56.dp).semantics { contentDescription = tag }) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TextField(draft, { text ->
-                if (text.length <= 7) {
-                    draft = text.uppercase()
-                    RobotLedColor.parse(draft)?.let(onValid)
-                }
-            }, label = label, singleLine = true,
-                modifier = Modifier.weight(1f).semantics { contentDescription = tag })
-            Box(Modifier.size(32.dp).background(rgbColor((parsed ?: value).hex), RoundedCornerShape(8.dp)))
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.size(28.dp).background(rgbColor(value.hex), RoundedCornerShape(8.dp)))
+            Text(label, Modifier.weight(1f), fontSize = 14.sp)
+            Text("›", color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
         }
-        if (parsed == null) Text(tr(Res.string.color_hex_hint), fontSize = 12.sp,
-            color = MiuixTheme.colorScheme.error)
+    }
+    if (open) {
+        val initial = remember { rgbColor(value.hex).toHsv() }
+        var hue by remember { mutableFloatStateOf(initial.h) }
+        var saturation by remember { mutableFloatStateOf(initial.s / 100f) }
+        var brightness by remember { mutableFloatStateOf(initial.v / 100f) }
+        val selected = Color.hsv(hue, saturation, brightness)
+        WorkbenchDialog(show = true, onDismissRequest = { open = false }, title = label) {
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.fillMaxWidth().height(48.dp).background(selected, RoundedCornerShape(12.dp)))
+                Column(Modifier.testTag("led-hue")) {
+                    Text(tr(Res.string.color_hue), fontSize = 13.sp)
+                    HsvHueSlider(hue, { hue = it * 360f })
+                }
+                Column(Modifier.testTag("led-saturation")) {
+                    Text(tr(Res.string.color_saturation), fontSize = 13.sp)
+                    HsvSaturationSlider(hue, saturation, { saturation = it })
+                }
+                Column(Modifier.testTag("led-brightness")) {
+                    Text(tr(Res.string.color_brightness), fontSize = 13.sp)
+                    HsvValueSlider(hue, saturation, brightness, { brightness = it })
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button({ open = false }, Modifier.weight(1f).heightIn(min = 48.dp)) {
+                        Text(tr(Res.string.cancel))
+                    }
+                    Button({
+                        onValid(RobotLedColor((selected.red * 255).roundToInt(),
+                            (selected.green * 255).roundToInt(), (selected.blue * 255).roundToInt()))
+                        open = false
+                    }, Modifier.weight(1f).heightIn(min = 48.dp).testTag("led-color-apply"),
+                        colors = ButtonDefaults.buttonColorsPrimary()) {
+                        Text(tr(Res.string.color_apply))
+                    }
+                }
+            }
+        }
     }
 }
+
+private fun rgbColor(hex: String): Color = Color(0xff000000L or hex.removePrefix("#").toLong(16))
 
 @Composable
 private fun CompactNumberField(value: Double, label: String, modifier: Modifier, onValid: (Double) -> Unit) {
@@ -249,7 +281,6 @@ private fun actionLabel(action: ControlAction): String = tr(when (action) {
     ControlAction.Gear3 -> Res.string.action_gear_3
     ControlAction.Gear4 -> Res.string.action_gear_4
     ControlAction.Gear5 -> Res.string.action_gear_5
-    ControlAction.Creep -> Res.string.action_creep
     ControlAction.Fire -> Res.string.action_fire
     ControlAction.SwitchAmmo -> Res.string.action_switch_ammo
     ControlAction.Photo -> Res.string.action_photo

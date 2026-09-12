@@ -45,7 +45,7 @@ class ScriptLibraryTest {
 
     @Test fun presetsHaveStableIdsAndPython36LabEntrypoints() {
         assertEquals(presetScripts.size, presetScripts.map { it.id }.distinct().size)
-        assertTrue(presetScripts.size >= 5)
+        assertEquals(12, presetScripts.size)
         presetScripts.forEach {
             assertTrue(Regex("(?m)^def start\\(\\):$").containsMatchIn(it.source), it.id)
             assertTrue(it.source.endsWith("\n"), it.id)

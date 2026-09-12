@@ -18,7 +18,7 @@ internal class AndroidSpeakerInput(private val context: Context) : SpeakerInput 
     private var worker: Thread? = null
     private var pcm = ByteArrayOutputStream()
 
-    @Synchronized override fun start() {
+    @Synchronized override fun start(onReady: () -> Unit) {
         check(context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             "需要麦克风权限才能对讲"
         }
@@ -36,11 +36,15 @@ internal class AndroidSpeakerInput(private val context: Context) : SpeakerInput 
             recorder.startRecording()
             audioRecord = recorder
             worker = thread(name = "hanppie-push-to-talk", isDaemon = true) {
-                val buffer = ByteArray(1_920)
+                val buffer = ByteArray(480)
+                var ready = false
                 val maximum = 12_000 * 2 * 15
                 while (recording.get() && pcm.size() < maximum) {
                     val count = recorder.read(buffer, 0, minOf(buffer.size, maximum - pcm.size()))
-                    if (count > 0) synchronized(pcm) { pcm.write(buffer, 0, count) }
+                    if (count > 0) {
+                        synchronized(pcm) { pcm.write(buffer, 0, count) }
+                        if (!ready) { ready = true; onReady() }
+                    }
                 }
                 recording.set(false)
             }

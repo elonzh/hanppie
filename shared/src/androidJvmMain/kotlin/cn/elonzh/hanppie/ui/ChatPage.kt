@@ -72,46 +72,52 @@ internal fun ChatPage(model: ConsoleModel, modifier: Modifier = Modifier, onVoic
             Spacer(Modifier.weight(1f))
             ComposerIcon(tr(Res.string.new_chat), "new", enabled = !state.running && state.lines.isNotEmpty()) { model.replySpeaker.stop(); model.chat.clear() }
         }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("chat-messages"), state = list,
-            verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
-            if (state.lines.isEmpty()) item {
-                Column(Modifier.padding(top = 28.dp, bottom = 24.dp)) {
-                    Text(tr(Res.string.what_would_you_like_to_do), fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            LazyColumn(Modifier.fillMaxSize().padding(end = 12.dp).testTag("chat-messages"), state = list,
+                verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
+                if (state.lines.isEmpty()) item {
+                    Column(Modifier.fillMaxWidth().padding(top = 48.dp, bottom = 32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                        androidx.compose.foundation.Image(org.jetbrains.compose.resources.painterResource(HanppieBrandAssets.avatar),
+                            null, Modifier.size(112.dp))
+                        Text(tr(Res.string.what_would_you_like_to_do), fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+                    }
                 }
-            }
-            items(state.lines) { line ->
-                Column(Modifier.fillMaxWidth().background(if (line.role == ChatRole.USER) MiuixTheme.colorScheme.secondaryContainer else MiuixTheme.colorScheme.surfaceContainer,
-                    RoundedCornerShape(18.dp)).padding(16.dp)) {
-                    Text(tr(line.role.label), fontSize = 11.sp, color = if (line.role == ChatRole.ASSISTANT) MiuixTheme.colorScheme.onTertiaryContainer else MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                    if (line.role == ChatRole.SCRIPT || line.role == ChatRole.TOOL) {
-                        SelectionContainer { Text(line.text, Modifier.padding(top = 6.dp), fontSize = 12.sp,
-                            fontFamily = FontFamily.Monospace) }
-                    } else ChatMarkdown(line.text, Modifier.padding(top = 6.dp))
-                    if (line.role == ChatRole.ASSISTANT) ComposerIcon(tr(Res.string.read_aloud), "speaker",
-                        enabled = speech.available && !microphone.active) { model.replySpeaker.speak(line.text) }
-                }
-            }
-            if (state.running) item {
-                if (state.streaming.isNotBlank()) key(state.lines) {
-                    Column(Modifier.fillMaxWidth().background(MiuixTheme.colorScheme.surfaceContainer,
+                items(state.lines) { line ->
+                    Column(Modifier.fillMaxWidth().background(if (line.role == ChatRole.USER) MiuixTheme.colorScheme.secondaryContainer else MiuixTheme.colorScheme.surfaceContainer,
                         RoundedCornerShape(18.dp)).padding(16.dp)) {
-                        Text(tr(ChatRole.ASSISTANT.label), fontSize = 11.sp, color = MiuixTheme.colorScheme.onTertiaryContainer)
-                        StreamingReply(state.streaming, Modifier.padding(top = 6.dp))
+                        Text(tr(line.role.label), fontSize = 11.sp, color = if (line.role == ChatRole.ASSISTANT) MiuixTheme.colorScheme.onTertiaryContainer else MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                        if (line.role == ChatRole.SCRIPT || line.role == ChatRole.TOOL) {
+                            SelectionContainer { Text(line.text, Modifier.padding(top = 6.dp), fontSize = 12.sp,
+                                fontFamily = FontFamily.Monospace) }
+                        } else ChatMarkdown(line.text, Modifier.padding(top = 6.dp))
+                        if (line.role == ChatRole.ASSISTANT) ComposerIcon(tr(Res.string.read_aloud), "speaker",
+                            enabled = speech.available && !microphone.active) { model.replySpeaker.speak(line.text) }
                     }
                 }
-                else Text(if (state.approval != null) tr(Res.string.awaiting_approval) else tr(Res.string.hanppie_is_thinking),
-                    Modifier.padding(12.dp), color = MiuixTheme.colorScheme.onTertiaryContainer)
+                if (state.running) item {
+                    if (state.streaming.isNotBlank()) key(state.lines) {
+                        Column(Modifier.fillMaxWidth().background(MiuixTheme.colorScheme.surfaceContainer,
+                            RoundedCornerShape(18.dp)).padding(16.dp)) {
+                            Text(tr(ChatRole.ASSISTANT.label), fontSize = 11.sp, color = MiuixTheme.colorScheme.onTertiaryContainer)
+                            StreamingReply(state.streaming, Modifier.padding(top = 6.dp))
+                        }
+                    }
+                    else Text(if (state.approval != null) tr(Res.string.awaiting_approval) else tr(Res.string.hanppie_is_thinking),
+                        Modifier.padding(12.dp), color = MiuixTheme.colorScheme.onTertiaryContainer)
+                }
+                state.approval?.let { source -> item {
+                    Column(Modifier.fillMaxWidth().background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(18.dp)).padding(16.dp)) {
+                        Text(tr(Res.string.run_this_script), fontWeight = FontWeight.SemiBold)
+                        SelectionContainer { Text(source, Modifier.padding(vertical = 12.dp), fontSize = 12.sp, fontFamily = FontFamily.Monospace) }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button({ model.chat.approve(false) }) { Text(tr(Res.string.reject)) }
+                            Button({ model.chat.approve(true) }, colors = ButtonDefaults.buttonColorsPrimary()) { Text(tr(Res.string.approve_and_run)) }
+                        }
+                    }
+                } }
             }
-            state.approval?.let { source -> item {
-                Column(Modifier.fillMaxWidth().background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(18.dp)).padding(16.dp)) {
-                    Text(tr(Res.string.run_this_script), fontWeight = FontWeight.SemiBold)
-                    SelectionContainer { Text(source, Modifier.padding(vertical = 12.dp), fontSize = 12.sp, fontFamily = FontFamily.Monospace) }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button({ model.chat.approve(false) }) { Text(tr(Res.string.reject)) }
-                        Button({ model.chat.approve(true) }, colors = ButtonDefaults.buttonColorsPrimary()) { Text(tr(Res.string.approve_and_run)) }
-                    }
-                }
-            } }
+            DesktopListScrollbar(list, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
         }
         if (speech.speaking) Button(model.replySpeaker::stop) { Text(tr(Res.string.stop_reading)) }
         state.error?.let { Text(it, color = MiuixTheme.colorScheme.error, fontSize = 12.sp) }

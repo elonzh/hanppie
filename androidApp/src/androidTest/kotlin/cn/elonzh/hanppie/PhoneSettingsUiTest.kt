@@ -26,7 +26,7 @@ class PhoneSettingsUiTest {
         var scenario: ActivityScenario<MainActivity>? = null
         try {
             scenario = ActivityScenario.launch(MainActivity::class.java)
-            rule.onNodeWithText("设置").performClick()
+            rule.onNodeWithContentDescription("设置").performClick()
             rule.waitUntil(5000) {
                 rule.onNodeWithText("API Key").fetchSemanticsNode().config.getOrNull(SemanticsProperties.Disabled) == null
             }
@@ -36,7 +36,7 @@ class PhoneSettingsUiTest {
             check(!requireNotNull(preferences.getString("encrypted-v1", null)).contains(key)) { "Plaintext key on disk" }
             scenario.close()
             scenario = ActivityScenario.launch(MainActivity::class.java)
-            rule.onNodeWithText("设置").performClick()
+            rule.onNodeWithContentDescription("设置").performClick()
             rule.waitUntil(5000) {
                 rule.onNodeWithText("API Key").fetchSemanticsNode().config.getOrNull(SemanticsProperties.Disabled) == null
             }

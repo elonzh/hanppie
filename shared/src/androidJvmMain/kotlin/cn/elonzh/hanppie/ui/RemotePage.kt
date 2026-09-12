@@ -4,6 +4,7 @@ import cn.elonzh.hanppie.resources.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 import androidx.compose.foundation.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -11,7 +12,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerType
@@ -25,6 +29,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import org.jetbrains.compose.resources.painterResource
 import top.yukonga.miuix.kmp.basic.*
 
 @Composable internal expect fun RemoteOrientation(onBack: (() -> Unit)?)
@@ -48,11 +54,14 @@ internal fun RemotePage(
     val gear by model.driveGear.collectAsState()
     val control by model.controlSettings.collectAsState()
     val talking by model.talking.collectAsState()
+    val microphoneReady by model.microphoneReady.collectAsState()
     val talkBusy by model.talkBusy.collectAsState()
     val mediaControls = remember { RemoteMediaController() }
     val mediaState by mediaControls.state.collectAsState()
     var left by remember { mutableStateOf(Offset.Zero) }
     var right by remember { mutableStateOf(Offset.Zero) }
+    val foreground by model.foregroundState.collectAsState()
+    var pageFocused by remember { mutableStateOf(false) }
     var keys by remember { mutableStateOf(setOf<Key>()) }
     val focus = remember { FocusRequester() }
     val currentLeft by rememberUpdatedState(left)
@@ -60,7 +69,6 @@ internal fun RemotePage(
     val currentKeys by rememberUpdatedState(keys)
     val currentGear by rememberUpdatedState(gear)
     val currentControl by rememberUpdatedState(control)
-    val creeping = Key.ShiftLeft in keys || Key.ShiftRight in keys
     val ledState = remoteLedState(enabled, mediaState.recording, talking || talkBusy)
     LaunchedEffect(connected.connected, ledState, control.remoteLeds) {
         if (connected.connected) model.setRemoteLed(control.remoteLeds.color(ledState))
@@ -85,9 +93,9 @@ internal fun RemotePage(
             val translation = DriveSpeed.translation(
                 (-currentLeft.y + axis(ControlAction.Forward, ControlAction.Backward)).coerceIn(-1f,1f).toDouble(),
                 (currentLeft.x + axis(ControlAction.StrafeRight, ControlAction.StrafeLeft)).coerceIn(-1f,1f).toDouble(),
-                currentGear, shortcuts.isHeld(ControlAction.Creep, currentKeys, shiftHeld), currentControl)
+                currentGear, currentControl)
             val rotation = axis(ControlAction.RotateClockwise, ControlAction.RotateCounterclockwise) *
-                DriveSpeed.rotation(currentGear, shortcuts.isHeld(ControlAction.Creep, currentKeys, shiftHeld), currentControl)
+                DriveSpeed.rotation(currentGear, currentControl)
             model.drive(translation.first, translation.second, rotation,
                 (-currentRight.y + axis(ControlAction.GimbalUp, ControlAction.GimbalDown)).coerceIn(-1f,1f).toDouble() * currentControl.gimbalSpeed,
                 (currentRight.x + axis(ControlAction.GimbalRight, ControlAction.GimbalLeft)).coerceIn(-1f,1f).toDouble() * currentControl.gimbalSpeed)
@@ -102,7 +110,11 @@ internal fun RemotePage(
             }
         }
     }.focusRequester(focus).onFocusChanged {
-        if (!it.hasFocus) { keys = emptySet(); left = Offset.Zero; right = Offset.Zero; model.haltRemote() }
+        pageFocused = it.hasFocus
+        if (!it.hasFocus) {
+            keys = emptySet(); left = Offset.Zero; right = Offset.Zero
+            model.haltRemote()
+        }
     }.onPreviewKeyEvent {
         val supported = control.shortcuts.supports(it.key)
         if (it.type == KeyEventType.KeyDown) keyboardHints = true
@@ -115,91 +127,131 @@ internal fun RemotePage(
             else if (it.type == KeyEventType.KeyDown) {
                 if (it.key !in keys) when (control.shortcuts.edgeAction(it.key,
                         it.isShiftPressed || Key.ShiftLeft in keys || Key.ShiftRight in keys)) {
-                    ControlAction.Fire -> model.fireSelected()
+                    ControlAction.Fire -> if (enabled) model.fireSelected()
                     ControlAction.SwitchAmmo -> model.switchAmmo()
-                    ControlAction.Photo -> mediaControls.takePhoto()
-                    ControlAction.Recording -> mediaControls.toggleRecording()
-                    ControlAction.PushToTalk -> (onPushToTalkStart ?: model::beginPushToTalk)()
-                    ControlAction.RobotMicrophone -> mediaControls.toggleRobotMicrophone()
+                    ControlAction.Photo -> if (enabled) mediaControls.takePhoto()
+                    ControlAction.Recording -> if (enabled) mediaControls.toggleRecording()
+                    ControlAction.PushToTalk -> if (enabled) (onPushToTalkStart ?: model::beginPushToTalk)()
+                    ControlAction.RobotMicrophone -> if (enabled) mediaControls.toggleRobotMicrophone()
                     ControlAction.Gear1 -> model.selectGear(1)
                     ControlAction.Gear2 -> model.selectGear(2)
                     ControlAction.Gear3 -> model.selectGear(3)
                     ControlAction.Gear4 -> model.selectGear(4)
                     ControlAction.Gear5 -> model.selectGear(5)
-                    ControlAction.Stop -> model.haltRemote()
+                    ControlAction.Stop -> if (onBack != null) onBack() else model.haltRemote()
                     else -> Unit
                 }
-                if (it.key == Key.Escape) model.haltRemote()
+                if (it.key == Key.Escape && control.shortcuts.edgeAction(it.key, it.isShiftPressed) != ControlAction.Stop)
+                    if (onBack != null) onBack() else model.haltRemote()
                 keys = keys + it.key
             }
         }
         supported
     }.focusable()) {
         val landscapeReady = maxWidth >= maxHeight
+        val compactHud = maxWidth < 800.dp
         LaunchedEffect(landscapeReady) { if (!landscapeReady) model.haltRemote() }
-        RobotVideo(model, mediaControls, Modifier.fillMaxSize())
-        Canvas(Modifier.align(Alignment.Center).size(36.dp)) {
-            drawLine(Color.White.copy(alpha=.7f), Offset(0f,center.y), Offset(size.width,center.y), 2f)
-            drawLine(Color.White.copy(alpha=.7f), Offset(center.x,0f), Offset(center.x,size.height), 2f)
-            drawCircle(Color.White.copy(alpha=.7f), 4f, style=androidx.compose.ui.graphics.drawscope.Stroke(1f))
+        LaunchedEffect(landscapeReady, foreground, connected.connected) {
+            keys = emptySet(); left = Offset.Zero; right = Offset.Zero
+            if (landscapeReady && foreground) focus.requestFocus()
         }
-        Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            onBack?.let { back -> HudButton(tr(Res.string.back_to_console), "←", action = back) }
-            Card(colors = CardDefaults.defaultColors(color = colors.surfaceContainer.copy(alpha = .9f)), insideMargin = PaddingValues(0.dp)) {
-                Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (connected.connected) "S1 · ${connected.battery ?: "—"}%" else connected.status,
-                        style = MiuixTheme.textStyles.footnote1)
-                    SignalIndicator(connected.signalQuality)
+        LaunchedEffect(landscapeReady, foreground, pageFocused, connected.connected) {
+            if (landscapeReady && foreground && pageFocused && connected.connected) {
+                snapshotFlow { connected.busy }.first { !it }
+                if (!model.remoteEnabled.value) model.enableRemote()
+            }
+        }
+        RobotVideo(model, mediaControls, Modifier.fillMaxSize())
+        Canvas(Modifier.align(Alignment.Center).size(24.dp)) {
+            // Open center preserves the target; a dark halo remains visible over bright video.
+            val gap = 5.dp.toPx()
+            val edge = 10.dp.toPx()
+            val segments = listOf(
+                Offset(center.x - edge, center.y) to Offset(center.x - gap, center.y),
+                Offset(center.x + gap, center.y) to Offset(center.x + edge, center.y),
+                Offset(center.x, center.y - edge) to Offset(center.x, center.y - gap),
+                Offset(center.x, center.y + gap) to Offset(center.x, center.y + edge))
+            segments.forEach { (a, b) ->
+                drawLine(Color.Black.copy(alpha = .55f), a, b, 3.dp.toPx(), StrokeCap.Round)
+                drawLine(Color.White.copy(alpha = .85f), a, b, 1.dp.toPx(), StrokeCap.Round)
+            }
+        }
+        Row(Modifier.align(Alignment.TopStart).padding(HanppieDesignTokens.RemoteEdgePadding),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            onBack?.let { back -> HudIconButton(tr(Res.string.back_to_console), HanppieSymbol.Back, action = back) }
+            if (connected.canStop) HudIconButton(tr(Res.string.stop_script), HanppieSymbol.Stop, action = model::stop)
+        }
+        val leftHudWidth = (if (onBack != null) 48 else 0) + (if (connected.canStop) 56 else 0)
+        val mediaHudWidth = 216
+        val hudOffset = if (compactHud) ((leftHudWidth - mediaHudWidth) / 2).dp else 0.dp
+        Card(Modifier.align(Alignment.TopCenter).offset(x = hudOffset)
+            .widthIn(max = (maxWidth - (leftHudWidth + mediaHudWidth + 48).dp).coerceAtLeast(80.dp))
+            .padding(top = HanppieDesignTokens.RemoteEdgePadding)
+            .testTag("remote-telemetry"),
+            colors = CardDefaults.defaultColors(color = HanppieDesignTokens.RemoteHudSurface.copy(alpha = HanppieDesignTokens.RemoteHudAlpha)),
+            insideMargin = PaddingValues(0.dp)) {
+                Row(Modifier.padding(horizontal = if (compactHud) 8.dp else 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(if (compactHud) 6.dp else 12.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Image(painterResource(HanppieBrandAssets.expression(ledState)), null,
+                        Modifier.size(if (compactHud) 28.dp else 40.dp, if (compactHud) 14.dp else 20.dp))
+                    Text(if (connected.connected) "S1 · ${connected.battery ?: "—"}%" else tr(Res.string.not_connected),
+                        color = HanppieDesignTokens.RemoteHudContent, style = MiuixTheme.textStyles.footnote1)
+                    SignalIndicator(connected.signalQuality, compactHud)
                     HeadingIndicator(connected.gimbal?.yawDegrees)
                 }
-            }
-            Spacer(Modifier.weight(1f))
-            if (connected.canStop) HudButton(tr(Res.string.stop_script), tr(Res.string.stop_script), action = model::stop)
-            Button(model::haltRemote, colors = ButtonDefaults.buttonColors(
-                color = colors.errorContainer, contentColor = colors.onErrorContainer),
-                modifier = Modifier.semantics { contentDescription = tr(Res.string.stop_remote_control) }) {
-                Text(tr(Res.string.stop_remote_short))
-            }
         }
         if (!landscapeReady) {
             Text(tr(Res.string.rotate_for_remote), Modifier.align(Alignment.Center).padding(24.dp),
                 color = colors.onSurface, style = MiuixTheme.textStyles.subtitle)
             return@BoxWithConstraints
         }
-        Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-            Stick(tr(Res.string.chassis), enabled, { keyboardHints = false; focus.requestFocus() },
-                control.joystickDeadZone) { left = it }
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    HudButton(tr(Res.string.shift_down), "−", gear > 1) { model.shiftGear(-1); if (enabled) focus.requestFocus() }
-                    Text(if (creeping) tr(Res.string.gear_value_creep, gear) else tr(Res.string.gear_value, gear),
-                        color = colors.onSurface, style = MiuixTheme.textStyles.footnote1)
-                    HudButton(tr(Res.string.shift_up), "+", gear < DriveSpeed.gearCount) { model.shiftGear(1); if (enabled) focus.requestFocus() }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    HudButton(tr(Res.string.switch_ammo), if (gelSelected) tr(Res.string.gel) else tr(Res.string.ir), action = model::switchAmmo)
-                    Button(model::fireSelected, enabled = enabled && !connected.busy,
-                        modifier = Modifier.semantics { contentDescription = if (gelSelected) tr(Res.string.fire_one_gel_bead) else tr(Res.string.fire_infrared) }) {
-                        Text(tr(Res.string.fire))
+        Column(Modifier.align(Alignment.BottomStart).padding(HanppieDesignTokens.RemoteEdgePadding),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.background(HanppieDesignTokens.RemoteHudSurface.copy(alpha = .82f), CircleShape)
+                .border(1.dp, Color.White.copy(alpha = .18f), CircleShape).padding(2.dp)) {
+                repeat(DriveSpeed.gearCount) { index ->
+                    val value = index + 1
+                    val gearLabel = tr(Res.string.gear_value, value)
+                    IconButton(onClick = { model.selectGear(value); focus.requestFocus() },
+                        modifier = Modifier.size(HanppieDesignTokens.TouchTarget).semantics {
+                            contentDescription = gearLabel
+                        }, cornerRadius = 24.dp,
+                        backgroundColor = if (gear == value) colors.primary else Color.Transparent) {
+                        Text(value.toString(), color = if (gear == value) colors.onPrimary else HanppieDesignTokens.RemoteHudContent,
+                            fontSize = 14.sp)
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (enabled) tr(Res.string.active) else tr(Res.string.standby),
-                        color = if (enabled) colors.onTertiaryContainer else colors.onSurfaceVariantSummary, fontSize = 12.sp)
-                    if (talking) Text(tr(Res.string.talking), color = colors.primary, fontSize = 12.sp)
-                    else if (talkBusy) Text(tr(Res.string.sending_talk), color = colors.onSurfaceVariantSummary, fontSize = 12.sp)
-                    Switch(checked = enabled, enabled = connected.connected && !connected.busy,
-                        modifier = Modifier.semantics { contentDescription = tr(Res.string.enable_remote_control) },
-                        onCheckedChange = { if (it) { focus.requestFocus(); model.enableRemote() } else model.haltRemote() })
-                }
-                if (keyboardHints) Text(keyboardHint(control.shortcuts),
-                    Modifier.widthIn(max = 420.dp).testTag("keyboard-hints"), color = colors.onSurfaceVariantSummary, fontSize = 11.sp)
             }
-            Stick("${tr(Res.string.gimbal)} · ${control.gimbalSpeed}°/s", enabled,
-                { keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone, tr(Res.string.gimbal)) { right = it }
+            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Stick(tr(Res.string.chassis),
+                    foreground && enabled, { keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
+                    tr(Res.string.chassis)) { left = it }
+
+            }
+        }
+        Column(Modifier.align(Alignment.BottomEnd).padding(HanppieDesignTokens.RemoteEdgePadding),
+            horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                HudIconButton(if (gelSelected) tr(Res.string.fire_one_gel_bead) else tr(Res.string.fire_infrared),
+                    HanppieSymbol.Crosshair, enabled = enabled && !connected.busy, selected = true,
+                    action = model::fireSelected)
+                HudButton(tr(Res.string.switch_ammo), if (gelSelected) tr(Res.string.gel) else tr(Res.string.ir), symbol = HanppieSymbol.Packets) {
+                    model.switchAmmo(); focus.requestFocus()
+                }
+            }
+            Stick("${tr(Res.string.gimbal)} · ${control.gimbalSpeed}°/s", foreground && enabled,
+                { keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
+                tr(Res.string.gimbal)) { right = it }
+        }
+        if (talking || talkBusy) Text(if (talking) tr(if (microphoneReady) Res.string.talking else Res.string.microphone_preparing) else tr(Res.string.sending_talk),
+            Modifier.align(Alignment.BottomCenter).padding(bottom = 54.dp), color = HanppieDesignTokens.RemoteHudContent,
+            fontSize = 12.sp)
+        if (keyboardHints) {
+            Text(keyboardHint(control.shortcuts), Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp)
+                .widthIn(max = 380.dp).background(HanppieDesignTokens.RemoteHudSurface.copy(alpha = .72f),
+                    androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp)
+                .testTag("keyboard-hints"), color = HanppieDesignTokens.RemoteHudMuted, fontSize = 10.sp, maxLines = 2)
         }
     }
 }
@@ -226,7 +278,7 @@ private fun keyboardHint(shortcuts: ControlShortcuts): String = listOf(tr(
 )).joinToString(" · ")
 
 @Composable
-private fun SignalIndicator(quality: Int?) {
+private fun SignalIndicator(quality: Int?, compact: Boolean = false) {
     val colors = MiuixTheme.colorScheme
     val bars = when {
         quality == null || quality <= 0 -> 0
@@ -239,9 +291,9 @@ private fun SignalIndicator(quality: Int?) {
         ?: tr(Res.string.signal_strength_unknown)
     Row(Modifier.semantics { contentDescription = description },
         horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-        Canvas(Modifier.size(28.dp, 18.dp)) {
-            val width = 4.dp.toPx()
-            val gap = 3.dp.toPx()
+        Canvas(Modifier.size(if (compact) 20.dp else 28.dp, if (compact) 16.dp else 18.dp)) {
+            val width = (if (compact) 3.dp else 4.dp).toPx()
+            val gap = (if (compact) 2.dp else 3.dp).toPx()
             repeat(4) { index ->
                 val height = (5 + index * 4).dp.toPx()
                 drawRoundRect(
@@ -252,47 +304,13 @@ private fun SignalIndicator(quality: Int?) {
                 )
             }
         }
-        Text(quality?.toString() ?: "—", color = colors.onSurfaceVariantSummary,
+        Text(quality?.toString() ?: "—", color = HanppieDesignTokens.RemoteHudMuted,
             style = MiuixTheme.textStyles.footnote1)
-    }
-}
-
-@Composable
-private fun HeadingIndicator(relativeYaw: Double?) {
-    val colors = MiuixTheme.colorScheme
-    val degrees = relativeYaw?.takeIf { it.isFinite() }?.let { kotlin.math.round(it).toInt() }
-    val angle = degrees?.let { if (it > 0) "+$it°" else "$it°" } ?: "—"
-    val description = if (degrees == null) tr(Res.string.chassis_gimbal_angle_unknown)
-        else tr(Res.string.chassis_gimbal_angle_value, angle)
-    Row(Modifier.semantics { contentDescription = description },
-        horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-        Canvas(Modifier.size(52.dp, 38.dp)) {
-            val bodySize = Size(24.dp.toPx(), 31.dp.toPx())
-            val bodyTopLeft = Offset(center.x - bodySize.width / 2, center.y - bodySize.height / 2)
-            drawRoundRect(colors.primary.copy(alpha = .20f), bodyTopLeft, bodySize,
-                CornerRadius(5.dp.toPx(), 5.dp.toPx()))
-            drawRoundRect(colors.primary, bodyTopLeft, bodySize,
-                CornerRadius(5.dp.toPx(), 5.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
-            drawLine(colors.primary, center, Offset(center.x, bodyTopLeft.y - 3.dp.toPx()),
-                2.dp.toPx(), cap = StrokeCap.Round)
-            drawCircle(colors.surfaceContainerHigh, 5.dp.toPx(), center)
-            drawCircle(colors.onTertiaryContainer, 3.dp.toPx(), center)
-            relativeYaw?.takeIf { it.isFinite() }?.let { yaw ->
-                val radians = yaw * kotlin.math.PI / 180
-                val direction = Offset(kotlin.math.sin(radians).toFloat(), -kotlin.math.cos(radians).toFloat())
-                val tip = center + direction * 17.dp.toPx()
-                drawLine(colors.onTertiaryContainer, center, tip, 3.dp.toPx(), cap = StrokeCap.Round)
-                drawCircle(colors.onTertiaryContainer, 2.5.dp.toPx(), tip)
-            }
-        }
-        Text(angle, color = if (degrees == null) colors.onSurfaceVariantSummary else colors.onSurface,
-            fontSize = 11.sp)
     }
 }
 
 @Composable private fun Stick(label: String, enabled: Boolean, claimFocus: () -> Unit,
                               deadZone: Double = .12, semanticLabel: String = label, update: (Offset) -> Unit) {
-    val colors = MiuixTheme.colorScheme
     var position by remember(enabled) { mutableStateOf(Offset.Zero) }
     val callback by rememberUpdatedState(update)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -315,29 +333,57 @@ private fun HeadingIndicator(relativeYaw: Double?) {
                     } finally { position=Offset.Zero; callback(Offset.Zero) }
                 }
             }) {
-            drawCircle(colors.surfaceContainer.copy(alpha = .82f))
-            drawCircle(Color.White.copy(alpha=.3f), style=androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
-            drawCircle(if (enabled) colors.primary else colors.outline, size.width*.18f,
-                center + position * (size.width*.30f))
+            val radius = size.minDimension / 2
+            drawCircle(Brush.radialGradient(listOf(Color(0xff34414d).copy(alpha = .84f),
+                HanppieDesignTokens.RemoteHudSurface.copy(alpha = .9f)), radius = radius))
+            drawCircle(Color.White.copy(alpha = .32f), radius - 1.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+            drawCircle(Color.White.copy(alpha = .10f), radius * .76f, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+            for (direction in listOf(Offset(0f, -1f), Offset(1f, 0f), Offset(0f, 1f), Offset(-1f, 0f))) {
+                drawCircle(HanppieDesignTokens.RemoteHudMuted, 1.5.dp.toPx(), center + direction * radius * .85f)
+            }
+            val thumbCenter = center + position * (size.width * .30f)
+            val thumbRadius = size.width * .17f
+            drawCircle(Color.Black.copy(alpha = .22f), thumbRadius + 2.dp.toPx(), thumbCenter + Offset(0f, 2.dp.toPx()))
+            drawCircle(Brush.linearGradient(listOf(Color(0xff829eac), Color(0xff496776)),
+                start = thumbCenter - Offset(0f, thumbRadius), end = thumbCenter + Offset(0f, thumbRadius)), thumbRadius, thumbCenter)
+            drawCircle(Color(0xffb8cbd4).copy(alpha = if (enabled) .8f else .45f), thumbRadius, thumbCenter,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
         }
-        Text(label, color=Color.White)
+        Text(label, color = HanppieDesignTokens.RemoteHudContent, fontSize = 12.sp,
+            modifier = Modifier.padding(top = 6.dp))
     }
 }
 
-@Composable internal fun HudButton(label: String, text: String, enabled: Boolean = true, action: () -> Unit) {
+@Composable internal fun HudButton(label: String, text: String, enabled: Boolean = true,
+                                   selected: Boolean = false, modifier: Modifier = Modifier, symbol: HanppieSymbol? = null, action: () -> Unit) {
     Button(onClick = action, enabled = enabled,
-        modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = label },
+        modifier = modifier.heightIn(min = HanppieDesignTokens.TouchTarget).semantics { contentDescription = label },
         insideMargin = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-        colors = ButtonDefaults.buttonColors(color = MiuixTheme.colorScheme.surfaceContainerHigh.copy(alpha = .94f))) {
+        colors = ButtonDefaults.buttonColors(
+            color = (if (selected) MiuixTheme.colorScheme.primary else HanppieDesignTokens.RemoteHudSurface).copy(alpha = .94f),
+            contentColor = if (selected) MiuixTheme.colorScheme.onPrimary else HanppieDesignTokens.RemoteHudContent)) {
+        symbol?.let {
+            HanppieIcon(it, if (selected) MiuixTheme.colorScheme.onPrimary else HanppieDesignTokens.RemoteHudContent,
+                Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+        }
         Text(text, fontSize = 14.sp)
     }
 }
 
-@Composable internal fun HudIconButton(label: String, text: String, enabled: Boolean = true, action: () -> Unit) {
-    Button(onClick = action, enabled = enabled,
-        modifier = Modifier.size(48.dp).semantics { contentDescription = label },
-        insideMargin = PaddingValues(0.dp),
-        colors = ButtonDefaults.buttonColors(color = MiuixTheme.colorScheme.surfaceContainerHigh.copy(alpha = .94f))) {
-        Text(text, fontSize = 16.sp)
+@Composable internal fun HudIconButton(label: String, symbol: HanppieSymbol, enabled: Boolean = true,
+    selected: Boolean = false, action: () -> Unit) {
+    val colors = MiuixTheme.colorScheme
+    val surface = if (selected && enabled) colors.primary else HanppieDesignTokens.RemoteHudSurface.copy(alpha = .88f)
+    val ink = when {
+        symbol == HanppieSymbol.Record || symbol == HanppieSymbol.Stop -> Color(0xffff7165)
+        selected && enabled -> colors.onPrimary
+        else -> HanppieDesignTokens.RemoteHudContent
+    }
+    IconButton(onClick = action, enabled = enabled, cornerRadius = 24.dp,
+        modifier = Modifier.size(HanppieDesignTokens.TouchTarget)
+            .border(1.dp, Color.White.copy(alpha = .22f), CircleShape)
+            .semantics { contentDescription = label }, backgroundColor = surface) {
+        HanppieIcon(symbol, ink.copy(alpha = if (enabled) 1f else .45f))
     }
 }

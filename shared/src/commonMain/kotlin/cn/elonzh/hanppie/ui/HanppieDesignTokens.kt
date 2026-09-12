@@ -40,6 +40,9 @@ internal object HanppieDesignTokens {
     val TouchTarget = 48.dp
     val RemoteStick = 132.dp
     val RemoteEdgePadding = 16.dp
+    val RemoteHudSurface = Color(0xff1c232b)
+    val RemoteHudContent = Color(0xfff4f7fa)
+    val RemoteHudMuted = Color(0xffb7c0c8)
     const val RemoteHudAlpha = 0.90f
 }
 

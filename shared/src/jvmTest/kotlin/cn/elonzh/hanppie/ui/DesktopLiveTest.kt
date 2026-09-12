@@ -53,7 +53,6 @@ class DesktopLiveTest {
             rule.waitUntil(10000) { rule.onAllNodesWithText("视频已解码 30 帧").fetchSemanticsNodes().isNotEmpty() }
             screenshot("desktop-live-audio")
             if (System.getenv("HANPPIE_TEST_ALLOW_REMOTE") == "1") {
-                rule.onNodeWithContentDescription("启用遥控").performClick()
                 rule.waitUntil(5000) { model.remoteEnabled.value }
                 rule.waitUntil(5000) { model.state.value.values.isNotEmpty() }
                 println("Remote idle telemetry=${model.state.value.values}")
@@ -123,16 +122,15 @@ class DesktopLiveTest {
                     Thread.sleep(1000)
                     screenshot(if(label.startsWith("底盘")) "remote-touch-chassis" else "remote-touch-gimbal")
                 }
-                rule.onRoot().performKeyInput { pressKey(Key.Escape) }
-                rule.waitUntil(3000) { !model.remoteEnabled.value }
-                rule.onNodeWithContentDescription("启用遥控").assertIsDisplayed()
             }
             rule.onNodeWithContentDescription("静音").performClick()
             rule.onNodeWithContentDescription("关闭视频").performClick()
+            rule.onNodeWithContentDescription("返回控制台").performClick()
+            rule.waitUntil(3000) { !model.remoteEnabled.value }
+            rule.onNodeWithTag("enter-remote").assertIsDisplayed()
             if (System.getenv("HANPPIE_TEST_ALLOW_LAB") == "1") {
-                rule.onNodeWithContentDescription("返回控制台").performClick()
                 assertTrue(model.modelSettings.value.apiKey.isNotBlank(), "Real model credentials required for Lab test")
-                rule.onNodeWithText("对话").performClick()
+                rule.onNodeWithContentDescription("对话").performClick()
                 val source = """
                     def start():
                         builtins = rm_define.__dict__["__builtins__"]

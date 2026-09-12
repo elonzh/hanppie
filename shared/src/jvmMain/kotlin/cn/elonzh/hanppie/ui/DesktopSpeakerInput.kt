@@ -9,27 +9,33 @@ import kotlin.concurrent.thread
 
 internal class DesktopSpeakerInput(
     private val executable: String = System.getenv("HANPPIE_FFMPEG") ?: "ffmpeg",
+    private val lineFactory: (AudioFormat) -> TargetDataLine = AudioSystem::getTargetDataLine,
+    private val encoder: (ByteArray) -> ByteArray = { encodeDesktopSpeakerPcm(it, executable) },
 ) : SpeakerInput {
     private val recording = AtomicBoolean(false)
     private var line: TargetDataLine? = null
     private var worker: Thread? = null
     private var pcm = ByteArrayOutputStream()
 
-    @Synchronized override fun start() {
+    @Synchronized override fun start(onReady: () -> Unit) {
         check(recording.compareAndSet(false, true)) { "对讲已在录音" }
         pcm = ByteArrayOutputStream()
         val format = AudioFormat(12_000f, 16, 1, true, false)
-        val input = AudioSystem.getTargetDataLine(format)
+        val input = try { lineFactory(format) } catch (error: Exception) { recording.set(false); throw error }
         try {
             input.open(format, maxOf(1_920, input.bufferSize))
             input.start()
             line = input
             worker = thread(name = "hanppie-push-to-talk", isDaemon = true) {
-                val buffer = ByteArray(1_920)
+                val buffer = ByteArray(480)
+                var ready = false
                 val maximum = 12_000 * 2 * 15
                 while (recording.get() && pcm.size() < maximum) {
                     val count = input.read(buffer, 0, minOf(buffer.size, maximum - pcm.size()))
-                    if (count > 0) synchronized(pcm) { pcm.write(buffer, 0, count) }
+                    if (count > 0) {
+                        synchronized(pcm) { pcm.write(buffer, 0, count) }
+                        if (!ready) { ready = true; onReady() }
+                    }
                 }
                 recording.set(false)
             }
@@ -50,7 +56,7 @@ internal class DesktopSpeakerInput(
         worker = null
         val captured = synchronized(pcm) { pcm.toByteArray() }
         require(captured.size >= 480) { "对讲录音过短" }
-        return encodeDesktopSpeakerPcm(captured, executable)
+        return encoder(captured)
     }
 
     override fun cancel() {

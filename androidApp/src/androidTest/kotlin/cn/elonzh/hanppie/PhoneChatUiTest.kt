@@ -19,7 +19,7 @@ class PhoneChatUiTest {
             "am start -W -n cn.elonzh.hanppie/.MainActivity"
         )).use { it.readBytes() }
         rule.waitUntil(15000) { rule.onAllNodesWithText("对话").fetchSemanticsNodes().isNotEmpty() }
-        rule.onNodeWithText("对话").performClick()
+        rule.onNodeWithContentDescription("对话").performClick()
         rule.onNodeWithText("语音", substring = false).assertDoesNotExist()
         rule.onNodeWithContentDescription("语音输入").assertIsDisplayed().performClick()
         rule.onNodeWithText("使用手机麦克风").assertIsDisplayed()
@@ -27,7 +27,7 @@ class PhoneChatUiTest {
         rule.onNodeWithTag("chat-input").assertIsDisplayed().performTextReplacement("你好，憨皮")
         rule.onNodeWithContentDescription("发送").assertIsDisplayed()
         screenshot("chat-keyboard")
-        rule.onNodeWithText("设置").performClick()
+        rule.onNodeWithContentDescription("设置").performClick()
         rule.onNodeWithText("API Key").assertIsDisplayed()
         screenshot("chat-settings")
         rule.onNodeWithText("语音服务").performClick()

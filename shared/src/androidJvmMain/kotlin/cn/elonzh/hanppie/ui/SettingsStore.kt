@@ -40,7 +40,6 @@ internal data class ControlSettings(
     val gimbalSpeed: Int = 90,
     val translationSpeeds: List<Double> = listOf(.25, .45, .65, .85, 1.0),
     val rotationSpeeds: List<Double> = listOf(30.0, 60.0, 90.0, 120.0, 150.0),
-    val creepMultiplier: Double = .25,
     val joystickDeadZone: Double = .12,
     val shortcuts: ControlShortcuts = ControlShortcuts(),
     val remoteLeds: RemoteLedSettings = RemoteLedSettings(),
@@ -51,7 +50,6 @@ internal data class ControlSettings(
         require(rotationSpeeds.size == 5 && rotationSpeeds.all { it.isFinite() && it in 10.0..150.0 })
         require(translationSpeeds.zipWithNext().all { (a, b) -> a <= b })
         require(rotationSpeeds.zipWithNext().all { (a, b) -> a <= b })
-        require(creepMultiplier.isFinite() && creepMultiplier in .1..1.0)
         require(joystickDeadZone.isFinite() && joystickDeadZone in 0.0..0.4)
     }
 }

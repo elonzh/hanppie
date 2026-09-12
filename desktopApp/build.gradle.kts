@@ -17,6 +17,9 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "cn.elonzh.hanppie.desktop.MainKt"
+        if (System.getProperty("os.name").startsWith("Mac")) {
+            jvmArgs("-Xdock:name=Hanppie")
+        }
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "Hanppie"

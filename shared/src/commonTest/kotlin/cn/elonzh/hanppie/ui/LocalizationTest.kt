@@ -11,7 +11,6 @@ class LocalizationTest {
         var saved: String? = null
         Localization.initialize("en-GB",null) { saved=it }
         assertEquals("Settings",tr(Res.string.settings))
-        assertEquals("Gear 3 · Creep",tr(Res.string.gear_value_creep,3))
         Localization.select("zh")
         assertEquals("zh",saved)
         assertEquals("设置",tr(Res.string.settings))

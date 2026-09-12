@@ -4,6 +4,7 @@ import cn.elonzh.hanppie.resources.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 import androidx.compose.foundation.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,14 +15,12 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -29,12 +28,14 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.sample
+import org.jetbrains.compose.resources.painterResource
 import top.yukonga.miuix.kmp.basic.*
 
 private val Ink: Color @Composable get() = MiuixTheme.colorScheme.onSurface
 private val Muted: Color @Composable get() = MiuixTheme.colorScheme.onSurfaceVariantSummary
 private val Accent: Color @Composable get() = MiuixTheme.colorScheme.primary
 private val CanvasColor: Color @Composable get() = MiuixTheme.colorScheme.background
+private val navigationOrder = listOf(0, 1, 3, 2, 4)
 private val labels get() = listOf(tr(Res.string.robot), tr(Res.string.script), tr(Res.string.debug), tr(Res.string.chat), tr(Res.string.settings))
 
 @Composable
@@ -42,6 +43,7 @@ private val labels get() = listOf(tr(Res.string.robot), tr(Res.string.script), t
 internal fun Console(
     model: ConsoleModel,
     document: MutableState<EditorDocument>,
+    onCockpitChanged: (Boolean) -> Unit = {},
     onImport: () -> Unit = {},
     onExport: () -> Unit = {},
     fileError: String? = null,
@@ -59,16 +61,44 @@ internal fun Console(
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val pageState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     fun navigate(index: Int) { focus.clearFocus(); keyboard?.hide(); tab = index }
+    var connectionDetails by remember { mutableStateOf(false) }
     var manual by rememberSaveable { mutableStateOf(false) }
     var ip by rememberSaveable { mutableStateOf("") }
     var appId by rememberSaveable { mutableStateOf("") }
     var diagnosticTab by rememberSaveable { mutableStateOf(0) }
     var cockpit by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state.connected) { if (!state.connected) cockpit = false }
-    if(cockpit && state.connected) {
+    LaunchedEffect(cockpit) { onCockpitChanged(cockpit) }
+    if(cockpit) {
         RemotePage(model, Modifier.fillMaxSize().safeDrawingPadding(), onBack = { cockpit=false },
             onPushToTalkStart = onPushToTalkStart, onPushToTalkStop = onPushToTalkStop)
         return
+    }
+
+    WorkbenchDialog(show = connectionDetails, onDismissRequest = { connectionDetails = false }, title = tr(Res.string.connection_details)) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Image(painterResource(HanppieBrandAssets.avatar), null, Modifier.size(64.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("RoboMaster S1", fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
+                    Text(state.status, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 13.sp)
+                }
+            }
+            Card(Modifier.fillMaxWidth(), insideMargin = PaddingValues(16.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ConnectionDetail(tr(Res.string.robot_ipv4), state.connectedAddress ?: "—")
+                    ConnectionDetail(tr(Res.string.battery), state.battery?.let { "$it%" } ?: "—")
+                    ConnectionDetail(tr(Res.string.signal), state.signalQuality?.toString() ?: "—")
+                    ConnectionDetail(tr(Res.string.script), state.scriptStatus)
+                }
+            }
+            if (state.connected || state.reconnecting) {
+                Button({ model.disconnect(); connectionDetails = false }, Modifier.fillMaxWidth().heightIn(min = 48.dp), enabled = !state.busy) { Text(tr(Res.string.disconnect_close_session)) }
+            } else {
+                Button({ connectionDetails = false; navigate(0); model.discover() }, Modifier.fillMaxWidth().heightIn(min = 48.dp), colors = ButtonDefaults.buttonColorsPrimary(), enabled = !state.busy) { Text(tr(Res.string.find_robots)) }
+                Button({ connectionDetails = false; manual = true }, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("connection-manual")) { Text(tr(Res.string.manual_connection)) }
+            }
+        }
     }
 
     WorkbenchDialog(show = manual, onDismissRequest = { manual = false }, title = tr(Res.string.manual_connection)) {
@@ -84,27 +114,33 @@ internal fun Console(
         }
     }
     BoxWithConstraints(Modifier.fillMaxSize().background(CanvasColor).safeDrawingPadding().imePadding()) {
-        val compact = maxWidth < 720.dp
+        val compact = maxWidth < HanppieDesignTokens.CompactBreakpoint
         Row(Modifier.fillMaxSize()) {
             if (!compact) NavigationRail(color = MiuixTheme.colorScheme.surfaceVariant, defaultWindowInsetsPadding = false,
-                header = { Text("H", Modifier.padding(vertical = 20.dp), color = Accent,
-                    style = MiuixTheme.textStyles.title2) }) {
-                labels.forEachIndexed { index, label ->
-                    NavigationRailItem(selected = selectedTab == index, onClick = { navigate(index) },
-                        icon = navigationIcons[index], label = label)
+                header = { Image(painterResource(HanppieBrandAssets.avatar), null,
+                    Modifier.padding(vertical = 18.dp).size(36.dp)) }) {
+                navigationOrder.forEach { index ->
+                    val label = labels[index]
+                    IconButton(onClick = { navigate(index) }, modifier = Modifier.padding(vertical = 4.dp).size(48.dp)
+                        .background(if (selectedTab == index) MiuixTheme.colorScheme.primary.copy(alpha = .14f) else Color.Transparent, RoundedCornerShape(16.dp))
+                        .semantics { contentDescription = label; selected = selectedTab == index }) {
+                        Icon(navigationIcons[index], null, Modifier.size(24.dp), tint = Ink)
+                    }
                 }
             }
-            Column(Modifier.weight(1f).fillMaxHeight()) {
-                Column(Modifier.weight(1f).fillMaxWidth().widthIn(max = 1080.dp)
-                    .padding(horizontal = if (compact) 20.dp else 28.dp)) {
+            Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.weight(1f).widthIn(max = HanppieDesignTokens.PageMaxWidth).fillMaxWidth()
+                    .padding(horizontal = if (compact) HanppieDesignTokens.PagePaddingCompact else HanppieDesignTokens.PagePaddingExpanded)) {
                     if (selectedTab != 1) {
                         Row(Modifier.fillMaxWidth().height(72.dp), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(if (selectedTab == 0) tr(Res.string.my_robot) else labels[selectedTab], fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Ink)
+                            Text(if (selectedTab == 0) tr(Res.string.my_robot) else labels[selectedTab], modifier = Modifier.weight(1f), fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Ink, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(6.dp).background(if (state.connected) Color(0xff32aa78) else Color(0xffaab1bb), RoundedCornerShape(50)))
-                                Spacer(Modifier.width(6.dp))
-                                Text(if (state.connected) tr(Res.string.connected) else state.status, fontSize = 12.sp, color = Muted)
+                                ConnectionStatusChip(state) { connectionDetails = true }
+                                if (selectedTab == 2) {
+                                    Spacer(Modifier.width(8.dp))
+                                    WorkbenchIconButton(tr(Res.string.clear), WorkbenchGlyph.DELETE, model::clearLogs)
+                                }
                             }
                         }
                         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
@@ -113,63 +149,24 @@ internal fun Console(
                     when (selectedTab) {
                         3 -> pageState.SaveableStateProvider("chat") { ChatPage(model, Modifier.weight(1f), onVoiceInput) { navigate(4) } }
                         4 -> SettingsPage(model, Modifier.weight(1f), onSpeechSettings)
-                        0 -> LazyColumn(Modifier.weight(1f).testTag("device-page"), verticalArrangement = Arrangement.spacedBy(16.dp),
-                            contentPadding = PaddingValues(bottom = 20.dp)) {
-                            item {
-                                Card(Modifier.fillMaxWidth(), colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer)) {
-                                    Column(Modifier.padding(22.dp)) {
-                                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                            Column(Modifier.weight(1f)) {
-                                                Text("ROBOMASTER", fontSize = 11.sp, color = Muted, fontWeight = FontWeight.Medium)
-                                                Text("S1", Modifier.padding(top = 4.dp), fontSize = 48.sp, color = Ink, fontWeight = FontWeight.Bold)
-                                                Text(state.connectedAddress?.takeIf { state.connected } ?: tr(Res.string.not_connected), fontSize = 13.sp, color = Muted)
-                                            }
-                                            RobotMark(Modifier.size(110.dp))
-                                        }
-                                        Spacer(Modifier.height(24.dp))
-                                        if (state.connected) {
-                                            Button({ cockpit = true }, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("enter-remote"), colors = ButtonDefaults.buttonColorsPrimary()) { Text(tr(Res.string.fullscreen_cockpit)) }
-                                            Spacer(Modifier.height(12.dp))
-                                        }
-                                        if (state.connected || state.reconnecting || state.statusMessage.resource == Res.string.connection_lost) {
-                                            Button(model::disconnect, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("disconnect-robot"), enabled = !state.busy) { Text(tr(Res.string.disconnect_close_session)) }
-                                        } else {
-                                            Button(model::discover, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("discover-robot"), enabled = !state.busy,
-                                                colors = ButtonDefaults.buttonColorsPrimary()) { Text(if (state.busy) tr(Res.string.searching) else tr(Res.string.find_robots)) }
-                                            Spacer(Modifier.height(12.dp))
-                                            Button({ manual = true }, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("manual-connect")) { Text(tr(Res.string.manual_connection)) }
-                                        }
-                                    }
-                                }
-                            }
-                            items(state.devices) { device ->
-                                Button({ model.connect(device.ip, device.appId) }, Modifier.fillMaxWidth(), enabled = !state.connected && !state.busy) {
-                                    Text("S1  ·  ${device.ip}", Modifier.weight(1f)); Text(tr(Res.string.connect))
-                                }
-                            }
-                            item {
-                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    Metric(tr(Res.string.battery), state.battery?.let { "$it%" } ?: "—", Modifier.weight(1f))
-                                    Metric(tr(Res.string.signal), state.signalQuality?.toString() ?: "—", Modifier.weight(1f))
-                                    Metric(tr(Res.string.packets), state.packets.toString(), Modifier.weight(1f))
-                                }
-                            }
-                            if (!state.connected) item {
-                                Text(tr(Res.string.connect_your_phone_or_computer_to_the_same_wi), fontSize = 12.sp, color = Muted)
-                            }
-                        }
-                        1 -> ScriptPage(model, document, compact, onImport, onExport, fileError, onFileError)
+                        0 -> DevicePage(model, state, compact, Modifier.weight(1f),
+                            onManualConnect = { manual = true },
+                            onRemote = { if (state.connected) cockpit = true }, onNavigate = ::navigate)
+                        1 -> ScriptPage(model, document, compact, onImport, onExport, fileError, onFileError, onConnectionDetails = { connectionDetails = true })
                         2 -> Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                listOf(tr(Res.string.logs), tr(Res.string.telemetry), tr(Res.string.packets_2)).forEachIndexed { index, label ->
-                                    Text(label, Modifier.clickable { diagnosticTab = index }.padding(12.dp),
-                                        color = if (diagnosticTab == index) Accent else Muted, fontSize = 14.sp)
-                                }
-                                Spacer(Modifier.weight(1f))
-                                Text(tr(Res.string.clear), Modifier.clickable(onClick = model::clearLogs).padding(12.dp), color = Muted, fontSize = 13.sp)
+                                TabRow(tabs = listOf(tr(Res.string.logs), tr(Res.string.telemetry), tr(Res.string.packets_2)),
+                                    selectedTabIndex = diagnosticTab, onTabSelected = { diagnosticTab = it },
+                                    modifier = Modifier.weight(1f), minWidth = 72.dp, maxWidth = 120.dp,
+                                    height = HanppieDesignTokens.TouchTarget, itemSpacing = 4.dp,
+                                    colors = TabRowDefaults.tabRowColors(selectedBackgroundColor = MiuixTheme.colorScheme.primaryVariant,
+                                        selectedContentColor = MiuixTheme.colorScheme.onPrimaryVariant))
                             }
-                            SelectionContainer(Modifier.weight(1f)) {
-                                LazyColumn(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(20.dp)), contentPadding = PaddingValues(16.dp),
+                            val diagnosticScroll = androidx.compose.foundation.lazy.rememberLazyListState()
+                            LaunchedEffect(diagnosticTab) { diagnosticScroll.scrollToItem(0) }
+                            Box(Modifier.weight(1f)) {
+                            SelectionContainer(Modifier.fillMaxSize().padding(end = 12.dp)) {
+                                LazyColumn(Modifier.fillMaxSize().testTag("diagnostic-output").background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(HanppieDesignTokens.CardRadius)), state = diagnosticScroll, contentPadding = PaddingValues(16.dp),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                     if (diagnosticTab == 1) {
                                         state.gimbal?.let { gimbal ->
@@ -191,10 +188,19 @@ internal fun Console(
                                         }
                                     } else {
                                         val lines = if (diagnosticTab == 0) state.logs else state.frames
-                                        if (lines.isEmpty()) item { Text(tr(Res.string.no_records), color = Muted, fontSize = 13.sp) }
+                                        if (lines.isEmpty()) item {
+                                            Column(Modifier.fillMaxWidth().padding(vertical = 72.dp),
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                                HanppieIcon(HanppieSymbol.File, Muted, Modifier.size(40.dp))
+                                                Text(tr(Res.string.no_records), color = Muted, fontSize = 14.sp)
+                                            }
+                                        }
                                         items(lines) { Text(it, fontSize = 12.sp, fontFamily = FontFamily.Monospace) }
                                     }
                                 }
+                            }
+                            DesktopListScrollbar(diagnosticScroll, Modifier.align(Alignment.CenterEnd).fillMaxHeight().testTag("diagnostic-scrollbar"))
                             }
                             Spacer(Modifier.height(4.dp))
                         }
@@ -204,9 +210,10 @@ internal fun Console(
                 if (selectedTab != 1) {
                     ScriptRunBanner(state, onOpen = { navigate(1) }, onStop = model::stop)
                 }
-                if (compact) NavigationBar(Modifier.testTag("bottom-navigation"),
+                if (compact) NavigationBar(Modifier.testTag("bottom-navigation"), mode = NavigationBarDisplayMode.IconOnly,
                     color = MiuixTheme.colorScheme.surfaceVariant, defaultWindowInsetsPadding = false) {
-                    labels.forEachIndexed { index, label ->
+                    navigationOrder.forEach { index ->
+                    val label = labels[index]
                         NavigationBarItem(selected = selectedTab == index, onClick = { navigate(index) },
                             icon = navigationIcons[index], label = label)
                     }
@@ -262,31 +269,5 @@ private fun ScriptRunBanner(state: ConsoleState, onOpen: () -> Unit, onStop: () 
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun Metric(label: String, value: String, modifier: Modifier) {
-    Card(modifier, colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer)) {
-        Column(Modifier.padding(18.dp)) {
-            Text(label, color = Muted, fontSize = 12.sp)
-            Text(value, Modifier.padding(top = 10.dp), fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = Ink)
-        }
-    }
-}
-
-@Composable
-private fun RobotMark(modifier: Modifier) {
-    val ink = Ink
-    val accent = Accent
-    val surface = MiuixTheme.colorScheme.surfaceContainer
-    Canvas(modifier.semantics { contentDescription = tr(Res.string.s1_robot_icon) }) {
-        val w = size.width; val h = size.height
-        drawCircle(Color(0xff29334a), w*.49f)
-        drawRoundRect(Color(0xff46536c), Offset(w*.18f,h*.55f), Size(w*.65f,h*.2f), androidx.compose.ui.geometry.CornerRadius(w*.08f))
-        listOf(.18f,.67f).forEach { x -> drawRoundRect(ink, Offset(w*x,h*.58f),Size(w*.15f,h*.25f),androidx.compose.ui.geometry.CornerRadius(w*.04f)) }
-        drawRoundRect(Color(0xffacb9d2), Offset(w*.33f,h*.28f),Size(w*.33f,h*.32f),androidx.compose.ui.geometry.CornerRadius(w*.06f))
-        drawRoundRect(accent,Offset(w*.47f,h*.36f),Size(w*.4f,h*.09f),androidx.compose.ui.geometry.CornerRadius(w*.025f))
-        drawCircle(surface,w*.06f,Offset(w*.44f,h*.35f))
     }
 }

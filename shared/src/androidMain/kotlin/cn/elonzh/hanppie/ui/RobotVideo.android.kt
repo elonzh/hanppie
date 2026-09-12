@@ -19,7 +19,9 @@ import android.view.PixelCopy
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalContext
@@ -488,8 +490,8 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
         if (requests.robotMicrophone > 0 && !recording) { sound = !sound; if (sound) playing = true }
     }
     DisposableEffect(surface, playing, sound, state.connected) {
-        status = if (playing) tr(Res.string.waiting_for_video) else tr(Res.string.video_off)
-        audioStatus = if (sound) tr(Res.string.waiting_for_audio) else ""
+        status = if (!state.connected) "" else if (playing) tr(Res.string.waiting_for_video) else tr(Res.string.video_off)
+        audioStatus = if (sound && state.connected) tr(Res.string.waiting_for_audio) else ""
         val activeDecoder = if (surface != null && playing && state.connected) RobotDecoder(surface!!, sound,
             report = { message, isAudio -> uiScope.launch { if (isAudio) audioStatus = message else status = message } },
             onRecordingStopped = { uiScope.launch { recording = false; controls.recording(false) } }) else null
@@ -511,18 +513,19 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
                 override fun surfaceDestroyed(holder: SurfaceHolder) { surface = null }
             })
         } }, modifier = Modifier.fillMaxSize())
-        Column(Modifier.padding(start=12.dp,top=64.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            HudIconButton(if(playing) tr(Res.string.stop_video) else tr(Res.string.start_video), if(playing) "▣" else "□", state.connected) { playing = !playing }
-            HudIconButton(if(sound) tr(Res.string.mute) else tr(Res.string.listen), if(sound) "♫" else "♩",
-                state.connected && !recording) { controls.toggleRobotMicrophone() }
-            HudIconButton(tr(Res.string.take_photo), "◉", state.connected && playing && surfaceView != null) { controls.takePhoto() }
-            HudIconButton(if(recording) tr(Res.string.stop_recording) else tr(Res.string.start_recording), if(recording) "■" else "●",
-                state.connected && playing && decoder != null) { controls.toggleRecording() }
-        }
-        Text(status, Modifier.widthIn(max = 420.dp), color=Color.White)
-        if (sound) Text(audioStatus, Modifier.widthIn(max = 420.dp), color=Color.White)
-        if (captureStatus.isNotBlank()) Text(captureStatus, Modifier.widthIn(max = 420.dp), color=Color.White, maxLines = 1)
+        Column(Modifier.align(Alignment.TopEnd).padding(end = HanppieDesignTokens.RemoteEdgePadding,
+            top = HanppieDesignTokens.RemoteEdgePadding), horizontalAlignment = Alignment.End) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HudIconButton(if(playing) tr(Res.string.stop_video) else tr(Res.string.start_video), if(playing) HanppieSymbol.Video else HanppieSymbol.VideoOff, state.connected) { playing = !playing }
+                HudIconButton(if(sound) tr(Res.string.mute) else tr(Res.string.listen), if(sound) HanppieSymbol.Speaker else HanppieSymbol.Muted,
+                    state.connected && !recording) { controls.toggleRobotMicrophone() }
+                HudIconButton(tr(Res.string.take_photo), HanppieSymbol.Camera, state.connected && playing && surfaceView != null) { controls.takePhoto() }
+                HudIconButton(if(recording) tr(Res.string.stop_recording) else tr(Res.string.start_recording), if(recording) HanppieSymbol.Stop else HanppieSymbol.Record,
+                    state.connected && playing && decoder != null) { controls.toggleRecording() }
+            }
+            Text(status, Modifier.widthIn(max = 300.dp), color = Color.White, fontSize = 11.sp, maxLines = 1)
+            if (sound) Text(audioStatus, Modifier.widthIn(max = 300.dp), color = Color.White, fontSize = 11.sp, maxLines = 1)
+            if (captureStatus.isNotBlank()) Text(captureStatus, Modifier.widthIn(max = 300.dp), color = Color.White, fontSize = 11.sp, maxLines = 1)
         }
     }
 }

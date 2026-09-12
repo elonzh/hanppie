@@ -60,6 +60,7 @@ internal fun ScriptPage(
     onExport: () -> Unit,
     fileError: String?,
     onFileError: (String?) -> Unit,
+    onConnectionDetails: () -> Unit = {},
 ) {
     val robotState by model.state.collectAsState()
     val libraryState by model.scriptLibrary.state.collectAsState()
@@ -230,6 +231,7 @@ internal fun ScriptPage(
             compact = compact,
             onBack = { showRun = false },
             onStop = model::stop,
+            onConnectionDetails = onConnectionDetails,
         )
         return
     }
@@ -238,8 +240,8 @@ internal fun ScriptPage(
         ScriptTopBar(
             title = if (editorOpen) document.value.displayName ?: tr(Res.string.new_script) else tr(Res.string.script),
             dirty = editorOpen && document.value.dirty,
-            connected = robotState.connected,
-            status = if (robotState.connected) tr(Res.string.connected) else robotState.status,
+            state = robotState,
+            onConnectionDetails = onConnectionDetails,
             onBack = navigateBack.takeIf { editorOpen },
         )
         if (robotState.busy) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
@@ -342,7 +344,15 @@ private fun ScriptLibraryView(
         if (state.loading) {
             item { LinearProgressIndicator(Modifier.fillMaxWidth().heightIn(min = 2.dp)) }
         } else if (state.scripts.isEmpty()) {
-            item { Text(tr(Res.string.no_saved_scripts), color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 13.sp) }
+            item {
+                Card(Modifier.fillMaxWidth(), colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer)) {
+                    Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        HanppieIcon(HanppieSymbol.File, MiuixTheme.colorScheme.onSurfaceVariantSummary, Modifier.size(32.dp))
+                        Text(tr(Res.string.no_saved_scripts), color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 13.sp)
+                    }
+                }
+            }
         } else {
             item {
                 FlowRow(
@@ -376,8 +386,8 @@ private fun ScriptLibraryView(
 private fun ScriptTopBar(
     title: String,
     dirty: Boolean,
-    connected: Boolean,
-    status: String,
+    state: ConsoleState,
+    onConnectionDetails: () -> Unit,
     onBack: (() -> Unit)?,
 ) {
     Row(Modifier.fillMaxWidth().height(72.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -398,14 +408,7 @@ private fun ScriptTopBar(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(6.dp).background(
-                if (connected) androidx.compose.ui.graphics.Color(0xff32aa78) else androidx.compose.ui.graphics.Color(0xffaab1bb),
-                RoundedCornerShape(50),
-            ))
-            Spacer(Modifier.width(6.dp))
-            Text(status, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-        }
+        ConnectionStatusChip(state, onConnectionDetails)
     }
 }
 
@@ -542,7 +545,7 @@ private fun ScriptEditor(
             }
         }
         Box(Modifier.weight(1f).fillMaxWidth()
-            .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(20.dp)).padding(16.dp)) {
+            .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(HanppieDesignTokens.CardRadius)).padding(16.dp)) {
             BasicTextField(
                 value = document.value.source,
                 onValueChange = { document.value = document.value.copy(source = it) },
@@ -571,6 +574,7 @@ private fun ScriptRunScreen(
     compact: Boolean,
     onBack: () -> Unit,
     onStop: () -> Unit,
+    onConnectionDetails: () -> Unit = {},
 ) {
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     val lines = state.scriptMessages
@@ -597,6 +601,7 @@ private fun ScriptRunScreen(
             )
             Spacer(Modifier.width(12.dp))
             Text(tr(Res.string.script_run), Modifier.weight(1f), fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            ConnectionStatusChip(state, onConnectionDetails)
             if (state.canStop) {
                 WorkbenchIconButton(
                     label = tr(Res.string.stop_script),
@@ -662,7 +667,8 @@ private fun RunLogCard(
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                 }
             } else {
-                SelectionContainer(Modifier.weight(1f)) {
+                Box(Modifier.weight(1f)) {
+                SelectionContainer(Modifier.fillMaxSize().padding(end = 12.dp)) {
                     LazyColumn(Modifier.fillMaxSize(), state = listState,
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         itemsIndexed(lines) { index, line ->
@@ -675,6 +681,8 @@ private fun RunLogCard(
                             }
                         }
                     }
+                }
+                DesktopListScrollbar(listState, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
                 }
             }
         }

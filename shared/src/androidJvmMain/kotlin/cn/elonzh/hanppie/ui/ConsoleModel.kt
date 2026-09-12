@@ -110,12 +110,18 @@ internal class ConsoleModel(
     @Volatile private var desiredTarget: RobotTarget? = null
     @Volatile private var connectionRevision = 0L
     private var reconnectJob: Job? = null
+    val foregroundState = MutableStateFlow(true)
+    private val remoteStateLock = Any()
+    @Volatile private var remoteRevision = 0L
     val remoteEnabled = MutableStateFlow(false)
     val remoteInput = MutableStateFlow(List(5) { 0.0 })
     val cameraYaw = MutableStateFlow<Double?>(null)
     val gelSelected = MutableStateFlow(false)
     val driveGear = MutableStateFlow(3)
     val talking = MutableStateFlow(false)
+    val microphoneReady = MutableStateFlow(false)
+    private val talkStateLock = Any()
+    private var talkGeneration = 0L
     val talkBusy = MutableStateFlow(false)
     fun shiftGear(delta: Int) { driveGear.update { (it + delta).coerceIn(1, DriveSpeed.gearCount) } }
     fun selectGear(gear: Int) { driveGear.value = gear.coerceIn(1, DriveSpeed.gearCount) }
@@ -123,13 +129,25 @@ internal class ConsoleModel(
     fun fireSelected() { if (gelSelected.value) fireGel() else fire() }
     @Volatile var videoSink: ((ByteArray) -> Unit)? = null
     @Volatile var audioSink: ((ByteArray) -> Unit)? = null
-    fun enableRemote() = work {
-        check(!state.value.scriptRunPhase.mayBeExecuting) { tr(Res.string.stop_the_lab_script_first) }
-        checkNotNull(session).enterRemote()
-        lab?.invalidateMode()
-        remoteEnabled.value = true
+    fun enableRemote() {
+        val target = session
+        val revision = remoteRevision
+        work {
+            if (revision != remoteRevision || !isForeground || session !== target) return@work
+            check(!state.value.scriptRunPhase.mayBeExecuting) { tr(Res.string.stop_the_lab_script_first) }
+            checkNotNull(target).enterRemote()
+            synchronized(remoteStateLock) {
+                if (revision != remoteRevision || !isForeground || session !== target) {
+                    target.halt()
+                } else {
+                    lab?.invalidateMode()
+                    remoteEnabled.value = true
+                }
+            }
+        }
     }
-    fun haltRemote() {
+    fun haltRemote() = synchronized(remoteStateLock) {
+        remoteRevision++
         cancelPushToTalk()
         runCatching { session?.halt() }
         remoteEnabled.value = false
@@ -164,16 +182,29 @@ internal class ConsoleModel(
         log(tr(Res.string.gel_fire_command_sent_seq_value_physical_firing_unconfirmed,sequence))
     }
     fun beginPushToTalk() {
-        if (!acceptingWork || !remoteEnabled.value || talkBusy.value || !talking.compareAndSet(false, true)) return
-        runCatching { speakerInput.start() }.onFailure { error ->
-            talking.value = false
+        val generation = synchronized(talkStateLock) {
+            if (!acceptingWork || !remoteEnabled.value || talkBusy.value || !talking.compareAndSet(false, true)) return
+            microphoneReady.value = false
+            ++talkGeneration
+        }
+        runCatching { speakerInput.start {
+            synchronized(talkStateLock) {
+                if (generation == talkGeneration && talking.value) microphoneReady.value = true
+            }
+        } }.onFailure { error ->
+            synchronized(talkStateLock) { talking.value = false; microphoneReady.value = false }
             val message = error.message ?: error.javaClass.simpleName
             log(message)
             state.update { it.copy(error = message) }
         }
     }
     fun endPushToTalk() {
-        if (!talking.compareAndSet(true, false)) return
+        val ready = synchronized(talkStateLock) {
+            if (!talking.compareAndSet(true, false)) return
+            talkGeneration++
+            microphoneReady.value.also { microphoneReady.value = false }
+        }
+        if (!ready) { speakerInput.cancel(); return }
         val current = session
         talkBusy.value = true
         scope.launch {
@@ -189,7 +220,12 @@ internal class ConsoleModel(
         }
     }
     private fun cancelPushToTalk() {
-        if (talking.compareAndSet(true, false)) runCatching { speakerInput.cancel() }
+        val cancel = synchronized(talkStateLock) {
+            talkGeneration++
+            microphoneReady.value = false
+            talking.compareAndSet(true, false)
+        }
+        if (cancel) runCatching { speakerInput.cancel() }
     }
     fun startMedia(audio: Boolean) {
         val current = session ?: return
@@ -231,7 +267,13 @@ internal class ConsoleModel(
 
     fun setForeground(foreground: Boolean) {
         acceptingWork = foreground
+        foregroundState.value = foreground
         if (!foreground) { haltRemote(); voiceInput.cancel(); replySpeaker.stop() }
+        else desiredTarget?.let { target ->
+            if (!state.value.connected && session == null && reconnectJob?.isActive != true) {
+                reconnect(target, connectionRevision)
+            }
+        }
     }
 
     fun log(message: String) {

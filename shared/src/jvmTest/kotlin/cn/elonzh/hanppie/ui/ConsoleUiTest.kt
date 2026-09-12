@@ -26,21 +26,21 @@ class ConsoleUiTest {
         val document=mutableStateOf(EditorDocument(source="print('用户脚本')"))
         try {
             rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(393.dp,740.dp)) { Console(model,document) } } }
-            rule.onNodeWithText("设置").performClick()
+            rule.onNodeWithContentDescription("设置").performClick()
             rule.onNodeWithContentDescription("language-selector").performClick()
             rule.onNodeWithContentDescription("language-en").performClick()
             rule.onNodeWithText("Language").assertIsDisplayed()
-            rule.onNode(hasText("Settings") and hasClickAction()).assertIsDisplayed()
+            rule.onNode(hasContentDescription("Settings") and hasClickAction()).assertIsDisplayed()
             assertEquals("print('用户脚本')",document.value.source)
             snapshot("phone-settings-en")
-            rule.onNodeWithText("Chat").performClick()
+            rule.onNodeWithContentDescription("Chat").performClick()
             rule.onNodeWithText("What would you like to do?").assertIsDisplayed()
             snapshot("phone-chat-en")
-            rule.onNodeWithText("Script").performClick()
+            rule.onNodeWithContentDescription("Script").performClick()
             snapshot("phone-script-en")
-            rule.onNodeWithText("Debug").performClick()
+            rule.onNodeWithContentDescription("Debug").performClick()
             snapshot("phone-debug-en")
-            rule.onNodeWithText("Settings").performClick()
+            rule.onNodeWithContentDescription("Settings").performClick()
             rule.onNodeWithContentDescription("language-selector").performClick()
             rule.onNodeWithContentDescription("language-zh").performClick()
             rule.onNodeWithText("语言").assertIsDisplayed()
@@ -54,17 +54,20 @@ class ConsoleUiTest {
         try {
             model.state.value = ConsoleState(connected = true, battery = 82, signalQuality = 37,
                 gimbal = cn.elonzh.hanppie.robot.GimbalTelemetry(42.0, 0.0, 42.0, 0.0, 0))
-            rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(width.value,393.dp)) { RemotePage(model) } } }
+            rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(width.value,393.dp)) { RemotePage(model, onBack = {}) } } }
+            rule.waitUntil(2000) { !model.state.value.busy }
+            rule.runOnIdle { model.remoteEnabled.value = true }
+            rule.waitForIdle()
             rule.onNodeWithContentDescription("Chassis joystick").assertIsDisplayed()
             rule.onNodeWithContentDescription("Gimbal joystick").assertIsDisplayed()
-            rule.onNodeWithContentDescription("Enable remote control").assertIsDisplayed()
+            rule.onNodeWithContentDescription("Enable remote control").assertDoesNotExist()
             rule.onNodeWithContentDescription("Switch ammo").assertIsDisplayed()
             rule.onNodeWithContentDescription("Stop video").assertIsDisplayed()
             rule.onNodeWithContentDescription("Take photo").assertIsDisplayed()
             rule.onNodeWithContentDescription("Start recording").assertIsDisplayed()
-            rule.onNodeWithText("Gear 3").assertIsDisplayed()
+            rule.onNodeWithContentDescription("Gear 3").assertIsDisplayed()
             rule.onNodeWithContentDescription("Signal strength 37").assertIsDisplayed()
-            rule.onNodeWithContentDescription("Chassis and gimbal horizontal angle +42°").assertIsDisplayed()
+            rule.onNodeWithContentDescription("Chassis heading relative to camera -42°").assertIsDisplayed()
             snapshot("phone-cockpit-en")
             rule.runOnIdle { width.value=1040.dp }
             rule.waitForIdle()
@@ -72,7 +75,7 @@ class ConsoleUiTest {
         } finally { model.close(); Localization.initialize("zh",null) }
     }
 
-    @Test fun gearKeysCreepReleaseAndStop() {
+    @Test fun gearKeysShiftDoesNotSlowAndStop() {
         val model=ConsoleModel()
         try {
             rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(1040.dp,760.dp)) { RemotePage(model) } } }
@@ -93,10 +96,10 @@ class ConsoleUiTest {
             rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(Key.W) }
             rule.waitUntil(2000) { model.remoteInput.value[0]==1.0 }
             rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(Key.ShiftLeft) }
-            rule.waitUntil(2000) { model.remoteInput.value[0]==.25 }
+            rule.waitUntil(2000) { model.remoteInput.value[0]==1.0 }
             rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(Key.ShiftRight); keyUp(Key.ShiftLeft) }
-            rule.waitUntil(2000) { model.remoteInput.value[0]==.25 }
-            tap(Key.Three); rule.waitUntil(2000) { model.remoteInput.value[0]==.1625 }
+            rule.waitUntil(2000) { model.remoteInput.value[0]==1.0 }
+            tap(Key.Three); rule.waitUntil(2000) { model.remoteInput.value[0]==.65 }
             assertEquals(3,model.driveGear.value)
             rule.onNodeWithTag("remote-surface").performKeyInput { keyUp(Key.ShiftRight) }
             rule.waitUntil(2000) { model.remoteInput.value[0]==.65 }
@@ -110,16 +113,29 @@ class ConsoleUiTest {
     @Test fun phoneCockpitControlsFitWithoutScrolling() {
         val model=ConsoleModel()
         try {
-            rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(740.dp,393.dp)) { RemotePage(model) } } }
+            rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(640.dp,360.dp)) { RemotePage(model, onBack = {}) } } }
             rule.onNodeWithContentDescription("底盘 摇杆").assertIsDisplayed()
             rule.onNodeWithContentDescription("云台 摇杆").assertIsDisplayed()
-            rule.onNodeWithContentDescription("启用遥控").assertIsDisplayed()
+            rule.onNodeWithContentDescription("启用遥控").assertDoesNotExist()
+            rule.onNodeWithContentDescription("停止遥控").assertDoesNotExist()
+            rule.onNodeWithContentDescription("3 档").assertIsDisplayed()
+            rule.onNodeWithContentDescription("慢行").assertDoesNotExist()
+            val chassis = rule.onNodeWithContentDescription("底盘 摇杆").fetchSemanticsNode().boundsInRoot
+            val gimbal = rule.onNodeWithContentDescription("云台 摇杆").fetchSemanticsNode().boundsInRoot
+            val gear = rule.onNodeWithContentDescription("3 档").fetchSemanticsNode().boundsInRoot
+            assertTrue(chassis.center.x < 640f * .25f && gimbal.center.x > 640f * .75f)
+            assertTrue(chassis.bottom <= 360f && gimbal.bottom <= 360f)
+            assertTrue(gear.bottom <= chassis.top)
+            assertTrue(gear.width >= 48f && gear.height >= 48f)
             rule.onNodeWithContentDescription("切换弹药").assertIsDisplayed().performClick()
-            rule.onNodeWithContentDescription("关闭视频").assertIsDisplayed()
+            val media = rule.onNodeWithContentDescription("关闭视频").assertIsDisplayed()
+                .fetchSemanticsNode().boundsInRoot
+            val telemetry = rule.onNodeWithTag("remote-telemetry").fetchSemanticsNode().boundsInRoot
+            assertTrue(telemetry.right <= media.left)
             rule.onNodeWithContentDescription("拍照").assertIsDisplayed()
             rule.onNodeWithContentDescription("开始录像").assertIsDisplayed()
             rule.onNodeWithContentDescription("水弹单发").assertIsDisplayed()
-            snapshot("phone-game-controls")
+            snapshot("compact-phone-game-controls")
         } finally { model.close() }
     }
 
@@ -171,22 +187,22 @@ class ConsoleUiTest {
                     Console(model, mutableStateOf(EditorDocument()), onVoiceInput = input::start)
                 }
             } }
-            rule.onNodeWithText("对话").performClick()
+            rule.onNodeWithContentDescription("对话").performClick()
             rule.onNodeWithContentDescription("语音输入").performClick()
             rule.onNodeWithContentDescription("发送").assertIsNotEnabled()
             rule.onNodeWithContentDescription("结束录音").performClick()
             rule.waitUntil { rule.onAllNodesWithText("看看连接状态").fetchSemanticsNodes().isNotEmpty() }
             assertTrue(model.chat.state.value.lines.isEmpty())
-            rule.onNodeWithText("设置").performClick()
+            rule.onNodeWithContentDescription("设置").performClick()
             rule.onNode(isToggleable()).performScrollTo().performClick()
-            rule.onNodeWithText("对话").performClick()
+            rule.onNodeWithContentDescription("对话").performClick()
             rule.runOnIdle { model.chat.state.value = model.chat.state.value.copy(
                 replyRevision = 1, lastReply = "目前未连接机器人。", lines = listOf(ChatLine(ChatRole.ASSISTANT, "目前未连接机器人。"))) }
             rule.waitUntil { spoken.size == 1 }
             rule.waitUntil(5000) { rule.onAllNodesWithText("目前未连接机器人。").fetchSemanticsNodes().isNotEmpty() }
             snapshot("phone-chat-voice")
-            rule.onNodeWithText("设备").performClick()
-            rule.onNodeWithText("对话", substring = false).performClick()
+            rule.onNodeWithContentDescription("设备").performClick()
+            rule.onNodeWithContentDescription("对话").performClick()
             rule.waitForIdle()
             assertEquals(1, spoken.size)
             assertTrue(!input.state.value.active)
@@ -200,9 +216,9 @@ class ConsoleUiTest {
                 Box(Modifier.requiredSize(393.dp, 740.dp)) { Console(model, mutableStateOf(EditorDocument())) }
             } }
             rule.onNodeWithTag("bottom-navigation").assertIsDisplayed()
-            rule.onNodeWithText("搜索设备").assertIsDisplayed()
+            rule.onNodeWithText("查找设备").assertIsDisplayed()
             snapshot("phone-device")
-            rule.onNodeWithText("脚本").performClick()
+            rule.onNodeWithContentDescription("脚本").performClick()
             rule.onNodeWithTag("script-library").assertIsDisplayed()
             rule.onNodeWithTag("script-new").performClick()
             rule.onNodeWithTag("script-editor").assertIsDisplayed().performTextReplacement("def start():\n    pass")
@@ -218,11 +234,11 @@ class ConsoleUiTest {
             rule.setContent { WorkbenchTheme {
                 Box(Modifier.requiredSize(393.dp, 740.dp)) { Console(model, mutableStateOf(EditorDocument())) }
             } }
-            rule.onNodeWithText("对话").performClick()
+            rule.onNodeWithContentDescription("对话").performClick()
             rule.onNodeWithTag("chat-input").assertIsDisplayed()
             rule.onNodeWithContentDescription("发送").assertIsNotEnabled()
             snapshot("phone-chat")
-            rule.onNodeWithText("设置").performClick()
+            rule.onNodeWithContentDescription("设置").performClick()
             rule.onNodeWithText("API Key").performScrollTo().assertIsDisplayed()
             snapshot("phone-chat-settings")
         } finally { model.close() }
@@ -266,48 +282,37 @@ class ConsoleUiTest {
             rule.onNodeWithTag("keyboard-hints").assertDoesNotExist()
             stick.performTouchInput { up() }
             rule.waitUntil(2000) { model.remoteInput.value.all { it == 0.0 } }
-            rule.onNodeWithContentDescription("停止遥控").assertIsEnabled().performClick()
+            rule.onNodeWithTag("remote-surface").performKeyInput { pressKey(Key.Escape) }
             rule.waitUntil(2000) { !model.remoteEnabled.value }
         } finally { model.close() }
     }
 
-    @Test fun appearancePresetsNightModeAndCustomPalettePreserveEditor() {
+    @Test fun fixedAppearanceNightModePreservesEditor() {
         val model = ConsoleModel()
         val document = mutableStateOf(EditorDocument(source = "print('keep me')"))
         var saved: String? = null
         val appearance = AppearanceController(persist = { saved = it })
         try {
             rule.setContent { WorkbenchTheme(appearance) { Box(Modifier.requiredSize(393.dp, 740.dp)) { Console(model, document) } } }
-            rule.onNodeWithText("设置").performClick()
+            rule.onNodeWithContentDescription("设置").performClick()
+            rule.onNodeWithContentDescription("theme-selector").assertDoesNotExist()
+            rule.onNodeWithTag("palette-editor").assertDoesNotExist()
             rule.onNodeWithContentDescription("night-mode-selector").performClick()
             rule.onNodeWithContentDescription("night-mode-LIGHT").performClick()
-            snapshot("appearance-native-light")
-            rule.onNodeWithContentDescription("theme-selector").performClick()
-            rule.onNodeWithContentDescription("theme-OCEAN").performClick()
+            snapshot("appearance-light")
             rule.onNodeWithContentDescription("night-mode-selector").performClick()
             rule.onNodeWithContentDescription("night-mode-DARK").performClick()
-            snapshot("appearance-ocean-dark")
-            rule.onNodeWithContentDescription("theme-selector").performClick()
-            rule.onNodeWithContentDescription("theme-CUSTOM").performClick()
-            rule.onNodeWithContentDescription("custom-dark-accent").performScrollTo().performTextReplacement("#ZZZZZZ")
-            rule.onNodeWithContentDescription("save-palette").assertIsNotEnabled()
-            rule.onNodeWithContentDescription("custom-dark-accent").performScrollTo().performTextReplacement("#81C784")
-            rule.onAllNodes(isRoot()).assertCountEquals(1)
-            rule.onNodeWithContentDescription("save-palette").performScrollTo()
-            snapshot("appearance-custom-editor")
-            rule.onNodeWithContentDescription("save-palette").performScrollTo().performClick()
+            snapshot("appearance-dark")
             rule.runOnIdle {
-                assertEquals("#81C784", appearance.settings.custom.darkAccent)
+                assertEquals(NightMode.DARK, appearance.settings.nightMode)
                 assertEquals(appearance.settings, AppearanceSettings.decode(saved))
                 assertEquals("print('keep me')", document.value.source)
                 assertTrue(!model.state.value.connected)
             }
-            rule.onNodeWithText("脚本").performClick()
+            rule.onNodeWithContentDescription("脚本").performClick()
             rule.onNodeWithTag("script-editor").assertIsDisplayed()
-            rule.onNodeWithText("设置").performClick()
-            rule.onNodeWithContentDescription("custom-dark-accent").performScrollTo().performTextReplacement("#000000")
-            rule.onNodeWithContentDescription("revert-palette").performScrollTo().performClick()
-            rule.runOnIdle { assertEquals("#81C784", appearance.settings.custom.darkAccent) }
+            rule.onNodeWithContentDescription("设置").performClick()
+            rule.runOnIdle { assertEquals(NightMode.DARK, appearance.settings.nightMode) }
         } finally { model.close() }
     }
 
@@ -332,7 +337,7 @@ class ConsoleUiTest {
             checkPair("discover-robot", "manual-connect")
             snapshot("home-actions-desktop")
             rule.runOnIdle { model.state.value = model.state.value.copy(connected = true, connectedAddress = "192.0.2.1") }
-            rule.waitUntil(3000) { rule.onAllNodesWithTag("enter-remote").fetchSemanticsNodes().isNotEmpty() }
+            rule.waitUntil(3000) { rule.onAllNodesWithTag("disconnect-robot").fetchSemanticsNodes().isNotEmpty() }
             checkPair("enter-remote", "disconnect-robot")
             assertTrue(!model.remoteEnabled.value)
         } finally { model.close() }
@@ -355,12 +360,17 @@ class ConsoleUiTest {
             rule.setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
             rule.onNodeWithText("连接", substring = false).assertDoesNotExist()
             rule.onNodeWithText("语音", substring = false).assertDoesNotExist()
-            rule.onNodeWithText("对话").performClick()
-            rule.onNodeWithText("设置").performClick()
+            rule.onNodeWithContentDescription("对话").performClick()
+            rule.onNodeWithContentDescription("设置").performClick()
             rule.onNodeWithText("自动朗读").assertExists()
             rule.onNodeWithContentDescription("gimbal-sensitivity-selector").assertExists()
-            rule.onNodeWithContentDescription("remote-led-standby").performScrollTo().performTextReplacement("#010203")
-            rule.runOnIdle { assertEquals(RobotLedColor(1, 2, 3), model.controlSettings.value.remoteLeds.standby) }
+            val original = model.controlSettings.value.remoteLeds.standby
+            rule.onNodeWithContentDescription("remote-led-standby").performScrollTo().performClick()
+            rule.onNodeWithTag("led-brightness").performTouchInput {
+                swipe(center.copy(x = width - 12f, y = height - 24f), center.copy(x = width * 0.5f, y = height - 24f))
+            }
+            rule.onNodeWithTag("led-color-apply").performClick()
+            rule.runOnIdle { assertTrue(original != model.controlSettings.value.remoteLeds.standby) }
             rule.onNodeWithContentDescription("remote-led-talking").performScrollTo().assertExists()
             rule.onNodeWithContentDescription("restore-default-settings").performScrollTo().assertIsEnabled().performClick()
             rule.onNodeWithText("恢复所有默认设置？").assertIsDisplayed()
@@ -375,7 +385,7 @@ class ConsoleUiTest {
             model.state.value = model.state.value.lost("fixture timeout").copy(
                 reconnecting = true, statusMessage = uiText(Res.string.reconnecting_attempt_value, 2))
             rule.setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
-            rule.onNodeWithText("断开 / 清理会话").assertIsEnabled().performClick()
+            rule.onNodeWithText("断开连接").assertIsEnabled().performClick()
             rule.waitUntil(3000) { model.state.value.status == "未连接" }
         } finally { model.close() }
     }
@@ -385,7 +395,7 @@ class ConsoleUiTest {
         val document = mutableStateOf(EditorDocument())
         try {
             rule.setContent { WorkbenchTheme { Console(model, document) } }
-            rule.onNodeWithText("脚本").performClick()
+            rule.onNodeWithContentDescription("脚本").performClick()
             rule.onNodeWithTag("script-new").performClick()
             rule.onNodeWithTag("script-editor").performTextReplacement("def start():\n    pass\n")
             rule.onNodeWithText("新脚本 · 未保存").assertExists()
@@ -433,7 +443,7 @@ class ConsoleUiTest {
                 byteArrayOf(1, 2, message.size.toByte(), 0) + message, true))
             rule.setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
             rule.onNodeWithText("88%", substring = true).assertExists()
-            rule.onNodeWithText("诊断").performClick()
+            rule.onNodeWithContentDescription("诊断").performClick()
             rule.onNodeWithText("遥测").performClick()
             rule.onNodeWithText("云台协议角度 · 最近接收").assertExists()
             rule.onNodeWithText("-229.4°").assertExists()
@@ -441,7 +451,7 @@ class ConsoleUiTest {
             snapshot("gimbal-telemetry")
             rule.onNodeWithText("raw[0] / offset 26").assertExists()
             rule.onNodeWithText("1.25", substring = false).assertExists()
-            rule.onNodeWithText("脚本").performClick()
+            rule.onNodeWithContentDescription("脚本").performClick()
             rule.onNodeWithTag("script-run-screen").assertIsDisplayed()
             rule.onNodeWithText("fixture robot message").assertExists()
         } finally { model.close() }
@@ -512,7 +522,7 @@ class ConsoleUiTest {
             rule.setContent { WorkbenchTheme {
                 Box(Modifier.requiredSize(393.dp, 740.dp)) { Console(model, document) }
             } }
-            rule.onNodeWithText("脚本").performClick()
+            rule.onNodeWithContentDescription("脚本").performClick()
             rule.onNodeWithText("我的脚本").assertIsDisplayed()
             rule.onNodeWithText("预置脚本").performScrollTo().assertIsDisplayed()
             snapshot("phone-script-library")

@@ -51,19 +51,37 @@ fun DesktopWorkbench(onExit: () -> Unit) {
     var confirmExit by remember { mutableStateOf(false) }
     var fileError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val desktopWindowState = rememberWindowState(width = 1040.dp, height = 760.dp)
+    var cockpitActive by remember { mutableStateOf(false) }
+    var workbenchSize by remember { mutableStateOf(desktopWindowState.size) }
     Window(onCloseRequest = {
         if (document.value.dirty || document.value.busy || model.state.value.connected || model.state.value.busy) confirmExit = true
         else { model.close(); onExit() }
-    }, title = "Hanppie", state = rememberWindowState(width = 1040.dp, height = 760.dp)) {
+    }, title = "Hanppie", icon = org.jetbrains.compose.resources.painterResource(Res.drawable.hanppie_app_icon),
+        state = desktopWindowState) {
         DisposableEffect(window) {
+            window.minimumSize = java.awt.Dimension(320, 480)
             val listener = object : java.awt.event.WindowAdapter() {
-                override fun windowLostFocus(event: java.awt.event.WindowEvent) { model.haltRemote() }
+                override fun windowLostFocus(event: java.awt.event.WindowEvent) { model.setForeground(false) }
+                override fun windowGainedFocus(event: java.awt.event.WindowEvent) { model.setForeground(true) }
             }
             window.addWindowFocusListener(listener)
             onDispose { window.removeWindowFocusListener(listener) }
         }
+        LaunchedEffect(cockpitActive) {
+            if (cockpitActive) {
+                workbenchSize = desktopWindowState.size
+                window.minimumSize = java.awt.Dimension(740, 480)
+                if (workbenchSize.width < 900.dp || workbenchSize.width < workbenchSize.height) {
+                    desktopWindowState.size = androidx.compose.ui.unit.DpSize(1040.dp, 700.dp)
+                }
+            } else {
+                window.minimumSize = java.awt.Dimension(320, 480)
+                desktopWindowState.size = workbenchSize
+            }
+        }
         WorkbenchTheme(appearance) {
-            Console(model, document, onImport = {
+            Console(model, document, onCockpitChanged = { cockpitActive = it }, onImport = {
                 val file = chooseFile(false)
                 if (file != null) {
                     document.value = document.value.copy(busy = true)

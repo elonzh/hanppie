@@ -18,11 +18,19 @@ class SettingsStoreTest {
         assertEquals(RemoteLedSettings(), restored.control.remoteLeds)
     }
 
+    @Test fun removedCreepSettingsPreserveOtherPreferences() {
+        val saved = settingsJson.decodeFromString<SavedSettings>("""{"autoRead":true,"control":{"creepMultiplier":0.5,"gimbalSpeed":60,"shortcuts":{"bindings":{"Creep":{"key":"Shift"},"Fire":{"key":"F"}}}}}""")
+        assertTrue(saved.autoRead)
+        assertEquals(60, saved.control.gimbalSpeed)
+        assertEquals(KeyBinding(ControlKey.F), saved.control.shortcuts[ControlAction.Fire])
+        assertFalse(settingsJson.encodeToString(saved).contains("Creep"))
+        assertFalse(settingsJson.encodeToString(saved).contains("creepMultiplier"))
+    }
+
     @Test fun customMotionAndShortcutSettingsRoundTrip() {
         val control = ControlSettings(
             translationSpeeds = listOf(.1, .2, .3, .4, .5),
             rotationSpeeds = listOf(20.0, 40.0, 60.0, 80.0, 100.0),
-            creepMultiplier = .5,
             joystickDeadZone = .2,
             shortcuts = ControlShortcuts().bind(ControlAction.Fire, KeyBinding(ControlKey.F)),
             remoteLeds = RemoteLedSettings(active = RobotLedColor(1, 2, 3)),
