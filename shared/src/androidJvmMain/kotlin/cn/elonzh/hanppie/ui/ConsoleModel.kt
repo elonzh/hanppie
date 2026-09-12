@@ -16,13 +16,11 @@ internal class ConsoleModel(
     val voiceInput: SpeechInput = NoSpeechInput(),
     private val speakerInput: SpeakerInput = NoSpeakerInput(),
     private val robotNetwork: () -> RobotNetwork = { RobotNetwork.Default },
-    private val settingsStore: SettingsStore? = null,
+    settingsStore: SettingsStore? = null,
     scriptStore: ScriptStore = MemoryScriptStore(),
     private val prepareNetwork: () -> Unit = {},
 ) {
     val replySpeaker = ReplySpeaker(speech)
-    val autoReadReplies = MutableStateFlow(false)
-    val controlSettings = MutableStateFlow(ControlSettings())
     var voicePageActive = false
     val isForeground: Boolean get() = acceptingWork
     val state = MutableStateFlow(ConsoleState())
@@ -31,62 +29,30 @@ internal class ConsoleModel(
         model = System.getenv("HANPPIE_LLM_MODEL") ?: ModelSettings().model,
         apiKey = System.getenv("HANPPIE_LLM_API_KEY") ?: "",
     )
-    val modelSettings = MutableStateFlow(defaultModelSettings())
+    private val settings = SettingsController(
+        store = settingsStore,
+        runtimeDefaults = ::defaultModelSettings,
+        applyEnvironmentOverrides = { persisted ->
+            persisted.copy(
+                endpoint = System.getenv("HANPPIE_LLM_ENDPOINT") ?: persisted.endpoint,
+                model = System.getenv("HANPPIE_LLM_MODEL") ?: persisted.model,
+                apiKey = System.getenv("HANPPIE_LLM_API_KEY") ?: persisted.apiKey,
+            )
+        },
+    )
+    val modelSettings = settings.model
+    val autoReadReplies = settings.autoRead
+    val controlSettings = settings.control
+    val settingsBusy = settings.busy
+    val settingsMessage = settings.message
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val scriptLibrary = ScriptLibrary(scriptStore)
-    private val settingsScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    val settingsBusy = MutableStateFlow(settingsStore != null)
-    val settingsMessage = MutableStateFlow<UiText?>(null)
     val robotFilesState = MutableStateFlow(RobotFilesState())
     init {
         scope.launch { scriptLibrary.load() }
-        if (settingsStore != null) settingsScope.launch {
-            try {
-                settingsStore.load()?.let {
-                    modelSettings.value = it.model.copy(
-                        endpoint = System.getenv("HANPPIE_LLM_ENDPOINT") ?: it.model.endpoint,
-                        model = System.getenv("HANPPIE_LLM_MODEL") ?: it.model.model,
-                        apiKey = System.getenv("HANPPIE_LLM_API_KEY") ?: it.model.apiKey,
-                    )
-                    autoReadReplies.value = it.autoRead
-                    controlSettings.value = it.control
-                }
-            } catch (_: Exception) {
-                settingsMessage.value = uiText(Res.string.settings_load_failed)
-            } finally { settingsBusy.value = false }
-        }
     }
-    fun saveSettings() {
-        val snapshot = SavedSettings(modelSettings.value, autoReadReplies.value, controlSettings.value)
-        persistSettings(snapshot, Res.string.settings_saved)
-    }
-    fun restoreDefaultSettings() {
-        val defaults = SavedSettings()
-        modelSettings.value = defaultModelSettings()
-        autoReadReplies.value = defaults.autoRead
-        controlSettings.value = defaults.control
-        // Environment overrides stay effective at runtime but are never copied into persistent storage by reset.
-        persistSettings(defaults, Res.string.default_settings_restored)
-    }
-    private fun persistSettings(snapshot: SavedSettings, success: org.jetbrains.compose.resources.StringResource) {
-        val store = settingsStore
-        if (store == null) {
-            settingsMessage.value = uiText(success)
-            return
-        }
-        if (!settingsBusy.compareAndSet(false, true)) return
-        settingsMessage.value = null
-        settingsScope.launch {
-            try {
-                // Saving a blank key intentionally clears the previously stored credential.
-                if (snapshot.model.apiKey.isNotBlank()) snapshot.model.validate()
-                store.save(snapshot)
-                settingsMessage.value = uiText(success)
-            } catch (_: Exception) {
-                settingsMessage.value = uiText(Res.string.settings_save_failed)
-            } finally { settingsBusy.value = false }
-        }
-    }
+    fun saveSettings() = settings.save()
+    fun restoreDefaultSettings() = settings.restoreDefaults()
     private data class MediaRequest(val session: AppSession, val start: Boolean, val audio: Boolean)
     private data class LedRequest(val session: AppSession, val color: RobotLedColor?)
     private val mediaRequests = kotlinx.coroutines.channels.Channel<MediaRequest>(16)
@@ -660,5 +626,5 @@ internal class ConsoleModel(
                 scriptMessage = if (uncertain) uiText(Res.string.connection_closed_robot_state_unknown) else it.scriptMessage)
         }
     }
-    fun close() { connectionRevision++; desiredTarget = null; reconnectJob?.cancel(); clearRobotFiles(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); replySpeaker.close(); chat.close(); session?.close(); speech.close(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); settingsScope.cancel(); scope.cancel() }
+    fun close() { connectionRevision++; desiredTarget = null; reconnectJob?.cancel(); clearRobotFiles(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); replySpeaker.close(); chat.close(); session?.close(); speech.close(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); settings.close(); scope.cancel() }
 }

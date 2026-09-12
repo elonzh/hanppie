@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.serialization.encodeToString
 import org.junit.Assume.assumeTrue
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.test.*
 
 class SettingsStoreTest {
@@ -98,6 +100,75 @@ class SettingsStoreTest {
             assertTrue(restored.autoReadReplies.value)
             assertEquals(expected.control, restored.controlSettings.value)
         } finally { restored.close() }
+    }
+
+    @Test fun restoreQueuedDuringLoadWinsAndClearsPersistedSettings() = runBlocking {
+        val loadStarted = CountDownLatch(1)
+        val continueLoad = CountDownLatch(1)
+        var saved = SavedSettings(ModelSettings(apiKey = "old-secret"), true, ControlSettings(45))
+        val store = object : SettingsStore {
+            override fun load(): SavedSettings {
+                loadStarted.countDown()
+                check(continueLoad.await(2, TimeUnit.SECONDS))
+                return saved
+            }
+
+            override fun save(settings: SavedSettings) { saved = settings }
+        }
+        val model = ConsoleModel(SystemSpeech(), settingsStore = store)
+        try {
+            assertTrue(loadStarted.await(2, TimeUnit.SECONDS))
+            model.restoreDefaultSettings()
+            continueLoad.countDown()
+            withTimeout(5_000) { model.settingsBusy.first { !it } }
+
+            assertEquals(SavedSettings(), saved)
+            assertFalse(model.autoReadReplies.value)
+            assertEquals(ControlSettings(), model.controlSettings.value)
+            assertEquals(Res.string.default_settings_restored, model.settingsMessage.value?.resource)
+        } finally {
+            continueLoad.countDown()
+            model.close()
+        }
+    }
+
+    @Test fun saveQueuedDuringAnotherSaveIsNotDropped() = runBlocking {
+        val firstSaveStarted = CountDownLatch(1)
+        val continueFirstSave = CountDownLatch(1)
+        val saved = java.util.Collections.synchronizedList(mutableListOf<SavedSettings>())
+        val store = object : SettingsStore {
+            override fun load(): SavedSettings? = null
+            override fun save(settings: SavedSettings) {
+                if (saved.isEmpty()) {
+                    firstSaveStarted.countDown()
+                    check(continueFirstSave.await(2, TimeUnit.SECONDS))
+                }
+                saved += settings
+            }
+        }
+        val model = ConsoleModel(SystemSpeech(), settingsStore = store)
+        try {
+            withTimeout(5_000) { model.settingsBusy.first { !it } }
+            val first = SavedSettings(ModelSettings(apiKey = "first"), true, ControlSettings(45))
+            model.modelSettings.value = first.model
+            model.autoReadReplies.value = first.autoRead
+            model.controlSettings.value = first.control
+            model.saveSettings()
+            assertTrue(firstSaveStarted.await(2, TimeUnit.SECONDS))
+
+            val second = SavedSettings(ModelSettings(apiKey = "second"), false, ControlSettings(60))
+            model.modelSettings.value = second.model
+            model.autoReadReplies.value = second.autoRead
+            model.controlSettings.value = second.control
+            model.saveSettings()
+            continueFirstSave.countDown()
+            withTimeout(5_000) { model.settingsBusy.first { !it } }
+
+            assertEquals(listOf(first, second), saved.toList())
+        } finally {
+            continueFirstSave.countDown()
+            model.close()
+        }
     }
 
     @Test fun nativeCredentialStoreRoundTrip() {
