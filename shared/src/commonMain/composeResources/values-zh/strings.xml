@@ -45,8 +45,8 @@
     <string name="restore_defaults">恢复默认</string>
     <string name="restore_default_settings_question">恢复所有默认设置？</string>
     <string name="restore_default_settings_summary">语言、显示模式、模型服务、自动朗读、控制参数、快捷键和 LED 颜色都会恢复默认值；已保存的 API Key 将被清除。</string>
-    <string name="settings_load_failed">读取配置失败，请检查系统凭据存储。</string>
-    <string name="settings_save_failed">保存失败，请检查配置与系统凭据存储。</string>
+    <string name="settings_load_failed">读取配置失败，请检查本地 DataStore。</string>
+    <string name="settings_save_failed">保存失败，请检查配置与本地 DataStore。</string>
     <string name="read_assistant_replies_automatically">自动朗读智能体回复</string>
     <string name="read_replies_aloud">自动朗读</string>
     <string name="speech_services">语音服务</string>

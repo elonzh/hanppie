@@ -1,0 +1,64 @@
+package cn.elonzh.hanppie.robot.remote
+
+import cn.elonzh.hanppie.robot.protocol.hex
+import cn.elonzh.hanppie.robot.telemetry.GimbalSubscription
+
+/** Ported verbatim from packet-tested src/hanppie/lab/direct.py. */
+internal data class RemoteCommand(val receiver: Int, val attr: Int, val set: Int, val id: Int, val payload: String, val flags: String, val control: Boolean)
+internal val remoteSetup = listOf(
+    RemoteCommand(9, 0, 63, 4, "0b0300", "0000", false),
+    RemoteCommand(9, 64, 63, 119, "010500", "0000", false),
+    RemoteCommand(3, 64, 63, 25, "00", "0000", false),
+    RemoteCommand(40, 64, 0, 1, "", "4000", false),
+    RemoteCommand(195, 64, 63, 102, "0200", "6040", false),
+    RemoteCommand(9, 64, 63, 102, "0200", "4000", false),
+    RemoteCommand(169, 64, 63, 163, "a900000000000000000000000000000000000000000000000000000000000000000000", "4000", false),
+    RemoteCommand(169, 64, 63, 163, "0900000000000000000000000000000000000000000000000000000000000000000000", "0000", false),
+    RemoteCommand(169, 64, 63, 163, "51626137646331356139366338346634303865343336633762636137313661653637623231383866363831303062323137", "0000", false),
+    RemoteCommand(169, 64, 63, 163, "91636130316464306134343966346338663834343030386363396161393134306535366234376530393337326265356232", "0000", false),
+    RemoteCommand(9, 64, 72, 4, GimbalSubscription.removePayload().hex(), "0000", false),
+    RemoteCommand(9, 64, 72, 3, GimbalSubscription.addPayload().hex(), "0000", false),
+    RemoteCommand(0, 0, 0, 0, "0000042000010840000210", "", true),
+    RemoteCommand(169, 64, 63, 163, "08626137646331356139366338346634303865343336633762636137313661653637623231383866363831303062323137", "6000", false),
+    RemoteCommand(169, 64, 63, 163, "a8636130316464306134343966346338663834343030386363396161393134306535366234376530393337326265356232", "0000", false),
+    RemoteCommand(0, 0, 0, 0, "0000042000010840000210", "", true),
+    RemoteCommand(0, 0, 0, 0, "0000042000010840000210", "", true),
+    RemoteCommand(7, 64, 7, 57, "", "0000", false),
+    RemoteCommand(0, 0, 0, 0, "0000042000010840000210", "", true),
+    RemoteCommand(0, 0, 0, 0, "0000042000010840000210", "", true),
+    RemoteCommand(0, 0, 0, 0, "0000042000010840000210", "", true),
+    RemoteCommand(0, 0, 0, 0, "0000042000010840000210", "", true),
+    RemoteCommand(9, 0, 63, 4, "0b0300", "0000", false),
+)
+internal val remoteEffects = listOf(
+    RemoteCommand(0, 0, 0, 0, "0000042000010840000210", "0000", true),
+    RemoteCommand(9, 64, 63, 119, "010301", "0000", false),
+    RemoteCommand(9, 64, 63, 119, "010401", "0000", false),
+    RemoteCommand(9, 64, 63, 119, "010201", "0000", false),
+    RemoteCommand(9, 64, 63, 179, "05049012516a00000000", "0000", false),
+    RemoteCommand(9, 64, 63, 119, "010401", "0000", false),
+    RemoteCommand(9, 64, 63, 119, "010201", "0000", false),
+    RemoteCommand(9, 64, 63, 91, "01", "0000", false),
+    RemoteCommand(9, 64, 63, 9, "0d000000e903000000000000ea03000001000000eb03000020bf0200ec030000b0040000ed03000064000000ef0300000a000000f003000000000000f1030000b80b0000f2030000dc050000060400000100000007040000000000000804000001000000090400000100000005000000dd050000dc050000de050000c4090000df050000b80b0000e0050000b80b00004006000000879303050000004d0400003075000001000000de0500004e0400001027000001000000dd0500004f0400003075000001000000df050000500400001027000001000000e0050000b0040000000000000100000040060000", "0000", false),
+    RemoteCommand(9, 0, 63, 4, "010301", "0000", false),
+    RemoteCommand(7, 64, 7, 23, "", "0000", false),
+    RemoteCommand(9, 64, 63, 89, "02", "0000", false),
+    RemoteCommand(9, 64, 63, 9, "0d000000e903000000000000ea03000001000000eb03000020bf0200ec030000b0040000ed03000064000000ef0300000a000000f003000000000000f1030000b80b0000f2030000dc050000060400000100000007040000000000000804000001000000090400000100000005000000dd050000dc050000de050000c4090000df050000b80b0000e0050000b80b00004006000000879303050000004d0400003075000001000000de0500004e0400001027000001000000dd0500004f0400003075000001000000df050000500400001027000001000000e0050000b0040000000000000100000040060000", "0000", false),
+    RemoteCommand(9, 0, 63, 4, "010301", "0000", false),
+    RemoteCommand(9, 64, 63, 10, "0100", "0000", false),
+    RemoteCommand(1, 64, 2, 52, "0900006400", "0000", false),
+    RemoteCommand(9, 64, 63, 89, "02", "0000", false),
+    RemoteCommand(241, 64, 10, 163, "0000", "0000", false),
+    RemoteCommand(241, 64, 10, 163, "0000", "0000", false),
+)
+internal val remoteExit = listOf(
+    RemoteCommand(0, 0, 0, 0, "0000042000010840000210", "0000", true),
+    RemoteCommand(1, 64, 2, 52, "0900006400", "0000", false),
+    RemoteCommand(9, 64, 63, 89, "00", "0000", false),
+    RemoteCommand(241, 64, 10, 163, "0000", "0000", false),
+    RemoteCommand(9, 64, 63, 179, "06040000000000000000", "0000", false),
+    RemoteCommand(0, 0, 0, 0, "0000042000010840000210", "0000", true),
+    RemoteCommand(9, 0, 63, 4, "000300", "0000", false),
+    RemoteCommand(9, 64, 63, 119, "010300", "0000", false),
+    RemoteCommand(241, 64, 10, 163, "0000", "0000", false),
+)

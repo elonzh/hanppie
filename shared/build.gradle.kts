@@ -4,6 +4,8 @@ plugins {
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.android.kmp)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.room3)
 }
 
 kotlin {
@@ -30,11 +32,15 @@ kotlin {
             dependencies {
                 implementation(libs.androidx.activity.compose)
                 implementation(libs.androidx.core)
-                implementation(libs.androidx.lifecycle.viewmodel.compose)
-                implementation(libs.androidx.lifecycle.runtime.compose)
             }
         }
         commonMain.dependencies {
+            implementation(libs.androidx.datastore.preferences.core)
+            implementation(libs.androidx.lifecycle.runtime.compose)
+            implementation(libs.androidx.lifecycle.viewmodel)
+            implementation(libs.androidx.lifecycle.viewmodel.compose)
+            implementation(libs.androidx.room3.runtime)
+            implementation(libs.androidx.sqlite.bundled)
             implementation(libs.compose.resources)
             implementation(libs.markdown.core)
             implementation(libs.markdown.coil3)
@@ -47,15 +53,27 @@ kotlin {
             implementation(libs.compose.icons.lucide)
             implementation(libs.coroutines.core)
             implementation(libs.serialization.json)
+            implementation(libs.filekit.core)
+            implementation(libs.filekit.dialogs)
+            implementation(libs.kotlin.logging)
         }
         jvmMain { dependsOn(androidJvmMain); dependencies {
-            implementation(libs.java.keyring)
             implementation(compose.desktop.currentOs) { exclude(group = "org.jetbrains.compose.material") }
             implementation(libs.coroutines.swing)
+            runtimeOnly(libs.slf4j.simple)
         } }
         commonTest.dependencies { implementation(kotlin("test")) }
         jvmTest.dependencies { implementation(libs.compose.test) }
     }
+}
+
+dependencies {
+    add("kspAndroid", libs.androidx.room3.compiler)
+    add("kspJvm", libs.androidx.room3.compiler)
+}
+
+room3 {
+    schemaDirectory("$projectDir/schemas")
 }
 
 compose.resources {

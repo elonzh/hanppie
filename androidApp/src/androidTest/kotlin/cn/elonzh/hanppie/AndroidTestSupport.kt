@@ -8,6 +8,9 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.view.PixelCopy
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
@@ -15,6 +18,13 @@ import androidx.test.runner.lifecycle.Stage
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.junit.rules.TestRule
 import org.junit.runner.Description
 import org.junit.runners.model.Statement
@@ -23,18 +33,35 @@ internal class TestLocaleRule(private val language: String = "zh") : TestRule {
     override fun apply(base: Statement, description: Description): Statement = object : Statement() {
         override fun evaluate() {
             val context = InstrumentationRegistry.getInstrumentation().targetContext
-            val preferences = context.getSharedPreferences("hanppie-ui", Context.MODE_PRIVATE)
-            val existed = preferences.contains("language")
-            val original = preferences.getString("language", null)
-            check(preferences.edit().putString("language", language).commit())
+            val key = stringPreferencesKey("language")
+            val original = withSettingsDataStore(context) { it.data.first()[key] }
+            withSettingsDataStore(context) { store -> store.edit { it[key] = language } }
             try {
                 base.evaluate()
             } finally {
-                val editor = preferences.edit()
-                if (existed) editor.putString("language", original) else editor.remove("language")
-                check(editor.commit())
+                withSettingsDataStore(context) { store ->
+                    store.edit { preferences ->
+                        if (original == null) preferences.remove(key) else preferences[key] = original
+                    }
+                }
             }
         }
+    }
+}
+
+internal fun settingsDataStoreFile(context: Context) = File(context.filesDir, "settings.preferences_pb")
+
+internal fun <T> withSettingsDataStore(
+    context: Context,
+    block: suspend (androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>) -> T,
+): T = runBlocking {
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val store = PreferenceDataStoreFactory.create(scope = scope, produceFile = { settingsDataStoreFile(context) })
+    try {
+        block(store)
+    } finally {
+        scope.cancel()
+        scope.coroutineContext[Job]?.join()
     }
 }
 

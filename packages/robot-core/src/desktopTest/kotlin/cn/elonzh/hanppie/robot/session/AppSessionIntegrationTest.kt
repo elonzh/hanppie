@@ -1,0 +1,202 @@
+package cn.elonzh.hanppie.robot.session
+
+import cn.elonzh.hanppie.robot.media.SpeakerAudio
+import cn.elonzh.hanppie.robot.protocol.DussFrame
+import cn.elonzh.hanppie.robot.protocol.Protocol
+import cn.elonzh.hanppie.robot.remote.RemoteControl
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
+import java.net.SocketTimeoutException
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlin.concurrent.thread
+import kotlin.test.*
+
+class AppSessionIntegrationTest {
+    @Test fun identityClaimRespondsToCoroutineCancellation() = runBlocking {
+        val opened = CountDownLatch(1)
+        val socket = AtomicReference<DatagramSocket>()
+        val network = object : RobotNetwork {
+            override fun datagram() = DatagramSocket(null).also {
+                socket.set(it)
+                opened.countDown()
+            }
+        }
+        val session = AppSession(RobotTarget("127.0.0.1", "12345678", localPort = 0), network = network)
+        try {
+            val connection = launch(Dispatchers.IO) { session.connect() }
+            assertTrue(opened.await(2, TimeUnit.SECONDS))
+            connection.cancel()
+            withTimeout(1_000) { connection.join() }
+
+            assertTrue(connection.isCancelled)
+            assertTrue(socket.get().isClosed)
+            assertFalse(session.connected)
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test fun loopbackHandshakeSetupTelemetryAndClose() = runBlocking {
+        DatagramSocket(0, InetAddress.getByName("127.0.0.1")).use { robot ->
+            robot.soTimeout = 100
+            val alive = AtomicBoolean(true)
+            val responding = AtomicBoolean(true)
+            val sent = CopyOnWriteArrayList<DussFrame>()
+            val received = CopyOnWriteArrayList<DussFrame>()
+            val losses = CopyOnWriteArrayList<String>()
+            var routedSockets = 0
+            val network = object : RobotNetwork {
+                override fun datagram() = DatagramSocket(null).also { routedSockets++ }
+            }
+            val responder = thread(isDaemon = true) {
+                while (alive.get()) {
+                    val packet = DatagramPacket(ByteArray(65535), 65535)
+                    try {
+                        robot.receive(packet)
+                        val bytes = packet.data.copyOf(packet.length)
+                        sent.addAll(Protocol.frames(bytes))
+                        // Session matching and decoding are exercised using the same envelope as a peer.
+                        if (responding.get()) robot.send(DatagramPacket(bytes, bytes.size, packet.socketAddress))
+                    } catch (_: SocketTimeoutException) { }
+                    catch (_: java.net.SocketException) { break }
+                }
+            }
+            val session = AppSession(RobotTarget("127.0.0.1", "12345678", localPort = 0,
+                remotePort = robot.localPort), onFrame = { received.add(it) }, network = network, onLost = { losses.add(it) })
+            try {
+                session.connect()
+                assertTrue(session.connected)
+                assertEquals(2, routedSockets, "Both identity and session must use the selected network")
+                withTimeout(2000) { while (received.isEmpty()) delay(10) }
+                assertTrue(sent.all { it.valid })
+                assertTrue(sent.any { it.set == 0x48 && it.id == 3 })
+                assertTrue(sent.filter { it.set == 1 && it.id == 4 }.all { it.payload.contentEquals(Protocol.neutral) })
+                val safetyMark = sent.size
+                session.safetyStop()
+                delay(80)
+                assertTrue(sent.drop(safetyMark).count {
+                    it.receiver == 0xc3 && it.set == 0x3f && it.id == 0x20 && it.payload.contentEquals(ByteArray(8))
+                } >= 3)
+                assertTrue(sent.drop(safetyMark).count {
+                    it.receiver == 4 && it.set == 4 && it.id == 0x0c && it.payload.contentEquals(RemoteControl.gimbalVelocity(0.0, 0.0))
+                } >= 3)
+                val ledMark = sent.size
+                session.setLed(1, 2, 3)
+                withTimeout(1_000) {
+                    while (sent.drop(ledMark).none { it.receiver == 9 && it.set == 0x3f && it.id == 0x33 }) delay(10)
+                }
+                assertContentEquals(RemoteControl.led(1, 2, 3),
+                    sent.drop(ledMark).last { it.receiver == 9 && it.set == 0x3f && it.id == 0x33 }.payload)
+                session.enterRemote()
+                val idleMark = sent.size
+                session.drive(-0.0,0.0,-0.0,0.0,0.0)
+                delay(100)
+                assertTrue(sent.drop(idleMark).any { it.receiver == 0xc3 && it.set == 0x3f && it.id == 0x20 && it.payload.contentEquals(ByteArray(8)) })
+                assertFalse(sent.drop(idleMark).any { it.set == 0x3f && it.id == 0x21 })
+                assertTrue(sent.drop(idleMark).filter { it.set == 1 && it.id == 4 }.all { it.payload.contentEquals(Protocol.neutral) })
+                assertTrue(sent.drop(idleMark).any { it.set == 4 && it.id == 0x0c && it.payload.contentEquals(RemoteControl.gimbalVelocity(0.0,0.0)) })
+                session.drive(.2,0.0,0.0,12.0,0.0,cameraRelative=true)
+                delay(100)
+                assertContentEquals(ByteArray(8),sent.last { it.set == 0x3f && it.id in listOf(0x20,0x21) }.payload, "Missing orientation must stop camera-relative translation")
+                assertContentEquals(RemoteControl.gimbalVelocity(12.0,0.0),sent.last { it.set == 4 && it.id == 0x0c }.payload)
+                session.send(9,0,0x48,8,byteArrayOf(0,10,0,0,0,0,0x84.toByte(),3,0,0,0))
+                withTimeout(1000) { while(session.cameraYaw == null) delay(5) }
+                session.drive(.2,0.0,0.0,0.0,0.0,cameraRelative=true)
+                delay(80)
+                val expected = RemoteControl.cameraVelocity(.2,0.0,90.0)
+                assertContentEquals(RemoteControl.velocity(expected.first,expected.second,0.0),sent.last { it.set == 0x3f && it.id == 0x21 }.payload)
+                session.drive(0.0,0.0,0.0,0.0,30.0,cameraRelative=true)
+                delay(60)
+                assertContentEquals(RemoteControl.velocity(0.0,0.0,60.0),sent.last { it.set == 0x3f && it.id == 0x21 }.payload)
+                session.drive(0.0,0.0,150.0,0.0,0.0,cameraRelative=true)
+                delay(60)
+                assertContentEquals(RemoteControl.velocity(0.0,0.0,150.0),sent.last { it.set == 0x3f && it.id == 0x21 }.payload)
+                session.halt(); delay(60)
+                assertContentEquals(ByteArray(8),sent.last { it.set == 0x3f && it.id in listOf(0x20,0x21) }.payload)
+                assertContentEquals(RemoteControl.gimbalVelocity(0.0,0.0),sent.last { it.set == 4 && it.id == 0x0c }.payload)
+                repeat(6) { session.drive(.2,0.0,0.0,0.0,0.0,cameraRelative=true); delay(100) }
+                assertNull(session.cameraYaw)
+                assertContentEquals(ByteArray(8),sent.last { it.set == 0x3f && it.id in listOf(0x20,0x21) }.payload,"Stale telemetry stops even with fresh input")
+                session.drive(0.0,0.0,0.0,0.0,30.0,cameraRelative=true); delay(60)
+                assertContentEquals(ByteArray(8),sent.last { it.set == 0x3f && it.id in listOf(0x20,0x21) }.payload)
+                assertContentEquals(RemoteControl.gimbalVelocity(0.0,0.0),sent.last { it.set == 4 && it.id == 0x0c }.payload)
+                session.drive(.2,0.0,0.0,0.0,0.0)
+                delay(100)
+                assertTrue(sent.any { it.receiver == 0xc3 && it.set == 0x3f && it.id == 0x21 && it.payload.contentEquals(RemoteControl.velocity(.2,0.0,0.0)) })
+                delay(350)
+                assertContentEquals(Protocol.neutral, sent.last { it.set == 1 && it.id == 4 }.payload)
+                assertContentEquals(ByteArray(8),sent.last { it.set == 0x3f && it.id in listOf(0x20,0x21) }.payload)
+                val gimbalMark = sent.size
+                session.drive(0.0,0.0,0.0,0.0,12.0)
+                delay(100)
+                assertTrue(sent.drop(gimbalMark).filter { it.set == 1 && it.id == 4 }.all { it.payload.contentEquals(Protocol.neutral) })
+                assertTrue(sent.drop(gimbalMark).any { it.set == 4 && it.id == 0x0c && it.payload.contentEquals(RemoteControl.gimbalVelocity(0.0,12.0)) })
+                session.drive(0.0,0.0,0.0,0.0,0.0)
+                delay(100)
+                assertContentEquals(RemoteControl.gimbalVelocity(0.0,0.0),sent.last { it.set == 4 && it.id == 0x0c }.payload)
+                val stoppedCount = sent.count { it.set == 4 && it.id == 0x0c }
+                delay(100)
+                assertTrue(sent.count { it.set == 4 && it.id == 0x0c } > stoppedCount)
+                val fireMark=sent.size
+                session.fireGelOnce()
+                withTimeout(1000) {
+                    while (sent.drop(fireMark).none {
+                            it.receiver==9 && it.set==0x3f && it.id==0x33 &&
+                                it.payload.contentEquals(RemoteControl.muzzleFireLed(false))
+                        }) delay(10)
+                }
+                val fireFrames = sent.drop(fireMark)
+                val flashOn = fireFrames.indexOfFirst { it.receiver==9 && it.set==0x3f && it.id==0x33 && it.payload.contentEquals(RemoteControl.muzzleFireLed(true)) }
+                val visibleOn = fireFrames.indexOfFirst { it.receiver==0x17 && it.set==0x3f && it.id==0x55 && it.payload.contentEquals(RemoteControl.blasterLed(true)) }
+                val fire = fireFrames.indexOfFirst { it.receiver==9 && it.set==0x3f && it.id==0x51 && it.payload.contentEquals(byteArrayOf(1)) }
+                val flashOff = fireFrames.indexOfLast { it.receiver==9 && it.set==0x3f && it.id==0x33 && it.payload.contentEquals(RemoteControl.muzzleFireLed(false)) }
+                val visibleOff = fireFrames.indexOfLast { it.receiver==0x17 && it.set==0x3f && it.id==0x55 && it.payload.contentEquals(RemoteControl.blasterLed(false)) }
+                assertTrue(flashOn >= 0 && visibleOn > flashOn && fire > visibleOn && visibleOff > fire && flashOff > visibleOff,
+                    "Both firing and visible blaster LEDs must wrap the gel command")
+                assertEquals(1,fireFrames.count { it.receiver==9 && it.set==0x3f && it.id==0x51 && it.payload.contentEquals(byteArrayOf(1)) })
+                assertFalse(fireFrames.any { it.id in listOf(0xa1,0xa2,0xa3) },"Firing must not upload Lab")
+                val talkMark = sent.size
+                val encoded = ByteArray(1_000) { it.toByte() }
+                assertEquals(2, session.playSpeaker(encoded))
+                withTimeout(1_000) {
+                    while (sent.drop(talkMark).none { it.receiver == 9 && it.set == 0x3f && it.id == 0xb3 }) delay(10)
+                }
+                val talkFrames = sent.drop(talkMark)
+                val uploadStart = talkFrames.indexOfFirst { it.receiver == 9 && it.set == 0x3f && it.id == 0x5f && it.payload.contentEquals(SpeakerAudio.start(2, encoded.size)) }
+                val firstBlock = talkFrames.indexOfFirst { it.receiver == 9 && it.set == 0 && it.id == 9 && it.payload.contentEquals(SpeakerAudio.block(encoded.copyOfRange(0, 960), 0)) }
+                val secondBlock = talkFrames.indexOfFirst { it.receiver == 9 && it.set == 0 && it.id == 9 && it.payload.contentEquals(SpeakerAudio.block(encoded.copyOfRange(960, 1_000), 1)) }
+                val uploadCommit = talkFrames.indexOfFirst { it.receiver == 9 && it.set == 0x3f && it.id == 0x5f && it.payload.firstOrNull() == 2.toByte() }
+                val play = talkFrames.indexOfFirst { it.receiver == 9 && it.set == 0x3f && it.id == 0xb3 && it.payload.contentEquals(SpeakerAudio.playPayload) }
+                assertTrue(uploadStart >= 0 && firstBlock > uploadStart && secondBlock > firstBlock && uploadCommit > secondBlock && play > uploadCommit)
+                val staleMark = sent.size
+                responding.set(false)
+                delay(600)
+                val stale = assertFailsWith<IllegalStateException> { session.drive(.2, 0.0, 0.0, 0.0, 0.0) }
+                assertTrue(stale.message!!.contains("安全停止"))
+                delay(100)
+                assertContentEquals(ByteArray(8), sent.drop(staleMark).last { it.set == 0x3f && it.id == 0x20 }.payload)
+                assertContentEquals(RemoteControl.gimbalVelocity(0.0, 0.0),
+                    sent.drop(staleMark).last { it.set == 4 && it.id == 0x0c }.payload)
+                session.exitRemote()
+                withTimeout(7000) { while (session.connected) delay(10) }
+                assertEquals(1, losses.size)
+                assertTrue(losses.single().contains("5 秒"))
+            } finally {
+                session.close(); alive.set(false); responder.join(1000)
+            }
+            assertFalse(session.connected)
+            assertFailsWith<IllegalStateException> { session.send(9, 0, 1, 4) }
+            Unit
+        }
+    }
+}

@@ -1,6 +1,5 @@
 package cn.elonzh.hanppie
 
-import android.content.Context
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
@@ -20,8 +19,8 @@ class PhoneSettingsUiTest {
 
     @Test fun saveAndRestoreAfterActivityIsDestroyed() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val preferences = context.getSharedPreferences("model-settings", Context.MODE_PRIVATE)
-        val original = preferences.getString("encrypted-v1", null)
+        val settingsFile = settingsDataStoreFile(context)
+        val original = settingsFile.takeIf(File::exists)?.readBytes()
         val importRequested = InstrumentationRegistry.getArguments().getString("importProvidedKey") == "1"
         val key = if (importRequested) File(context.filesDir, "live-test-key").let {
             try { it.readText().trim().also { value -> check(value.isNotBlank()) } } finally { it.delete() }
@@ -36,7 +35,7 @@ class PhoneSettingsUiTest {
             rule.onNodeWithText("API Key").performTextReplacement(key)
             rule.onNodeWithText("保存设置").performScrollTo().performClick()
             rule.waitUntil(10000) { rule.onAllNodesWithText("已保存").fetchSemanticsNodes().isNotEmpty() }
-            check(!requireNotNull(preferences.getString("encrypted-v1", null)).contains(key)) { "Plaintext key on disk" }
+            check(settingsFile.readBytes().toString(Charsets.ISO_8859_1).contains(key)) { "API key was not stored in DataStore" }
             scenario.close()
             scenario = ActivityScenario.launch(MainActivity::class.java)
             rule.onNodeWithContentDescription("设置").performClick()
@@ -48,9 +47,9 @@ class PhoneSettingsUiTest {
             }
         } finally {
             scenario?.close()
-            if (!importRequested) check(preferences.edit().apply {
-                if (original == null) remove("encrypted-v1") else putString("encrypted-v1", original)
-            }.commit())
+            if (!importRequested) {
+                if (original == null) settingsFile.delete() else settingsFile.writeBytes(original)
+            }
         }
     }
 }

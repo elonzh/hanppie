@@ -29,4 +29,5 @@ dependencies {
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.espresso)
     androidTestImplementation(libs.androidx.compose.test)
+    androidTestImplementation(libs.androidx.datastore.preferences.core)
 }

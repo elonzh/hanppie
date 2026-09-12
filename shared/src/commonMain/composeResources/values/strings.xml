@@ -45,8 +45,8 @@
     <string name="restore_defaults">Restore defaults</string>
     <string name="restore_default_settings_question">Restore all defaults?</string>
     <string name="restore_default_settings_summary">Language, display mode, model service, auto-read, controls, shortcuts, and LED colors will return to defaults. The saved API key will be cleared.</string>
-    <string name="settings_load_failed">Could not read saved settings. Check system credential storage.</string>
-    <string name="settings_save_failed">Could not save. Check settings and system credential storage.</string>
+    <string name="settings_load_failed">Could not read saved settings. Check local DataStore.</string>
+    <string name="settings_save_failed">Could not save. Check settings and local DataStore.</string>
     <string name="read_assistant_replies_automatically">Read assistant replies automatically</string>
     <string name="read_replies_aloud">Read replies aloud</string>
     <string name="speech_services">Speech services</string>
