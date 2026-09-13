@@ -26,7 +26,11 @@ internal fun ConnectionStatusChip(state: ConsoleState, onClick: () -> Unit) {
         .clickable(onClick = onClick).padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(6.dp).background(if (state.connected) Color(0xff32aa78) else Color(0xffaab1bb), RoundedCornerShape(50)))
-        Text(if (state.connected) tr(Res.string.connected) else state.status, Modifier.weight(1f, fill = false),
+        Text(when {
+            state.connected -> tr(Res.string.connected)
+            state.busy || state.reconnecting -> tr(Res.string.connecting)
+            else -> state.status
+        }, Modifier.weight(1f, fill = false),
             fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
         WorkbenchIcon(WorkbenchGlyph.CHEVRON_RIGHT, MiuixTheme.colorScheme.onSurfaceVariantSummary, Modifier.size(16.dp))
     }

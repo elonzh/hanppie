@@ -7,6 +7,7 @@ import cn.elonzh.hanppie.ui.robot.remote.SpeakerInput
 import cn.elonzh.hanppie.ui.scripts.ScriptRepository
 import cn.elonzh.hanppie.ui.scripts.StoredScript
 import cn.elonzh.hanppie.ui.settings.AppearanceSettings
+import cn.elonzh.hanppie.ui.settings.ConnectionPreferences
 import cn.elonzh.hanppie.ui.settings.SavedSettings
 import cn.elonzh.hanppie.ui.settings.SettingsStore
 import cn.elonzh.hanppie.ui.settings.UiPreferences
@@ -35,6 +36,7 @@ internal class MemoryScriptRepository(initial: List<StoredScript> = emptyList())
 internal class MemorySettingsStore : SettingsStore {
     private var settings = SavedSettings()
     private var ui = UiPreferences()
+    private var connection = ConnectionPreferences.fresh()
 
     override suspend fun load(): SavedSettings = settings
 
@@ -55,6 +57,12 @@ internal class MemorySettingsStore : SettingsStore {
     override suspend fun saveSpeechService(service: String) {
         ui = ui.copy(speechService = service)
     }
+
+    override suspend fun loadConnection(): ConnectionPreferences = connection
+
+    override suspend fun saveConnection(preferences: ConnectionPreferences) {
+        connection = preferences
+    }
 }
 
 internal fun testConsoleModel(
@@ -74,4 +82,5 @@ internal fun testConsoleModel(
     scriptRepository = scriptRepository,
     createAgentHttpClient = { error("Agent HTTP client must not be created by isolated UI tests") },
     prepareNetwork = prepareNetwork,
+    autoConnectOnStart = false,
 )

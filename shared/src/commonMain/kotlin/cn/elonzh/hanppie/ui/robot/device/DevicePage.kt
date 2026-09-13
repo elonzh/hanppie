@@ -4,7 +4,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -19,7 +18,6 @@ import cn.elonzh.hanppie.ui.app.ConsoleState
 import cn.elonzh.hanppie.ui.design.HanppieBrandAssets
 import cn.elonzh.hanppie.ui.design.WorkbenchGlyph
 import cn.elonzh.hanppie.ui.design.WorkbenchIcon
-import cn.elonzh.hanppie.ui.design.navigationIcons
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.robot.product.RobotModel
 import org.jetbrains.compose.resources.painterResource
@@ -28,7 +26,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 internal fun DevicePage(model: ConsoleController, state: ConsoleState, compact: Boolean, modifier: Modifier,
-    onManualConnect: () -> Unit, onRemote: () -> Unit, onNavigate: (Int) -> Unit) {
+    onConnectionGuide: () -> Unit, onRemote: () -> Unit) {
     val colors = MiuixTheme.colorScheme
     val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
     LazyColumn(modifier.fillMaxWidth().testTag("device-page"), verticalArrangement = Arrangement.spacedBy(20.dp),
@@ -38,25 +36,17 @@ internal fun DevicePage(model: ConsoleController, state: ConsoleState, compact: 
                 colors = CardDefaults.defaultColors(color = colors.surfaceContainer)) {
                 if (compact) Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
                     DeviceIdentity(state, Modifier.fillMaxWidth(), compact = true)
-                    DeviceActions(model, state, onManualConnect, onRemote)
+                    DeviceActions(model, state, onConnectionGuide, onRemote)
                 } else Row(Modifier.padding(32.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(32.dp)) {
                     DeviceIdentity(state, Modifier.weight(1f), compact = false)
                     Column(Modifier.width(260.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                        DeviceActions(model, state, onManualConnect, onRemote)
+                        DeviceActions(model, state, onConnectionGuide, onRemote)
                     }
                 }
             }
         }
-        items(state.devices) { device ->
-            Button({ model.connect(device.ip, device.appId) }, Modifier.fillMaxWidth().heightIn(min = 56.dp),
-                enabled = !state.connected && !state.busy) {
-                WorkbenchIcon(WorkbenchGlyph.CONNECT)
-                Text("RoboMaster  ·  ${device.ip}", Modifier.weight(1f).padding(horizontal = 12.dp))
-                Text(tr(Res.string.connect))
-            }
-        }
-        item {
+        if (state.connected) item {
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 if (maxWidth / fontScale < 300.dp) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -71,28 +61,12 @@ internal fun DevicePage(model: ConsoleController, state: ConsoleState, compact: 
                 }
             }
         }
-        if (!state.connected) item {
+        if (!state.connected && !state.busy && !state.reconnecting) item {
             Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 WorkbenchIcon(WorkbenchGlyph.CONNECT, colors.onSurfaceVariantSummary, Modifier.size(20.dp))
                 Text(tr(Res.string.connect_your_phone_or_computer_to_the_same_wi), fontSize = 13.sp,
                     color = colors.onSurfaceVariantSummary)
-            }
-        }
-        item {
-            Text(tr(Res.string.workspace), fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
-            Card(Modifier.fillMaxWidth(), insideMargin = PaddingValues(0.dp),
-                colors = CardDefaults.defaultColors(color = colors.surfaceContainer)) {
-                Column {
-                    listOf(1 to Res.string.script_library, 2 to Res.string.diagnostics_workspace, 3 to Res.string.assistant_workspace).forEach { (index, title) ->
-                        BasicComponent(title = tr(title), onClick = { onNavigate(index) },
-                            startAction = {
-                                Icon(navigationIcons[index], null, Modifier.padding(end = 16.dp).size(24.dp),
-                                    tint = colors.onSurfaceVariantSummary)
-                            }, endActions = { WorkbenchIcon(WorkbenchGlyph.CHEVRON_RIGHT, colors.onSurfaceVariantSummary) })
-                    }
-                }
             }
         }
     }
@@ -112,7 +86,11 @@ private fun DeviceIdentity(state: ConsoleState, modifier: Modifier, compact: Boo
             }
             Text(productName, fontSize = if (compact) 30.sp else 48.sp, fontWeight = FontWeight.Bold,
                 maxLines = 1, color = colors.onSurface)
-            Text(state.connectedAddress?.takeIf { state.connected } ?: tr(Res.string.not_connected),
+            Text(when {
+                state.connected -> tr(Res.string.robot_ready)
+                state.busy || state.reconnecting -> tr(Res.string.automatically_finding_robot)
+                else -> tr(Res.string.not_connected)
+            },
                 fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
         }
         // Brand identity in the connection overview; never presented as a picture of the physical robot.
@@ -124,24 +102,29 @@ private fun DeviceIdentity(state: ConsoleState, modifier: Modifier, compact: Boo
 }
 
 @Composable
-private fun DeviceActions(model: ConsoleController, state: ConsoleState, onManual: () -> Unit, onRemote: () -> Unit) {
+private fun DeviceActions(model: ConsoleController, state: ConsoleState, onGuide: () -> Unit, onRemote: () -> Unit) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (state.connected) CockpitEntry(onRemote)
-        if (state.connected || state.reconnecting || state.statusMessage.resource == Res.string.connection_lost) {
-            Button(model::disconnect, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("disconnect-robot"), enabled = !state.busy) {
-                Text(tr(Res.string.disconnect_close_session))
+        when {
+            state.connected -> CockpitEntry(onRemote)
+            state.busy || state.reconnecting -> Row(
+                Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("automatic-connection-progress"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                WorkbenchIcon(WorkbenchGlyph.CONNECT, MiuixTheme.colorScheme.primary)
+                Text(tr(Res.string.automatically_finding_robot), color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             }
-        } else {
-            Button(model::discover, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("discover-robot"), enabled = !state.busy,
-                colors = ButtonDefaults.buttonColorsPrimary()) {
-                WorkbenchIcon(WorkbenchGlyph.SEARCH, MiuixTheme.colorScheme.onPrimary)
-                Spacer(Modifier.width(10.dp)); Text(tr(if (state.busy) Res.string.searching else Res.string.find_robots))
-            }
-            Button(onManual, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("manual-connect")) {
-                Text(tr(Res.string.manual_connection))
+            else -> {
+                Button(model::discover, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("auto-connect"), enabled = !state.busy,
+                    colors = ButtonDefaults.buttonColorsPrimary()) {
+                    WorkbenchIcon(WorkbenchGlyph.CONNECT, MiuixTheme.colorScheme.onPrimary)
+                    Spacer(Modifier.width(10.dp)); Text(tr(Res.string.automatic_connection))
+                }
+                Button(onGuide, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("connection-guide")) {
+                    Text(tr(Res.string.connection_settings))
+                }
             }
         }
-
     }
 }
 

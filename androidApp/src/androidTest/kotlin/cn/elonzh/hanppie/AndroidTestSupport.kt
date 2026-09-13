@@ -32,6 +32,8 @@ import org.junit.runners.model.Statement
 internal class TestLocaleRule(private val language: String = "zh") : TestRule {
     override fun apply(base: Statement, description: Description): Statement = object : Statement() {
         override fun evaluate() {
+            val autoConnectProperty = System.getProperty("hanppie.test.disableAutoConnect")
+            System.setProperty("hanppie.test.disableAutoConnect", "true")
             val context = InstrumentationRegistry.getInstrumentation().targetContext
             val key = stringPreferencesKey("language")
             val original = withSettingsDataStore(context) { it.data.first()[key] }
@@ -39,6 +41,8 @@ internal class TestLocaleRule(private val language: String = "zh") : TestRule {
             try {
                 base.evaluate()
             } finally {
+                if (autoConnectProperty == null) System.clearProperty("hanppie.test.disableAutoConnect")
+                else System.setProperty("hanppie.test.disableAutoConnect", autoConnectProperty)
                 withSettingsDataStore(context) { store ->
                     store.edit { preferences ->
                         if (original == null) preferences.remove(key) else preferences[key] = original

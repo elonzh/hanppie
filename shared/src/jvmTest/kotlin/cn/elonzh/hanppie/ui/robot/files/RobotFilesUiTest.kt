@@ -64,6 +64,8 @@ class RobotFilesUiTest {
             WorkbenchGlyph.CROSSHAIR to "crosshair",
             WorkbenchGlyph.SEARCH to "search",
             WorkbenchGlyph.CONNECT to "plug",
+            WorkbenchGlyph.WIFI to "wifi",
+            WorkbenchGlyph.ROUTER to "router",
             WorkbenchGlyph.BATTERY to "battery-medium",
             WorkbenchGlyph.SIGNAL to "chart-no-axes-column-increasing",
             WorkbenchGlyph.PACKETS to "arrow-left-right",

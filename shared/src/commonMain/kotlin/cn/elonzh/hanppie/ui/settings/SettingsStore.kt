@@ -9,6 +9,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlin.random.Random
 
 @Serializable
 internal data class RobotLedColor(
@@ -76,6 +77,63 @@ internal data class UiPreferences(
     val speechService: String? = null,
 )
 
+@Serializable
+internal enum class ConnectionMode { DIRECT, ROUTER, UNKNOWN }
+
+@Serializable
+internal data class RememberedRobot(
+    val ip: String,
+    val appId: String,
+    val mac: String = "",
+    val mode: ConnectionMode = ConnectionMode.UNKNOWN,
+)
+
+/** Stable App identity, the last router credentials, and most-recent-first robot history. */
+@Serializable
+internal data class ConnectionPreferences(
+    val appId: String = "",
+    val routerSsid: String = "",
+    val routerPassword: String = "",
+    val robots: List<RememberedRobot> = emptyList(),
+) {
+    fun normalized(): ConnectionPreferences {
+        val stableAppId = appId.lowercase().takeIf { Regex("[0-9a-f]{8}").matches(it) } ?: newAppId()
+        val validRobots = robots.filter {
+            ipv4.matches(it.ip) && Regex("[0-9a-fA-F]{8}").matches(it.appId)
+        }.map { it.copy(appId = it.appId.lowercase(), mac = it.mac.uppercase()) }
+            .distinctBy { it.mac.takeIf(String::isNotBlank) ?: "${it.ip}/${it.appId}" }
+            .take(MAX_REMEMBERED_ROBOTS)
+        return copy(appId = stableAppId, robots = validRobots)
+    }
+
+    fun remember(robot: RememberedRobot): ConnectionPreferences {
+        val normalizedRobot = robot.copy(appId = robot.appId.lowercase(), mac = robot.mac.uppercase())
+        val identity = normalizedRobot.mac.takeIf(String::isNotBlank)
+        val remaining = robots.filterNot { saved ->
+            identity?.let { saved.mac.equals(it, ignoreCase = true) }
+                ?: (saved.ip == normalizedRobot.ip && saved.appId.equals(normalizedRobot.appId, ignoreCase = true))
+        }
+        return copy(robots = (listOf(normalizedRobot) + remaining).take(MAX_REMEMBERED_ROBOTS))
+    }
+
+    companion object {
+        private const val MAX_REMEMBERED_ROBOTS = 8
+        private val ipv4 = Regex("(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)(?:\\.(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)){3}")
+
+        fun fresh(): ConnectionPreferences = ConnectionPreferences(appId = newAppId())
+
+        private fun newAppId(): String {
+            var result: String
+            do {
+                result = Random.nextBytes(4).joinToString("") {
+                    (it.toInt() and 0xff).toString(16).padStart(2, '0')
+                }
+            } while (result == "00000000")
+            return result
+        }
+    }
+}
+
 internal interface SettingsStore {
     suspend fun load(): SavedSettings
     suspend fun save(settings: SavedSettings)
@@ -83,6 +141,8 @@ internal interface SettingsStore {
     suspend fun saveLanguage(language: String)
     suspend fun saveAppearance(appearance: AppearanceSettings)
     suspend fun saveSpeechService(service: String)
+    suspend fun loadConnection(): ConnectionPreferences = ConnectionPreferences.fresh()
+    suspend fun saveConnection(preferences: ConnectionPreferences) = Unit
 }
 
 internal val settingsJson = Json { encodeDefaults = true }
@@ -126,10 +186,25 @@ internal class DataStoreSettingsStore(
         dataStore.edit { it[Keys.speechService] = service }
     }
 
+    override suspend fun loadConnection(): ConnectionPreferences {
+        val preferences = dataStore.data.first()
+        return preferences[Keys.connection]
+            ?.let { settingsJson.decodeFromString<ConnectionPreferences>(it) }
+            ?.normalized()
+            ?: ConnectionPreferences.fresh()
+    }
+
+    override suspend fun saveConnection(preferences: ConnectionPreferences) {
+        dataStore.edit { stored ->
+            stored[Keys.connection] = settingsJson.encodeToString(preferences.normalized())
+        }
+    }
+
     private object Keys {
         val settings = stringPreferencesKey("settings")
         val language = stringPreferencesKey("language")
         val appearance = stringPreferencesKey("appearance")
         val speechService = stringPreferencesKey("speech_service")
+        val connection = stringPreferencesKey("connection")
     }
 }

@@ -12,8 +12,14 @@ import cn.elonzh.hanppie.robot.product.RobotProduct
 class JvmRobotRuntime(
     private val networkProvider: () -> RobotNetwork = { RobotNetwork.Default },
 ) : RobotRuntime {
-    override suspend fun discover(): List<DiscoveredRobot> =
-        AppSession.discover(network = networkProvider())
+    override suspend fun discover(timeoutMillis: Long): List<DiscoveredRobot> =
+        AppSession.discover(timeoutMillis = timeoutMillis, network = networkProvider())
+
+    override suspend fun waitForRouterPairing(appId: String): RouterPairing =
+        AppSession.waitForRouterPairing(appId, network = networkProvider())
+
+    override suspend fun acknowledgeRouterPairing(pairing: RouterPairing, appId: String) =
+        AppSession.acknowledgeRouterPairing(pairing, appId, network = networkProvider())
 
     override fun open(
         target: RobotTarget,

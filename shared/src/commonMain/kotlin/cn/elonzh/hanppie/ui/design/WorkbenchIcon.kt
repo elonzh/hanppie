@@ -38,6 +38,7 @@ import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Plug
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.RefreshCw
+import com.composables.icons.lucide.Router
 import com.composables.icons.lucide.Save
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.SendHorizontal
@@ -49,6 +50,7 @@ import com.composables.icons.lucide.Video
 import com.composables.icons.lucide.VideoOff
 import com.composables.icons.lucide.Volume2
 import com.composables.icons.lucide.VolumeX
+import com.composables.icons.lucide.Wifi
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -56,7 +58,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 internal enum class WorkbenchGlyph {
     BACK, ADD, IMPORT, EXPORT, UPLOAD, DOWNLOAD, SAVE, EDIT, DELETE, STOP, ACTIVITY, CHEVRON_RIGHT,
     FILE, FILE_TEXT, FOLDER, REFRESH, MORE, OPEN, VIDEO, VIDEO_OFF, SPEAKER, MUTED, CAMERA, RECORD,
-    CROSSHAIR, SEARCH, CONNECT, BATTERY, SIGNAL, PACKETS, MICROPHONE, SEND, ROBOT, CODE, CHAT, SETTINGS,
+    CROSSHAIR, SEARCH, CONNECT, WIFI, ROUTER, BATTERY, SIGNAL, PACKETS, MICROPHONE, SEND, ROBOT, CODE, CHAT, SETTINGS,
 }
 
 internal val WorkbenchGlyph.icon: ImageVector get() = when (this) {
@@ -87,6 +89,8 @@ internal val WorkbenchGlyph.icon: ImageVector get() = when (this) {
     WorkbenchGlyph.CROSSHAIR -> Lucide.Crosshair
     WorkbenchGlyph.SEARCH -> Lucide.Search
     WorkbenchGlyph.CONNECT -> Lucide.Plug
+    WorkbenchGlyph.WIFI -> Lucide.Wifi
+    WorkbenchGlyph.ROUTER -> Lucide.Router
     WorkbenchGlyph.BATTERY -> Lucide.BatteryMedium
     WorkbenchGlyph.SIGNAL -> Lucide.ChartNoAxesColumnIncreasing
     WorkbenchGlyph.PACKETS -> Lucide.ArrowLeftRight

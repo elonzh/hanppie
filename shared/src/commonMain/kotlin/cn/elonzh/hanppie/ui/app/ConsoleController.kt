@@ -5,6 +5,7 @@ import cn.elonzh.hanppie.ui.i18n.UiText
 import cn.elonzh.hanppie.ui.robot.files.RobotFilesController
 import cn.elonzh.hanppie.ui.scripts.ScriptLibrary
 import cn.elonzh.hanppie.ui.settings.ControlSettings
+import cn.elonzh.hanppie.ui.settings.ConnectionPreferences
 import cn.elonzh.hanppie.ui.settings.ModelSettings
 import cn.elonzh.hanppie.ui.settings.RobotLedColor
 import cn.elonzh.hanppie.ui.speech.ReplySpeaker
@@ -23,6 +24,7 @@ internal interface ConsoleController : AutoCloseable {
     val modelSettings: MutableStateFlow<ModelSettings>
     val autoReadReplies: MutableStateFlow<Boolean>
     val controlSettings: MutableStateFlow<ControlSettings>
+    val connectionPreferences: MutableStateFlow<ConnectionPreferences>
     val settingsBusy: MutableStateFlow<Boolean>
     val settingsMessage: MutableStateFlow<UiText?>
     val scriptLibrary: ScriptLibrary
@@ -60,6 +62,7 @@ internal interface ConsoleController : AutoCloseable {
     fun setForeground(foreground: Boolean)
     fun log(message: String)
     fun discover()
+    fun pairRouter(ssid: String, password: String)
     fun connect(ip: String, appId: String)
     fun disconnect()
     fun runScript(source: String, title: String)

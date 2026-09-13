@@ -26,6 +26,15 @@ internal data object SettingsRoute : WorkbenchRoute { override val topLevelIndex
 @Serializable
 internal data object CockpitRoute : WorkbenchRoute { override val topLevelIndex = 0 }
 
+@Serializable
+internal data object ConnectionGuideRoute : WorkbenchRoute { override val topLevelIndex = 0 }
+
+@Serializable
+internal data object DirectConnectionGuideRoute : WorkbenchRoute { override val topLevelIndex = 0 }
+
+@Serializable
+internal data object RouterConnectionGuideRoute : WorkbenchRoute { override val topLevelIndex = 0 }
+
 internal fun workbenchRoute(index: Int): WorkbenchRoute = when (index) {
     0 -> RobotRoute
     1 -> ScriptRoute

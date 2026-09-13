@@ -2,11 +2,14 @@ package cn.elonzh.hanppie
 
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.content.IntentFilter
+import android.provider.Settings
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
+import androidx.test.platform.app.InstrumentationRegistry
 
 /** Exercises only local UI; never discovers, connects to, or moves a robot. */
 class PhoneUiTest {
@@ -16,7 +19,7 @@ class PhoneUiTest {
 
     @Test fun phonePagesAndKeyboard() {
         rule.onNodeWithTag("bottom-navigation").assertIsDisplayed()
-        rule.onNodeWithText("查找设备").assertIsDisplayed()
+        rule.onNodeWithText("自动连接").assertIsDisplayed()
         screenshot("device")
         rule.onNodeWithContentDescription("设置").performClick()
         rule.onNodeWithContentDescription("language-selector").performClick()
@@ -45,6 +48,20 @@ class PhoneUiTest {
         rule.onNodeWithTag("script-editor").assertIsDisplayed()
         screenshot("script-landscape")
         rule.runOnUiThread { rule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
+    }
+
+    @Test fun directModeOpensSystemWifiSettings() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        rule.onNodeWithTag("connection-guide").performClick()
+        rule.onNodeWithTag("direct-mode").performClick()
+        rule.onNodeWithText("切换为直连模式").assertIsDisplayed()
+        val monitor = instrumentation.addMonitor(IntentFilter(Settings.ACTION_WIFI_SETTINGS), null, true)
+        try {
+            rule.onNodeWithTag("open-wifi-settings").performScrollTo().performClick()
+            rule.waitUntil(5_000) { monitor.hits == 1 }
+        } finally {
+            instrumentation.removeMonitor(monitor)
+        }
     }
 
     @Test fun systemBackReturnsFromUnmodifiedPresetWithoutDiscardDialog() {

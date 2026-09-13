@@ -210,14 +210,70 @@ class AppSession(private val target: RobotTarget,
                         val packet = DatagramPacket(ByteArray(2048), 2048)
                         try {
                             socket.receive(packet)
-                            Protocol.broadcast(packet.data.copyOf(packet.length))?.let {
-                                if (packet.address.hostAddress == it.ip) found[it.ip] = it
+                            Protocol.broadcast(packet.data.copyOf(packet.length))?.let { decoded ->
+                                // The official App routes by the UDP source. The embedded address may still
+                                // contain the previous router lease while the robot changes network mode.
+                                val sourceIp = packet.address?.hostAddress ?: return@let
+                                val robot = decoded.copy(ip = sourceIp)
+                                found["${robot.mac}/${robot.appId}"] = robot
                             }
                         } catch (_: SocketTimeoutException) { /* bounded passive discovery */ }
                     }
                 }
                 found.values.toList()
             }
+
+        /** Waits for the first pairing broadcast. The App session must be established before the final ACK. */
+        suspend fun waitForRouterPairing(
+            appId: String,
+            timeoutMillis: Long = 120_000,
+            localIp: String = "0.0.0.0",
+            network: RobotNetwork = RobotNetwork.Default,
+        ): RouterPairing = withContext(Dispatchers.IO) {
+            require(Regex("[0-9a-fA-F]{8}").matches(appId)) { "AppID 必须是 8 位十六进制字符" }
+            require(timeoutMillis in 1..360_000)
+            val normalizedAppId = appId.lowercase()
+            network.datagram().use { socket ->
+                socket.reuseAddress = true
+                socket.broadcast = true
+                socket.bind(InetSocketAddress(localIp, 45678))
+                socket.soTimeout = 200
+                val deadline = System.nanoTime() + timeoutMillis * 1_000_000
+                while (System.nanoTime() < deadline) {
+                    coroutineContext.ensureActive()
+                    val packet = DatagramPacket(ByteArray(2048), 2048)
+                    try {
+                        socket.receive(packet)
+                        val decoded = Protocol.broadcast(packet.data.copyOf(packet.length)) ?: continue
+                        val sourceIp = packet.address?.hostAddress ?: continue
+                        val robot = decoded.copy(ip = sourceIp)
+                        if (!robot.pairing) continue
+                        if (!robot.appId.equals(normalizedAppId, ignoreCase = true)) continue
+                        return@withContext RouterPairing(robot, packet.port)
+                    } catch (_: SocketTimeoutException) { /* keep the bounded pairing window open */ }
+                }
+            }
+            error("等待机器人扫描配网二维码超时，请重试")
+        }
+
+        /** Completes router pairing after the App session is live, matching the official App sequence. */
+        suspend fun acknowledgeRouterPairing(
+            pairing: RouterPairing,
+            appId: String,
+            localIp: String = "0.0.0.0",
+            network: RobotNetwork = RobotNetwork.Default,
+        ) = withContext(Dispatchers.IO) {
+            require(Regex("[0-9a-fA-F]{8}").matches(appId)) { "AppID 必须是 8 位十六进制字符" }
+            require(pairing.robot.appId.equals(appId, ignoreCase = true)) { "配网 AppID 与二维码不一致" }
+            val acknowledgement = appId.lowercase().toByteArray(Charsets.US_ASCII)
+            network.datagram().use { socket ->
+                socket.reuseAddress = true
+                socket.broadcast = true
+                socket.bind(InetSocketAddress(localIp, 45678))
+                val destination = InetAddress.getByName(pairing.robot.ip)
+                socket.send(DatagramPacket(acknowledgement, acknowledgement.size, destination, pairing.sourcePort))
+            }
+        }
     }
 
     suspend fun connect() = withContext(Dispatchers.IO) {
@@ -232,7 +288,7 @@ class AppSession(private val target: RobotTarget,
             udp.bind(InetSocketAddress(target.localIp, target.localPort))
             udp.connect(destination, target.remotePort)
             udp.soTimeout = 200
-            val deadline = System.nanoTime() + 5_000_000_000
+            val deadline = System.nanoTime() + target.sessionTimeoutMillis * 1_000_000
             var acknowledged = false
             while (System.nanoTime() < deadline && !acknowledged) {
                 coroutineContext.ensureActive()
@@ -276,7 +332,7 @@ class AppSession(private val target: RobotTarget,
             udp.bind(InetSocketAddress(target.localIp, 45678))
             udp.soTimeout = 200
             val claim = target.appId.lowercase().toByteArray(Charsets.US_ASCII)
-            val deadline = System.nanoTime() + 4_000_000_000
+            val deadline = System.nanoTime() + target.identityTimeoutMillis * 1_000_000
             var nextSend = 0L
             var claimSent = false
             var routeFailure: NoRouteToHostException? = null
@@ -298,9 +354,9 @@ class AppSession(private val target: RobotTarget,
                     udp.receive(packet)
                     if (packet.address != destination) continue
                     val robot = Protocol.broadcast(packet.data.copyOf(packet.length)) ?: continue
-                    if (robot.ip != target.ip) continue
                     if (robot.appId.equals(target.appId, true)) return
-                    check(robot.pairing || robot.appId == "00000000") { "机器人 AppID 与目标不一致" }
+                    // A robot switching from the official App can still advertise its previous AppID.
+                    // Keep claiming our stable identity, then let the App-session handshake decide reachability.
                 } catch (_: SocketTimeoutException) { /* established robots may stop broadcasting */ }
             }
             if (!claimSent) {

@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
@@ -88,14 +89,14 @@ class DesignUiTest {
             waitUntil(timeoutMillis = 3_000) { onAllNodesWithText("192.0.2.1").fetchSemanticsNodes().isNotEmpty() }
             saveDesignSnapshot("connection-details", onAllNodes(isRoot()).onLast(), 1040, 700)
             runOnIdle { model.state.value = model.state.value.copy(connected = false, statusMessage = uiText(Res.string.disconnected), connectedAddress = null, battery = null, signalQuality = null) }
-            waitUntil(timeoutMillis = 3_000) { onAllNodesWithTag("connection-manual").fetchSemanticsNodes().isNotEmpty() }
-            onNodeWithTag("connection-manual").performClick()
-            onNodeWithText("取消").performClick()
+            waitUntil(timeoutMillis = 3_000) { onAllNodesWithText("添加或更换机器人").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithTag("connection-manual").assertDoesNotExist()
+            onAllNodes(isRoot()).onLast().performTouchInput { click(Offset(4f, 4f)) }
             onNodeWithContentDescription("脚本").performClick()
             onNodeWithTag("connection-status").performClick()
             onNodeWithText("连接状态").assertIsDisplayed()
-            onNodeWithTag("connection-manual").performClick()
-            onNodeWithText("取消").performClick()
+            onAllNodesWithText("添加或更换机器人").onLast().assertIsDisplayed()
+            onAllNodes(isRoot()).onLast().performTouchInput { click(Offset(4f, 4f)) }
             onNodeWithContentDescription("诊断").performClick()
             onNodeWithTag("diagnostic-scrollbar").assertIsDisplayed()
             onNodeWithTag("diagnostic-output").performScrollToIndex(150)
@@ -121,7 +122,7 @@ class DesignUiTest {
         val model = testConsoleModel()
         try {
             setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
-            onNodeWithTag("discover-robot").assertIsDisplayed()
+            onNodeWithTag("connection-guide").assertIsDisplayed()
             onNodeWithContentDescription("设置").performClick()
             onNodeWithContentDescription("gimbal-sensitivity-selector").assertIsDisplayed()
             saveDesignSnapshot("desktop-minimum-settings", onRoot(), 900, 572)
@@ -141,10 +142,12 @@ class DesignUiTest {
                     }
                 }
             }
-            onNodeWithTag("discover-robot").assertIsDisplayed()
-            onNodeWithTag("manual-connect").assertIsDisplayed()
+            onNodeWithTag("connection-guide").assertIsDisplayed()
+            onNodeWithTag("manual-connect").assertDoesNotExist()
             assertTrue(onNodeWithTag("connection-status").fetchSemanticsNode().boundsInRoot.right <= 300f)
             saveDesignSnapshot("design-phone-320-large-text", onRoot(), 320, 640)
+            onNode(hasContentDescription("Debug") and hasClickAction()).performClick()
+            onNodeWithTag("manual-connect").assertIsDisplayed()
             onNode(hasContentDescription("Chat") and hasClickAction()).performClick()
             onNodeWithText("What would you like to do?").assertIsDisplayed()
             saveDesignSnapshot("design-chat-320-large-text", onRoot(), 320, 640)

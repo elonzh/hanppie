@@ -26,6 +26,58 @@ import kotlin.concurrent.thread
 import kotlin.test.*
 
 class AppSessionIntegrationTest {
+    @Test fun discoveryUsesUdpSourceWhenBroadcastContainsAStaleAddress() = runBlocking {
+        val broadcast = robotBroadcast(
+            "b6359877",
+            embeddedIp = byteArrayOf(192.toByte(), 0, 2, 99),
+        )
+        val delivered = AtomicBoolean(false)
+        val network = object : RobotNetwork {
+            override fun datagram() = object : DatagramSocket(null as java.net.SocketAddress?) {
+                override fun receive(packet: DatagramPacket) {
+                    if (!delivered.compareAndSet(false, true)) throw SocketTimeoutException()
+                    broadcast.copyInto(packet.data)
+                    packet.length = broadcast.size
+                    packet.address = InetAddress.getByName("127.0.0.1")
+                    packet.port = 45678
+                }
+            }
+        }
+
+        val robots = AppSession.discover(timeoutMillis = 10, network = network)
+
+        assertEquals(1, robots.size)
+        assertEquals("127.0.0.1", robots.single().ip)
+    }
+
+    @Test fun routerPairingConnectsBeforeAcknowledgingTheQrAppId() = runBlocking {
+        val broadcast = robotBroadcast("b6359877", pairing = true, embeddedIp = byteArrayOf(192.toByte(), 0, 2, 99))
+        val sent = AtomicReference<DatagramPacket>()
+        val network = object : RobotNetwork {
+            override fun datagram() = object : DatagramSocket(null as java.net.SocketAddress?) {
+                override fun receive(packet: DatagramPacket) {
+                    broadcast.copyInto(packet.data)
+                    packet.length = broadcast.size
+                    packet.address = InetAddress.getByName("127.0.0.1")
+                    packet.port = 56789
+                }
+
+                override fun send(packet: DatagramPacket) {
+                    sent.set(DatagramPacket(packet.data.copyOf(packet.length), packet.length, packet.socketAddress))
+                }
+            }
+        }
+
+        val pairing = AppSession.waitForRouterPairing("B6359877", timeoutMillis = 1_000, network = network)
+
+        assertEquals("127.0.0.1", pairing.robot.ip)
+        assertEquals("b6359877", pairing.robot.appId)
+        assertNull(sent.get(), "Pairing must not be acknowledged before the App session is connected")
+        AppSession.acknowledgeRouterPairing(pairing, "B6359877", network = network)
+        assertContentEquals("b6359877".encodeToByteArray(), sent.get().data.copyOf(sent.get().length))
+        assertEquals(56789, sent.get().port)
+    }
+
     @Test fun identityClaimRespondsToCoroutineCancellation() = runBlocking {
         val opened = CountDownLatch(1)
         val socket = AtomicReference<DatagramSocket>()
@@ -273,11 +325,16 @@ class AppSessionIntegrationTest {
         }
     }
 
-    private fun robotBroadcast(appId: String): ByteArray {
+    private fun robotBroadcast(
+        appId: String,
+        pairing: Boolean = false,
+        embeddedIp: ByteArray = byteArrayOf(127, 0, 0, 1),
+    ): ByteArray {
         val decoded = ByteArray(24)
         decoded[0] = 0x5a
         decoded[1] = 0x5b
-        byteArrayOf(127, 0, 0, 1).copyInto(decoded, 6)
+        decoded[2] = if (pairing) 1 else 0
+        embeddedIp.copyInto(decoded, 6)
         appId.encodeToByteArray().copyInto(decoded, 16)
         var key = 7
         return ByteArray(decoded.size) { index ->

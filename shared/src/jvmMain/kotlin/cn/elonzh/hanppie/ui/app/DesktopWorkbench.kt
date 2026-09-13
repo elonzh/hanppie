@@ -32,6 +32,7 @@ import cn.elonzh.hanppie.ui.speech.SystemSpeech
 import java.awt.Dimension
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
+import java.io.File
 import java.util.Locale
 import org.jetbrains.compose.resources.painterResource
 import top.yukonga.miuix.kmp.basic.Button
@@ -63,6 +64,19 @@ private fun desktopModelOverrides(settings: ModelSettings) = settings.copy(
     apiKey = System.getenv("HANPPIE_LLM_API_KEY") ?: settings.apiKey,
 )
 
+private fun desktopWifiSettingsCommand(): List<String>? {
+    val os = System.getProperty("os.name", "").lowercase()
+    return when {
+        os.contains("mac") -> listOf("/usr/bin/open", "/System/Library/PreferencePanes/Network.prefPane")
+        os.contains("win") -> listOf("cmd.exe", "/c", "start", "", "ms-settings:network-wifi")
+        else -> listOf("nm-connection-editor", "gnome-control-center").firstNotNullOfOrNull { executable ->
+            System.getenv("PATH")?.split(File.pathSeparator)?.firstNotNullOfOrNull { directory ->
+                File(directory, executable).takeIf { it.isFile && it.canExecute() }
+            }?.let { path -> if (executable == "gnome-control-center") listOf(path.path, "wifi") else listOf(path.path) }
+        }
+    }
+}
+
 @Composable
 fun DesktopWorkbench(onExit: () -> Unit) {
     val lifecycleOwner = rememberLifecycleOwner(parent = null)
@@ -84,6 +98,7 @@ private fun DesktopWorkbenchWindow(onExit: () -> Unit) {
     val desktopWindowState = rememberWindowState(width = 1040.dp, height = 760.dp)
     var cockpitActive by remember { mutableStateOf(false) }
     var workbenchSize by remember { mutableStateOf(desktopWindowState.size) }
+    val wifiSettingsCommand = remember { desktopWifiSettingsCommand() }
 
     Window(
         onCloseRequest = {
@@ -131,6 +146,12 @@ private fun DesktopWorkbenchWindow(onExit: () -> Unit) {
                 onRobotFileUpload = holder::uploadRobotFile,
                 onRobotFileDownload = holder::downloadRobotFile,
                 onRobotFileOpen = holder::openRobotFile,
+                onOpenWifiSettings = wifiSettingsCommand?.let { command ->
+                    {
+                        try { ProcessBuilder(command).start() }
+                        catch (_: Exception) { holder.updateFileError(tr(Res.string.could_not_open_wifi_settings)) }
+                    }
+                },
             )
             WorkbenchDialog(
                 show = confirmExit,

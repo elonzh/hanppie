@@ -48,6 +48,7 @@ kotlin {
             implementation(libs.miuix.ui)
             implementation(libs.navigation3.ui)
             implementation(libs.compose.icons.lucide)
+            implementation(libs.qrose)
             implementation(libs.coroutines.core)
             implementation(libs.serialization.json)
             implementation(libs.filekit.core)

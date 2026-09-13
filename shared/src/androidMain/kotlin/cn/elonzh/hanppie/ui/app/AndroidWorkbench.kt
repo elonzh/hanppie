@@ -67,7 +67,11 @@ private class AndroidNetworkResources(app: Application) : AutoCloseable {
     override fun close() = releaseMulticast()
 }
 
-private fun createAndroidWorkbenchViewModel(app: Application, systemLanguage: String): WorkbenchViewModel {
+private fun createAndroidWorkbenchViewModel(
+    app: Application,
+    systemLanguage: String,
+    autoConnectOnStart: Boolean,
+): WorkbenchViewModel {
     val storage = WorkbenchStorage.create()
     val network = AndroidNetworkResources(app)
     val speechInput = AndroidSpeechInput(app)
@@ -81,6 +85,7 @@ private fun createAndroidWorkbenchViewModel(app: Application, systemLanguage: St
             scriptRepository = storage.scripts,
             createAgentHttpClient = ::createAgentHttpClient,
             prepareNetwork = network::prepare,
+            autoConnectOnStart = autoConnectOnStart,
         )
         WorkbenchViewModel(
             model = model,
@@ -99,11 +104,17 @@ private fun createAndroidWorkbenchViewModel(app: Application, systemLanguage: St
 }
 
 @Composable
-fun AndroidWorkbench() {
+fun AndroidWorkbench(autoConnectOnStart: Boolean = true) {
     val context = LocalContext.current
     val systemLanguage = androidx.compose.ui.platform.LocalConfiguration.current.locales[0].toLanguageTag()
     val holder: WorkbenchViewModel = viewModel(factory = viewModelFactory {
-        initializer { createAndroidWorkbenchViewModel(context.applicationContext as Application, systemLanguage) }
+        initializer {
+            createAndroidWorkbenchViewModel(
+                context.applicationContext as Application,
+                systemLanguage,
+                autoConnectOnStart,
+            )
+        }
     })
     val speechInput = holder.model.voiceInput as AndroidSpeechInput
     LaunchedEffect(systemLanguage) { holder.updateSystemLanguage(systemLanguage) }
@@ -202,7 +213,11 @@ fun AndroidWorkbench() {
             onSpeechSettings = { audioSettings = true },
             onRobotFileUpload = holder::uploadRobotFile,
             onRobotFileDownload = holder::downloadRobotFile,
-            onRobotFileOpen = holder::openRobotFile)
+            onRobotFileOpen = holder::openRobotFile,
+            onOpenWifiSettings = {
+                try { context.startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)) }
+                catch (_: Exception) { holder.updateFileError(tr(Res.string.could_not_open_wifi_settings)) }
+            })
     }
 }
 internal fun Context.activity(): Activity? = when (this) {

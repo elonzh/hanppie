@@ -6,12 +6,16 @@ import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
 import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.product.RobotProduct
 
+const val ROBOT_DIRECT_IP = "192.168.2.1"
+
 data class RobotTarget(
     val ip: String,
     val appId: String,
     val localIp: String = "0.0.0.0",
     val localPort: Int = 10609,
     val remotePort: Int = 10607,
+    val identityTimeoutMillis: Long = 4_000,
+    val sessionTimeoutMillis: Long = 5_000,
 ) {
     init {
         require(ip.split('.').let { parts -> parts.size == 4 && parts.all { it.toIntOrNull() in 0..255 } }) {
@@ -19,7 +23,20 @@ data class RobotTarget(
         }
         require(Regex("[0-9a-fA-F]{8}").matches(appId)) { "AppID 必须是 8 位十六进制字符" }
         require(localPort in 0..65535 && remotePort in 1..65535)
+        require(identityTimeoutMillis in 200..30_000 && sessionTimeoutMillis in 200..30_000)
     }
+
+    fun forAutomaticProbe(): RobotTarget = copy(identityTimeoutMillis = 800, sessionTimeoutMillis = 1_800)
+
+    fun withStandardTimeouts(): RobotTarget = copy(identityTimeoutMillis = 4_000, sessionTimeoutMillis = 5_000)
+}
+
+/** Router-mode pairing broadcast together with the UDP endpoint that must receive the final ACK. */
+data class RouterPairing(
+    val robot: DiscoveredRobot,
+    val sourcePort: Int,
+) {
+    init { require(sourcePort in 1..65535) }
 }
 
 interface RobotLabSession {
@@ -53,7 +70,9 @@ interface RobotSession : AutoCloseable {
 }
 
 interface RobotRuntime {
-    suspend fun discover(): List<DiscoveredRobot>
+    suspend fun discover(timeoutMillis: Long = 3000): List<DiscoveredRobot>
+    suspend fun waitForRouterPairing(appId: String): RouterPairing
+    suspend fun acknowledgeRouterPairing(pairing: RouterPairing, appId: String)
     fun open(
         target: RobotTarget,
         onFrame: (DussFrame) -> Unit,

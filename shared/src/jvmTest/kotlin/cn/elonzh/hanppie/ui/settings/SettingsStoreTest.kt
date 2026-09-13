@@ -60,9 +60,17 @@ class SettingsStoreTest {
             store.saveLanguage("en")
             store.saveAppearance(AppearanceSettings(NightMode.DARK))
             store.saveSpeechService("test.service/.Recognizer")
+            val connection = ConnectionPreferences(
+                appId = "ABCDEF12",
+                routerSsid = "test-network",
+                routerPassword = "network-secret",
+                robots = listOf(RememberedRobot("192.0.2.10", "ABCDEF12", "AA:BB:CC:DD:EE:FF", ConnectionMode.ROUTER)),
+            )
+            store.saveConnection(connection)
 
             assertEquals(expected, store.load())
             assertEquals(UiPreferences("en", AppearanceSettings(NightMode.DARK), "test.service/.Recognizer"), store.loadUi())
+            assertEquals(connection.copy(appId = "abcdef12", robots = listOf(connection.robots.single().copy(appId = "abcdef12"))), store.loadConnection())
             assertTrue(file.readBytes().toString(Charsets.ISO_8859_1).contains("secret-value"))
 
             store.save(expected.copy(model = expected.model.copy(apiKey = "")))
@@ -71,6 +79,18 @@ class SettingsStoreTest {
             scope.cancel()
             directory.toFile().deleteRecursively()
         }
+    }
+
+    @Test fun connectionPreferencesKeepStableIdentityAndMostRecentRobots() {
+        val initial = ConnectionPreferences(appId = "ABCDEF12")
+            .remember(RememberedRobot("192.168.2.1", "ABCDEF12", "00:11:22:33:44:55", ConnectionMode.DIRECT))
+            .remember(RememberedRobot("192.0.2.20", "ABCDEF12", "00:11:22:33:44:55", ConnectionMode.ROUTER))
+            .normalized()
+
+        assertEquals("abcdef12", initial.appId)
+        assertEquals(1, initial.robots.size)
+        assertEquals("192.0.2.20", initial.robots.single().ip)
+        assertEquals(ConnectionMode.ROUTER, initial.robots.single().mode)
     }
 
     @Test fun restoreDefaultsClearsPersistedSettings() = runBlocking {

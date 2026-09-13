@@ -13,6 +13,7 @@ androidx-core = "1.16.0"
 lifecycle = "2.11.0"
 navigation3 = "1.1.1"
 compose-icons = "2.2.1"
+qrose = "1.2.1"
 datastore = "1.2.1"
 filekit = "0.14.1"
 kotlin-logging = "8.0.4"
@@ -55,6 +56,7 @@ kotlin-logging = { module = "io.github.oshai:kotlin-logging", version.ref = "kot
 slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
 navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui", version.ref = "navigation3" }
 compose-icons-lucide = { module = "com.composables:icons-lucide-cmp", version.ref = "compose-icons" }
+qrose = { module = "io.github.alexzhirkevich:qrose", version.ref = "qrose" }
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose" }
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose" }
 compose-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "compose" }

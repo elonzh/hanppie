@@ -267,7 +267,7 @@ class ConsoleUiTest {
                 Box(Modifier.requiredSize(393.dp, 740.dp)) { Console(model, mutableStateOf(EditorDocument())) }
             } }
             rule.onNodeWithTag("bottom-navigation").assertIsDisplayed()
-            rule.onNodeWithText("查找设备").assertIsDisplayed()
+            rule.onNodeWithText("自动连接").assertIsDisplayed()
             snapshot("phone-device")
             rule.onNodeWithContentDescription("脚本").performClick()
             rule.onNodeWithTag("script-library").assertIsDisplayed()
@@ -367,10 +367,19 @@ class ConsoleUiTest {
         } finally { model.close() }
     }
 
-    @Test fun homepageActionsStayAlignedAcrossConnectionStates() {
+    @Test fun homepageKeepsConnectionChoicesOutOfTheEverydayFlow() {
         val model = testConsoleModel()
         val width = mutableStateOf(393.dp)
         try {
+            model.connectionPreferences.value = cn.elonzh.hanppie.ui.settings.ConnectionPreferences(
+                appId = "AABBCCDD",
+                robots = listOf(cn.elonzh.hanppie.ui.settings.RememberedRobot(
+                    "192.0.2.10", "AABBCCDD", "00:11:22:33:44:55", cn.elonzh.hanppie.ui.settings.ConnectionMode.ROUTER,
+                )),
+            )
+            model.state.value = model.state.value.copy(devices = listOf(
+                cn.elonzh.hanppie.robot.protocol.DiscoveredRobot("192.0.2.20", "AA:BB:CC:DD:EE:FF", "AABBCCDD", false),
+            ))
             rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(width.value, 740.dp)) {
                 Console(model, mutableStateOf(EditorDocument()))
             } } }
@@ -382,15 +391,76 @@ class ConsoleUiTest {
                 assertEquals(a.height, b.height)
                 assertTrue(b.top > a.bottom)
             }
-            checkPair("discover-robot", "manual-connect")
+            checkPair("auto-connect", "connection-guide")
+            rule.onNodeWithTag("manual-connect").assertDoesNotExist()
+            rule.onNodeWithText("192.0.2.10", substring = true).assertDoesNotExist()
+            rule.onNodeWithText("192.0.2.20", substring = true).assertDoesNotExist()
             snapshot("home-actions-phone")
             rule.runOnIdle { width.value = 1040.dp }
-            checkPair("discover-robot", "manual-connect")
+            checkPair("auto-connect", "connection-guide")
             snapshot("home-actions-desktop")
+            rule.onNodeWithContentDescription("诊断").performClick()
+            rule.onNodeWithTag("manual-connect").assertIsDisplayed()
+            rule.onNodeWithContentDescription("设备").performClick()
             rule.runOnIdle { model.state.value = model.state.value.copy(connected = true, connectedAddress = "192.0.2.1") }
-            rule.waitUntil(3000) { rule.onAllNodesWithTag("disconnect-robot").fetchSemanticsNodes().isNotEmpty() }
-            checkPair("enter-remote", "disconnect-robot")
+            rule.waitUntil(3_000) { rule.onAllNodesWithTag("enter-remote").fetchSemanticsNodes().isNotEmpty() }
+            rule.onNodeWithTag("auto-connect").assertDoesNotExist()
+            rule.onNodeWithTag("connection-guide").assertDoesNotExist()
+            rule.onNodeWithText("192.0.2.1", substring = true).assertDoesNotExist()
+            rule.onNodeWithText("机器人已准备好").assertIsDisplayed()
+            snapshot("home-connected-desktop")
+            rule.runOnIdle { width.value = 393.dp }
+            rule.waitForIdle()
+            snapshot("home-connected-phone")
+            rule.onNodeWithTag("connection-status").performClick()
+            rule.onNodeWithText("断开连接").assertIsDisplayed()
             assertTrue(!model.remoteEnabled.value)
+        } finally { model.close() }
+    }
+
+    @Test fun connectionGuideOffersDirectAndRouterWorkflows() {
+        val model = testConsoleModel()
+        val width = mutableStateOf(393.dp)
+        var wifiSettingsOpenCount = 0
+        try {
+            rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(width.value, 740.dp)) {
+                Console(model, mutableStateOf(EditorDocument()), onOpenWifiSettings = { wifiSettingsOpenCount++ })
+            } } }
+            rule.onNodeWithTag("connection-guide").performClick()
+            rule.onNodeWithText("配置连接方式").assertIsDisplayed()
+            rule.onNodeWithTag("direct-mode").assertIsDisplayed()
+            rule.onNodeWithTag("router-mode").assertIsDisplayed()
+            snapshot("connection-modes-phone")
+            rule.runOnIdle { width.value = 1040.dp }
+            rule.waitForIdle()
+            snapshot("connection-modes-desktop")
+            rule.runOnIdle { width.value = 393.dp }
+            rule.waitForIdle()
+            rule.onNodeWithTag("direct-mode").performClick()
+            rule.onNodeWithText("切换为直连模式").assertIsDisplayed()
+            rule.onNodeWithText("连接机器人 Wi-Fi").assertIsDisplayed()
+            snapshot("connection-direct-phone")
+            rule.onNodeWithText("S1 出厂热点通常为 RMS1-XXXXXX", substring = true).performScrollTo().assertIsDisplayed()
+            rule.onNodeWithTag("open-wifi-settings").performScrollTo().performClick()
+            rule.runOnIdle { assertEquals(1, wifiSettingsOpenCount) }
+            rule.onNodeWithTag("connection-guide-back").performClick()
+            rule.runOnIdle { width.value = 1040.dp }
+            rule.waitForIdle()
+            rule.onNodeWithTag("router-mode").performClick()
+            rule.onNodeWithText("生成路由器配网二维码").assertIsDisplayed()
+            rule.onNodeWithTag("router-qr-placeholder").assertIsDisplayed()
+            snapshot("connection-router-desktop")
+            rule.onNodeWithTag("router-ssid").performTextReplacement("HanppieLab")
+            rule.onNodeWithTag("router-password").performTextReplacement("12341234")
+            rule.onNodeWithTag("router-qr-code").assertIsDisplayed()
+            rule.onNodeWithTag("pair-router").assertIsEnabled()
+            snapshot("connection-router-qr-desktop")
+            rule.runOnIdle { width.value = 393.dp }
+            rule.waitForIdle()
+            rule.onNodeWithTag("router-qr-code").performScrollTo()
+            snapshot("connection-router-qr-phone")
+            rule.onNodeWithText("整个流程无需 RoboMaster 官方 App", substring = true).performScrollTo().assertIsDisplayed()
+            rule.onNodeWithTag("manual-connect-from-guide").assertDoesNotExist()
         } finally { model.close() }
     }
 
@@ -436,6 +506,7 @@ class ConsoleUiTest {
             model.state.value = model.state.value.lost("fixture timeout").copy(
                 reconnecting = true, statusMessage = uiText(Res.string.reconnecting_attempt_value, 2))
             rule.setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
+            rule.onNodeWithTag("connection-status").performClick()
             rule.onNodeWithText("断开连接").assertIsEnabled().performClick()
             rule.waitUntil(3000) { model.state.value.status == "未连接" }
         } finally { model.close() }
@@ -466,7 +537,8 @@ class ConsoleUiTest {
         val model = testConsoleModel()
         try {
             rule.setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
-            rule.onNodeWithText("手动连接").performClick()
+            rule.onNodeWithContentDescription("诊断").performClick()
+            rule.onNodeWithTag("manual-connect").performClick()
             rule.onNodeWithText("连接", substring = false).performClick()
             rule.waitUntil(timeoutMillis = 3000) {
                 rule.onAllNodesWithText("请指定机器人 IPv4 地址").fetchSemanticsNodes().isNotEmpty()
@@ -488,7 +560,7 @@ class ConsoleUiTest {
             // Subsequent chassis messages must not overwrite the gimbal sample.
             model.receive(DussFrame(20, 9, 2, 3, 0, 0x48, 8, payload, true))
             val message = "fixture robot message".encodeToByteArray()
-            model.state.value = model.state.value.copy(scriptTitle = "fixture",
+            model.state.value = model.state.value.copy(connected = true, connectedAddress = "192.0.2.1", scriptTitle = "fixture",
                 scriptRunPhase = ScriptRunPhase.RUNNING, scriptStartedAtEpochMillis = System.currentTimeMillis())
             model.receive(DussFrame(20, 9, 2, 2, 0, 0x3f, 0xa4,
                 byteArrayOf(1, 2, message.size.toByte(), 0) + message, true))

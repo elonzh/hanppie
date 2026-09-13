@@ -32,6 +32,8 @@ import cn.elonzh.hanppie.ui.design.WorkbenchIconButton
 import cn.elonzh.hanppie.ui.design.navigationIcons
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.robot.device.ConnectionDetail
+import cn.elonzh.hanppie.ui.robot.device.ConnectionGuideMode
+import cn.elonzh.hanppie.ui.robot.device.ConnectionGuidePage
 import cn.elonzh.hanppie.ui.robot.device.ConnectionStatusChip
 import cn.elonzh.hanppie.ui.robot.device.DevicePage
 import cn.elonzh.hanppie.ui.robot.diagnostics.DebugPage
@@ -65,6 +67,9 @@ private val workbenchNavigationConfiguration = SavedStateConfiguration {
             subclass(ChatRoute.serializer())
             subclass(SettingsRoute.serializer())
             subclass(CockpitRoute.serializer())
+            subclass(ConnectionGuideRoute.serializer())
+            subclass(DirectConnectionGuideRoute.serializer())
+            subclass(RouterConnectionGuideRoute.serializer())
         }
     }
 }
@@ -86,9 +91,11 @@ internal fun Console(
     onRobotFileUpload: ((String) -> Unit)? = null,
     onRobotFileDownload: ((cn.elonzh.hanppie.robot.files.RobotFileEntry) -> Unit)? = null,
     onRobotFileOpen: ((cn.elonzh.hanppie.robot.files.RobotFileEntry) -> Unit)? = null,
+    onOpenWifiSettings: (() -> Unit)? = null,
 ) {
     val renderState = remember(model) { model.state.sample(100) }
     val state by renderState.collectAsState(initial = model.state.value)
+    val connectionPreferences by model.connectionPreferences.collectAsState()
     val backStack = rememberNavBackStack(workbenchNavigationConfiguration, RobotRoute)
     val currentRoute = backStack.last() as WorkbenchRoute
     val focus = LocalFocusManager.current
@@ -107,12 +114,22 @@ internal fun Console(
     fun openCockpit() {
         if (state.connected && backStack.lastOrNull() != CockpitRoute) backStack.add(CockpitRoute)
     }
+    fun openConnectionGuide() {
+        navigate(0)
+        backStack.add(ConnectionGuideRoute)
+    }
+    LaunchedEffect(connectionPreferences.appId) {
+        if (appId.isBlank()) appId = connectionPreferences.appId
+    }
     fun goBack() {
         if (backStack.size > 1) backStack.removeLastOrNull()
         else if (backStack.lastOrNull() != RobotRoute) backStack[0] = RobotRoute
     }
     LaunchedEffect(state.connected, currentRoute) {
         if (!state.connected && currentRoute == CockpitRoute && backStack.size > 1) backStack.removeLastOrNull()
+        if (state.connected && currentRoute in listOf(ConnectionGuideRoute, DirectConnectionGuideRoute, RouterConnectionGuideRoute)) {
+            navigate(0)
+        }
     }
     LaunchedEffect(currentRoute) { onCockpitChanged(currentRoute == CockpitRoute) }
 
@@ -136,8 +153,8 @@ internal fun Console(
             if (state.connected || state.reconnecting) {
                 Button({ model.disconnect(); connectionDetails = false }, Modifier.fillMaxWidth().heightIn(min = 48.dp), enabled = !state.busy) { Text(tr(Res.string.disconnect_close_session)) }
             } else {
-                Button({ connectionDetails = false; navigate(0); model.discover() }, Modifier.fillMaxWidth().heightIn(min = 48.dp), colors = ButtonDefaults.buttonColorsPrimary(), enabled = !state.busy) { Text(tr(Res.string.find_robots)) }
-                Button({ connectionDetails = false; manual = true }, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("connection-manual")) { Text(tr(Res.string.manual_connection)) }
+                Button({ connectionDetails = false; model.discover() }, Modifier.fillMaxWidth().heightIn(min = 48.dp), colors = ButtonDefaults.buttonColorsPrimary(), enabled = !state.busy) { Text(tr(Res.string.automatic_connection)) }
+                Button({ connectionDetails = false; openConnectionGuide() }, Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(tr(Res.string.connection_settings)) }
             }
         }
     }
@@ -168,6 +185,8 @@ internal fun Console(
                     val routeTab = route.topLevelIndex
                     BoxWithConstraints(Modifier.fillMaxSize().background(CanvasColor).safeDrawingPadding().imePadding()) {
                         val compact = maxWidth < HanppieDesignTokens.CompactBreakpoint
+                        val isConnectionGuide = route == ConnectionGuideRoute ||
+                            route == DirectConnectionGuideRoute || route == RouterConnectionGuideRoute
                         Row(Modifier.fillMaxSize()) {
                             if (!compact) NavigationRail(color = MiuixTheme.colorScheme.surfaceVariant,
                                 defaultWindowInsetsPadding = false,
@@ -188,7 +207,7 @@ internal fun Console(
                                 Column(Modifier.weight(1f).widthIn(max = HanppieDesignTokens.PageMaxWidth).fillMaxWidth()
                                     .padding(horizontal = if (compact) HanppieDesignTokens.PagePaddingCompact
                                     else HanppieDesignTokens.PagePaddingExpanded)) {
-                                    if (routeTab != 1) {
+                                    if (routeTab != 1 && !isConnectionGuide) {
                                         Row(Modifier.fillMaxWidth().height(72.dp), verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.SpaceBetween) {
                                             Text(if (routeTab == 0) tr(Res.string.my_robot) else labels[routeTab],
@@ -197,9 +216,20 @@ internal fun Console(
                                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 ConnectionStatusChip(state) { connectionDetails = true }
-                                                if (routeTab == 2 && diagnosticTab != RobotFilesDebugTab) {
-                                                    Spacer(Modifier.width(8.dp))
-                                                    WorkbenchIconButton(tr(Res.string.clear), WorkbenchGlyph.DELETE, model::clearLogs)
+                                                if (routeTab == 2) {
+                                                    if (!state.connected) {
+                                                        Spacer(Modifier.width(8.dp))
+                                                        WorkbenchIconButton(
+                                                            tr(Res.string.manual_connection),
+                                                            WorkbenchGlyph.CONNECT,
+                                                            { manual = true },
+                                                            tag = "manual-connect",
+                                                        )
+                                                    }
+                                                    if (diagnosticTab != RobotFilesDebugTab) {
+                                                        Spacer(Modifier.width(8.dp))
+                                                        WorkbenchIconButton(tr(Res.string.clear), WorkbenchGlyph.DELETE, model::clearLogs)
+                                                    }
                                                 }
                                             }
                                         }
@@ -211,13 +241,42 @@ internal fun Console(
                                         ChatRoute -> ChatPage(model, Modifier.weight(1f), onVoiceInput) { navigate(4) }
                                         SettingsRoute -> SettingsPage(model, Modifier.weight(1f), onSpeechSettings)
                                         RobotRoute -> DevicePage(model, state, compact, Modifier.weight(1f),
-                                            onManualConnect = { manual = true }, onRemote = ::openCockpit,
-                                            onNavigate = ::navigate)
+                                            onConnectionGuide = ::openConnectionGuide, onRemote = ::openCockpit)
                                         ScriptRoute -> ScriptPage(model, document, compact, onImport, onExport,
                                             fileError, onFileError, onConnectionDetails = { connectionDetails = true })
                                         DebugRoute -> DebugPage(model, state, diagnosticTab, { diagnosticTab = it }, compact,
                                             Modifier.weight(1f), onRobotFileUpload, onRobotFileDownload, onRobotFileOpen)
                                         CockpitRoute -> Unit
+                                        ConnectionGuideRoute -> ConnectionGuidePage(
+                                            mode = null,
+                                            compact = compact,
+                                            modifier = Modifier.weight(1f),
+                                            onBack = ::goBack,
+                                            onSelectMode = { mode ->
+                                                backStack.add(if (mode == ConnectionGuideMode.DIRECT) DirectConnectionGuideRoute else RouterConnectionGuideRoute)
+                                            },
+                                            onOpenWifiSettings = onOpenWifiSettings,
+                                            onDiscover = { navigate(0); model.discover() },
+                                            routerSsid = connectionPreferences.routerSsid,
+                                            routerPassword = connectionPreferences.routerPassword,
+                                            appId = connectionPreferences.appId,
+                                            onPairRouter = model::pairRouter,
+                                            busy = state.busy,
+                                        )
+                                        DirectConnectionGuideRoute, RouterConnectionGuideRoute -> ConnectionGuidePage(
+                                            mode = if (route == DirectConnectionGuideRoute) ConnectionGuideMode.DIRECT else ConnectionGuideMode.ROUTER,
+                                            compact = compact,
+                                            modifier = Modifier.weight(1f),
+                                            onBack = ::goBack,
+                                            onSelectMode = {},
+                                            onOpenWifiSettings = onOpenWifiSettings,
+                                            onDiscover = { navigate(0); model.discover() },
+                                            routerSsid = connectionPreferences.routerSsid,
+                                            routerPassword = connectionPreferences.routerPassword,
+                                            appId = connectionPreferences.appId,
+                                            onPairRouter = model::pairRouter,
+                                            busy = state.busy,
+                                        )
                                     }
                                 }
                                 if (routeTab != 1) ScriptRunBanner(state, onOpen = { navigate(1) }, onStop = model::stop)

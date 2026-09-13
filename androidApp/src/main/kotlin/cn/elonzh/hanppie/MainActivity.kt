@@ -12,6 +12,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         initializeAndroidPlatform(this)
         enableEdgeToEdge()
-        setContent { AndroidWorkbench() }
+        setContent {
+            AndroidWorkbench(
+                autoConnectOnStart = System.getProperty("hanppie.test.disableAutoConnect") != "true",
+            )
+        }
     }
 }

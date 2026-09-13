@@ -25,11 +25,13 @@ class RobotLiveUiTest {
         val appId = args.getString("robotAppId")
         assumeTrue(ip != null && appId != null)
         activity = launchMainActivityForTest()
-        rule.waitUntil(10000) { rule.onAllNodesWithText("手动连接").fetchSemanticsNodes().isNotEmpty() }
-        rule.onNodeWithText("手动连接").performClick()
+        rule.onNodeWithContentDescription("诊断").performClick()
+        rule.waitUntil(10000) { rule.onAllNodesWithTag("manual-connect").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("manual-connect").performClick()
         rule.onNodeWithText("机器人 IPv4").performTextReplacement(ip!!)
         rule.onNodeWithText("AppID · 8 位十六进制").performTextReplacement(appId!!)
         rule.onNodeWithText("连接", substring = false).performClick()
+        rule.onNodeWithContentDescription("设备").performClick()
         try {
             rule.waitUntil(20000) { rule.onAllNodesWithText("开始操控").fetchSemanticsNodes().isNotEmpty() }
         } catch (failure: Throwable) {
@@ -117,6 +119,7 @@ class RobotLiveUiTest {
             rule.waitUntil(10000) { rule.onAllNodesWithText("运行完成", substring = false).fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithContentDescription("设备").performClick()
         }
-        rule.onNodeWithContentDescription("断开连接").performClick()
+        rule.onNodeWithTag("connection-status").performClick()
+        rule.onNodeWithText("断开连接").performClick()
     }
 }
