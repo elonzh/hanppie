@@ -20,6 +20,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import cn.elonzh.hanppie.agent.provider.ModelTestStage
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.ui.app.ConsoleController
 import cn.elonzh.hanppie.ui.design.WorkbenchDialog
@@ -34,7 +35,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @OptIn(ExperimentalLayoutApi::class)
 internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifier, onSpeechSettings: (() -> Unit)? = null) {
     val config by model.modelSettings.collectAsState()
-    val autoRead by model.autoReadReplies.collectAsState()
+    val modelTest by model.modelTestState.collectAsState()
     val control by model.controlSettings.collectAsState()
     val chat by model.chat.state.collectAsState()
     val settingsBusy by model.settingsBusy.collectAsState()
@@ -53,8 +54,8 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
             }
             Button({
                 confirmDefaults = false
-                model.voiceInput.cancel(); model.replySpeaker.stop()
-                Localization.select("system"); model.speech.languageChanged()
+                model.voiceInput.cancel()
+                Localization.select("system")
                 appearance.update(AppearanceSettings())
                 model.restoreDefaultSettings()
             }, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.buttonColorsPrimary()) {
@@ -82,8 +83,8 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
         verticalArrangement = Arrangement.spacedBy(20.dp)) {
         SettingsDropdown(tr(Res.string.language), "language", Localization.choice,
             listOf("system" to tr(Res.string.system_default), "zh" to "简体中文", "en" to "English")) { id ->
-            model.voiceInput.cancel(); model.replySpeaker.stop()
-            Localization.select(id); model.speech.languageChanged()
+            model.voiceInput.cancel()
+            Localization.select(id)
         }
         AppearanceSetting()
         Text(tr(Res.string.control), fontSize = 18.sp)
@@ -160,21 +161,50 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
         }
         Text(tr(Res.string.model_service), fontSize = 18.sp)
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SettingsDropdown(tr(Res.string.model_provider), "model-provider", config.provider.name,
+                ModelCatalog.providers.map { it.name to it.displayName }) { id ->
+                val provider = ModelProviderPreset.valueOf(id)
+                model.settingsMessage.value = null
+                model.modelSettings.value = if (provider == ModelProviderPreset.CUSTOM) {
+                    config.copy(provider = provider)
+                } else ModelCatalog.defaults(provider).copy(apiKey = config.apiKey)
+            }
             TextField(config.endpoint, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(endpoint = it) }, label = tr(Res.string.api_endpoint), modifier = Modifier.fillMaxWidth(), enabled = !chat.running && !settingsBusy, singleLine = true)
-            TextField(config.model, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(model = it) }, label = tr(Res.string.model), modifier = Modifier.fillMaxWidth(), enabled = !chat.running && !settingsBusy, singleLine = true)
+            val discoveredModels = modelTest.discoveredModels.takeIf {
+                modelTest.provider == config.provider && modelTest.endpoint == config.endpoint
+            }.orEmpty()
+            val availableModels = (ModelCatalog.models[config.provider].orEmpty().map { it.id } + discoveredModels).distinct()
+            if (config.provider != ModelProviderPreset.CUSTOM) {
+                SettingsDropdown(tr(Res.string.model), "model-preset", config.model,
+                    availableModels.map { it to it }) { id ->
+                    model.settingsMessage.value = null
+                    model.modelSettings.value = config.copy(model = id)
+                }
+            }
+            TextField(config.model, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(model = it) }, label = tr(Res.string.custom_model_id), modifier = Modifier.fillMaxWidth(), enabled = !chat.running && !settingsBusy, singleLine = true)
             TextField(config.apiKey, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(apiKey = it) }, label = tr(Res.string.api_key), modifier = Modifier.fillMaxWidth(), enabled = !chat.running && !settingsBusy, singleLine = true,
                 visualTransformation = PasswordVisualTransformation())
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(modifier = Modifier.semantics { contentDescription = tr(Res.string.read_assistant_replies_automatically) },
-                    checked = autoRead, enabled = !settingsBusy, onCheckedChange = {
-                        if (!settingsBusy) model.autoReadReplies.value = !autoRead
-                        model.settingsMessage.value = null
-                        if (autoRead) model.replySpeaker.stop()
-                    })
-                Text(tr(Res.string.read_replies_aloud), Modifier.padding(start = 12.dp), fontSize = 13.sp)
-                Spacer(Modifier.weight(1f))
-                if (onSpeechSettings != null) Button(onSpeechSettings) { Text(tr(Res.string.speech_services)) }
+            val llModel = config.llModel
+            Text(tr(Res.string.model_capabilities_value,
+                llModel.contextLength?.toString() ?: tr(Res.string.unknown),
+                llModel.maxOutputTokens?.toString() ?: tr(Res.string.unknown),
+                llModel.capabilities.orEmpty().joinToString { it.id }),
+                fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(model::testModelSettings, enabled = !modelTest.running && !chat.running && !settingsBusy && config.apiKey.isNotBlank()) {
+                    Text(if (modelTest.running) tr(Res.string.testing_model_configuration) else tr(Res.string.test_model_configuration))
+                }
+                modelTest.message?.let { Text(it, fontSize = 12.sp,
+                    color = if (modelTest.success == false) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.onSurfaceVariantSummary) }
             }
+            Text(tr(Res.string.model_test_cost_notice), fontSize = 11.sp,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            modelTest.stages.forEach { result ->
+                Text("${if (result.passed) "✓" else "!"} ${modelTestStageLabel(result.stage)} · ${result.message}",
+                    fontSize = 12.sp,
+                    color = if (result.passed) MiuixTheme.colorScheme.onSurfaceVariantSummary else MiuixTheme.colorScheme.error)
+            }
+            if (onSpeechSettings != null) Button(onSpeechSettings) { Text(tr(Res.string.speech_services)) }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button({ confirmDefaults = true }, enabled = !settingsBusy && !chat.running,
                     modifier = Modifier.semantics { contentDescription = "restore-default-settings" }) {
@@ -291,4 +321,11 @@ private fun actionLabel(action: ControlAction): String = tr(when (action) {
     ControlAction.PushToTalk -> Res.string.action_push_to_talk
     ControlAction.RobotMicrophone -> Res.string.action_robot_microphone
     ControlAction.Stop -> Res.string.action_stop
+})
+
+private fun modelTestStageLabel(stage: ModelTestStage): String = tr(when (stage) {
+    ModelTestStage.LOCAL -> Res.string.model_test_local
+    ModelTestStage.CATALOG -> Res.string.model_test_catalog
+    ModelTestStage.STREAMING -> Res.string.model_test_streaming
+    ModelTestStage.TOOL_CALL -> Res.string.model_test_tool_call
 })

@@ -27,7 +27,11 @@ internal interface ScriptDao {
     suspend fun delete(script: StoredScript)
 }
 
-@Database(entities = [StoredScript::class], version = 1, exportSchema = true)
+@Database(
+    entities = [StoredScript::class],
+    version = 1,
+    exportSchema = true,
+)
 @ConstructedBy(HanppieDatabaseConstructor::class)
 internal abstract class HanppieDatabase : RoomDatabase() {
     abstract fun scriptDao(): ScriptDao

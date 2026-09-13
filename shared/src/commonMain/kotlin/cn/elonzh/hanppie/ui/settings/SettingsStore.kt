@@ -67,7 +67,6 @@ internal data class ControlSettings(
 @Serializable
 internal data class SavedSettings(
     val model: ModelSettings = ModelSettings(),
-    val autoRead: Boolean = false,
     val control: ControlSettings = ControlSettings(),
 )
 
@@ -145,7 +144,10 @@ internal interface SettingsStore {
     suspend fun saveConnection(preferences: ConnectionPreferences) = Unit
 }
 
-internal val settingsJson = Json { encodeDefaults = true }
+internal val settingsJson = Json {
+    encodeDefaults = true
+    ignoreUnknownKeys = true
+}
 
 internal class DataStoreSettingsStore(
     private val dataStore: DataStore<Preferences>,

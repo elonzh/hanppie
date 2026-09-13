@@ -30,7 +30,6 @@ internal class SettingsController(
     private val applyEnvironmentOverrides: (ModelSettings) -> ModelSettings,
 ) : AutoCloseable {
     val model = MutableStateFlow(runtimeDefaults())
-    val autoRead = MutableStateFlow(false)
     val control = MutableStateFlow(ControlSettings())
     val busy = MutableStateFlow(false)
     val message = MutableStateFlow<UiText?>(null)
@@ -54,7 +53,7 @@ internal class SettingsController(
     }
 
     fun save() {
-        val snapshot = SavedSettings(model.value, autoRead.value, control.value)
+        val snapshot = SavedSettings(model.value, control.value)
         enqueue(Command.Save(snapshot, Res.string.settings_saved))
     }
 
@@ -105,7 +104,6 @@ internal class SettingsController(
 
     private fun apply(settings: SavedSettings) {
         model.value = settings.model
-        autoRead.value = settings.autoRead
         control.value = settings.control
     }
 

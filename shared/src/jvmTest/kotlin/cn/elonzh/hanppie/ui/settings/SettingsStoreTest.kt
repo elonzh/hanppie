@@ -5,7 +5,6 @@ import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.ui.app.testConsoleModel
 import cn.elonzh.hanppie.ui.robot.remote.RemoteLedState
 import cn.elonzh.hanppie.ui.robot.remote.remoteLedState
-import cn.elonzh.hanppie.ui.speech.SystemSpeech
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.test.*
@@ -55,7 +54,7 @@ class SettingsStoreTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val store = DataStoreSettingsStore(PreferenceDataStoreFactory.create(scope = scope, produceFile = { file }))
         try {
-            val expected = SavedSettings(ModelSettings(endpoint = "https://example.test/v1", model = "test", apiKey = "secret-value"), true)
+            val expected = SavedSettings(ModelSettings(endpoint = "https://example.test/v1", model = "test", apiKey = "secret-value"))
             store.save(expected)
             store.saveLanguage("en")
             store.saveAppearance(AppearanceSettings(NightMode.DARK))
@@ -94,19 +93,18 @@ class SettingsStoreTest {
     }
 
     @Test fun restoreDefaultsClearsPersistedSettings() = runBlocking {
-        var saved: SavedSettings? = SavedSettings(ModelSettings(apiKey = "secret"), true,
+        var saved: SavedSettings? = SavedSettings(ModelSettings(apiKey = "secret"),
             ControlSettings(remoteLeds = RemoteLedSettings(active = RobotLedColor(1, 2, 3))))
         val store = object : TestSettingsStore() {
             override suspend fun load() = checkNotNull(saved)
             override suspend fun save(settings: SavedSettings) { saved = settings }
         }
-        val model = testConsoleModel(SystemSpeech(), settingsStore = store)
+        val model = testConsoleModel(settingsStore = store)
         try {
             withTimeout(5_000) { model.settingsBusy.first { !it } }
             model.restoreDefaultSettings()
             withTimeout(5_000) { model.settingsBusy.first { !it } }
             assertEquals(SavedSettings(), saved)
-            assertFalse(model.autoReadReplies.value)
             assertEquals(ControlSettings(), model.controlSettings.value)
             assertEquals(cn.elonzh.hanppie.resources.Res.string.default_settings_restored,
                 model.settingsMessage.value?.resource)
@@ -123,12 +121,11 @@ class SettingsStoreTest {
                 saved = settings
             }
         }
-        val expected = SavedSettings(ModelSettings(apiKey = "test-key"), true, ControlSettings(45))
-        val model = testConsoleModel(SystemSpeech(), settingsStore = store)
+        val expected = SavedSettings(ModelSettings(apiKey = "test-key"), ControlSettings(45))
+        val model = testConsoleModel(settingsStore = store)
         try {
             withTimeout(5000) { model.settingsBusy.first { !it } }
             model.modelSettings.value = expected.model
-            model.autoReadReplies.value = expected.autoRead
             model.controlSettings.value = expected.control
             model.saveSettings()
             withTimeout(5000) { model.settingsBusy.first { !it } }
@@ -138,11 +135,10 @@ class SettingsStoreTest {
             withTimeout(5000) { model.settingsBusy.first { !it } }
             assertEquals(cn.elonzh.hanppie.resources.Res.string.settings_save_failed, model.settingsMessage.value?.resource)
         } finally { model.close() }
-        val restored = testConsoleModel(SystemSpeech(), settingsStore = store)
+        val restored = testConsoleModel(settingsStore = store)
         try {
             withTimeout(5000) { restored.settingsBusy.first { !it } }
             assertEquals(expected.model, restored.modelSettings.value)
-            assertTrue(restored.autoReadReplies.value)
             assertEquals(expected.control, restored.controlSettings.value)
         } finally { restored.close() }
     }
@@ -150,7 +146,7 @@ class SettingsStoreTest {
     @Test fun restoreQueuedDuringLoadWinsAndClearsPersistedSettings() = runBlocking {
         val loadStarted = CountDownLatch(1)
         val continueLoad = CountDownLatch(1)
-        var saved = SavedSettings(ModelSettings(apiKey = "old-secret"), true, ControlSettings(45))
+        var saved = SavedSettings(ModelSettings(apiKey = "old-secret"), ControlSettings(45))
         val store = object : TestSettingsStore() {
             override suspend fun load(): SavedSettings {
                 loadStarted.countDown()
@@ -160,7 +156,7 @@ class SettingsStoreTest {
 
             override suspend fun save(settings: SavedSettings) { saved = settings }
         }
-        val model = testConsoleModel(SystemSpeech(), settingsStore = store)
+        val model = testConsoleModel(settingsStore = store)
         try {
             assertTrue(loadStarted.await(2, TimeUnit.SECONDS))
             model.restoreDefaultSettings()
@@ -168,7 +164,6 @@ class SettingsStoreTest {
             withTimeout(5_000) { model.settingsBusy.first { !it } }
 
             assertEquals(SavedSettings(), saved)
-            assertFalse(model.autoReadReplies.value)
             assertEquals(ControlSettings(), model.controlSettings.value)
             assertEquals(Res.string.default_settings_restored, model.settingsMessage.value?.resource)
         } finally {
@@ -191,19 +186,17 @@ class SettingsStoreTest {
                 saved += settings
             }
         }
-        val model = testConsoleModel(SystemSpeech(), settingsStore = store)
+        val model = testConsoleModel(settingsStore = store)
         try {
             withTimeout(5_000) { model.settingsBusy.first { !it } }
-            val first = SavedSettings(ModelSettings(apiKey = "first"), true, ControlSettings(45))
+            val first = SavedSettings(ModelSettings(apiKey = "first"), ControlSettings(45))
             model.modelSettings.value = first.model
-            model.autoReadReplies.value = first.autoRead
             model.controlSettings.value = first.control
             model.saveSettings()
             assertTrue(firstSaveStarted.await(2, TimeUnit.SECONDS))
 
-            val second = SavedSettings(ModelSettings(apiKey = "second"), false, ControlSettings(60))
+            val second = SavedSettings(ModelSettings(apiKey = "second"), ControlSettings(60))
             model.modelSettings.value = second.model
-            model.autoReadReplies.value = second.autoRead
             model.controlSettings.value = second.control
             model.saveSettings()
             continueFirstSave.countDown()

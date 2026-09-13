@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.chat
 
+import cn.elonzh.hanppie.agent.runtime.TestSessionHistory
 import cn.elonzh.hanppie.ui.settings.ModelSettings
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -24,7 +25,9 @@ class ChatAgentLiveTest {
             execute = { error("No robot allowed") },
             stopRobot = { error("No robot allowed") },
             createHttpClient = ::createAgentHttpClient,
+            sessions = TestSessionHistory(),
         ).use { agent ->
+            withTimeout(5000) { agent.state.first { it.ready } }
             agent.send("记住口令是蓝色。只回复已记住。", config)
             withTimeout(125000) { agent.state.first { !it.running } }
             assertNull(agent.state.value.error)

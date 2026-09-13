@@ -1,5 +1,7 @@
 package cn.elonzh.hanppie.ui.app
 
+import cn.elonzh.hanppie.agent.runtime.SessionHistory
+import cn.elonzh.hanppie.agent.runtime.TestSessionHistory
 import cn.elonzh.hanppie.robot.session.RobotNetwork
 import cn.elonzh.hanppie.robot.session.RobotRuntime
 import cn.elonzh.hanppie.robot.session.JvmRobotRuntime
@@ -13,9 +15,7 @@ import cn.elonzh.hanppie.ui.settings.SavedSettings
 import cn.elonzh.hanppie.ui.settings.SettingsStore
 import cn.elonzh.hanppie.ui.settings.UiPreferences
 import cn.elonzh.hanppie.ui.speech.NoSpeechInput
-import cn.elonzh.hanppie.ui.speech.SpeechEngine
 import cn.elonzh.hanppie.ui.speech.SpeechInput
-import cn.elonzh.hanppie.ui.speech.SystemSpeech
 
 internal class MemoryScriptRepository(initial: List<StoredScript> = emptyList()) : ScriptRepository {
     private var saved = initial.toList()
@@ -67,21 +67,21 @@ internal class MemorySettingsStore : SettingsStore {
 }
 
 internal fun testConsoleModel(
-    speech: SpeechEngine = SystemSpeech(),
     voiceInput: SpeechInput = NoSpeechInput(),
     speakerInput: SpeakerInput = NoSpeakerInput(),
     robotNetwork: () -> RobotNetwork = { RobotNetwork.Default },
     robotRuntime: RobotRuntime = JvmRobotRuntime(robotNetwork),
     settingsStore: SettingsStore = MemorySettingsStore(),
     scriptRepository: ScriptRepository = MemoryScriptRepository(),
+    sessionHistory: SessionHistory = TestSessionHistory(),
     prepareNetwork: () -> Unit = {},
 ): ConsoleModel = ConsoleModel(
-    speech = speech,
     voiceInput = voiceInput,
     speakerInput = speakerInput,
     robotRuntime = robotRuntime,
     settingsStore = settingsStore,
     scriptRepository = scriptRepository,
+    sessionHistory = sessionHistory,
     createAgentHttpClient = { error("Agent HTTP client must not be created by isolated UI tests") },
     prepareNetwork = prepareNetwork,
     autoConnectOnStart = false,

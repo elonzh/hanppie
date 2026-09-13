@@ -1,14 +1,14 @@
 @file:OptIn(
     ai.koog.agents.core.annotation.InternalAgentsApi::class,
     kotlin.concurrent.atomics.ExperimentalAtomicApi::class,
+    kotlin.uuid.ExperimentalUuidApi::class,
 )
 
 package cn.elonzh.hanppie.ui.chat
 
-import ai.koog.agents.core.agent.FunctionalAIAgent
+import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.agent.config.AIAgentConfig
-import ai.koog.agents.core.agent.functionalStrategy
-import ai.koog.agents.core.tools.*
+import ai.koog.agents.core.agent.execution.AgentExecutionInfo
 import ai.koog.http.client.ktor.KtorKoogHttpClient
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
@@ -20,8 +20,12 @@ import ai.koog.prompt.llm.*
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.MessagePart
 import ai.koog.prompt.streaming.StreamFrame
-import ai.koog.prompt.streaming.toMessageResponse
-import ai.koog.serialization.typeToken
+import cn.elonzh.hanppie.agent.runtime.*
+import cn.elonzh.hanppie.agent.tools.ExecuteLabPythonTool
+import cn.elonzh.hanppie.agent.tools.HanppieToolEnvironment
+import cn.elonzh.hanppie.agent.tools.RobotStatusTool
+import cn.elonzh.hanppie.agent.tools.StopLabTool
+import cn.elonzh.hanppie.agent.tools.hanppieToolRegistry
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.ui.i18n.Localization
 import cn.elonzh.hanppie.ui.i18n.tr
@@ -29,10 +33,11 @@ import cn.elonzh.hanppie.ui.settings.ModelSettings
 import io.ktor.client.HttpClient
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicReference
+import kotlin.time.Clock
 import kotlin.time.TimeSource
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import kotlinx.serialization.Serializable
 
 internal enum class ChatRole(val label: org.jetbrains.compose.resources.StringResource) {
     USER(Res.string.you), ASSISTANT(Res.string.hanppie), TOOL(Res.string.tool),
@@ -44,24 +49,25 @@ internal data class ChatState(
     val streaming: String = "", val approval: String? = null, val error: String? = null,
     val firstTokenMs: Long? = null, val elapsedMs: Long? = null,
     val replyRevision: Long = 0, val lastReply: String = "",
+    val ready: Boolean = false,
+    val sessionId: String? = null,
+    val sessions: List<AgentSession> = emptyList(),
+    val archivedSessions: List<AgentSession> = emptyList(),
+    val draft: String = "",
 )
 
-@Serializable
-internal data class ScriptArgs(val source: String)
-@Serializable
-internal class EmptyArgs
-
-/** One sequential run at a time. Completed prompts, not graph checkpoints, carry conversation context. */
+/** Application adapter for one sequential Koog run. Durable state is owned by SessionHistory. */
 internal class ChatAgent(
     private val status: () -> String,
     private val execute: suspend (String) -> String,
     private val stopRobot: suspend () -> String,
     private val createHttpClient: () -> HttpClient,
+    private val sessions: SessionHistory,
     private val executorOverride: PromptExecutor? = null,
 ) : AutoCloseable {
     val state = MutableStateFlow(ChatState())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val turnRunning = AtomicBoolean(false)
+    private val runRunning = AtomicBoolean(false)
     private val job = AtomicReference<Job?>(null)
     private val approval = AtomicReference<CompletableDeferred<Boolean>?>(null)
     private var history = emptyList<Message>()
@@ -69,190 +75,406 @@ internal class ChatAgent(
     private var http: HttpClient? = null
     private var settings: ModelSettings? = null
     private val closed = AtomicBoolean(false)
+    private val drafts = MutableStateFlow<Map<String, String>>(emptyMap())
+    private val initializationJob: Job
+
+    init {
+        initializationJob = scope.launch {
+            try {
+                sessions.initialize()
+                val selected = sessions.active().firstOrNull() ?: sessions.create(tr(Res.string.new_chat))
+                openInternal(selected.id)
+            } catch (_: Exception) {
+                state.update { it.copy(ready = true, error = tr(Res.string.conversation_history_could_not_be_loaded)) }
+            }
+        }
+    }
 
     fun send(text: String, config: ModelSettings) {
-        if (text.isBlank() || !turnRunning.compareAndSet(false, true)) return
+        val sessionId = state.value.sessionId
+        if (text.isBlank() || !state.value.ready || sessionId == null || !runRunning.compareAndSet(false, true)) return
         if (closed.load()) {
-            turnRunning.store(false)
+            runRunning.store(false)
             return
         }
         try {
             config.validate(); require(text.length <= 12000) { tr(Res.string.message_too_long) }
-            require(history.sumOf { it.toString().length } + text.length < 100000) { tr(Res.string.context_full_start_a_new_chat) }
+            val approximateCharacterLimit = ((config.llModel.contextLength ?: 64_000L) * 3L).coerceAtMost(3_000_000L)
+            require(history.sumOf { it.toString().length }.toLong() + text.length < approximateCharacterLimit) { tr(Res.string.context_full_start_a_new_chat) }
         }
         catch (e: Exception) {
-            turnRunning.store(false)
+            runRunning.store(false)
             state.update { it.copy(error = e.message) }
             return
         }
-        state.update { it.copy(running = true, error = null, streaming = "", firstTokenMs = null, elapsedMs = null,
-            lines = it.lines + ChatLine(ChatRole.USER, text)) }
+        state.update { it.copy(running = true, error = null, streaming = "", firstTokenMs = null, elapsedMs = null) }
         val launched = scope.launch {
             val started = TimeSource.Monotonic.markNow()
-            val effects = mutableListOf<String>()
+            val runId = Uuid.random().toString()
+            val model = config.llModel
+            var runStarted = false
+            // Koog uses this same caller-supplied runId and root execution path.
+            val executionInfo = AgentExecutionInfo(null, AGENT_ID)
+            val pendingToolCalls = mutableListOf<MessagePart.Tool.Call>()
+            val activeToolCalls = AtomicReference<List<MessagePart.Tool.Call>>(emptyList())
+            fun consumeActiveToolCalls(): List<MessagePart.Tool.Call> {
+                while (true) {
+                    val current = activeToolCalls.load()
+                    if (activeToolCalls.compareAndSet(current, emptyList())) return current
+                }
+            }
             try {
+                val userMessage = prompt("hanppie-user-message") { user(text) }.messages.single() as Message.User
+                sessions.append(sessionId, AgentStartingEvent(
+                    eventId(), runId, timestamp(), executionInfo, userMessage, model,
+                ))
+                runStarted = true
+                drafts.update { current ->
+                    if (current[sessionId] == text) current - sessionId else current
+                }
+                state.update { current -> current.copy(
+                    lines = current.lines + ChatLine(ChatRole.USER, text),
+                    draft = drafts.value[sessionId].orEmpty(),
+                ) }
+                if (state.value.lines.size == 1 && state.value.sessions.firstOrNull { it.id == sessionId }?.title == tr(Res.string.new_chat)) {
+                    sessions.rename(sessionId, text.take(32))
+                }
                 if (settings != config && executorOverride == null) {
                     executor?.close(); http?.close()
                     val newHttp = createHttpClient()
-                    val newExecutor = try {
-                        MultiLLMPromptExecutor(
-                            OpenAILLMClient(
-                                config.apiKey,
-                                OpenAIClientSettings(
-                                    baseUrl = config.endpoint.trimEnd('/') + "/",
-                                    chatCompletionsPath = "chat/completions",
-                                ),
-                                KtorKoogHttpClient.Factory(newHttp),
+                    executor = try {
+                        MultiLLMPromptExecutor(config.llModel.provider to OpenAILLMClient(
+                            config.apiKey,
+                            OpenAIClientSettings(
+                                baseUrl = config.endpoint.trimEnd('/') + "/",
+                                chatCompletionsPath = "chat/completions",
                             ),
-                        )
+                            KtorKoogHttpClient.Factory(newHttp),
+                        ))
                     } catch (error: Exception) {
                         newHttp.close()
                         throw error
                     }
                     http = newHttp
-                    executor = newExecutor
                     settings = config
                 }
-                suspend fun record(label: org.jetbrains.compose.resources.StringResource, block: suspend () -> String): String {
-                    effects += tr(Res.string.value_started_result_unknown,tr(label))
+                fun claimToolCall(toolName: String): MessagePart.Tool.Call {
+                    val next = pendingToolCalls.removeFirstOrNull()
+                    check(next?.tool == toolName) { "Tool call order mismatch" }
+                    return next
+                }
+                suspend fun record(
+                    toolCall: MessagePart.Tool.Call,
+                    label: org.jetbrains.compose.resources.StringResource,
+                    block: suspend () -> String,
+                ): String {
+                    sessions.append(sessionId, ToolCallStartingEvent(
+                        eventId(), runId, timestamp(), executionInfo, toolCall,
+                    ))
+                    activeToolCalls.store(activeToolCalls.load() + toolCall)
                     append(ChatRole.TOOL, "${tr(label)}…")
                     val result = try { block() }
                     catch (e: CancellationException) { throw e }
-                    catch (e: Exception) { tr(Res.string.value_failed_check_robot_state_and_do_not_retry,tr(label),e.message?.take(300)) }
-                    effects[effects.lastIndex] = result
+                    catch (e: Exception) {
+                        tr(Res.string.value_failed_check_robot_state_and_do_not_retry,
+                            tr(label), e::class.simpleName ?: "Exception")
+                    }
                     append(ChatRole.TOOL, result)
                     return result
                 }
-                val registry = ToolRegistry {
-                    tool(object : Tool<EmptyArgs, String>(typeToken<EmptyArgs>(), typeToken<String>(),
-                        ToolDescriptor("robot_status", "读取当前连接、遥测及脚本消息，不连接新设备")) {
-                        override suspend fun execute(args: EmptyArgs) = record(Res.string.read_status) { status() }
-                    })
-                    tool(object : Tool<ScriptArgs, String>(typeToken<ScriptArgs>(), typeToken<String>(),
-                        ToolDescriptor("execute_lab_python", "提交完整 RoboMaster Lab Python 3.6 脚本。用户确认后上传并启动，不等于动作完成。",
-                            listOf(ToolParameterDescriptor("source", "完整脚本，包含 def start()", ToolParameterType.String)))) {
-                        override suspend fun execute(args: ScriptArgs): String {
-                            require(args.source.length <= 32000 && args.source.isNotBlank()) { tr(Res.string.script_is_empty_or_exceeds_the_32k_character_limit) }
-                            effects += "脚本待确认，尚未上传或启动。"
-                            val decision = CompletableDeferred<Boolean>()
-                            check(approval.compareAndSet(null, decision))
-                            state.update { it.copy(approval = args.source) }
-                            val accepted = try { decision.await() } finally {
-                                approval.compareAndSet(decision, null)
-                                state.update { it.copy(approval = null) }
+                val registry = hanppieToolRegistry(object : HanppieToolEnvironment {
+                    override suspend fun robotStatus(): String {
+                        val toolCall = claimToolCall(RobotStatusTool.NAME)
+                        return record(toolCall, Res.string.read_status) { status() }
+                    }
+
+                    override suspend fun executeLabPython(source: String): String {
+                        val toolCall = claimToolCall(ExecuteLabPythonTool.NAME)
+                        val toolCallId = requireNotNull(toolCall.id)
+                        require(source.length <= 32000 && source.isNotBlank()) { tr(Res.string.script_is_empty_or_exceeds_the_32k_character_limit) }
+                        val decision = CompletableDeferred<Boolean>()
+                        check(approval.compareAndSet(null, decision))
+                        sessions.append(sessionId, ToolApprovalRequestedEvent(
+                            eventId(), runId, timestamp(), executionInfo, toolCall,
+                        ))
+                        state.update { it.copy(approval = source) }
+                        val accepted = try {
+                            decision.await().also { accepted ->
+                                sessions.append(sessionId, ToolApprovalResolvedEvent(
+                                    eventId(), runId, timestamp(), executionInfo, toolCallId, accepted,
+                                ))
                             }
-                            return if (accepted) {
-                                append(ChatRole.SCRIPT, args.source)
-                                record(Res.string.run_lab_script) { execute(args.source) }
-                            } else {
-                                val result = tr(Res.string.user_rejected_execution_nothing_uploaded_or_started)
-                                effects += result; append(ChatRole.TOOL, result); result
+                        } catch (error: CancellationException) {
+                            withContext(NonCancellable) {
+                                runCatching { sessions.append(sessionId, ToolApprovalResolvedEvent(
+                                    eventId(), runId, timestamp(), executionInfo, toolCallId, accepted = false,
+                                )) }
                             }
+                            throw error
+                        } finally {
+                            approval.compareAndSet(decision, null)
+                            state.update { it.copy(approval = null) }
                         }
-                    })
-                    tool(object : Tool<EmptyArgs, String>(typeToken<EmptyArgs>(), typeToken<String>(),
-                        ToolDescriptor("stop_lab", "向当前机器人发送停止脚本命令，不代表停止已被实机确认")) {
-                        override suspend fun execute(args: EmptyArgs) = record(Res.string.stop_script) { stopRobot() }
-                    })
-                }
-                var completed = emptyList<Message>()
-                val strategy = functionalStrategy<String, String>("hanppie-conversation") { input ->
-                    llm.writeSession { appendPrompt { user(input) } }
-                    var answer: String? = null
-                    repeat(8) {
-                        if (answer == null) {
-                            val response = llm.writeSession {
-                                val frames = requestLLMStreaming().onEach { frame ->
-                                    if (frame is StreamFrame.TextDelta) state.update { old -> old.copy(
-                                        streaming = old.streaming + frame.text,
-                                        firstTokenMs = old.firstTokenMs ?: started.elapsedNow().inWholeMilliseconds) }
-                                }.toList()
-                                check(frames.any { it is StreamFrame.End }) { tr(Res.string.model_output_interrupted_incomplete_instructions_were_not_executed) }
-                                check(frames.filterIsInstance<StreamFrame.End>().none { it.finishReason in listOf("length", "max_tokens", "max_output_tokens") }) { tr(Res.string.model_output_truncated) }
-                                val response = frames.toMessageResponse()
-                                appendPrompt { message(response) }
-                                response
-                            }
-                            val calls = response.parts.filterIsInstance<MessagePart.Tool.Call>()
-                            if (calls.isEmpty()) {
-                                answer = response.parts.filterIsInstance<MessagePart.Text>().joinToString("") { it.text }
-                                check(!answer.isNullOrBlank()) { tr(Res.string.the_model_returned_no_visible_reply) }
-                            } else {
-                                if (state.value.streaming.isNotBlank()) append(ChatRole.ASSISTANT, state.value.streaming)
-                                state.update { it.copy(streaming = "") }
-                                val results = executeTools(calls, parallelTools = false)
-                                llm.writeSession { appendPrompt { user { results.forEach { toolResult(it.toMessagePart()) } } } }
-                            }
+                        return if (accepted) {
+                            append(ChatRole.SCRIPT, source)
+                            record(toolCall, Res.string.run_lab_script) { execute(source) }
+                        } else {
+                            val result = tr(Res.string.user_rejected_execution_nothing_uploaded_or_started)
+                            append(ChatRole.TOOL, result); result
                         }
                     }
-                    check(answer != null) { tr(Res.string.tool_iteration_limit_reached_review_the_execution_history_before) }
-                    llm.readSession { completed = prompt.messages }
-                    requireNotNull(answer)
-                }
+
+                    override suspend fun stopLab(): String {
+                        val toolCall = claimToolCall(StopLabTool.NAME)
+                        return record(toolCall, Res.string.stop_script) { stopRobot() }
+                    }
+                })
+                val strategy = hanppieAgentStrategy(
+                    onStreamFrame = { frame ->
+                        if (frame is StreamFrame.TextDelta) state.update { old -> old.copy(
+                            streaming = old.streaming + frame.text,
+                            firstTokenMs = old.firstTokenMs ?: started.elapsedNow().inWholeMilliseconds,
+                        ) }
+                    },
+                    onMessage = { message ->
+                        sessions.append(sessionId, MessageEvent(
+                            eventId(), runId, timestamp(), executionInfo, message,
+                        ))
+                        val calls = message.parts.filterIsInstance<MessagePart.Tool.Call>()
+                        if (calls.isNotEmpty()) {
+                            if (state.value.streaming.isNotBlank()) append(ChatRole.ASSISTANT, state.value.streaming)
+                            state.update { it.copy(streaming = "") }
+                            pendingToolCalls += calls
+                        }
+                        if (message.parts.any { part -> part is MessagePart.Tool.Result }) {
+                            activeToolCalls.store(emptyList())
+                        }
+                    },
+                )
                 val initial = prompt("hanppie", params = OpenAIChatParams(maxTokens = 4096)) {
                     system(SYSTEM_PROMPT)
                     messages(history)
                 }
-                val model = LLModel(LLMProvider.OpenAI, config.model,
-                    listOf(LLMCapability.Temperature, LLMCapability.Tools, LLMCapability.Completion, LLMCapability.OpenAIEndpoint.Completions),
-                    contextLength = 64000, maxOutputTokens = 4096)
-                val agent = FunctionalAIAgent(executorOverride ?: requireNotNull(executor),
-                    AIAgentConfig(initial, model, maxAgentIterations = 32), strategy, registry)
-                val result = try { withTimeout(120_000) { agent.run(text) } } finally { agent.close() }
-                history = completed.filterNot { it is Message.System }
+                val agent = AIAgent(
+                    id = AGENT_ID,
+                    promptExecutor = executorOverride ?: requireNotNull(executor),
+                    strategy = strategy,
+                    agentConfig = AIAgentConfig(initial, model, maxAgentIterations = 32),
+                    toolRegistry = registry,
+                )
+                val result = try { withTimeout(120_000) { agent.run(text, runId) } } finally { agent.close() }
+                history = completedContext(sessions.messages(sessionId))
                 append(ChatRole.ASSISTANT, result)
                 state.update { it.copy(replyRevision = it.replyRevision + 1, lastReply = result) }
+                sessions.append(sessionId, AgentCompletedEvent(
+                    eventId(), runId, timestamp(), executionInfo, result,
+                ))
+                refreshLists()
             } catch (e: TimeoutCancellationException) {
-                rememberInterrupted(text, effects)
-                state.update { it.copy(error = tr(Res.string.turn_timed_out_after_120_seconds_review_tool_history)) }
+                if (runStarted) runCatching {
+                    rememberInterrupted(sessionId, runId, executionInfo, consumeActiveToolCalls())
+                    sessions.append(sessionId, AgentExecutionFailedEvent(
+                        eventId(), runId, timestamp(), executionInfo, errorType = "Timeout",
+                    ))
+                }
+                state.update { it.copy(error = tr(Res.string.run_timed_out_after_120_seconds_review_tool_history)) }
             } catch (e: CancellationException) {
-                rememberInterrupted(text, effects)
-                append(ChatRole.SYSTEM, tr(Res.string.turn_canceled_canceling_chat_does_not_stop_robot_scripts))
+                if (runStarted) withContext(NonCancellable) {
+                    runCatching {
+                        rememberInterrupted(sessionId, runId, executionInfo, consumeActiveToolCalls())
+                        sessions.append(sessionId, AgentExecutionCancelledEvent(
+                            eventId(), runId, timestamp(), executionInfo, reason = "UserCancelled",
+                        ))
+                    }
+                }
+                append(ChatRole.SYSTEM, tr(Res.string.run_canceled_canceling_chat_does_not_stop_robot_scripts))
             } catch (e: Exception) {
-                rememberInterrupted(text, effects)
                 // Provider exceptions can contain request bodies/headers. Never put them in UI/logs.
                 val code = (e as? ai.koog.http.client.KoogHttpClientException)?.statusCode
                 val category = if (code != null) "HTTP $code" else e::class.simpleName ?: "Exception"
-                state.update { it.copy(error = tr(Res.string.turn_incomplete_value_check_network_model_settings_and_tool,category)) }
+                if (runStarted) runCatching {
+                    rememberInterrupted(sessionId, runId, executionInfo, consumeActiveToolCalls())
+                    sessions.append(sessionId, AgentExecutionFailedEvent(
+                        eventId(), runId, timestamp(), executionInfo, errorType = category,
+                    ))
+                }
+                state.update { it.copy(error = tr(Res.string.run_incomplete_value_check_network_model_settings_and_tool,category)) }
             } finally {
                 approval.store(null)
                 state.update { it.copy(running = false, approval = null, streaming = "", elapsedMs = started.elapsedNow().inWholeMilliseconds) }
-                turnRunning.store(false)
+                runRunning.store(false)
             }
         }
         job.store(launched)
     }
 
-    private fun rememberInterrupted(input: String, effects: List<String>) {
-        history = history + prompt("interrupted") {
-            user(input)
-            assistant("上一轮中断，不应自动重复操作。已知记录：" + effects.joinToString("\n"))
-        }.messages
+    private suspend fun rememberInterrupted(
+        sessionId: String,
+        runId: String,
+        executionInfo: AgentExecutionInfo,
+        activeToolCalls: List<MessagePart.Tool.Call>,
+    ) {
+        activeToolCalls.forEach { toolCall ->
+            val toolCallId = requireNotNull(toolCall.id)
+            val notice = toolOutcomeUnknownNotice(toolCall.tool)
+            val resultMessage = prompt("tool-outcome-interrupted-result") {
+                user { toolResult(MessagePart.Tool.Result(toolCallId, toolCall.tool, notice, isError = true)) }
+            }.messages.single()
+            sessions.append(sessionId, MessageEvent(
+                eventId(), runId, timestamp(), executionInfo, resultMessage,
+            ))
+            sessions.append(sessionId, MessageEvent(
+                eventId(), runId, timestamp(), executionInfo,
+                prompt("tool-outcome-interrupted") { system(notice) }.messages.single(),
+            ))
+        }
+        sessions.append(sessionId, MessageEvent(
+            eventId(), runId, timestamp(), executionInfo,
+            prompt("interrupted") { system(RUN_INTERRUPTED_NOTICE) }.messages.single(),
+        ))
+        history = completedContext(sessions.messages(sessionId))
     }
     private fun append(role: ChatRole, text: String) { state.update { it.copy(lines = (it.lines + ChatLine(role, text)).takeLast(250)) } }
     fun approve(accepted: Boolean) { approval.load()?.complete(accepted) }
     fun cancel() { job.load()?.cancel() }
     suspend fun cancelAndJoin() { job.load()?.cancelAndJoin() }
-    fun clear() {
-        if (closed.load() || !turnRunning.compareAndSet(false, true)) return
-        try {
-            history = emptyList()
-            state.value = ChatState(replyRevision = state.value.replyRevision)
-        } finally {
-            turnRunning.store(false)
+    fun clear() = newSession()
+
+    fun updateDraft(text: String) {
+        val sessionId = state.value.sessionId ?: return
+        val bounded = text.take(12_000)
+        drafts.update { it + (sessionId to bounded) }
+        state.update { current ->
+            if (current.sessionId == sessionId) current.copy(draft = bounded) else current
         }
     }
-    override fun close() {
+
+    fun newSession() = manage {
+        openInternal(sessions.create(tr(Res.string.new_chat)).id)
+    }
+
+    fun openSession(sessionId: String) = manage {
+        checkNotNull(sessions.find(sessionId))
+        openInternal(sessionId)
+    }
+
+    fun renameSession(sessionId: String, title: String) = manage {
+        sessions.rename(sessionId, title)
+        refreshLists()
+    }
+
+    fun archiveSession(sessionId: String) = manage {
+        sessions.archive(sessionId, true)
+        if (state.value.sessionId == sessionId) {
+            val next = sessions.active().firstOrNull() ?: sessions.create(tr(Res.string.new_chat))
+            openInternal(next.id)
+        } else refreshLists()
+    }
+
+    fun restoreSession(sessionId: String) = manage {
+        sessions.archive(sessionId, false)
+        refreshLists()
+    }
+
+    fun deleteSession(sessionId: String) = manage {
+        sessions.delete(sessionId)
+        drafts.update { it - sessionId }
+        if (state.value.sessionId == sessionId) {
+            val next = sessions.active().firstOrNull() ?: sessions.create(tr(Res.string.new_chat))
+            openInternal(next.id)
+        } else refreshLists()
+    }
+
+    private fun manage(block: suspend () -> Unit) {
+        if (closed.load() || !runRunning.compareAndSet(false, true)) return
+        scope.launch {
+            try { block() }
+            catch (_: Exception) { state.update { it.copy(error = tr(Res.string.conversation_history_operation_failed)) } }
+            finally { runRunning.store(false) }
+        }
+    }
+
+    private suspend fun openInternal(sessionId: String) {
+        val storedMessages = sessions.messages(sessionId)
+        history = completedContext(storedMessages)
+        val lines = storedMessages.mapNotNull(::toChatLine).takeLast(250)
+        val active = sessions.active()
+        state.value = ChatState(
+            lines = lines,
+            ready = true,
+            sessionId = sessionId,
+            sessions = active,
+            archivedSessions = sessions.archived(),
+            replyRevision = state.value.replyRevision,
+            draft = drafts.value[sessionId].orEmpty(),
+        )
+    }
+
+    private suspend fun refreshLists() {
+        state.update { it.copy(sessions = sessions.active(), archivedSessions = sessions.archived()) }
+    }
+
+    private fun toChatLine(message: Message): ChatLine? {
+        val toolResult = message.parts.filterIsInstance<MessagePart.Tool.Result>()
+        val toolCall = message.parts.filterIsInstance<MessagePart.Tool.Call>()
+        val text = when {
+            toolResult.isNotEmpty() -> toolResult.joinToString("\n") { "${it.tool}: ${it.output}" }
+            toolCall.isNotEmpty() -> toolCall.joinToString("\n") { "${it.tool}: ${it.args}" }
+            else -> message.textContent().trim().let { content ->
+                when (content) {
+                    RUN_INTERRUPTED_NOTICE -> tr(Res.string.previous_run_interrupted)
+                    PROCESS_RESTART_NOTICE -> tr(Res.string.previous_run_interrupted_after_restart)
+                    else -> toolNameFromUnknownNotice(content)?.let { toolName ->
+                        tr(Res.string.value_started_result_unknown, toolName)
+                    } ?: content
+                }
+            }
+        }
+        if (text.isBlank()) return null
+        val role = when {
+            toolResult.isNotEmpty() || toolCall.isNotEmpty() -> ChatRole.TOOL
+            message is Message.User -> ChatRole.USER
+            message is Message.Assistant -> ChatRole.ASSISTANT
+            else -> ChatRole.SYSTEM
+        }
+        return ChatLine(role, text)
+    }
+
+    /** Never replay a provider tool call without its matching result after cancellation or a crash. */
+    private fun completedContext(messages: List<Message>): List<Message> = messages.filterIndexed { index, message ->
+        if (message is Message.System) return@filterIndexed false
+        val calls = message.parts.filterIsInstance<MessagePart.Tool.Call>()
+        if (calls.isEmpty()) return@filterIndexed true
+        val results = messages.getOrNull(index + 1)?.parts?.filterIsInstance<MessagePart.Tool.Result>().orEmpty()
+        calls.all { call ->
+            results.any { result ->
+                if (call.id != null) result.id == call.id else result.tool == call.tool
+            }
+        }
+    }
+    fun closeWhenSettled(onSettled: () -> Unit) {
         if (!closed.compareAndSet(false, true)) return
         val activeJob = job.load()
+        initializationJob.cancel()
         activeJob?.cancel()
         scope.launch {
-            try { activeJob?.join(); executor?.close() }
+            try {
+                initializationJob.join()
+                activeJob?.join()
+                onSettled()
+                executor?.close()
+            }
             finally { http?.close(); scope.cancel() }
         }
     }
 
+    override fun close() = closeWhenSettled {}
+
+    private fun eventId() = Uuid.random().toString()
+    private fun timestamp() = Clock.System.now().toEpochMilliseconds()
+
     companion object {
+        private const val AGENT_ID = "hanppie-agent"
         internal val SYSTEM_PROMPT get() = (if(Localization.english) "Respond concisely in English unless the user requests another language.\n" else "默认用简洁中文回复，除非用户要求其他语言。\n") + """
             你是憨皮，RoboMaster 系列机器人的对话助手。连续对话，理解上下文。
             当前设备型号只能来自可靠的设备信息；不得根据已验证机型推断连接目标的型号，也不得声称未经验证的型号已经受支持。

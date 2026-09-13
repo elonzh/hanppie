@@ -12,7 +12,6 @@ import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.robot.remote.DesktopSpeakerInput
 import cn.elonzh.hanppie.ui.scripts.EditorDocument
-import cn.elonzh.hanppie.ui.speech.SystemSpeech
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
@@ -34,7 +33,6 @@ class DesktopLiveTest {
             WorkbenchStorage.create()
         } else null
         val model = testConsoleModel(
-            speech = SystemSpeech(),
             speakerInput = DesktopSpeakerInput(),
             settingsStore = storage?.settings ?: MemorySettingsStore(),
             scriptRepository = storage?.scripts ?: MemoryScriptRepository(),

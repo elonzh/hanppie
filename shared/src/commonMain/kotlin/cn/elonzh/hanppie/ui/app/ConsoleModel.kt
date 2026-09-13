@@ -3,6 +3,8 @@
 package cn.elonzh.hanppie.ui.app
 
 import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.agent.provider.ModelConfigurationTester
+import cn.elonzh.hanppie.agent.runtime.SessionHistory
 import cn.elonzh.hanppie.robot.lab.LabRunEvent
 import cn.elonzh.hanppie.robot.lab.LabRunEventType
 import cn.elonzh.hanppie.robot.lab.LabRunProtocol
@@ -36,8 +38,6 @@ import cn.elonzh.hanppie.ui.settings.RobotLedColor
 import cn.elonzh.hanppie.ui.settings.SettingsController
 import cn.elonzh.hanppie.ui.settings.SettingsStore
 import cn.elonzh.hanppie.ui.speech.NoSpeechInput
-import cn.elonzh.hanppie.ui.speech.ReplySpeaker
-import cn.elonzh.hanppie.ui.speech.SpeechEngine
 import cn.elonzh.hanppie.ui.speech.SpeechInput
 import io.ktor.client.HttpClient
 import kotlin.concurrent.atomics.AtomicBoolean
@@ -51,12 +51,12 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 internal class ConsoleModel(
-    override val speech: SpeechEngine,
     override val voiceInput: SpeechInput = NoSpeechInput(),
     private val speakerInput: SpeakerInput = NoSpeakerInput(),
     private val robotRuntime: RobotRuntime,
     private val settingsStore: SettingsStore,
     scriptRepository: ScriptRepository,
+    sessionHistory: SessionHistory,
     createAgentHttpClient: () -> HttpClient,
     private val runtimeDefaults: () -> ModelSettings = ::ModelSettings,
     private val applyModelOverrides: (ModelSettings) -> ModelSettings = { it },
@@ -64,7 +64,6 @@ internal class ConsoleModel(
     private val clock: Clock = Clock.System,
     private val autoConnectOnStart: Boolean = true,
 ) : ConsoleController {
-    override val replySpeaker = ReplySpeaker(speech)
     override var voicePageActive = false
     override val isForeground: Boolean get() = acceptingWork.load()
     override val state = MutableStateFlow(ConsoleState())
@@ -73,13 +72,15 @@ internal class ConsoleModel(
         runtimeDefaults = runtimeDefaults,
         applyEnvironmentOverrides = applyModelOverrides,
     )
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     override val modelSettings = settings.model
-    override val autoReadReplies = settings.autoRead
+    private val modelTester = ModelConfigurationTester(scope = scope,
+        createHttpClient = createAgentHttpClient, clock = clock)
+    override val modelTestState = modelTester.state
     override val controlSettings = settings.control
     override val connectionPreferences = MutableStateFlow(ConnectionPreferences.fresh())
     override val settingsBusy = settings.busy
     override val settingsMessage = settings.message
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val connectionPreferencesScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     override val scriptLibrary = ScriptLibrary(scriptRepository)
     override val robotFiles = RobotFilesController(scope) { acceptingWork.load() && state.value.connected }
@@ -87,6 +88,7 @@ internal class ConsoleModel(
         scope.launch { scriptLibrary.load() }
     }
     override fun saveSettings() = settings.save()
+    override fun testModelSettings() = modelTester.test(modelSettings.value)
     override fun restoreDefaultSettings() = settings.restoreDefaults()
     private data class MediaRequest(val session: RobotSession, val start: Boolean, val audio: Boolean)
     private data class LedRequest(val session: RobotSession, val color: RobotLedColor?)
@@ -312,6 +314,7 @@ internal class ConsoleModel(
             tr(Res.string.stop_command_sent_robot_stop_is_unconfirmed)
         } },
         createHttpClient = createAgentHttpClient,
+        sessions = sessionHistory,
     )
 
     private suspend fun agentOperation(block: suspend () -> String): String {
@@ -338,7 +341,7 @@ internal class ConsoleModel(
     override fun setForeground(foreground: Boolean) {
         acceptingWork.store(foreground)
         foregroundState.value = foreground
-        if (!foreground) { haltRemote(); voiceInput.cancel(); replySpeaker.stop() }
+        if (!foreground) { haltRemote(); voiceInput.cancel() }
         else desiredTarget.load()?.let { target ->
             if (!state.value.connected && session.load() == null && reconnectJob?.isActive != true) {
                 reconnect(target, connectionRevision.load())
@@ -771,5 +774,5 @@ internal class ConsoleModel(
                 scriptMessage = if (uncertain) uiText(Res.string.connection_closed_robot_state_unknown) else it.scriptMessage)
         }
     }
-    override fun close() { connectionRevision.addAndFetch(1); desiredTarget.store(null); reconnectJob?.cancel(); robotFiles.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); replySpeaker.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); speech.close(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
+    override fun close() { connectionRevision.addAndFetch(1); desiredTarget.store(null); reconnectJob?.cancel(); robotFiles.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
 }

@@ -9,7 +9,6 @@ import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.robot.remote.RemotePage
 import cn.elonzh.hanppie.ui.robot.remote.chassisHeadingInCameraFrame
 import cn.elonzh.hanppie.ui.scripts.EditorDocument
-import cn.elonzh.hanppie.ui.speech.SystemSpeech
 import java.net.*
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
@@ -54,7 +53,7 @@ class RemoteLifecycleUiTest {
                     }
                 }
             }
-            val model = testConsoleModel(SystemSpeech(), robotNetwork = { network })
+            val model = testConsoleModel(robotNetwork = { network })
             try {
                 rule.setContent { WorkbenchTheme { RemotePage(model) } }
                 model.connect("127.0.0.1", "12345678")

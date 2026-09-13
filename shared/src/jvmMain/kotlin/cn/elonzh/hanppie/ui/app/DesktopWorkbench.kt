@@ -28,8 +28,10 @@ import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.robot.remote.DesktopSpeakerInput
 import cn.elonzh.hanppie.ui.settings.ModelSettings
-import cn.elonzh.hanppie.ui.speech.SystemSpeech
+import cn.elonzh.hanppie.ui.settings.ModelCatalog
+import cn.elonzh.hanppie.ui.settings.ModelProviderPreset
 import java.awt.Dimension
+import java.awt.EventQueue
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
 import java.io.File
@@ -42,11 +44,11 @@ private fun createDesktopWorkbenchViewModel(): WorkbenchViewModel {
     val storage = WorkbenchStorage.create()
     return try {
         val model = ConsoleModel(
-            speech = SystemSpeech(),
             speakerInput = DesktopSpeakerInput(),
             robotRuntime = JvmRobotRuntime(),
             settingsStore = storage.settings,
             scriptRepository = storage.scripts,
+            sessionHistory = storage.sessions,
             createAgentHttpClient = ::createAgentHttpClient,
             runtimeDefaults = { desktopModelOverrides(ModelSettings()) },
             applyModelOverrides = ::desktopModelOverrides,
@@ -58,11 +60,17 @@ private fun createDesktopWorkbenchViewModel(): WorkbenchViewModel {
     }
 }
 
-private fun desktopModelOverrides(settings: ModelSettings) = settings.copy(
-    endpoint = System.getenv("HANPPIE_LLM_ENDPOINT") ?: settings.endpoint,
-    model = System.getenv("HANPPIE_LLM_MODEL") ?: settings.model,
-    apiKey = System.getenv("HANPPIE_LLM_API_KEY") ?: settings.apiKey,
-)
+private fun desktopModelOverrides(settings: ModelSettings): ModelSettings {
+    val provider = System.getenv("HANPPIE_LLM_PROVIDER")?.uppercase()
+        ?.let { runCatching { ModelProviderPreset.valueOf(it) }.getOrNull() }
+        ?: settings.provider
+    val providerDefaults = if (provider == settings.provider) settings else ModelCatalog.defaults(provider)
+    return providerDefaults.copy(
+        endpoint = System.getenv("HANPPIE_LLM_ENDPOINT") ?: providerDefaults.endpoint,
+        model = System.getenv("HANPPIE_LLM_MODEL") ?: providerDefaults.model,
+        apiKey = System.getenv("HANPPIE_LLM_API_KEY") ?: settings.apiKey,
+    )
+}
 
 private fun desktopWifiSettingsCommand(): List<String>? {
     val os = System.getProperty("os.name", "").lowercase()
@@ -99,14 +107,14 @@ private fun DesktopWorkbenchWindow(onExit: () -> Unit) {
     var cockpitActive by remember { mutableStateOf(false) }
     var workbenchSize by remember { mutableStateOf(desktopWindowState.size) }
     val wifiSettingsCommand = remember { desktopWifiSettingsCommand() }
+    val shutdown = { holder.shutdown { EventQueue.invokeLater(onExit) } }
 
     Window(
         onCloseRequest = {
             if (document.value.dirty || document.value.busy || model.state.value.connected || model.state.value.busy) {
                 confirmExit = true
             } else {
-                holder.shutdown()
-                onExit()
+                shutdown()
             }
         },
         title = "Hanppie",
@@ -161,7 +169,7 @@ private fun DesktopWorkbenchWindow(onExit: () -> Unit) {
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button({ confirmExit = false }) { Text(tr(Res.string.back)) }
-                    Button({ holder.shutdown(); onExit() }) { Text(tr(Res.string.quit_anyway)) }
+                    Button(shutdown) { Text(tr(Res.string.quit_anyway)) }
                 }
             }
         }

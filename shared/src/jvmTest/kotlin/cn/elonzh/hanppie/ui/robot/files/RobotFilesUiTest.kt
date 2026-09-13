@@ -75,6 +75,8 @@ class RobotFilesUiTest {
             WorkbenchGlyph.CODE to "code-xml",
             WorkbenchGlyph.CHAT to "message-square",
             WorkbenchGlyph.SETTINGS to "sliders-horizontal",
+            WorkbenchGlyph.ARCHIVE to "archive",
+            WorkbenchGlyph.RESTORE to "archive-restore",
         )
 
         assertEquals(WorkbenchGlyph.entries.toSet(), expected.keys)

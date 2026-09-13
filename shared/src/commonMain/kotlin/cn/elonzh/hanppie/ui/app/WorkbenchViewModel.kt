@@ -155,7 +155,6 @@ internal class WorkbenchViewModel(
     fun pauseConnection() {
         foreground = false
         model.setForeground(false)
-        model.speech.stop()
         val previous = transition
         transition = viewModelScope.launch {
             previous?.join()
@@ -176,13 +175,16 @@ internal class WorkbenchViewModel(
         }
     }
 
-    fun shutdown() {
+    fun shutdown(onComplete: () -> Unit = {}) {
         if (!closed.compareAndSet(expectedValue = false, newValue = true)) return
         viewModelScope.cancel()
         transition?.cancel()
+        model.chat.closeWhenSettled {
+            storage.close()
+            onComplete()
+        }
         model.close()
         releasePlatformResources()
-        storage.close()
     }
 
     override fun onCleared() {

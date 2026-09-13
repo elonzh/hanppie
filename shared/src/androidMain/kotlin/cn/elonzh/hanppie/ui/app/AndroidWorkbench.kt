@@ -34,7 +34,6 @@ import cn.elonzh.hanppie.ui.design.WorkbenchDialog
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.robot.remote.AndroidSpeakerInput
-import cn.elonzh.hanppie.ui.speech.AndroidSpeech
 import cn.elonzh.hanppie.ui.speech.AndroidSpeechInput
 import java.net.DatagramSocket
 import top.yukonga.miuix.kmp.basic.Button
@@ -77,12 +76,12 @@ private fun createAndroidWorkbenchViewModel(
     val speechInput = AndroidSpeechInput(app)
     return try {
         val model = ConsoleModel(
-            speech = AndroidSpeech(app),
             voiceInput = speechInput,
             speakerInput = AndroidSpeakerInput(app),
             robotRuntime = JvmRobotRuntime(network::network),
             settingsStore = storage.settings,
             scriptRepository = storage.scripts,
+            sessionHistory = storage.sessions,
             createAgentHttpClient = ::createAgentHttpClient,
             prepareNetwork = network::prepare,
             autoConnectOnStart = autoConnectOnStart,
@@ -135,7 +134,6 @@ fun AndroidWorkbench(autoConnectOnStart: Boolean = true) {
     }
     fun startVoice() {
         if (!holder.model.isForeground || !holder.model.voicePageActive) return
-        holder.model.replySpeaker.stop()
         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) speechInput.start()
         else microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
     }
@@ -185,11 +183,6 @@ fun AndroidWorkbench(autoConnectOnStart: Boolean = true) {
                     try { context.startActivity(Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS)) }
                     catch (_: Exception) { holder.updateFileError(tr(Res.string.could_not_open_default_voice_input_settings)) }
                 }) { Text(tr(Res.string.default_voice_input)) }
-                Button({
-                    audioSettings = false
-                    try { context.startActivity(Intent("com.android.settings.TTS_SETTINGS")) }
-                    catch (_: Exception) { holder.updateFileError(tr(Res.string.could_not_open_text_to_speech_settings)) }
-                }, modifier = Modifier.testTag("open-tts-settings")) { Text(tr(Res.string.text_to_speech_settings)) }
             }
         }
         WorkbenchDialog(show = voiceDisclosure, onDismissRequest = { voiceDisclosure = false }, title = tr(Res.string.use_phone_microphone),

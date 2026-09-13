@@ -1,7 +1,6 @@
 package cn.elonzh.hanppie.ui.robot.remote
 
 import cn.elonzh.hanppie.ui.app.testConsoleModel
-import cn.elonzh.hanppie.ui.speech.SystemSpeech
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
@@ -54,7 +53,7 @@ class DesktopSpeakerInputTest {
             override suspend fun finish(): ByteArray = error("Unready recording must not be encoded")
             override fun cancel() = Unit
         }
-        val model = testConsoleModel(SystemSpeech(), speakerInput = input)
+        val model = testConsoleModel(speakerInput = input)
         try {
             model.remoteEnabled.value = true
             model.beginPushToTalk()

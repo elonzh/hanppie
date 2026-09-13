@@ -17,6 +17,10 @@ import cn.elonzh.hanppie.ui.chat.ChatLine
 import cn.elonzh.hanppie.ui.chat.ChatPage
 import cn.elonzh.hanppie.ui.chat.ChatRole
 import cn.elonzh.hanppie.ui.chat.ChatState
+import ai.koog.agents.core.agent.execution.AgentExecutionInfo
+import cn.elonzh.hanppie.agent.runtime.MessageEvent
+import cn.elonzh.hanppie.agent.runtime.TestSessionHistory
+import ai.koog.prompt.dsl.prompt
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
 import cn.elonzh.hanppie.ui.i18n.uiText
@@ -28,11 +32,10 @@ import cn.elonzh.hanppie.ui.settings.ControlAction
 import cn.elonzh.hanppie.ui.settings.ControlKey
 import cn.elonzh.hanppie.ui.settings.KeyBinding
 import cn.elonzh.hanppie.ui.settings.NightMode
+import cn.elonzh.hanppie.ui.settings.ModelProviderPreset
 import cn.elonzh.hanppie.ui.settings.SettingsPage
-import cn.elonzh.hanppie.ui.speech.SpeechEngine
 import cn.elonzh.hanppie.ui.speech.SpeechInput
 import cn.elonzh.hanppie.ui.speech.SpeechInputState
-import cn.elonzh.hanppie.ui.speech.SpeechState
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
@@ -215,14 +218,7 @@ class ConsoleUiTest {
         } finally { model.close() }
     }
 
-    @Test fun voiceRecognitionFillsDraftAndReplyReadingDoesNotReplayOnNavigation() {
-        val spoken = mutableListOf<String>()
-        val speech = object : SpeechEngine {
-            override val state = kotlinx.coroutines.flow.MutableStateFlow(SpeechState("fixture", true))
-            override fun speak(text: String) { spoken += text }
-            override fun stop() {}
-            override fun close() {}
-        }
+    @Test fun voiceRecognitionFillsDraftAndStopsOnNavigation() {
         val input = object : SpeechInput {
             override val state = kotlinx.coroutines.flow.MutableStateFlow(SpeechInputState())
             override fun start() { state.value = state.value.copy(active = true) }
@@ -231,7 +227,7 @@ class ConsoleUiTest {
             override fun consumeResult() { state.value = state.value.copy(result = "") }
             override fun close() { cancel() }
         }
-        val model = testConsoleModel(speech, input)
+        val model = testConsoleModel(input)
         try {
             rule.setContent { WorkbenchTheme {
                 Box(Modifier.requiredSize(393.dp, 740.dp)) {
@@ -244,18 +240,13 @@ class ConsoleUiTest {
             rule.onNodeWithContentDescription("结束录音").performClick()
             rule.waitUntil { rule.onAllNodesWithText("看看连接状态").fetchSemanticsNodes().isNotEmpty() }
             assertTrue(model.chat.state.value.lines.isEmpty())
-            rule.onNodeWithContentDescription("设置").performClick()
-            rule.onNode(isToggleable()).performScrollTo().performClick()
-            rule.onNodeWithContentDescription("对话").performClick()
             rule.runOnIdle { model.chat.state.value = model.chat.state.value.copy(
                 replyRevision = 1, lastReply = "目前未连接机器人。", lines = listOf(ChatLine(ChatRole.ASSISTANT, "目前未连接机器人。"))) }
-            rule.waitUntil { spoken.size == 1 }
             rule.waitUntil(5000) { rule.onAllNodesWithText("目前未连接机器人。").fetchSemanticsNodes().isNotEmpty() }
             snapshot("phone-chat-voice")
             rule.onNodeWithContentDescription("设备").performClick()
             rule.onNodeWithContentDescription("对话").performClick()
             rule.waitForIdle()
-            assertEquals(1, spoken.size)
             assertTrue(!input.state.value.active)
         } finally { model.close() }
     }
@@ -292,6 +283,66 @@ class ConsoleUiTest {
             rule.onNodeWithContentDescription("设置").performClick()
             rule.onNodeWithText("API Key").performScrollTo().assertIsDisplayed()
             snapshot("phone-chat-settings")
+        } finally { model.close() }
+    }
+
+    @Test fun sessionHistoryAdaptsBetweenPhoneDialogAndDesktopSidebar() {
+        val history = TestSessionHistory()
+        kotlinx.coroutines.runBlocking {
+            val first = history.create("机器人巡检")
+            history.append(first.id, MessageEvent(
+                eventId = "history-message",
+                runId = "history-run",
+                timestamp = 1,
+                executionInfo = AgentExecutionInfo(null, "test"),
+                message = prompt("history-ui") { user("检查当前连接") }.messages.single(),
+            ))
+            history.create("灯光方案")
+        }
+        val model = testConsoleModel(sessionHistory = history)
+        val width = mutableStateOf(393.dp)
+        try {
+            rule.setContent { WorkbenchTheme {
+                Box(Modifier.requiredSize(width.value, 740.dp)) { ChatPage(model) }
+            } }
+            rule.waitUntil(5_000) { model.chat.state.value.ready && model.chat.state.value.sessions.size == 2 }
+            rule.onNodeWithTag("conversation-list").assertDoesNotExist()
+            rule.onNodeWithContentDescription("对话记录").performClick()
+            rule.onNodeWithTag("conversation-list").assertIsDisplayed()
+            rule.onNodeWithText("机器人巡检").assertIsDisplayed()
+            snapshot("phone-conversation-list", rule.onNodeWithTag("conversation-list"))
+
+            rule.onNodeWithText("机器人巡检").performClick()
+            rule.runOnIdle { width.value = 1040.dp }
+            rule.waitForIdle()
+            rule.onNodeWithTag("conversation-list").assertIsDisplayed()
+            rule.onNodeWithText("机器人巡检").assertIsDisplayed()
+            snapshot("desktop-conversation-sidebar")
+        } finally { model.close() }
+    }
+
+    @Test fun desktopChatShortcutsCreateConversationAndFocusComposer() {
+        val history = TestSessionHistory()
+        val model = testConsoleModel(sessionHistory = history)
+        var settingsOpened = false
+        try {
+            rule.setContent { WorkbenchTheme {
+                Box(Modifier.requiredSize(1040.dp, 740.dp)) { ChatPage(model, onSettings = { settingsOpened = true }) }
+            } }
+            rule.waitUntil(5_000) { model.chat.state.value.ready }
+            val initial = model.chat.state.value.sessions.size
+            rule.onNodeWithTag("chat-input").performClick().performKeyInput {
+                keyDown(Key.CtrlLeft); pressKey(Key.N); keyUp(Key.CtrlLeft)
+            }
+            rule.waitUntil(5_000) { model.chat.state.value.sessions.size == initial + 1 }
+            rule.onNodeWithTag("chat-input").performKeyInput {
+                keyDown(Key.CtrlLeft); pressKey(Key.L); keyUp(Key.CtrlLeft)
+            }
+            rule.onNodeWithTag("chat-input").assertIsFocused()
+            rule.onNodeWithTag("chat-input").performKeyInput {
+                keyDown(Key.CtrlLeft); pressKey(Key.Comma); keyUp(Key.CtrlLeft)
+            }
+            rule.runOnIdle { assertTrue(settingsOpened) }
         } finally { model.close() }
     }
 
@@ -475,7 +526,7 @@ class ConsoleUiTest {
         ImageIO.write(buffered, "png", output)
     }
 
-    @Test fun beginnerViewHidesParametersAndSpeechIsExplicit() {
+    @Test fun beginnerViewHidesParametersAndModelSettingsAreExplicit() {
         val model = testConsoleModel()
         try {
             rule.setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
@@ -483,7 +534,17 @@ class ConsoleUiTest {
             rule.onNodeWithText("语音", substring = false).assertDoesNotExist()
             rule.onNodeWithContentDescription("对话").performClick()
             rule.onNodeWithContentDescription("设置").performClick()
-            rule.onNodeWithText("自动朗读").assertExists()
+            rule.onNodeWithText("供应商").performScrollTo().assertExists()
+            rule.onNodeWithContentDescription("model-provider-selector").performScrollTo().performClick()
+            ModelProviderPreset.entries.forEach { provider ->
+                rule.onNodeWithContentDescription("model-provider-${provider.name}").assertExists()
+            }
+            rule.onNodeWithContentDescription("model-provider-DEEPSEEK").performClick()
+            rule.runOnIdle {
+                assertEquals(ModelProviderPreset.DEEPSEEK, model.modelSettings.value.provider)
+                assertEquals(ModelProviderPreset.DEEPSEEK.defaultEndpoint, model.modelSettings.value.endpoint)
+            }
+            rule.onNodeWithText("自动朗读").assertDoesNotExist()
             rule.onNodeWithContentDescription("gimbal-sensitivity-selector").assertExists()
             val original = model.controlSettings.value.remoteLeds.standby
             rule.onNodeWithContentDescription("remote-led-standby").performScrollTo().performClick()
