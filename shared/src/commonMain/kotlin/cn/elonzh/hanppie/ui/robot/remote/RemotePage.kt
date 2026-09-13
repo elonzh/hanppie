@@ -73,6 +73,7 @@ internal fun RemotePage(
     val foreground by model.foregroundState.collectAsState()
     var pageFocused by remember { mutableStateOf(false) }
     var keys by remember { mutableStateOf(setOf<Key>()) }
+    var firePointerHeld by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     val currentLeft by rememberUpdatedState(left)
     val currentRight by rememberUpdatedState(right)
@@ -84,6 +85,7 @@ internal fun RemotePage(
         if (connected.connected) model.setRemoteLed(control.remoteLeds.color(ledState))
     }
     DisposableEffect(model) { onDispose {
+        model.stopFiring()
         (onPushToTalkStop ?: model::endPushToTalk)()
         model.setRemoteLed(null)
         model.leaveRemote()
@@ -91,7 +93,7 @@ internal fun RemotePage(
     } }
     LaunchedEffect(enabled) {
         if (enabled) focus.requestFocus()
-        else { keys = emptySet(); left = Offset.Zero; right = Offset.Zero }
+        else { keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; model.stopFiring() }
     }
     LaunchedEffect(enabled) {
         while (enabled) {
@@ -112,6 +114,12 @@ internal fun RemotePage(
             delay(50)
         }
     }
+    val currentShiftHeld = Key.ShiftLeft in currentKeys || Key.ShiftRight in currentKeys
+    val fireKeyHeld = currentControl.shortcuts.isHeld(ControlAction.Fire, currentKeys, currentShiftHeld)
+    val shouldFire = enabled && (fireKeyHeld || firePointerHeld)
+    LaunchedEffect(shouldFire) {
+        if (shouldFire) model.startFiring() else model.stopFiring()
+    }
     BoxWithConstraints(modifier.fillMaxSize().testTag("remote-surface").background(colors.background).pointerInput(Unit) {
         awaitPointerEventScope {
             while (true) {
@@ -122,8 +130,9 @@ internal fun RemotePage(
     }.focusRequester(focus).onFocusChanged {
         pageFocused = it.hasFocus
         if (!it.hasFocus) {
-            keys = emptySet(); left = Offset.Zero; right = Offset.Zero
-            model.haltRemote()
+            keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+            model.stopFiring()
+            model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
         }
     }.onPreviewKeyEvent {
         val supported = control.shortcuts.supports(it.key)
@@ -137,7 +146,7 @@ internal fun RemotePage(
             else if (it.type == KeyEventType.KeyDown) {
                 if (it.key !in keys) when (control.shortcuts.edgeAction(it.key,
                         it.isShiftPressed || Key.ShiftLeft in keys || Key.ShiftRight in keys)) {
-                    ControlAction.Fire -> if (enabled) model.fireSelected()
+                    ControlAction.Fire -> Unit
                     ControlAction.SwitchAmmo -> model.switchAmmo()
                     ControlAction.Photo -> if (enabled) mediaControls.takePhoto()
                     ControlAction.Recording -> if (enabled) mediaControls.toggleRecording()
@@ -160,9 +169,9 @@ internal fun RemotePage(
     }.focusable()) {
         val landscapeReady = maxWidth >= maxHeight
         val compactHud = maxWidth < 800.dp
-        LaunchedEffect(landscapeReady) { if (!landscapeReady) model.haltRemote() }
+        LaunchedEffect(landscapeReady) { if (!landscapeReady) { firePointerHeld = false; model.stopFiring(); model.haltRemote() } }
         LaunchedEffect(landscapeReady, foreground, connected.connected) {
-            keys = emptySet(); left = Offset.Zero; right = Offset.Zero
+            keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; model.stopFiring()
             if (landscapeReady && foreground) focus.requestFocus()
         }
         LaunchedEffect(landscapeReady, foreground, pageFocused, connected.connected) {
@@ -245,7 +254,17 @@ internal fun RemotePage(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 HudIconButton(if (gelSelected) tr(Res.string.fire_one_gel_bead) else tr(Res.string.fire_infrared),
                     WorkbenchGlyph.CROSSHAIR, enabled = enabled && !connected.busy, selected = true,
-                    action = model::fireSelected)
+                    onPressChange = { held ->
+                        firePointerHeld = held
+                        if (held) {
+                            keyboardHints = false
+                            focus.requestFocus()
+                        }
+                    },
+                    action = {
+                        model.fireSelected()
+                        focus.requestFocus()
+                    })
                 HudButton(tr(Res.string.switch_ammo), if (gelSelected) tr(Res.string.gel) else tr(Res.string.ir), symbol = WorkbenchGlyph.PACKETS) {
                     model.switchAmmo(); focus.requestFocus()
                 }
@@ -382,7 +401,7 @@ private fun SignalIndicator(quality: Int?, compact: Boolean = false) {
 }
 
 @Composable internal fun HudIconButton(label: String, symbol: WorkbenchGlyph, enabled: Boolean = true,
-    selected: Boolean = false, action: () -> Unit) {
+    selected: Boolean = false, onPressChange: ((Boolean) -> Unit)? = null, action: () -> Unit = {}) {
     val colors = MiuixTheme.colorScheme
     val surface = if (selected && enabled) colors.primary else HanppieDesignTokens.RemoteHudSurface.copy(alpha = .88f)
     val ink = when {
@@ -390,8 +409,27 @@ private fun SignalIndicator(quality: Int?, compact: Boolean = false) {
         selected && enabled -> colors.onPrimary
         else -> HanppieDesignTokens.RemoteHudContent
     }
+    val currentOnPressChange by rememberUpdatedState(onPressChange)
+    val holdModifier = if (onPressChange != null) {
+        Modifier.pointerInput(enabled) {
+            if (enabled) awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                currentOnPressChange?.invoke(true)
+                try {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val pointer = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!pointer.pressed) break
+                    }
+                } finally {
+                    currentOnPressChange?.invoke(false)
+                }
+            }
+        }
+    } else Modifier
     IconButton(onClick = action, enabled = enabled, cornerRadius = 24.dp,
         modifier = Modifier.size(HanppieDesignTokens.TouchTarget)
+            .then(holdModifier)
             .border(1.dp, Color.White.copy(alpha = .22f), CircleShape)
             .semantics { contentDescription = label }, backgroundColor = surface) {
         WorkbenchIcon(symbol, ink.copy(alpha = if (enabled) 1f else .45f))

@@ -48,6 +48,8 @@ internal interface ConsoleController : AutoCloseable {
     fun selectGear(gear: Int)
     fun switchAmmo()
     fun fireSelected()
+    fun startFiring()
+    fun stopFiring()
     fun enableRemote()
     fun haltRemote()
     fun leaveRemote()

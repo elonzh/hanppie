@@ -123,6 +123,9 @@ internal class ConsoleModel(
     override val remoteInput = MutableStateFlow(List(5) { 0.0 })
     override val cameraYaw = MutableStateFlow<Double?>(null)
     override val gelSelected = MutableStateFlow(false)
+    private val firing = AtomicBoolean(false)
+    private var firingJob: Job? = null
+    private val gelFireMutex = Mutex()
     override val driveGear = MutableStateFlow(3)
     override val talking = MutableStateFlow(false)
     override val microphoneReady = MutableStateFlow(false)
@@ -161,6 +164,7 @@ internal class ConsoleModel(
     }
     override fun haltRemote() {
         remoteRevision.addAndFetch(1)
+        stopFiring()
         cancelPushToTalk()
         runCatching { session.load()?.halt() }
         remoteEnabled.value = false
@@ -184,15 +188,59 @@ internal class ConsoleModel(
             }
         }
     }
+    override fun startFiring() {
+        if (!remoteEnabled.value || !acceptingWork.load() || chat.state.value.running || state.value.busy) return
+        firing.store(true)
+        if (firingJob?.isActive == true) return
+        firingJob = scope.launch {
+            try {
+                while (firing.load() && remoteEnabled.value && acceptingWork.load() && !chat.state.value.running && !state.value.busy) {
+                    val s = session.load() ?: break
+                    if (gelSelected.value) {
+                        val seq = gelFireMutex.withLock {
+                            if (!firing.load() || !remoteEnabled.value) return@withLock null
+                            runCatching { s.fireGelOnce() }.getOrNull()
+                        }
+                        if (seq != null) {
+                            log(tr(Res.string.gel_fire_command_sent_seq_value_physical_firing_unconfirmed, seq))
+                        } else {
+                            break
+                        }
+                    } else {
+                        runCatching { s.fireInfrared() }.onFailure { break }
+                        delay(200)
+                    }
+                }
+            } finally {
+                firing.store(false)
+            }
+        }
+    }
+    override fun stopFiring() {
+        firing.store(false)
+        if (!gelSelected.value) {
+            firingJob?.cancel()
+        }
+    }
     override fun fire() {
         if (remoteEnabled.value && acceptingWork.load() && !chat.state.value.running && !state.value.busy)
             runCatching { session.load()?.fireInfrared() }.onFailure { state.update { s -> s.copy(error = it.message) } }
     }
-    override fun fireGel() = work {
-        check(remoteEnabled.value) { tr(Res.string.enable_remote_control_first) }
-        check(!state.value.scriptRunPhase.mayBeExecuting) { tr(Res.string.stop_the_lab_script_first) }
-        val sequence = checkNotNull(session.load()).fireGelOnce()
-        log(tr(Res.string.gel_fire_command_sent_seq_value_physical_firing_unconfirmed,sequence))
+    override fun fireGel() {
+        if (!remoteEnabled.value || !acceptingWork.load() || chat.state.value.running || state.value.busy) return
+        scope.launch {
+            val s = session.load() ?: return@launch
+            gelFireMutex.withLock {
+                runCatching {
+                    val sequence = s.fireGelOnce()
+                    log(tr(Res.string.gel_fire_command_sent_seq_value_physical_firing_unconfirmed, sequence))
+                }.onFailure { error ->
+                    val message = error.message ?: error::class.simpleName ?: "Unknown error"
+                    log(tr(Res.string.error_value, message))
+                    state.update { it.copy(error = message) }
+                }
+            }
+        }
     }
     override fun beginPushToTalk() {
         if (!acceptingWork.load() || !remoteEnabled.value || talkBusy.value || !talking.compareAndSet(false, true)) return
@@ -519,6 +567,7 @@ internal class ConsoleModel(
 
     private fun connectionLost(candidate: RobotSession, reason: String) {
         remoteEnabled.value = false
+        stopFiring()
         remoteInput.value = List(5) { 0.0 }
         cameraYaw.value = null
         scope.launch {
