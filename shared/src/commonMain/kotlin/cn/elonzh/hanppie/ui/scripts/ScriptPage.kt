@@ -256,7 +256,7 @@ internal fun ScriptPage(
             onBack = navigateBack.takeIf { editorOpen },
         )
         if (robotState.busy) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
-        (fileError ?: robotState.error)?.let {
+        fileError?.let {
             Text(it, Modifier.padding(vertical = 8.dp), color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -642,7 +642,7 @@ private fun RunStatusCard(state: ConsoleState, elapsedText: String?, modifier: M
     val color = scriptRunColor(state.scriptRunPhase)
     Card(modifier, colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer)) {
         Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (state.scriptRunPhase.active) LinearProgressIndicator(Modifier.fillMaxWidth().height(3.dp))
+            if (state.scriptRunPhase.progressing) LinearProgressIndicator(Modifier.fillMaxWidth().height(3.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(14.dp).background(color, RoundedCornerShape(50)))
                 Spacer(Modifier.width(10.dp))
@@ -650,6 +650,13 @@ private fun RunStatusCard(state: ConsoleState, elapsedText: String?, modifier: M
             }
             Text(state.scriptTitle ?: tr(Res.string.script), fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
+            state.scriptRunId?.let { runId ->
+                SelectionContainer {
+                    Text(tr(Res.string.script_run_id_value, runId), fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                }
+            }
             elapsedText?.let {
                 Text(it, fontSize = 32.sp, fontFamily = FontFamily.Monospace,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary)

@@ -37,6 +37,7 @@ class ChatAgentTest {
         stopRobot: suspend () -> String,
         executor: PromptExecutor,
         sessions: TestSessionHistory = TestSessionHistory(),
+        operationTimeoutMillis: Long = 120_000,
     ) = ChatAgent(
         status = status,
         execute = execute,
@@ -44,6 +45,7 @@ class ChatAgentTest {
         createHttpClient = { error("HTTP client must not be created when a test executor is injected") },
         sessions = sessions,
         executorOverride = executor,
+        operationTimeoutMillis = operationTimeoutMillis,
     )
 
     @Test fun continuousConversationUsesCompletedPrompt(): Unit = runBlocking {
@@ -57,11 +59,14 @@ class ChatAgentTest {
             assertNotNull(agent.state.value.firstTokenMs)
         }
     }
-    @Test fun toolResultsReturnToModelAndWaitForExactScriptApproval() = runBlocking {
+    @Test fun sideEffectResultEndsRunAfterExactScriptApproval() = runBlocking {
         var requests = 0; var executions = 0
         val source = "def start():\n    print('test')"
         val history = TestSessionHistory()
-        val fake = Fake { if (requests++ == 0) call("execute_lab_python", buildJsonObject { put("source", source) }.toString()) else text("命令已发送") }
+        val fake = Fake {
+            check(requests++ == 0) { "Side-effect result must not trigger another model request" }
+            call("execute_lab_python", buildJsonObject { put("source", source) }.toString())
+        }
         agent({ "已连接" }, { assertEquals(source, it); executions++; "启动命令已发送" }, { "停止命令已发送" }, fake, history).use { agent ->
             agent.ready()
             agent.send("打印 test", config)
@@ -70,7 +75,8 @@ class ChatAgentTest {
             assertEquals(source, agent.state.value.approval); assertEquals(0, executions)
             agent.approve(true); agent.finished()
             assertEquals(1, executions)
-            assertTrue(fake.prompts.last().messages.toString().contains("启动命令已发送"))
+            assertEquals(1, requests)
+            assertEquals("启动命令已发送", agent.state.value.lastReply)
             val approval = history.events.filterIsInstance<ToolApprovalRequestedEvent>().single()
             val started = history.events.filterIsInstance<ToolCallStartingEvent>().single()
             val result = history.events.filterIsInstance<MessageEvent>()
@@ -78,6 +84,32 @@ class ChatAgentTest {
             assertEquals("call-1", approval.toolCall.id)
             assertEquals(approval.toolCall.id, started.toolCall.id)
             assertEquals(started.toolCall.id, result.id)
+        }
+    }
+
+    @Test fun sideEffectCompletionImmediatelyAcceptsTheNextMessage() = runBlocking {
+        var requests = 0
+        val source = "def start(): pass"
+        val history = TestSessionHistory()
+        val fake = Fake {
+            if (requests++ == 0) {
+                call("execute_lab_python", buildJsonObject { put("source", source) }.toString())
+            } else {
+                text("可以继续")
+            }
+        }
+        agent({ "已连接" }, { "启动命令已发送" }, { "停止命令已发送" }, fake, history).use { agent ->
+            agent.ready()
+            assertTrue(agent.send("执行", config))
+            withTimeout(5000) { agent.state.first { it.approval != null || !it.running } }
+            agent.approve(true)
+            assertNull(agent.finished().error)
+            assertEquals(ChatPhase.IDLE, agent.state.value.phase)
+
+            assertTrue(agent.send("继续", config))
+            assertNull(agent.finished().error)
+            assertEquals(2, history.events.filterIsInstance<AgentStartingEvent>().size)
+            assertEquals("可以继续", agent.state.value.lastReply)
         }
     }
 
@@ -141,14 +173,18 @@ class ChatAgentTest {
     }
     @Test fun denialIsReturnedToModelWithoutExecuting() = runBlocking {
         var requests = 0
-        val fake = Fake { if (requests++ == 0) call("execute_lab_python", "{\"source\":\"def start(): pass\"}") else text("不执行") }
+        val fake = Fake {
+            check(requests++ == 0) { "Rejected side effect must not trigger another model request" }
+            call("execute_lab_python", "{\"source\":\"def start(): pass\"}")
+        }
         agent({ "已连接" }, { error("Must not execute") }, { error("Must not stop") }, fake).use { agent ->
             agent.ready()
             agent.send("生成脚本", config)
             withTimeout(5000) { agent.state.first { it.approval != null || !it.running } }
             agent.approve(false); agent.finished()
             assertNull(agent.state.value.error)
-            assertTrue(fake.prompts.last().messages.toString().contains("用户拒绝执行"))
+            assertEquals(1, requests)
+            assertTrue(agent.state.value.lastReply.contains("用户拒绝执行"))
         }
     }
     @Test fun truncatedToolStreamIsNeverExecuted(): Unit = runBlocking {
@@ -158,7 +194,47 @@ class ChatAgentTest {
             agent.send("停", config); assertNotNull(agent.finished().error)
         }
     }
-    @Test fun graphStopsBeforeNinthModelRequest(): Unit = runBlocking {
+
+    @Test fun failedRunIsTraceableInternallyAndImmediatelyAcceptsTheNextMessage(): Unit = runBlocking {
+        var requests = 0
+        val history = TestSessionHistory()
+        val fake = Fake {
+            if (requests++ == 0) {
+                listOf(StreamFrame.ToolCallComplete("c", "stop_lab", "{}"), StreamFrame.End("length"))
+            } else {
+                text("恢复完成")
+            }
+        }
+        agent({ "未连接" }, { error("No robot") }, { error("No robot") }, fake, history).use { agent ->
+            agent.ready()
+            assertTrue(agent.send("停", config))
+            val error = requireNotNull(agent.finished().error)
+            val failedRun = history.events.filterIsInstance<AgentStartingEvent>().single().runId
+            assertFalse(error.contains(failedRun))
+            val failure = history.events.filterIsInstance<AgentExecutionFailedEvent>().single()
+            assertEquals(failedRun, failure.runId)
+            assertContains(failure.failure, "Model output was truncated")
+            assertEquals(ChatPhase.IDLE, agent.state.value.phase)
+
+            assertTrue(agent.send("继续", config))
+            assertNull(agent.finished().error)
+            assertEquals("恢复完成", agent.state.value.lastReply)
+        }
+    }
+
+    @Test fun busyRuntimeRejectsACommandWithoutExposingAnInternalReference(): Unit = runBlocking {
+        val fake = Fake { text("unused") }
+        agent({ "未连接" }, { error("No robot") }, { error("No robot") }, fake).use { agent ->
+            agent.ready()
+            agent.state.value = agent.state.value.copy(phase = ChatPhase.MANAGING)
+
+            assertFalse(agent.send("不会丢失", config))
+            val error = requireNotNull(agent.state.value.error)
+            assertContains(error, ChatPhase.MANAGING.name)
+            assertFalse(Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}").containsMatchIn(error))
+        }
+    }
+    @Test fun repeatedReadOnlyToolCallEndsRunWithoutRequestLimitFailure(): Unit = runBlocking {
         var requests = 0
         var statusReads = 0
         val fake = Fake {
@@ -172,9 +248,50 @@ class ChatAgentTest {
             agent.ready()
             agent.send("持续读取", config)
 
-            assertNotNull(agent.finished().error)
-            assertEquals(8, requests)
-            assertEquals(8, statusReads)
+            assertNull(agent.finished().error)
+            assertEquals(2, requests)
+            assertEquals(2, statusReads)
+            assertEquals("已连接", agent.state.value.lastReply)
+        }
+    }
+
+    @Test fun stopResultEndsRunWithoutAnotherModelRequest(): Unit = runBlocking {
+        var requests = 0
+        var stops = 0
+        val fake = Fake {
+            check(requests++ == 0) { "Stop result must not trigger another model request" }
+            call("stop_lab")
+        }
+        agent({ "已连接" }, { error("No script") }, { stops++; "停止命令已发送；未获得机内停止确认。" }, fake).use { agent ->
+            agent.ready()
+            agent.send("停止", config)
+
+            assertNull(agent.finished().error)
+            assertEquals(1, requests)
+            assertEquals(1, stops)
+            assertEquals("停止命令已发送；未获得机内停止确认。", agent.state.value.lastReply)
+        }
+    }
+
+    @Test fun approvalWaitDoesNotConsumeModelOrToolTimeout(): Unit = runBlocking {
+        var executions = 0
+        val fake = Fake { call("execute_lab_python", "{\"source\":\"def start(): pass\"}") }
+        agent(
+            status = { "已连接" },
+            execute = { executions++; "启动命令已发送" },
+            stopRobot = { error("No stop") },
+            executor = fake,
+            operationTimeoutMillis = 100,
+        ).use { agent ->
+            agent.ready()
+            agent.send("执行", config)
+            withTimeout(5000) { agent.state.first { it.approval != null || !it.running } }
+            delay(200)
+            assertTrue(agent.state.value.running)
+
+            agent.approve(true)
+            assertNull(agent.finished().error)
+            assertEquals(1, executions)
         }
     }
     @Test fun secretAndInvalidUrlNeverLeak() {
@@ -184,16 +301,21 @@ class ChatAgentTest {
         assertFails { config.copy(endpoint = "https://example.com?debug=true").validate() }
         assertFails { config.copy(endpoint = "https://example.com/#fragment").validate() }
     }
-    @Test fun httpStatusIsUsefulWithoutLeakingProviderBody(): Unit = runBlocking {
+    @Test fun originalProviderExceptionIsNotRewritten(): Unit = runBlocking {
         val fake = Fake { throw ai.koog.http.client.KoogHttpClientException(statusCode = 401,
             errorBody = "Authorization: Bearer provider-secret", message = "request-private-content") }
-        agent({ "disconnected" }, { error("Must not execute") }, { error("Must not stop") }, fake).use { agent ->
+        val history = TestSessionHistory()
+        agent({ "disconnected" }, { error("Must not execute") }, { error("Must not stop") }, fake, history).use { agent ->
             agent.ready()
             agent.send("hello", config)
             val error = requireNotNull(agent.finished().error)
-            assertTrue(error.contains("HTTP 401"))
-            assertFalse(error.contains("provider-secret"))
-            assertFalse(error.contains("request-private-content"))
+            val runId = history.events.filterIsInstance<AgentStartingEvent>().single().runId
+            assertFalse(error.contains(runId))
+            assertContains(error, "request-private-content")
+            val failure = history.events.filterIsInstance<AgentExecutionFailedEvent>().single().failure
+            assertContains(failure, "KoogHttpClientException")
+            assertContains(failure, "request-private-content")
+            assertContains(failure, "ChatAgentTest")
         }
     }
 
@@ -211,7 +333,7 @@ class ChatAgentTest {
         }
     }
 
-    @Test fun sessionManagementKeepsActiveAndArchivedListsConsistent() = runBlocking {
+    @Test fun sessionManagementKeepsTheSessionListConsistent() = runBlocking {
         val fake = Fake { text("unused") }
         agent({ "未连接" }, { error("No robot") }, { error("No robot") }, fake).use { agent ->
             val first = agent.ready().sessionId
@@ -220,12 +342,8 @@ class ChatAgentTest {
             assertNotNull(second)
             agent.renameSession(second, "巡检")
             withTimeout(5000) { agent.state.first { state -> state.sessions.any { it.id == second && it.title == "巡检" } } }
-            agent.archiveSession(second)
-            withTimeout(5000) { agent.state.first { state -> state.archivedSessions.any { it.id == second } } }
-            agent.restoreSession(second)
-            withTimeout(5000) { agent.state.first { state -> state.sessions.any { it.id == second } } }
             agent.deleteSession(second)
-            withTimeout(5000) { agent.state.first { state -> (state.sessions + state.archivedSessions).none { it.id == second } } }
+            withTimeout(5000) { agent.state.first { state -> state.sessions.none { it.id == second } } }
         }
         Unit
     }

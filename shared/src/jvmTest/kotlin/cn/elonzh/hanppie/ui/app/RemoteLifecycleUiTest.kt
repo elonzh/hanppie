@@ -72,12 +72,16 @@ class RemoteLifecycleUiTest {
                 rule.onNodeWithTag("remote-surface").performKeyInput { keyUp(Key.E) }
                 rule.waitUntil(3_000) { model.remoteInput.value.all { it == 0.0 } }
 
-                // A session can also time out while the native window is inactive.
+                // A session can time out while the native window is inactive. Activation must not reconnect it.
                 rule.runOnIdle { model.setForeground(false); responding.set(false) }
                 rule.waitUntil(8_000) { !model.state.value.connected }
                 rule.runOnIdle { responding.set(true); model.setForeground(true) }
-                rule.waitUntil(15_000) { model.state.value.connected && model.remoteEnabled.value }
-                rule.runOnIdle { assertTrue(model.remoteInput.value.all { it == 0.0 }) }
+                Thread.sleep(2_000)
+                rule.runOnIdle {
+                    assertFalse(model.state.value.connected)
+                    assertFalse(model.remoteEnabled.value)
+                    assertTrue(model.remoteInput.value.all { it == 0.0 })
+                }
             } finally { model.close(); alive.set(false); peer.join(1_000) }
         }
     }

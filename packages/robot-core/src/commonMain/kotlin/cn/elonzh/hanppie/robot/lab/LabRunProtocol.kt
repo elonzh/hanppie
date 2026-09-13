@@ -9,22 +9,20 @@ object LabRunProtocol {
     private const val prefix = "__HANPPIE_RUN__|"
     private val runIdPattern = Regex("[a-f0-9]{16}")
     private val startPattern = Regex("(?m)^def[ \\t]+start[ \\t]*\\([ \\t]*\\)[ \\t]*:")
+    private val importPattern = Regex("(?m)^[ \\t]*(?:import[ \\t]+|from[ \\t]+\\S+[ \\t]+import[ \\t]+)")
 
     fun instrument(source: String, runId: String): String {
         require(source.isNotBlank()) { "脚本不能为空" }
         require(runIdPattern.matches(runId)) { "运行标识必须是 16 位小写十六进制字符" }
+        require(!importPattern.containsMatchIn(source)) {
+            "Lab 脚本不能使用 import；time 等 SDK 对象已由机内环境提供"
+        }
         val symbol = "_hanppie_$runId"
         require(startPattern.containsMatchIn(source)) { "脚本需要定义 def start():" }
         val renamedSource = startPattern.replaceFirst(source.trimEnd(), "def ${symbol}_user_start():")
         val support = """
             def ${symbol}_send(kind, text=""):
-                builtins = rm_define.__dict__["__builtins__"]
-                importer = builtins["__import__"] if isinstance(builtins, dict) else builtins.__import__
-                module = importer("rm_module", globals(), locals(), [], 0)
-                head = "$prefix$runId|" + kind + "|"
-                body = str(text).encode("utf-8")[:800 - len(head)]
-                wire = head + "".join(chr(value) for value in body)
-                module.Mobile(chassis_ctrl.event_client).custom_msg_send(0, 0, wire)
+                log_ctrl.print_msg("$prefix$runId|" + kind + "|" + str(text))
         """.trimIndent()
         val entry = """
             def start():
@@ -41,8 +39,9 @@ object LabRunProtocol {
     }
 
     fun decode(message: String): LabRunEvent? {
-        if (!message.startsWith(prefix)) return null
-        val parts = message.split('|', limit = 4)
+        val start = message.indexOf(prefix)
+        if (start < 0) return null
+        val parts = message.substring(start).split('|', limit = 4)
         if (parts.size != 4 || !runIdPattern.matches(parts[1])) return null
         val type = when (parts[2]) {
             "STARTED" -> LabRunEventType.STARTED

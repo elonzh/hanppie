@@ -18,29 +18,18 @@ internal class TestSessionHistory : SessionHistory {
 
     override suspend fun create(title: String): AgentSession {
         val now = Clock.System.now().toEpochMilliseconds()
-        val session = AgentSession(Uuid.random().toString(), title, now, now, null, null, "")
+        val session = AgentSession(Uuid.random().toString(), title, now, now, null, "")
         entries[session.id] = session
         storedMessages[session.id] = mutableListOf()
         return session
     }
 
-    override suspend fun active() = entries.values.filter { it.archivedAtEpochMillis == null }
-        .sortedByDescending { it.updatedAtEpochMillis }
-    override suspend fun archived() = entries.values.filter { it.archivedAtEpochMillis != null }
-        .sortedByDescending { it.archivedAtEpochMillis }
+    override suspend fun list() = entries.values.sortedByDescending { it.updatedAtEpochMillis }
     override suspend fun find(id: String) = entries[id]
     override suspend fun messages(sessionId: String): List<Message> = storedMessages[sessionId].orEmpty().toList()
 
     override suspend fun rename(sessionId: String, title: String) {
         entries[sessionId]?.let { entries[sessionId] = it.copy(title = title) }
-    }
-
-    override suspend fun archive(sessionId: String, archived: Boolean) {
-        entries[sessionId]?.let {
-            entries[sessionId] = it.copy(
-                archivedAtEpochMillis = Clock.System.now().toEpochMilliseconds().takeIf { archived },
-            )
-        }
     }
 
     override suspend fun delete(sessionId: String) {

@@ -21,6 +21,7 @@ Hanppie 的运行时聚合根是 **Agent Session**，不是 Conversation。一�
 6. SQLite 只是可删除、可重建的查询投影；任何写命令先提交 JSONL，再更新投影。
 7. 工具副作用前必须先持久化 `ToolCallStartingEvent`。开始后没有匹配的 Koog `MessagePart.Tool.Result`，恢复时只能记为结果未知，禁止自动重放。
 8. agent 编排使用 Koog graph-based `AIAgent` 和显式策略图；工具实现使用具名的 class-based `Tool`/`SimpleTool`，由 `ToolRegistry` 组合，不引入平行的函数式循环、匿名工具或反射 ToolSet。
+9. 产品适配器把副作用工具声明为 run 终止点；其 Tool Result 持久化后直接完成当前 run，不再交给模型规划下一步。模型请求关闭并行工具调用，同一只读工具在一个 run 内第二次返回后也直接收束，模型不得用工具循环充当状态订阅。
 
 ## 2. 当前实现与后续边界
 
@@ -95,7 +96,7 @@ UI 不得直接追加 JSONL 或修改运行时 SQLite 表。投影器是从事�
 | run 与嵌套执行位置 | Koog `runId`、`AgentExecutionInfo` |
 | 实时模型输出 | Koog `StreamFrame`，仅内存 `Flow` |
 
-Hanppie 自有类型只描述 Koog 没有的事实：Session 名称/归档、用户审批、工具副作用开始、供应商配置来源和 SQLite 查询行。SQLite 的文本预览是读模型，不是领域消息 DTO。
+Hanppie 自有类型只描述 Koog 没有的事实：Session 名称、用户审批、工具副作用开始、供应商配置来源和 SQLite 查询行。SQLite 的文本预览是读模型，不是领域消息 DTO。
 
 ## 5. Session 事件模型
 
@@ -105,15 +106,14 @@ Hanppie 自有类型只描述 Koog 没有的事实：Session 名称/归档、用
 | --- | --- | --- |
 | `SessionCreatedEvent` | 标题 | Session 生命周期 |
 | `SessionRenamedEvent` | 标题 | 产品元数据，但仍属于 Session 事实 |
-| `SessionArchivedEvent` | `archived` | 归档与恢复 |
 | `AgentStartingEvent` | `Message.User`、`LLModel`、`runId`、`AgentExecutionInfo` | 一次 fsync 同时接受用户输入与开始 run |
 | `MessageEvent` | Koog `Message` | 完整助手消息或工具结果；不保存 delta |
 | `ToolApprovalRequestedEvent` | `MessagePart.Tool.Call` | Hanppie 人工审批事实 |
 | `ToolApprovalResolvedEvent` | `toolCallId`、决定 | Hanppie 人工审批事实 |
 | `ToolCallStartingEvent` | `MessagePart.Tool.Call` | 副作用前的耐久边界 |
 | `AgentCompletedEvent` | Koog run 结果摘要 | 明确完成 |
-| `AgentExecutionFailedEvent` | 脱敏错误类型 | 失败、超时或进程重启中断 |
-| `AgentExecutionCancelledEvent` | 脱敏原因 | 用户或宿主取消 |
+| `AgentExecutionFailedEvent` | 原始异常 traceback 或恢复原因 | 失败、超时或进程重启中断 |
+| `AgentExecutionCancelledEvent` | 取消原因 | 用户或宿主取消 |
 
 工具完成不再单独定义 `ToolFinished` DTO。Koog `MessagePart.Tool.Result` 随 `MessageEvent` 保存，就是模型上下文和历史投影使用的同一个结果。
 
@@ -178,9 +178,9 @@ flowchart LR
 
 | 表 | 用途 |
 | --- | --- |
-| `session_projection` | 标题、创建/更新时间、归档、最近事件 ID、消息预览 |
+| `session_projection` | 标题、创建/更新时间、最近事件 ID、消息预览 |
 | `session_messages` | `eventId`、Session 内位置、角色、完整 Koog `messageJson`、文本预览 |
-| `agent_runs` | `runId`、模型快照、开始/完成时间、终态和脱敏错误类型 |
+| `agent_runs` | `runId`、模型快照、开始/完成时间、终态和完整失败信息 |
 | `session_projection_checkpoints` | 每个 Session 的 `lastEventId` 与 `eventCount` |
 
 `hanppie.db` 只包含脚本表。运行时库可以单独关闭、删除并从 JSONL 重建；不能使用应用数据库事务制造跨库原子性，也不能用 `fallbackToDestructiveMigration` 冒充事件迁移。
@@ -224,6 +224,10 @@ stateDiagram-v2
 
 provider 连接成功、首个 delta 或工具命令已发送都不代表 run 完成。每个 Session 同时最多一个活动 run；当前应用同时最多允许一个会派发机器人工具的 run。
 
+应用适配器使用单一 `ChatPhase`（`INITIALIZING`、`IDLE`、`RUNNING`、`MANAGING`、`CLOSED`）同时决定命令准入和界面可操作性，不再用不可观察的原子布尔值维护第二份“正在运行”状态。发送或 Session 管理若因当前阶段被拒绝，调用方会得到失败结果和明确说明，不能静默丢弃。agent run 的 `runId` 同时出现在原始日志、JSONL 终态事件和 SQLite `agent_runs` 投影中；初始化和 Session 管理等尚未产生 run 的操作使用独立操作 ID。关联 ID 不展示给终端用户，只用于开发日志与耐久记录之间的故障追踪。`PromptExecutor` 不改写异常；异步 UI、run 终态持久化和资源释放等必须处理异常的边界使用原始 `Throwable` 记录完整 cause chain 与 traceback。工具异常不得转换为看似成功的文本结果；开始过副作用的工具按结果未知处理并让 run 失败。
+
+120 秒超时分别约束单次模型请求和单次工具操作，不包住整个 run。`WAITING_APPROVAL` 是可取消、可持久化的人机等待状态，不消耗模型或工具执行超时；否则用户停留在审批卡片上的时间会导致“刚确认就超时”。图的模型请求数与重复工具上限保证取消审批等待后仍有有限的自动执行边界。
+
 ### 8.2 工具顺序
 
 ```mermaid
@@ -247,15 +251,21 @@ sequenceDiagram
     R->>T: execute
     T-->>R: result / error
     R->>E: MessageEvent(MessagePart.Tool.Result)
-    R-->>K: 同一个 MessagePart.Tool.Result
+    alt 副作用工具或重复只读调用
+        R-->>K: 以 Tool Result 完成当前 run
+    else 首次只读调用
+        R-->>K: 同一个 MessagePart.Tool.Result 继续推理
+    end
 ```
+
+`execute_lab_python` 与 `stop_lab` 当前都是 run 终止工具。命令发送后的脚本状态由应用已有的全局状态流异步投影；agent 不通过连续 `robot_status` 查询等待 `STARTED` 或完成。重试必须来自新的用户消息和新的审批，不能由同一 run 自行修正后再次执行。模型请求上限仍是异常供应商输出的最后保险；达到上限时以最后一个已持久化 Tool Result 收束，不再发出必然失败的下一次模型请求，也不承担正常的工具循环控制。
 
 启动恢复按以下规则执行：
 
 1. JSONL 与 checkpoint 的 `lastEventId/eventCount` 不一致时清空并重建该 Session 投影。
 2. `ToolApprovalRequestedEvent` 没有决定且工具未开始时，追加拒绝事件；不恢复为已同意。
 3. `ToolCallStartingEvent` 没有匹配 `MessagePart.Tool.Result` 时，追加 `isError=true` 的结果未知 Tool Result；不调用工具。
-4. `AgentStartingEvent` 没有 agent 终态时，追加重启提示与 `AgentExecutionFailedEvent(errorType=ProcessRestart)`。
+4. `AgentStartingEvent` 没有 agent 终态时，追加重启提示与 `AgentExecutionFailedEvent(failure=ProcessRestart)`。
 5. 系统恢复提示只用于 UI，不进入下一次模型上下文。
 
 取消 run 不表示机内脚本停止。停止机器人必须走 `stop_lab` 或现有本地安全入口。
@@ -272,7 +282,9 @@ sequenceDiagram
 4. 随 Hanppie 发布的内置目录；
 5. `UNKNOWN`。
 
-配置测试分为本地校验、模型目录、最小流式文本、无副作用工具调用四步。目录成功只证明模型可见；文本成功不能证明工具调用可用。测试不创建用户 Session、不调用机器人、不记录 key 或供应商原始错误 body。
+配置测试分为本地校验、模型目录、最小流式文本、无副作用工具调用四步。目录成功只证明模型可见；文本成功不能证明工具调用可用。测试不创建用户 Session、不调用机器人，也不把配置的 API Key 主动拼接进日志；供应商抛出的原始异常则连同 cause chain 和 traceback 直接记录，不再提取错误分类或改写正文。
+
+模型目录发现不是 Session Runtime 的启动依赖，也不进入 Session 事件。应用适配层只在用户展开模型选择器或显式启动配置测试时请求目录；模型选择器先展示内置 `LLModel` 预设与当前模型 ID，再异步合并远端 ID。设置页初始化、供应商切换和应用启动均不预取，失败也不后台重试。
 
 | 供应商 | 默认发现 | 能力补充 |
 | --- | --- | --- |
@@ -296,7 +308,7 @@ Hanppie 与 DTEmpower 当前均使用 Koog `1.2.0`。本方案采用的是经过
 - 流式 delta 不进入长期事件日志；
 - Koog Persistence 以后只负责活动 run 的 graph checkpoint，不能代替跨 run 的 Session 历史。
 
-Hanppie 的差异只有机器人安全所需的审批和副作用开始事件，以及产品需要的 Session 标题/归档事件。当前 `ChatAgent` 把同一个 `runId` 显式传给 Koog，根 `AgentExecutionInfo.partName` 也与 Koog agent ID 一致；若以后把手动记录下沉为 Koog feature，应像 DTEmpower 一样直接订阅 lifecycle interceptor，进一步使用 Koog 产生的 event ID 和嵌套执行位置。
+Hanppie 的差异只有机器人安全所需的审批和副作用开始事件，以及产品需要的 Session 标题事件。当前 `ChatAgent` 把同一个 `runId` 显式传给 Koog，根 `AgentExecutionInfo.partName` 也与 Koog agent ID 一致；若以后把手动记录下沉为 Koog feature，应像 DTEmpower 一样直接订阅 lifecycle interceptor，进一步使用 Koog 产生的 event ID 和嵌套执行位置。
 
 参考：[Koog Agent events](https://docs.koog.ai/agent-events/) · [Koog persistence](https://docs.koog.ai/features/persistence/) · [Koog chat memory](https://docs.koog.ai/features/chat-memory/)
 

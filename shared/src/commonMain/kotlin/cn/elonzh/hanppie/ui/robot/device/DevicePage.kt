@@ -36,11 +36,11 @@ internal fun DevicePage(model: ConsoleController, state: ConsoleState, compact: 
                 colors = CardDefaults.defaultColors(color = colors.surfaceContainer)) {
                 if (compact) Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
                     DeviceIdentity(state, Modifier.fillMaxWidth(), compact = true)
-                    DeviceActions(model, state, onConnectionGuide, onRemote)
+                    if (!state.connecting) DeviceActions(model, state, onConnectionGuide, onRemote)
                 } else Row(Modifier.padding(32.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(32.dp)) {
                     DeviceIdentity(state, Modifier.weight(1f), compact = false)
-                    Column(Modifier.width(260.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                    if (!state.connecting) Column(Modifier.width(260.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                         DeviceActions(model, state, onConnectionGuide, onRemote)
                     }
                 }
@@ -61,14 +61,6 @@ internal fun DevicePage(model: ConsoleController, state: ConsoleState, compact: 
                 }
             }
         }
-        if (!state.connected && !state.busy && !state.reconnecting) item {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                WorkbenchIcon(WorkbenchGlyph.CONNECT, colors.onSurfaceVariantSummary, Modifier.size(20.dp))
-                Text(tr(Res.string.connect_your_phone_or_computer_to_the_same_wi), fontSize = 13.sp,
-                    color = colors.onSurfaceVariantSummary)
-            }
-        }
     }
 }
 
@@ -86,12 +78,11 @@ private fun DeviceIdentity(state: ConsoleState, modifier: Modifier, compact: Boo
             }
             Text(productName, fontSize = if (compact) 30.sp else 48.sp, fontWeight = FontWeight.Bold,
                 maxLines = 1, color = colors.onSurface)
-            Text(when {
-                state.connected -> tr(Res.string.robot_ready)
-                state.busy || state.reconnecting -> tr(Res.string.automatically_finding_robot)
-                else -> tr(Res.string.not_connected)
-            },
-                fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+            if (!state.connecting) Text(
+                if (state.connected) tr(Res.string.robot_ready) else tr(Res.string.not_connected),
+                fontSize = 13.sp,
+                color = colors.onSurfaceVariantSummary,
+            )
         }
         // Brand identity in the connection overview; never presented as a picture of the physical robot.
         Box(Modifier.size(if (compact) 100.dp else 128.dp).background(colors.surfaceContainerHigh, CircleShape),
@@ -106,14 +97,6 @@ private fun DeviceActions(model: ConsoleController, state: ConsoleState, onGuide
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         when {
             state.connected -> CockpitEntry(onRemote)
-            state.busy || state.reconnecting -> Row(
-                Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("automatic-connection-progress"),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                WorkbenchIcon(WorkbenchGlyph.CONNECT, MiuixTheme.colorScheme.primary)
-                Text(tr(Res.string.automatically_finding_robot), color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-            }
             else -> {
                 Button(model::discover, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("auto-connect"), enabled = !state.busy,
                     colors = ButtonDefaults.buttonColorsPrimary()) {

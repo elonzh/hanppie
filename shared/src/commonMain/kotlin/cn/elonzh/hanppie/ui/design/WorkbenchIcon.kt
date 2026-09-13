@@ -15,8 +15,6 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Activity
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.ArrowLeftRight
-import com.composables.icons.lucide.Archive
-import com.composables.icons.lucide.ArchiveRestore
 import com.composables.icons.lucide.BatteryMedium
 import com.composables.icons.lucide.Bot
 import com.composables.icons.lucide.Camera
@@ -61,7 +59,6 @@ internal enum class WorkbenchGlyph {
     BACK, ADD, IMPORT, EXPORT, UPLOAD, DOWNLOAD, SAVE, EDIT, DELETE, STOP, ACTIVITY, CHEVRON_RIGHT,
     FILE, FILE_TEXT, FOLDER, REFRESH, MORE, OPEN, VIDEO, VIDEO_OFF, SPEAKER, MUTED, CAMERA, RECORD,
     CROSSHAIR, SEARCH, CONNECT, WIFI, ROUTER, BATTERY, SIGNAL, PACKETS, MICROPHONE, SEND, ROBOT, CODE, CHAT, SETTINGS,
-    ARCHIVE, RESTORE,
 }
 
 internal val WorkbenchGlyph.icon: ImageVector get() = when (this) {
@@ -103,8 +100,6 @@ internal val WorkbenchGlyph.icon: ImageVector get() = when (this) {
     WorkbenchGlyph.CODE -> Lucide.CodeXml
     WorkbenchGlyph.CHAT -> Lucide.MessageSquare
     WorkbenchGlyph.SETTINGS -> Lucide.SlidersHorizontal
-    WorkbenchGlyph.ARCHIVE -> Lucide.Archive
-    WorkbenchGlyph.RESTORE -> Lucide.ArchiveRestore
 }
 
 internal val navigationIcons = listOf(

@@ -18,24 +18,19 @@
     <string name="conversation_title">Conversation title</string>
     <string name="delete_conversation_question">Permanently delete this conversation?</string>
     <string name="delete_conversation_summary">The Agent Session JSONL events and runtime projection will be removed. This cannot be undone.</string>
-    <string name="archive">Archive</string>
-    <string name="restore">Restore</string>
-    <string name="hide_archived_conversations">Hide archived</string>
-    <string name="show_archived_conversations_value">Archived (%1$s)</string>
-    <string name="chat_shortcuts">⌘/Ctrl+N new · ⌘/Ctrl+B conversations · ⌘/Ctrl+L composer · ⌘/Ctrl+, settings · ⌘/Ctrl+Enter send · Esc cancel</string>
+    <string name="conversation_actions">Conversation actions</string>
     <string name="what_would_you_like_to_do">What would you like to do?</string>
     <string name="conversation_history_could_not_be_loaded">Conversation history could not be loaded.</string>
     <string name="conversation_history_operation_failed">Conversation history operation failed.</string>
+    <string name="agent_runtime_cannot_accept_commands_value">The agent runtime cannot accept this command while its state is %1$s.</string>
+    <string name="agent_runtime_unavailable">The agent runtime is unavailable. Restart Hanppie if the problem persists.</string>
     <string name="previous_run_interrupted">The previous agent run was interrupted and will not be retried automatically. Review the tool history before continuing.</string>
     <string name="previous_run_interrupted_after_restart">The previous agent run was interrupted by an app restart and will not be retried automatically. Review the tool history before continuing.</string>
     <string name="chat_or_create_a_robot_script_together">Chat or create a robot script together.</string>
-    <string name="you">You</string>
-    <string name="tool">Tool</string>
     <string name="script">Script</string>
-    <string name="hanppie">Hanppie</string>
     <string name="system">System</string>
     <string name="awaiting_approval">Awaiting approval</string>
-    <string name="hanppie_is_thinking">Hanppie is thinking…</string>
+    <string name="agent_is_thinking">Thinking…</string>
     <string name="run_this_script">Run this script?</string>
     <string name="reject">Reject</string>
     <string name="approve_and_run">Approve and run</string>
@@ -52,7 +47,7 @@
     <string name="custom_model_id">Custom model ID</string>
     <string name="model_capabilities_value">Context: %1$s tokens · Max output: %2$s · Capabilities: %3$s</string>
     <string name="unknown">Unknown</string>
-    <string name="test_model_configuration">Test and discover</string>
+    <string name="test_model_configuration">Test model configuration</string>
     <string name="testing_model_configuration">Testing…</string>
     <string name="model_test_cost_notice">The test sends one short text request and one side-effect-free forced tool call; provider charges may apply.</string>
     <string name="model_test_local">Local validation</string>
@@ -67,6 +62,9 @@
     <string name="model_test_tool_not_returned">The model did not return the required valid tool call</string>
     <string name="api_endpoint">API endpoint</string>
     <string name="model">Model</string>
+    <string name="loading_model_catalog">Loading model list…</string>
+    <string name="model_catalog_load_failed_value">Could not load model list: %1$s</string>
+    <string name="configure_api_key_to_load_model_catalog">Enter an API key to load the provider model list</string>
     <string name="api_key">API Key</string>
     <string name="save_settings">Save settings</string>
     <string name="settings_saved">Saved</string>
@@ -81,7 +79,9 @@
     <string name="debug">Debug</string>
     <string name="chat">Chat</string>
     <string name="settings">Settings</string>
+    <string name="general_settings">General</string>
     <string name="control">Controls</string>
+    <string name="control_settings_summary">Cockpit speed, joystick and status LEDs</string>
     <string name="gimbal_sensitivity">Gimbal sensitivity</string>
     <string name="push_to_talk_sent_packets_value">Intercom sent · %1$s packets</string>
     <string name="motion_parameters">Motion parameters · gears 1–5</string>
@@ -95,6 +95,12 @@
     <string name="remote_led_recording">Recording</string>
     <string name="remote_led_talking">Intercom</string>
     <string name="control_shortcuts">Control shortcuts</string>
+    <string name="keyboard_shortcuts">Keyboard shortcuts</string>
+    <string name="keyboard_shortcuts_summary">Chat and cockpit keyboard controls</string>
+    <string name="conversation_shortcuts">Chat shortcuts</string>
+    <string name="insert_line_break">Insert line break</string>
+    <string name="focus_message_input">Focus message input</string>
+    <string name="cancel_current_run">Cancel current run</string>
     <string name="press_a_key">Press a key</string>
     <string name="action_forward">Forward</string>
     <string name="action_backward">Backward</string>
@@ -126,7 +132,7 @@
     <string name="connection_settings">Add or change robot</string>
     <string name="robot_ready">Robot ready</string>
     <string name="select_connection_mode">Configure connection</string>
-    <string name="connection_mode_summary">Use this only for first-time setup or when switching network modes. Normal launches reconnect automatically.</string>
+    <string name="connection_mode_summary">Use this only for first-time setup or when switching network modes. Normal launches make one automatic connection attempt.</string>
     <string name="direct_mode">Direct mode</string>
     <string name="direct_mode_description">Connect directly to the robot Wi-Fi when no router is available</string>
     <string name="router_mode">Router mode</string>
@@ -183,7 +189,6 @@
     <string name="battery">Battery</string>
     <string name="signal">Signal</string>
     <string name="packets">Packets</string>
-    <string name="connect_your_phone_or_computer_to_the_same_wi">Connect your phone or computer to the same Wi-Fi as the robot.</string>
     <string name="new_script">New script</string>
     <string name="unsaved"> · Unsaved</string>
     <string name="open_py">Open .py</string>
@@ -242,11 +247,18 @@
     <string name="script_completed">Run completed</string>
     <string name="script_failed_value">Run failed: %1$s</string>
     <string name="script_start_state_unknown">Start delivery was interrupted; onboard state is unknown</string>
+    <string name="script_start_confirmation_timed_out">No onboard STARTED report was received; run state is unknown. Inspect or stop the script before retrying.</string>
     <string name="stopping_script">Stopping…</string>
     <string name="script_stopped">Stopped</string>
     <string name="script_stop_state_unknown">Stop delivery failed; onboard state is unknown</string>
     <string name="completed_marker_received_but_cleanup_failed">The script reported completion, but Lab cleanup failed</string>
-    <string name="script_started_progress_and_completion_will_be_reported">Script started; progress and completion appear in the global run status.</string>
+    <string name="script_start_command_sent_awaiting_confirmation_value">Start command sent; waiting for the onboard STARTED report. Script run ID: %1$s. Progress and completion appear in the global run status.</string>
+    <string name="script_run_id_value">Run ID: %1$s</string>
+    <string name="script_trace_uploading">[Hanppie] Preparing and uploading script</string>
+    <string name="script_trace_uploaded_value">[Hanppie] Upload confirmed; runId=%1$s, DSP MD5=%2$s</string>
+    <string name="script_trace_start_sent_value">[Hanppie] Start sequence sent; waiting for STARTED, runId=%1$s</string>
+    <string name="script_trace_start_timeout_value">[Hanppie] Start confirmation timed out; runId=%1$s, received %2$s data frames and %3$s Lab message frames</string>
+    <string name="script_trace_lifecycle_value">[Hanppie] Received %1$s; runId=%2$s</string>
     <string name="unknown_error">Unknown error</string>
     <string name="stop_command_sent_robot_stop_is_unconfirmed">Stop command sent; robot stop is unconfirmed.</string>
     <string name="robot_disconnected_or_app_not_in_foreground">Robot disconnected or app not in foreground</string>
@@ -257,9 +269,6 @@
     <string name="disconnect_the_current_session_first">Disconnect the current session first</string>
     <string name="connection_failed">Connection failed</string>
     <string name="connection_cancelled">Connection cancelled</string>
-    <string name="reconnecting_attempt_value">Reconnecting · attempt %1$s</string>
-    <string name="reconnect_failed_retrying_value">Reconnect failed; retrying in %1$s s</string>
-    <string name="reconnected_to_value">Reconnected to %1$s</string>
     <string name="session_ended_robot_state_unknown">Session ended; robot state unknown</string>
     <string name="connection_closed_scripts_on_the_robot_may_still_be">Connection closed; scripts on the robot may still be running</string>
     <string name="heading_like_uncalibrated">heading_like (uncalibrated)</string>
@@ -377,7 +386,7 @@
     <string name="message_too_long">Message too long</string>
     <string name="context_full_start_a_new_chat">Context full. Start a new chat.</string>
     <string name="the_model_returned_no_visible_reply">The model returned no visible reply</string>
-    <string name="run_timed_out_after_120_seconds_review_tool_history">Agent run timed out after 120 seconds. Review tool history; robot scripts do not stop automatically.</string>
+    <string name="model_or_tool_operation_timed_out_review_tool_history">A model request or tool operation timed out after 120 seconds. Review tool history; robot scripts do not stop automatically.</string>
     <string name="run_canceled_canceling_chat_does_not_stop_robot_scripts">Agent run canceled; canceling chat does not stop robot scripts.</string>
     <string name="stop_the_running_script_before_uploading_another">Stop the running script before uploading another</string>
     <string name="robot_disconnected_during_upload">Robot disconnected during upload</string>

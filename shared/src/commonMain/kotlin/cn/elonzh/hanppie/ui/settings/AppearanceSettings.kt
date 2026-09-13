@@ -33,12 +33,23 @@ internal fun AppearanceSetting() {
 }
 
 @Composable
-internal fun SettingsDropdown(label: String, tag: String, selected: String, values: List<Pair<String, String>>, change: (String) -> Unit) {
+internal fun SettingsDropdown(
+    label: String,
+    tag: String,
+    selected: String,
+    values: List<Pair<String, String>>,
+    onOpen: () -> Unit = {},
+    change: (String) -> Unit,
+) {
     var expanded by remember { mutableStateOf(false) }
+    val selectedLabel = values.firstOrNull { it.first == selected }?.second ?: selected
     Box {
-        Button({ expanded = true }, Modifier.fillMaxWidth().heightIn(min = 52.dp).semantics { contentDescription = "$tag-selector" }) {
+        Button({
+            if (!expanded) onOpen()
+            expanded = true
+        }, Modifier.fillMaxWidth().heightIn(min = 52.dp).semantics { contentDescription = "$tag-selector" }) {
             Text(label, Modifier.weight(1f), fontSize = 15.sp)
-            Text(values.first { it.first == selected }.second, fontSize = 14.sp,
+            Text(selectedLabel, fontSize = 14.sp,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             Spacer(Modifier.width(12.dp))
             Text("⌄")

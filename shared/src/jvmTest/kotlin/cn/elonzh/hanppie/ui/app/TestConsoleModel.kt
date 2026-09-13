@@ -16,6 +16,7 @@ import cn.elonzh.hanppie.ui.settings.SettingsStore
 import cn.elonzh.hanppie.ui.settings.UiPreferences
 import cn.elonzh.hanppie.ui.speech.NoSpeechInput
 import cn.elonzh.hanppie.ui.speech.SpeechInput
+import io.ktor.client.HttpClient
 
 internal class MemoryScriptRepository(initial: List<StoredScript> = emptyList()) : ScriptRepository {
     private var saved = initial.toList()
@@ -75,6 +76,10 @@ internal fun testConsoleModel(
     scriptRepository: ScriptRepository = MemoryScriptRepository(),
     sessionHistory: SessionHistory = TestSessionHistory(),
     prepareNetwork: () -> Unit = {},
+    createAgentHttpClient: () -> HttpClient = {
+        error("Agent HTTP client must not be created by isolated UI tests")
+    },
+    scriptStartConfirmationTimeoutMillis: Long = 10_000,
 ): ConsoleModel = ConsoleModel(
     voiceInput = voiceInput,
     speakerInput = speakerInput,
@@ -82,7 +87,8 @@ internal fun testConsoleModel(
     settingsStore = settingsStore,
     scriptRepository = scriptRepository,
     sessionHistory = sessionHistory,
-    createAgentHttpClient = { error("Agent HTTP client must not be created by isolated UI tests") },
+    createAgentHttpClient = createAgentHttpClient,
     prepareNetwork = prepareNetwork,
     autoConnectOnStart = false,
+    scriptStartConfirmationTimeoutMillis = scriptStartConfirmationTimeoutMillis,
 )

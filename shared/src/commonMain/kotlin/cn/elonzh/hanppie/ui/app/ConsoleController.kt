@@ -1,6 +1,7 @@
 package cn.elonzh.hanppie.ui.app
 
 import cn.elonzh.hanppie.ui.chat.ChatAgent
+import cn.elonzh.hanppie.agent.provider.ModelCatalogState
 import cn.elonzh.hanppie.agent.provider.ModelTestState
 import cn.elonzh.hanppie.ui.i18n.UiText
 import cn.elonzh.hanppie.ui.robot.files.RobotFilesController
@@ -19,6 +20,7 @@ internal interface ConsoleController : AutoCloseable {
     val isForeground: Boolean
     val state: MutableStateFlow<ConsoleState>
     val modelSettings: MutableStateFlow<ModelSettings>
+    val modelCatalogState: MutableStateFlow<ModelCatalogState>
     val modelTestState: MutableStateFlow<ModelTestState>
     val controlSettings: MutableStateFlow<ControlSettings>
     val connectionPreferences: MutableStateFlow<ConnectionPreferences>
@@ -40,6 +42,7 @@ internal interface ConsoleController : AutoCloseable {
     var audioSink: ((ByteArray) -> Unit)?
 
     fun saveSettings()
+    fun loadModelCatalog()
     fun testModelSettings()
     fun restoreDefaultSettings()
     fun shiftGear(delta: Int)

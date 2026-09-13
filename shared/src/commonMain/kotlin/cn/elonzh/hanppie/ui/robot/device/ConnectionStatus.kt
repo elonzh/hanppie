@@ -22,17 +22,25 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 internal fun ConnectionStatusChip(state: ConsoleState, onClick: () -> Unit) {
-    Row(Modifier.widthIn(max = 124.dp).heightIn(min = 48.dp).testTag("connection-status")
+    val colors = MiuixTheme.colorScheme
+    val label = when {
+        state.connected -> tr(Res.string.connected)
+        state.connecting -> tr(Res.string.connecting)
+        else -> tr(Res.string.disconnected)
+    }
+    val indicator = when {
+        state.connected -> Color(0xff32aa78)
+        state.connecting -> colors.primary
+        else -> Color(0xffaab1bb)
+    }
+    Row(Modifier.widthIn(max = 144.dp).heightIn(min = 48.dp).testTag("connection-status")
         .clickable(onClick = onClick).padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(6.dp).background(if (state.connected) Color(0xff32aa78) else Color(0xffaab1bb), RoundedCornerShape(50)))
-        Text(when {
-            state.connected -> tr(Res.string.connected)
-            state.busy || state.reconnecting -> tr(Res.string.connecting)
-            else -> state.status
-        }, Modifier.weight(1f, fill = false),
-            fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-        WorkbenchIcon(WorkbenchGlyph.CHEVRON_RIGHT, MiuixTheme.colorScheme.onSurfaceVariantSummary, Modifier.size(16.dp))
+        Box(Modifier.size(6.dp).background(indicator, RoundedCornerShape(50)))
+        Text(label,
+            Modifier.weight(1f, fill = false),
+            fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.onSurfaceVariantSummary)
+        WorkbenchIcon(WorkbenchGlyph.CHEVRON_RIGHT, colors.onSurfaceVariantSummary, Modifier.size(16.dp))
     }
 }
 

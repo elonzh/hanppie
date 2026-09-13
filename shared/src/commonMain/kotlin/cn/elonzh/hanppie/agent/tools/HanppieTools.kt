@@ -35,11 +35,11 @@ internal class ExecuteLabPythonTool(
 ) : SimpleTool<ExecuteLabPythonTool.Args>(
     argsType = typeToken<Args>(),
     name = NAME,
-    description = "提交完整 RoboMaster Lab Python 3.6 脚本。用户确认后上传并启动，不等于动作完成。",
+    description = "提交完整且不含 import 的 RoboMaster Lab Python 3.6 脚本。用户确认后上传并发送启动命令，必须等待机内回报才能视为已启动。",
 ) {
     @Serializable
     data class Args(
-        @property:LLMDescription("完整脚本，包含 def start()")
+        @property:LLMDescription("完整脚本，包含 def start()；不得使用 import，time 等 SDK 对象直接可用")
         val source: String,
     )
 

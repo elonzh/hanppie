@@ -51,7 +51,7 @@ internal class SessionRepository(
                 runId = run.id,
                 timestamp = now(),
                 executionInfo = executionInfo,
-                errorType = "ProcessRestart",
+                failure = "ProcessRestart",
             ))
         }
     }
@@ -62,8 +62,7 @@ internal class SessionRepository(
         return requireNotNull(dao.find(id)).toAgentSession()
     }
 
-    override suspend fun active(): List<AgentSession> = dao.active().map(SessionProjectionEntity::toAgentSession)
-    override suspend fun archived(): List<AgentSession> = dao.archived().map(SessionProjectionEntity::toAgentSession)
+    override suspend fun list(): List<AgentSession> = dao.sessions().map(SessionProjectionEntity::toAgentSession)
     override suspend fun find(id: String): AgentSession? = dao.find(id)?.toAgentSession()
     override suspend fun messages(sessionId: String): List<Message> = dao.messages(sessionId).map {
         json.decodeFromString<Message>(it.messageJson)
@@ -71,10 +70,6 @@ internal class SessionRepository(
 
     override suspend fun rename(sessionId: String, title: String) {
         append(sessionId, SessionRenamedEvent(eventId(), now(), title.normalizedTitle()))
-    }
-
-    override suspend fun archive(sessionId: String, archived: Boolean) {
-        append(sessionId, SessionArchivedEvent(eventId(), now(), archived))
     }
 
     override suspend fun delete(sessionId: String) {
@@ -161,18 +156,11 @@ internal class SessionRepository(
         val current = dao.find(sessionId)
         when (event) {
             is SessionCreatedEvent -> dao.putSession(SessionProjectionEntity(
-                sessionId, event.title, event.timestamp, event.timestamp, null, event.eventId, "",
+                sessionId, event.title, event.timestamp, event.timestamp, event.eventId, "",
             ))
             is SessionRenamedEvent -> current?.let {
                 dao.putSession(it.copy(title = event.title, updatedAtEpochMillis = event.timestamp,
                     latestEventId = event.eventId))
-            }
-            is SessionArchivedEvent -> current?.let {
-                dao.putSession(it.copy(
-                    archivedAtEpochMillis = event.timestamp.takeIf { event.archived },
-                    updatedAtEpochMillis = event.timestamp,
-                    latestEventId = event.eventId,
-                ))
             }
             is AgentStartingEvent -> {
                 dao.putRun(AgentRunProjection(
@@ -183,7 +171,7 @@ internal class SessionRepository(
             }
             is MessageEvent -> putMessage(sessionId, event.eventId, position, event.timestamp, event.message, current)
             is AgentCompletedEvent -> dao.finishRun(event.runId, event.timestamp, "COMPLETED", null)
-            is AgentExecutionFailedEvent -> dao.finishRun(event.runId, event.timestamp, "FAILED", event.errorType)
+            is AgentExecutionFailedEvent -> dao.finishRun(event.runId, event.timestamp, "FAILED", event.failure)
             is AgentExecutionCancelledEvent -> dao.finishRun(event.runId, event.timestamp, "CANCELLED", null)
             is ToolApprovalRequestedEvent,
             is ToolApprovalResolvedEvent,
@@ -244,12 +232,10 @@ internal class SessionRepository(
 internal interface SessionHistory {
     suspend fun initialize()
     suspend fun create(title: String = "新对话"): AgentSession
-    suspend fun active(): List<AgentSession>
-    suspend fun archived(): List<AgentSession>
+    suspend fun list(): List<AgentSession>
     suspend fun find(id: String): AgentSession?
     suspend fun messages(sessionId: String): List<Message>
     suspend fun rename(sessionId: String, title: String)
-    suspend fun archive(sessionId: String, archived: Boolean)
     suspend fun delete(sessionId: String)
     suspend fun append(sessionId: String, event: SessionEvent): SessionEvent
 }

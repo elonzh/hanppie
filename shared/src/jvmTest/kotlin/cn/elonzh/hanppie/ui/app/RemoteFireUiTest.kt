@@ -49,8 +49,9 @@ class RemoteFireUiTest {
         override var onAudio: ((ByteArray) -> Unit)? = null
         override val lab: RobotLabSession = object : RobotLabSession {
             override fun invalidateMode() {}
-            override suspend fun upload(source: String, title: String): LabUpload = LabUpload("hash", "run1")
-            override suspend fun start(): String = "run1"
+            override suspend fun upload(source: String, title: String): LabUpload =
+                LabUpload("hash", "0123456789abcdef")
+            override suspend fun start(): String = "0123456789abcdef"
             override suspend fun stop() {}
             override suspend fun complete(runId: String): Boolean = true
         }
@@ -97,6 +98,37 @@ class RemoteFireUiTest {
             onLog: (String) -> Unit,
             onLost: (RobotSession, String) -> Unit,
         ): RobotSession = fakeSession
+    }
+
+    @Test
+    fun missingOnboardStartReportBecomesUnknownInsteadOfWaitingForever() = runBlocking {
+        val session = FakeRobotSession()
+        val model = testConsoleModel(
+            robotRuntime = FakeRobotRuntime(session),
+            scriptStartConfirmationTimeoutMillis = 25,
+        )
+        try {
+            model.connect("127.0.0.1", "12345678")
+            withTimeout(5_000) {
+                while (!model.state.value.connected || model.state.value.busy) delay(10)
+            }
+
+            model.runScript("def start():\n    pass\n", "No report")
+            withTimeout(2_000) {
+                while (model.state.value.scriptRunPhase != ScriptRunPhase.UNKNOWN) delay(10)
+            }
+
+            assertEquals(
+                "未收到机内 STARTED 回报，运行状态未知；请检查或停止脚本后再重试",
+                model.state.value.scriptStatus,
+            )
+            assertTrue(model.state.value.canStop)
+            assertTrue(model.state.value.scriptMessages.any {
+                it.contains("runId=0123456789abcdef") && it.contains("0 个 Lab 消息帧")
+            })
+        } finally {
+            model.close()
+        }
     }
 
     @Test

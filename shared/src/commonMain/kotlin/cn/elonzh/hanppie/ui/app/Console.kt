@@ -108,6 +108,7 @@ internal fun Console(
     }
     var connectionDetails by remember { mutableStateOf(false) }
     var manual by rememberSaveable { mutableStateOf(false) }
+    var manualAttempted by rememberSaveable { mutableStateOf(false) }
     var ip by rememberSaveable { mutableStateOf("") }
     var appId by rememberSaveable { mutableStateOf("") }
     var diagnosticTab by rememberSaveable { mutableStateOf(0) }
@@ -126,6 +127,10 @@ internal fun Console(
         else if (backStack.lastOrNull() != RobotRoute) backStack[0] = RobotRoute
     }
     LaunchedEffect(state.connected, currentRoute) {
+        if (state.connected && manual) {
+            manual = false
+            manualAttempted = false
+        }
         if (!state.connected && currentRoute == CockpitRoute && backStack.size > 1) backStack.removeLastOrNull()
         if (state.connected && currentRoute in listOf(ConnectionGuideRoute, DirectConnectionGuideRoute, RouterConnectionGuideRoute)) {
             navigate(0)
@@ -150,7 +155,7 @@ internal fun Console(
                     ConnectionDetail(tr(Res.string.script), state.scriptStatus)
                 }
             }
-            if (state.connected || state.reconnecting) {
+            if (state.connected) {
                 Button({ model.disconnect(); connectionDetails = false }, Modifier.fillMaxWidth().heightIn(min = 48.dp), enabled = !state.busy) { Text(tr(Res.string.disconnect_close_session)) }
             } else {
                 Button({ connectionDetails = false; model.discover() }, Modifier.fillMaxWidth().heightIn(min = 48.dp), colors = ButtonDefaults.buttonColorsPrimary(), enabled = !state.busy) { Text(tr(Res.string.automatic_connection)) }
@@ -159,14 +164,17 @@ internal fun Console(
         }
     }
 
-    WorkbenchDialog(show = manual, onDismissRequest = { manual = false }, title = tr(Res.string.manual_connection)) {
+    WorkbenchDialog(show = manual, onDismissRequest = { manual = false; manualAttempted = false }, title = tr(Res.string.manual_connection)) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             TextField(ip, { ip = it }, label = tr(Res.string.robot_ipv4), singleLine = true)
             TextField(appId, { appId = it }, label = tr(Res.string.appid_8_hex_characters), singleLine = true)
+            if (manualAttempted) state.error?.let { error ->
+                Text(error, color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                Button({ manual = false }, Modifier.weight(1f).heightIn(min = 48.dp)) { Text(tr(Res.string.cancel)) }
+                Button({ manual = false; manualAttempted = false }, Modifier.weight(1f).heightIn(min = 48.dp)) { Text(tr(Res.string.cancel)) }
                 Spacer(Modifier.width(8.dp))
-                Button({ model.connect(ip, appId); manual = false }, Modifier.weight(1f).heightIn(min = 48.dp), enabled = !state.busy && !state.connected,
+                Button({ manualAttempted = true; model.connect(ip, appId) }, Modifier.weight(1f).heightIn(min = 48.dp), enabled = !state.busy && !state.connected,
                     colors = ButtonDefaults.buttonColorsPrimary()) { Text(tr(Res.string.connect)) }
             }
         }
@@ -222,7 +230,7 @@ internal fun Console(
                                                         WorkbenchIconButton(
                                                             tr(Res.string.manual_connection),
                                                             WorkbenchGlyph.CONNECT,
-                                                            { manual = true },
+                                                            { manualAttempted = false; manual = true },
                                                             tag = "manual-connect",
                                                         )
                                                     }
@@ -233,8 +241,7 @@ internal fun Console(
                                                 }
                                             }
                                         }
-                                        if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
-                                        (fileError ?: state.error)?.let { Text(it, Modifier.padding(vertical = 8.dp),
+                                        if (route == ScriptRoute) fileError?.let { Text(it, Modifier.padding(vertical = 8.dp),
                                             color = MiuixTheme.colorScheme.error, fontSize = 13.sp) }
                                     }
                                     when (route) {
@@ -317,7 +324,7 @@ private fun ScriptRunBanner(state: ConsoleState, onOpen: () -> Unit, onStop: () 
         colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainerHigh),
         insideMargin = PaddingValues(0.dp)) {
         Column {
-            if (active) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
+            if (state.scriptRunPhase.progressing) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(8.dp).background(scriptRunColor(state.scriptRunPhase), RoundedCornerShape(50)))

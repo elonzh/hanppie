@@ -28,7 +28,6 @@ data class RobotTarget(
 
     fun forAutomaticProbe(): RobotTarget = copy(identityTimeoutMillis = 800, sessionTimeoutMillis = 1_800)
 
-    fun withStandardTimeouts(): RobotTarget = copy(identityTimeoutMillis = 4_000, sessionTimeoutMillis = 5_000)
 }
 
 /** Router-mode pairing broadcast together with the UDP endpoint that must receive the final ACK. */

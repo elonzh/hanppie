@@ -119,7 +119,7 @@ class SessionPersistenceTest {
             assertTrue(Files.exists(runtimePath))
             assertNotEquals(applicationPath, runtimePath)
             assertEquals("保留脚本", applicationDatabase.scriptDao().getAll().single().name)
-            assertEquals(session.id, runtimeStorage.sessions.active().single().id)
+            assertEquals(session.id, runtimeStorage.sessions.list().single().id)
         } finally {
             runtimeStorage?.close()
             applicationDatabase?.close()
@@ -160,11 +160,7 @@ class SessionPersistenceTest {
             assertEquals(listOf(user, assistant), repository.messages(session.id))
 
             repository.rename(session.id, "重命名")
-            repository.archive(session.id, true)
-            assertTrue(repository.active().isEmpty())
-            assertEquals("重命名", repository.archived().single().title)
-            repository.archive(session.id, false)
-            assertEquals(session.id, repository.active().single().id)
+            assertEquals("重命名", repository.list().single().title)
             val last = eventStore.read(session.id).lastEventId
             assertEquals(last, repository.find(session.id)?.latestEventId)
 
@@ -197,7 +193,7 @@ class SessionPersistenceTest {
 
             assertTrue(database.sessionProjectionDao().unfinishedRuns().isEmpty())
             val failed = eventStore.read(session.id).events.filterIsInstance<AgentExecutionFailedEvent>().single()
-            assertEquals("ProcessRestart", failed.errorType)
+            assertEquals("ProcessRestart", failed.failure)
             assertTrue(repository.messages(session.id).any { it.textContent() == PROCESS_RESTART_NOTICE })
         } finally {
             database.close()
@@ -231,7 +227,7 @@ class SessionPersistenceTest {
             assertEquals("execute_lab_python", toolNameFromUnknownNotice(result.output))
             assertTrue(result.isError)
             assertEquals("ProcessRestart",
-                eventStore.read(session.id).events.filterIsInstance<AgentExecutionFailedEvent>().single().errorType)
+                eventStore.read(session.id).events.filterIsInstance<AgentExecutionFailedEvent>().single().failure)
         } finally {
             database.close()
             directory.toFile().deleteRecursively()

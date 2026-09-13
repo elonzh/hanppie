@@ -76,9 +76,23 @@ class DesignUiTest {
     @Test fun desktopNavigationConnectionAndScrollableLogs() = runDesktopComposeUiTest(width = 1040, height = 700) {
         Localization.initialize("zh", null)
         val model = testConsoleModel()
-        model.state.value = model.state.value.copy(logs = (0..150).map { "测试日志 $it" })
+        model.state.value = model.state.value.copy(
+            busy = true,
+            connecting = true,
+            statusMessage = uiText(Res.string.automatically_finding_robot),
+            logs = (0..150).map { "测试日志 $it" },
+        )
         try {
             setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
+            onNodeWithTag("connection-status").assertTextContains("连接中")
+            onNodeWithText("正在自动识别并连接机器人…", substring = false).assertDoesNotExist()
+            saveDesignSnapshot("desktop-device-connecting", onRoot(), 1040, 700)
+            runOnIdle { model.state.value = model.state.value.copy(
+                busy = false,
+                connecting = false,
+                statusMessage = uiText(Res.string.disconnected),
+            ) }
+            waitForIdle()
             val chat = onNodeWithContentDescription("对话").fetchSemanticsNode().boundsInRoot
             val debug = onNodeWithContentDescription("诊断").fetchSemanticsNode().boundsInRoot
             assertEquals(48f, chat.height)
@@ -124,7 +138,8 @@ class DesignUiTest {
             setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
             onNodeWithTag("connection-guide").assertIsDisplayed()
             onNodeWithContentDescription("设置").performClick()
-            onNodeWithContentDescription("gimbal-sensitivity-selector").assertIsDisplayed()
+            onNodeWithTag("settings-section-control-toggle").performScrollTo().performClick()
+            onNodeWithContentDescription("gimbal-sensitivity-selector").performScrollTo().assertIsDisplayed()
             saveDesignSnapshot("desktop-minimum-settings", onRoot(), 900, 572)
             onNodeWithContentDescription("设备").performClick()
             saveDesignSnapshot("desktop-minimum-device", onRoot(), 900, 572)

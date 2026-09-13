@@ -39,6 +39,7 @@ import cn.elonzh.hanppie.ui.settings.SettingsController
 import cn.elonzh.hanppie.ui.settings.SettingsStore
 import cn.elonzh.hanppie.ui.speech.NoSpeechInput
 import cn.elonzh.hanppie.ui.speech.SpeechInput
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicLong
@@ -49,6 +50,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+
+private val consoleLogger = KotlinLogging.logger {}
 
 internal class ConsoleModel(
     override val voiceInput: SpeechInput = NoSpeechInput(),
@@ -63,6 +66,7 @@ internal class ConsoleModel(
     private val prepareNetwork: () -> Unit = {},
     private val clock: Clock = Clock.System,
     private val autoConnectOnStart: Boolean = true,
+    private val scriptStartConfirmationTimeoutMillis: Long = 10_000,
 ) : ConsoleController {
     override var voicePageActive = false
     override val isForeground: Boolean get() = acceptingWork.load()
@@ -76,6 +80,7 @@ internal class ConsoleModel(
     override val modelSettings = settings.model
     private val modelTester = ModelConfigurationTester(scope = scope,
         createHttpClient = createAgentHttpClient, clock = clock)
+    override val modelCatalogState = modelTester.catalogState
     override val modelTestState = modelTester.state
     override val controlSettings = settings.control
     override val connectionPreferences = MutableStateFlow(ConnectionPreferences.fresh())
@@ -88,6 +93,7 @@ internal class ConsoleModel(
         scope.launch { scriptLibrary.load() }
     }
     override fun saveSettings() = settings.save()
+    override fun loadModelCatalog() = modelTester.loadCatalog(modelSettings.value)
     override fun testModelSettings() = modelTester.test(modelSettings.value)
     override fun restoreDefaultSettings() = settings.restoreDefaults()
     private data class MediaRequest(val session: RobotSession, val start: Boolean, val audio: Boolean)
@@ -113,12 +119,9 @@ internal class ConsoleModel(
     }
     private val session = AtomicReference<RobotSession?>(null)
     private val lab = AtomicReference<RobotLabSession?>(null)
-    private val desiredTarget = AtomicReference<RobotTarget?>(null)
     private val connectionRevision = AtomicLong(0L)
     private val connectionPreferencesMutex = Mutex()
     private val connectionPreferencesLoaded = AtomicBoolean(false)
-    private val automaticConnectionsEnabled = AtomicBoolean(autoConnectOnStart)
-    private var reconnectJob: Job? = null
     override val foregroundState = MutableStateFlow(true)
     private val remoteRevision = AtomicLong(0L)
     override val remoteEnabled = MutableStateFlow(false)
@@ -304,8 +307,8 @@ internal class ConsoleModel(
             check(!state.value.scriptRunPhase.mayBeExecuting) { tr(Res.string.stop_the_script_with_unknown_state_first) }
             haltRemote()
             session.load()?.exitRemote()
-            startScript(source, "Hanppie-Agent")
-            tr(Res.string.script_started_progress_and_completion_will_be_reported)
+            val scriptRunId = startScript(source, "Hanppie-Agent")
+            tr(Res.string.script_start_command_sent_awaiting_confirmation_value, scriptRunId)
         } },
         stopRobot = { agentOperation {
             checkNotNull(lab.load()) { tr(Res.string.robot_is_not_connected) }.stop()
@@ -342,16 +345,6 @@ internal class ConsoleModel(
         acceptingWork.store(foreground)
         foregroundState.value = foreground
         if (!foreground) { haltRemote(); voiceInput.cancel() }
-        else desiredTarget.load()?.let { target ->
-            if (!state.value.connected && session.load() == null && reconnectJob?.isActive != true) {
-                reconnect(target, connectionRevision.load())
-            }
-        } ?: run {
-            if (automaticConnectionsEnabled.load() && connectionPreferencesLoaded.load() &&
-                !state.value.connected && !state.value.busy && session.load() == null) {
-                discover()
-            }
-        }
     }
 
     override fun log(message: String) {
@@ -359,31 +352,31 @@ internal class ConsoleModel(
         state.update { it.copy(logs = (it.logs + line).takeLast(500)) }
     }
 
-    private fun work(allowDuringChat: Boolean = false, block: suspend () -> Unit) {
+    private fun work(allowDuringChat: Boolean = false, connecting: Boolean = false, block: suspend () -> Unit) {
         if (chat.state.value.running && !allowDuringChat) {
             state.update { it.copy(error = tr(Res.string.cancel_the_current_chat_before_changing_connections_or_using)) }; return
         }
         val snapshot = state.value
-        if (!acceptingWork.load() || snapshot.busy || !state.compareAndSet(snapshot, snapshot.copy(busy = true, error = null))) return
+        if (!acceptingWork.load() || snapshot.busy ||
+            !state.compareAndSet(snapshot, snapshot.copy(busy = true, connecting = connecting, error = null))) return
         scope.launch {
             try { block() }
             catch (error: CancellationException) { throw error }
             catch (error: Exception) {
-                val message = error.message ?: error::class.simpleName ?: "Unknown error"
+                consoleLogger.error(error) { "Console operation failed connecting=$connecting" }
+                val message = error.message ?: error.toString()
                 log(tr(Res.string.error_value,message))
                 state.update { it.copy(error = message) }
-            } finally { state.update { it.copy(busy = false) } }
+            } finally { state.update { it.copy(busy = false, connecting = false) } }
         }
     }
 
     override fun discover() {
-        automaticConnectionsEnabled.store(true)
-        work { autoConnect() }
+        work(connecting = true) { autoConnect() }
     }
 
     override fun pairRouter(ssid: String, password: String) {
-        automaticConnectionsEnabled.store(true)
-        work {
+        work(connecting = true) {
             awaitConnectionPreferences()
             check(session.load() == null) { tr(Res.string.disconnect_the_current_session_first) }
             val normalizedSsid = ssid
@@ -392,9 +385,7 @@ internal class ConsoleModel(
             // RouterProvisioning performs the byte-length and password validation before the UI reaches here.
             cn.elonzh.hanppie.robot.protocol.RouterProvisioning.encode(normalizedSsid, password, normalizedAppId)
             updateConnectionPreferences { it.copy(routerSsid = normalizedSsid, routerPassword = password) }
-            reconnectJob?.cancelAndJoin()
             val revision = connectionRevision.addAndFetch(1)
-            desiredTarget.store(null)
             prepareNetwork()
             state.update { it.copy(statusMessage = uiText(Res.string.waiting_for_robot_to_scan_qr), devices = emptyList()) }
             log(tr(Res.string.waiting_for_robot_to_scan_qr))
@@ -406,11 +397,11 @@ internal class ConsoleModel(
                 robotRuntime.acknowledgeRouterPairing(pairing, normalizedAppId)
             } catch (error: Exception) {
                 connectionRevision.addAndFetch(1)
-                desiredTarget.store(null)
                 session.exchange(null)?.close()
                 lab.store(null)
                 robotFiles.clear()
-                state.update { it.copy(connected = false, connectedAddress = null, statusMessage = uiText(Res.string.connection_failed)) }
+                state.update { it.copy(connected = false, connectedAddress = null, connecting = false,
+                    statusMessage = uiText(Res.string.connection_failed)) }
                 throw error
             }
             log(tr(Res.string.router_pairing_completed))
@@ -418,13 +409,10 @@ internal class ConsoleModel(
     }
 
     override fun connect(ip: String, appId: String) {
-        automaticConnectionsEnabled.store(true)
-        work {
+        work(connecting = true) {
             awaitConnectionPreferences()
             check(session.load() == null) { tr(Res.string.disconnect_the_current_session_first) }
-            reconnectJob?.cancelAndJoin()
             val revision = connectionRevision.addAndFetch(1)
-            desiredTarget.store(null)
             prepareNetwork()
             val target = RobotTarget(ip.trim(), appId.trim())
             val device = state.value.devices.firstOrNull { it.ip == target.ip }
@@ -444,9 +432,7 @@ internal class ConsoleModel(
     private suspend fun autoConnect() {
         awaitConnectionPreferences()
         check(session.load() == null) { tr(Res.string.disconnect_the_current_session_first) }
-        reconnectJob?.cancelAndJoin()
         val revision = connectionRevision.addAndFetch(1)
-        desiredTarget.store(null)
         prepareNetwork()
         state.update { it.copy(statusMessage = uiText(Res.string.automatically_finding_robot), devices = emptyList()) }
         log(tr(Res.string.listening_for_robots_on_the_local_network))
@@ -504,7 +490,8 @@ internal class ConsoleModel(
         robot: DiscoveredRobot? = null,
         automaticProbe: Boolean = false,
     ) {
-        state.update { ConsoleState(busy = true, statusMessage = uiText(Res.string.connecting_to_value,target.ip), logs = it.logs, devices = it.devices) }
+        state.update { ConsoleState(busy = true, connecting = true,
+            statusMessage = uiText(Res.string.connecting_to_value,target.ip), logs = it.logs, devices = it.devices) }
         val attemptTarget = if (automaticProbe) target.forAutomaticProbe() else target
         val candidate = newSession(attemptTarget)
         session.store(candidate)
@@ -516,8 +503,7 @@ internal class ConsoleModel(
             session.store(candidate)
             lab.store(candidate.lab)
             robotFiles.attach(candidate.files)
-            desiredTarget.store(target.withStandardTimeouts())
-            state.update { it.copy(connected = true, connectedAddress = target.ip, reconnecting = false,
+            state.update { it.copy(connected = true, connectedAddress = target.ip, connecting = false,
                 statusMessage = uiText(Res.string.connected_to_value,target.ip), error = null,
                 robotProduct = candidate.product, devices = emptyList()) }
             runCatching {
@@ -539,8 +525,7 @@ internal class ConsoleModel(
             candidate.close()
             session.compareAndSet(candidate, null)
             if (revision == connectionRevision.load()) {
-                desiredTarget.store(null)
-                state.update { it.copy(reconnecting = false, statusMessage = uiText(Res.string.connection_failed)) }
+                state.update { it.copy(connecting = false, statusMessage = uiText(Res.string.connection_failed)) }
             }
             throw error
         }
@@ -574,73 +559,24 @@ internal class ConsoleModel(
         remoteInput.value = List(5) { 0.0 }
         cameraYaw.value = null
         scope.launch {
-            val target = desiredTarget.load() ?: return@launch
             if (session.load() !== candidate) return@launch
             session.store(null)
             lab.store(null)
             robotFiles.clear()
             candidate.close()
             log(reason)
-            state.update { it.lost(reason).copy(busy = false, reconnecting = acceptingWork.load()) }
-            if (acceptingWork.load()) reconnect(target, connectionRevision.load())
-        }
-    }
-
-    private fun reconnect(target: RobotTarget, revision: Long) {
-        reconnectJob?.cancel()
-        reconnectJob = scope.launch {
-            var attempt = 0
-            var retryDelay = 500L
-            while (isActive && acceptingWork.load() && desiredTarget.load() == target && connectionRevision.load() == revision) {
-                delay(retryDelay)
-                attempt++
-                state.update { it.copy(reconnecting = true,
-                    statusMessage = uiText(Res.string.reconnecting_attempt_value, attempt), error = null) }
-                var candidate: RobotSession? = null
-                try {
-                    prepareNetwork()
-                    candidate = newSession(target)
-                    session.store(candidate)
-                    candidate.connect()
-                    candidate.safetyStop()
-                    ensureActive()
-                    check(acceptingWork.load() && desiredTarget.load() == target && connectionRevision.load() == revision)
-                    lab.store(candidate.lab)
-                    robotFiles.attach(candidate.files)
-                    state.update { it.copy(connected = true, connectedAddress = target.ip, reconnecting = false,
-                        statusMessage = uiText(Res.string.reconnected_to_value, target.ip), error = null,
-                        robotProduct = candidate.product) }
-                    log(tr(Res.string.reconnected_to_value, target.ip))
-                    return@launch
-                } catch (error: CancellationException) {
-                    candidate?.close()
-                    session.compareAndSet(candidate, null)
-                    throw error
-                } catch (error: Exception) {
-                    candidate?.close()
-                    session.compareAndSet(candidate, null)
-                    val nextDelay = (retryDelay * 2).coerceAtMost(8000L)
-                    val seconds = (nextDelay / 1000L).coerceAtLeast(1L).toInt()
-                    state.update { it.copy(connected = false, connectedAddress = null, reconnecting = true,
-                        statusMessage = uiText(Res.string.reconnect_failed_retrying_value, seconds), error = error.message) }
-                    retryDelay = nextDelay
-                }
-            }
+            state.update { it.lost(reason).copy(busy = false, connecting = false) }
         }
     }
 
     override fun disconnect() = work {
-        automaticConnectionsEnabled.store(false)
         connectionRevision.addAndFetch(1)
-        desiredTarget.store(null)
-        reconnectJob?.cancelAndJoin()
-        reconnectJob = null
         haltRemote()
         session.exchange(null)?.close(); lab.store(null)
         robotFiles.clear()
         state.update {
             val uncertain = it.scriptRunPhase.mayBeExecuting
-            it.copy(connected = false, connectedAddress = null, reconnecting = false,
+            it.copy(connected = false, connectedAddress = null, connecting = false,
                 statusMessage = uiText(Res.string.disconnected), error = null,
                 scriptRunPhase = if (uncertain) ScriptRunPhase.UNKNOWN else it.scriptRunPhase,
                 scriptMessage = if (uncertain) uiText(Res.string.session_ended_robot_state_unknown) else it.scriptMessage,
@@ -654,12 +590,13 @@ internal class ConsoleModel(
         startScript(source, title)
     }
 
-    private suspend fun startScript(source: String, title: String) {
+    private suspend fun startScript(source: String, title: String): String {
         val controller = checkNotNull(lab.load()) { tr(Res.string.robot_is_not_connected) }
         val startedAt = clock.now().toEpochMilliseconds()
         state.update { it.copy(scriptRunId = null, scriptTitle = title,
             scriptRunPhase = ScriptRunPhase.UPLOADING, scriptStartedAtEpochMillis = startedAt,
-            scriptFinishedAtEpochMillis = null, scriptMessage = uiText(Res.string.uploading), scriptMessages = emptyList()) }
+            scriptFinishedAtEpochMillis = null, scriptMessage = uiText(Res.string.uploading),
+            scriptMessages = listOf(tr(Res.string.script_trace_uploading))) }
         val upload = try {
             controller.upload(source, title)
         } catch (error: Exception) {
@@ -668,14 +605,45 @@ internal class ConsoleModel(
             throw error
         }
         state.update { it.copy(scriptRunId = upload.runId, scriptRunPhase = ScriptRunPhase.STARTING,
-            scriptMessage = uiText(Res.string.waiting_for_script_start)) }
+            scriptMessage = uiText(Res.string.waiting_for_script_start),
+            scriptMessages = (it.scriptMessages + tr(
+                Res.string.script_trace_uploaded_value, upload.runId, upload.digest,
+            )).takeLast(200)) }
+        val packetBaseline = state.value.packets
+        val labMessageBaseline = state.value.labMessagePackets
         try {
-            controller.start()
+            check(controller.start() == upload.runId) { "启动运行标识不匹配" }
         } catch (error: Exception) {
             state.update { it.copy(scriptRunPhase = ScriptRunPhase.UNKNOWN,
                 scriptMessage = uiText(Res.string.script_start_state_unknown)) }
             throw error
         }
+        state.update { current -> if (current.scriptRunId == upload.runId &&
+            current.scriptRunPhase == ScriptRunPhase.STARTING) current.copy(
+            scriptMessages = (current.scriptMessages + tr(
+                Res.string.script_trace_start_sent_value, upload.runId,
+            )).takeLast(200),
+        ) else current }
+        scope.launch {
+            delay(scriptStartConfirmationTimeoutMillis)
+            state.update { current ->
+                if (current.scriptRunId == upload.runId && current.scriptRunPhase == ScriptRunPhase.STARTING) {
+                    current.copy(
+                        scriptRunPhase = ScriptRunPhase.UNKNOWN,
+                        scriptMessage = uiText(Res.string.script_start_confirmation_timed_out),
+                        scriptMessages = (current.scriptMessages + tr(
+                            Res.string.script_trace_start_timeout_value,
+                            upload.runId,
+                            current.packets - packetBaseline,
+                            current.labMessagePackets - labMessageBaseline,
+                        )).takeLast(200),
+                    )
+                } else {
+                    current
+                }
+            }
+        }
+        return upload.runId
     }
 
     override fun stop() = work(allowDuringChat = true) {
@@ -706,13 +674,20 @@ internal class ConsoleModel(
         val runEvent = message?.let { LabRunProtocol.decode(it.text) }
         val eventRunId = runEvent?.runId
         val eventType = runEvent?.type
+        val labMessageFrame = frame.valid && frame.set == 0x3f && frame.id == 0xa4
         state.update { old -> old.copy(packets = old.packets + 1,
+            labMessagePackets = old.labMessagePackets + if (labMessageFrame) 1 else 0,
             frames = (old.frames + line).takeLast(250),
             robotProduct = RobotProductProtocol.updated(old.robotProduct, frame) ?: old.robotProduct,
             battery = if (motion == null) old.battery else motion.batteryPercent,
             signalQuality = signalQuality ?: old.signalQuality,
             gimbal = gimbal ?: old.gimbal,
             scriptMessages = when {
+                runEvent != null && eventRunId == old.scriptRunId -> (old.scriptMessages + tr(
+                    Res.string.script_trace_lifecycle_value,
+                    requireNotNull(eventType).name,
+                    requireNotNull(eventRunId),
+                )).takeLast(200)
                 runEvent == null && message != null -> (old.scriptMessages + message.text).takeLast(200)
                 else -> old.scriptMessages
             },
@@ -758,21 +733,18 @@ internal class ConsoleModel(
     override fun clearLogs() { state.update { it.copy(logs = emptyList(), frames = emptyList()) } }
     override suspend fun pauseConnection() {
         connectionRevision.addAndFetch(1)
-        desiredTarget.store(null)
-        reconnectJob?.cancelAndJoin()
-        reconnectJob = null
         chat.cancelAndJoin()
         scope.coroutineContext[Job]?.children?.toList()?.forEach { it.cancelAndJoin() }
         session.exchange(null)?.close(); lab.store(null)
         robotFiles.clear()
         state.update {
             val uncertain = it.scriptRunPhase.mayBeExecuting
-            it.copy(connected = false, connectedAddress = null, reconnecting = false, busy = false,
+            it.copy(connected = false, connectedAddress = null, connecting = false, busy = false,
                 statusMessage = uiText(Res.string.disconnected), battery = null, signalQuality = null,
                 values = emptyList(), gimbal = null,
                 scriptRunPhase = if (uncertain) ScriptRunPhase.UNKNOWN else it.scriptRunPhase,
                 scriptMessage = if (uncertain) uiText(Res.string.connection_closed_robot_state_unknown) else it.scriptMessage)
         }
     }
-    override fun close() { connectionRevision.addAndFetch(1); desiredTarget.store(null); reconnectJob?.cancel(); robotFiles.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
+    override fun close() { connectionRevision.addAndFetch(1); robotFiles.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
 }

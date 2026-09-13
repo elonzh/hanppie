@@ -13,6 +13,8 @@ internal enum class ScriptRunPhase {
     val visible: Boolean get() = this != IDLE
     val active: Boolean get() = this == UPLOADING || this == STARTING || this == RUNNING ||
         this == COMPLETING || this == STOPPING || this == UNKNOWN
+    val progressing: Boolean get() = this == UPLOADING || this == STARTING || this == RUNNING ||
+        this == COMPLETING || this == STOPPING
     val mayBeExecuting: Boolean get() = this == STARTING || this == RUNNING || this == COMPLETING ||
         this == STOPPING || this == UNKNOWN
 }
@@ -20,13 +22,14 @@ internal enum class ScriptRunPhase {
 internal data class ConsoleState(
     val connected: Boolean = false,
     val connectedAddress: String? = null,
-    val reconnecting: Boolean = false,
+    val connecting: Boolean = false,
     val busy: Boolean = false,
     val statusMessage: UiText = uiText(Res.string.disconnected),
     val error: String? = null,
     val devices: List<DiscoveredRobot> = emptyList(),
     val robotProduct: RobotProduct = RobotProduct(),
     val packets: Long = 0,
+    val labMessagePackets: Long = 0,
     val battery: Int? = null,
     val signalQuality: Int? = null,
     val values: List<Pair<String, String>> = emptyList(),
@@ -48,7 +51,7 @@ internal data class ConsoleState(
         (scriptRunPhase == ScriptRunPhase.STARTING || scriptRunPhase == ScriptRunPhase.RUNNING ||
             scriptRunPhase == ScriptRunPhase.UNKNOWN)
 
-    fun lost(reason: String): ConsoleState = copy(connected = false, connectedAddress = null, reconnecting = false, statusMessage = uiText(Res.string.connection_lost), error = reason,
+    fun lost(reason: String): ConsoleState = copy(connected = false, connectedAddress = null, connecting = false, statusMessage = uiText(Res.string.connection_lost), error = reason,
         robotProduct = RobotProduct(), battery = null, signalQuality = null, values = emptyList(), gimbal = null,
         scriptRunPhase = if (scriptRunPhase.mayBeExecuting) ScriptRunPhase.UNKNOWN else scriptRunPhase,
         scriptMessage = if (scriptRunPhase.mayBeExecuting) uiText(Res.string.connection_lost_robot_execution_state_unknown) else scriptMessage)

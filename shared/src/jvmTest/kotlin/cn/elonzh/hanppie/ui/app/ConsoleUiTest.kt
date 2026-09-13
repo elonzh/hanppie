@@ -15,6 +15,7 @@ import cn.elonzh.hanppie.robot.product.RobotModel
 import cn.elonzh.hanppie.robot.product.RobotProduct
 import cn.elonzh.hanppie.ui.chat.ChatLine
 import cn.elonzh.hanppie.ui.chat.ChatPage
+import cn.elonzh.hanppie.ui.chat.ChatPhase
 import cn.elonzh.hanppie.ui.chat.ChatRole
 import cn.elonzh.hanppie.ui.chat.ChatState
 import ai.koog.agents.core.agent.execution.AgentExecutionInfo
@@ -33,6 +34,8 @@ import cn.elonzh.hanppie.ui.settings.ControlKey
 import cn.elonzh.hanppie.ui.settings.KeyBinding
 import cn.elonzh.hanppie.ui.settings.NightMode
 import cn.elonzh.hanppie.ui.settings.ModelProviderPreset
+import cn.elonzh.hanppie.ui.settings.ModelSettings
+import cn.elonzh.hanppie.ui.settings.SettingsDropdown
 import cn.elonzh.hanppie.ui.settings.SettingsPage
 import cn.elonzh.hanppie.ui.speech.SpeechInput
 import cn.elonzh.hanppie.ui.speech.SpeechInputState
@@ -80,6 +83,7 @@ class ConsoleUiTest {
             rule.onNodeWithText("RoboMaster").assertIsDisplayed()
             rule.onNodeWithText("S1").assertDoesNotExist()
             rule.onNodeWithContentDescription("设置").performClick()
+            rule.onNodeWithTag("settings-section-general-toggle").performClick()
             rule.onNodeWithContentDescription("language-selector").performClick()
             rule.onNodeWithContentDescription("language-en").performClick()
             rule.onNodeWithText("Language").assertIsDisplayed()
@@ -94,6 +98,7 @@ class ConsoleUiTest {
             rule.onNodeWithContentDescription("Debug").performClick()
             snapshot("phone-debug-en")
             rule.onNodeWithContentDescription("Settings").performClick()
+            rule.onNodeWithTag("settings-section-general-toggle").performClick()
             rule.onNodeWithContentDescription("language-selector").performClick()
             rule.onNodeWithContentDescription("language-zh").performClick()
             rule.onNodeWithText("语言").assertIsDisplayed()
@@ -259,6 +264,7 @@ class ConsoleUiTest {
             } }
             rule.onNodeWithTag("bottom-navigation").assertIsDisplayed()
             rule.onNodeWithText("自动连接").assertIsDisplayed()
+            rule.onNodeWithText("手机或电脑需与机器人连接同一 Wi-Fi").assertDoesNotExist()
             snapshot("phone-device")
             rule.onNodeWithContentDescription("脚本").performClick()
             rule.onNodeWithTag("script-library").assertIsDisplayed()
@@ -286,6 +292,60 @@ class ConsoleUiTest {
         } finally { model.close() }
     }
 
+    @Test fun sendAvailabilityUsesTheRuntimePhase() {
+        val model = testConsoleModel()
+        try {
+            rule.setContent { WorkbenchTheme {
+                Box(Modifier.requiredSize(393.dp, 740.dp)) { ChatPage(model) }
+            } }
+            rule.waitUntil(5_000) { model.chat.state.value.ready }
+            rule.runOnIdle {
+                model.chat.updateDraft("继续")
+                model.chat.state.value = model.chat.state.value.copy(phase = ChatPhase.MANAGING)
+            }
+            rule.onNodeWithContentDescription("发送").assertIsNotEnabled()
+
+            rule.runOnIdle {
+                model.chat.state.value = model.chat.state.value.copy(phase = ChatPhase.IDLE)
+            }
+            rule.onNodeWithContentDescription("发送").assertIsEnabled()
+        } finally { model.close() }
+    }
+
+    @Test fun composerSendsWithEnterAndButtonWhileShiftEnterInsertsALineBreak() {
+        val model = testConsoleModel()
+        try {
+            rule.setContent { WorkbenchTheme {
+                Box(Modifier.requiredSize(1040.dp, 740.dp)) { ChatPage(model) }
+            } }
+            rule.waitUntil(5_000) { model.chat.state.value.ready }
+            rule.runOnIdle { model.modelSettings.value = ModelSettings(apiKey = "test-key") }
+
+            rule.onNodeWithTag("chat-input").performClick().performTextInput("第一行")
+            rule.onNodeWithTag("chat-input").performKeyInput {
+                keyDown(Key.ShiftLeft); pressKey(Key.Enter); keyUp(Key.ShiftLeft)
+            }
+            rule.onNodeWithTag("chat-input").performTextInput("第二行")
+            rule.runOnIdle { assertEquals("第一行\n第二行", model.chat.state.value.draft) }
+
+            rule.onNodeWithTag("chat-input").performKeyInput { pressKey(Key.Enter) }
+            rule.waitUntil(5_000) {
+                model.chat.state.value.lines.any {
+                    it.role == ChatRole.USER && it.text == "第一行\n第二行"
+                }
+            }
+            rule.waitUntil(5_000) { model.chat.state.value.ready }
+
+            rule.onNodeWithTag("chat-input").performTextInput("按钮发送")
+            rule.onNodeWithContentDescription("发送").performClick()
+            rule.waitUntil(5_000) {
+                model.chat.state.value.lines.any {
+                    it.role == ChatRole.USER && it.text == "按钮发送"
+                }
+            }
+        } finally { model.close() }
+    }
+
     @Test fun sessionHistoryAdaptsBetweenPhoneDialogAndDesktopSidebar() {
         val history = TestSessionHistory()
         kotlinx.coroutines.runBlocking {
@@ -310,6 +370,15 @@ class ConsoleUiTest {
             rule.onNodeWithContentDescription("对话记录").performClick()
             rule.onNodeWithTag("conversation-list").assertIsDisplayed()
             rule.onNodeWithText("机器人巡检").assertIsDisplayed()
+            rule.onNodeWithTag("new-conversation").assertIsDisplayed()
+            assertTrue(rule.onNodeWithTag("conversation-list").fetchSemanticsNode().boundsInRoot.height < 400f)
+            rule.onAllNodesWithContentDescription("对话操作").assertCountEquals(2)
+            rule.onAllNodesWithContentDescription("对话操作").onFirst().performClick()
+            rule.onNodeWithText("重命名", substring = false).assertIsDisplayed()
+            rule.onNodeWithText("删除", substring = false).assertIsDisplayed()
+            rule.onNodeWithText("重命名", substring = false).performClick()
+            rule.onNodeWithText("取消", substring = false).performClick()
+            rule.onNodeWithText("归档", substring = false).assertDoesNotExist()
             snapshot("phone-conversation-list", rule.onNodeWithTag("conversation-list"))
 
             rule.onNodeWithText("机器人巡检").performClick()
@@ -317,6 +386,10 @@ class ConsoleUiTest {
             rule.waitForIdle()
             rule.onNodeWithTag("conversation-list").assertIsDisplayed()
             rule.onNodeWithText("机器人巡检").assertIsDisplayed()
+            val sidebarBounds = rule.onNodeWithTag("conversation-list").fetchSemanticsNode().boundsInRoot
+            val newConversationBounds = rule.onNodeWithTag("new-conversation").fetchSemanticsNode().boundsInRoot
+            assertTrue(sidebarBounds.height < 400f)
+            assertTrue(newConversationBounds.left >= sidebarBounds.left && newConversationBounds.right <= sidebarBounds.right)
             snapshot("desktop-conversation-sidebar")
         } finally { model.close() }
     }
@@ -348,16 +421,25 @@ class ConsoleUiTest {
 
     @Test fun streamingMarkdownAppendsAndStartsANewReply() {
         val model = testConsoleModel()
+        val width = mutableStateOf(393.dp)
         try {
-            model.chat.state.value = ChatState(running = true,
-                lines = listOf(ChatLine(ChatRole.USER, "检查状态")), streaming = "## 连接状态\n\n电量 **88")
-            rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(393.dp, 740.dp)) { ChatPage(model) } } }
+            rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(width.value, 740.dp)) { ChatPage(model) } } }
+            rule.waitUntil(5_000) { model.chat.state.value.ready }
+            rule.runOnIdle {
+                model.chat.state.value = model.chat.state.value.copy(
+                    phase = ChatPhase.RUNNING,
+                    lines = listOf(ChatLine(ChatRole.USER, "检查状态")),
+                    streaming = "## 连接状态\n\n电量 **88",
+                )
+            }
             rule.waitUntil(5000) { rule.onAllNodesWithText("连接状态").fetchSemanticsNodes().size == 1 }
             rule.runOnIdle { model.chat.state.value = model.chat.state.value.copy(
                 streaming = "## 连接状态\n\n电量 **88%**。\n\n- 已连接\n- 待机") }
             rule.waitUntil(5000) { rule.onAllNodesWithText("待机", substring = true).fetchSemanticsNodes().isNotEmpty() }
             rule.onAllNodesWithText("连接状态").assertCountEquals(1)
             snapshot("phone-markdown-stream")
+            rule.onNodeWithText("我", substring = false).assertDoesNotExist()
+            rule.onNodeWithText("憨皮", substring = false).assertDoesNotExist()
             rule.runOnIdle {
                 val old = model.chat.state.value
                 model.chat.state.value = old.copy(lines = old.lines + ChatLine(ChatRole.ASSISTANT, old.streaming),
@@ -366,6 +448,65 @@ class ConsoleUiTest {
             rule.waitUntil(5000) { rule.onAllNodesWithText("下一步").fetchSemanticsNodes().size == 1 }
             rule.onAllNodesWithText("连接状态").assertCountEquals(1)
             rule.onAllNodesWithText("下一步").assertCountEquals(1)
+            rule.runOnIdle { width.value = 1040.dp }
+            rule.waitForIdle()
+            snapshot("desktop-agent-chat")
+        } finally { model.close() }
+    }
+
+    @Test fun userMessageBubbleWrapsShortContentAndCapsLongMessages() {
+        val model = testConsoleModel()
+        val width = mutableStateOf(393.dp)
+        try {
+            rule.setContent { WorkbenchTheme {
+                Box(Modifier.requiredSize(width.value, 740.dp)) { ChatPage(model) }
+            } }
+            rule.waitUntil(5_000) { model.chat.state.value.ready }
+            rule.runOnIdle {
+                model.chat.state.value = model.chat.state.value.copy(
+                    lines = listOf(ChatLine(ChatRole.USER, "你好")),
+                )
+            }
+            val shortWidth = rule.onNodeWithTag("user-message").fetchSemanticsNode().boundsInRoot.width
+            assertTrue(shortWidth < 160f)
+
+            rule.runOnIdle {
+                width.value = 1040.dp
+                model.chat.state.value = model.chat.state.value.copy(
+                    lines = listOf(ChatLine(ChatRole.USER, "请检查当前机器人连接与脚本运行状态，并说明下一步应该如何处理。".repeat(8))),
+                )
+            }
+            rule.waitForIdle()
+            val longWidth = rule.onNodeWithTag("user-message").fetchSemanticsNode().boundsInRoot.width
+            assertTrue(longWidth > shortWidth)
+            assertTrue(longWidth <= 600.5f)
+        } finally { model.close() }
+    }
+
+    @Test fun connectionFailureDetailsDoNotOccupyThePageHeader() {
+        val model = testConsoleModel()
+        try {
+            val failure = "机器人未确认 App 会话，请检查网络或关闭其他控制器"
+            model.state.value = model.state.value.lost(failure)
+            rule.setContent { WorkbenchTheme {
+                Box(Modifier.requiredSize(1040.dp, 740.dp)) {
+                    Console(model, mutableStateOf(EditorDocument()))
+                }
+            } }
+            rule.onNodeWithTag("connection-status").assertTextContains("未连接")
+            rule.onNodeWithText(failure, substring = false).assertDoesNotExist()
+
+            rule.onNodeWithContentDescription("对话").performClick()
+            rule.onNodeWithTag("connection-status").assertTextContains("未连接")
+            rule.onNodeWithText(failure, substring = false).assertDoesNotExist()
+
+            rule.onNodeWithContentDescription("脚本").performClick()
+            rule.onNodeWithTag("script-library").assertIsDisplayed()
+            rule.onNodeWithText(failure, substring = false).assertDoesNotExist()
+
+            rule.onNodeWithTag("script-new").performClick()
+            rule.onNodeWithTag("script-editor").assertIsDisplayed()
+            rule.onNodeWithText(failure, substring = false).assertDoesNotExist()
         } finally { model.close() }
     }
 
@@ -397,6 +538,7 @@ class ConsoleUiTest {
         try {
             rule.setContent { WorkbenchTheme(appearance) { Box(Modifier.requiredSize(393.dp, 740.dp)) { Console(model, document) } } }
             rule.onNodeWithContentDescription("设置").performClick()
+            rule.onNodeWithTag("settings-section-general-toggle").performClick()
             rule.onNodeWithContentDescription("theme-selector").assertDoesNotExist()
             rule.onNodeWithTag("palette-editor").assertDoesNotExist()
             rule.onNodeWithContentDescription("night-mode-selector").performClick()
@@ -545,6 +687,7 @@ class ConsoleUiTest {
                 assertEquals(ModelProviderPreset.DEEPSEEK.defaultEndpoint, model.modelSettings.value.endpoint)
             }
             rule.onNodeWithText("自动朗读").assertDoesNotExist()
+            rule.onNodeWithTag("settings-section-control-toggle").performScrollTo().performClick()
             rule.onNodeWithContentDescription("gimbal-sensitivity-selector").assertExists()
             val original = model.controlSettings.value.remoteLeds.standby
             rule.onNodeWithContentDescription("remote-led-standby").performScrollTo().performClick()
@@ -561,15 +704,80 @@ class ConsoleUiTest {
         } finally { model.close() }
     }
 
-    @Test fun lostConnectionCanBeCleanedUp() {
+    @Test fun settingsRenderAndOfferAModelOutsideTheBuiltInCatalog() {
         val model = testConsoleModel()
         try {
-            model.state.value = model.state.value.lost("fixture timeout").copy(
-                reconnecting = true, statusMessage = uiText(Res.string.reconnecting_attempt_value, 2))
-            rule.setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
-            rule.onNodeWithTag("connection-status").performClick()
-            rule.onNodeWithText("断开连接").assertIsEnabled().performClick()
-            rule.waitUntil(3000) { model.state.value.status == "未连接" }
+            model.modelSettings.value = ModelSettings(model = "qwen-plus")
+
+            rule.setContent {
+                WorkbenchTheme {
+                    Box(Modifier.requiredSize(393.dp, 740.dp)) { SettingsPage(model) }
+                }
+            }
+
+            rule.onNodeWithContentDescription("model-preset-selector")
+                .performScrollTo().assertTextContains("qwen-plus").performClick()
+            rule.onNodeWithContentDescription("model-preset-qwen-plus").assertExists()
+        } finally { model.close() }
+    }
+
+    @Test fun remoteModelCatalogLoadsOnlyWhenTheModelSelectorOpens() {
+        var clientCreations = 0
+        val model = testConsoleModel(createAgentHttpClient = {
+            clientCreations += 1
+            error("Offline model catalog fixture")
+        })
+        try {
+            model.modelSettings.value = ModelSettings(apiKey = "test-key")
+            rule.setContent {
+                WorkbenchTheme {
+                    Box(Modifier.requiredSize(393.dp, 740.dp)) { SettingsPage(model) }
+                }
+            }
+
+            rule.runOnIdle { assertEquals(0, clientCreations) }
+            rule.onNodeWithTag("settings-section-model-toggle").performClick()
+            rule.onNodeWithContentDescription("model-preset-selector")
+                .performScrollTo().performClick()
+            rule.waitUntil(3_000) { clientCreations == 1 }
+            rule.onNodeWithText("获取模型列表失败", substring = true).assertExists()
+        } finally { model.close() }
+    }
+
+    @Test fun dropdownRendersAnUnavailableCurrentValueInsteadOfCrashing() {
+        rule.setContent {
+            WorkbenchTheme {
+                SettingsDropdown(
+                    label = "Model",
+                    tag = "unavailable-value",
+                    selected = "custom-model",
+                    values = listOf("built-in" to "Built-in"),
+                    change = {},
+                )
+            }
+        }
+
+        rule.onNodeWithContentDescription("unavailable-value-selector")
+            .assertTextContains("custom-model")
+    }
+
+    @Test fun connectingUsesOnlyTheHeaderStatus() {
+        val model = testConsoleModel()
+        try {
+            model.state.value = model.state.value.copy(
+                busy = true,
+                connecting = true,
+                statusMessage = uiText(Res.string.automatically_finding_robot),
+            )
+            rule.setContent { WorkbenchTheme {
+                Box(Modifier.requiredSize(393.dp, 740.dp)) {
+                    Console(model, mutableStateOf(EditorDocument()))
+                }
+            } }
+            rule.onNodeWithTag("connection-status").assertTextContains("连接中")
+            rule.onNodeWithTag("automatic-connection-progress").assertDoesNotExist()
+            rule.onNodeWithText("正在自动识别并连接机器人…", substring = false).assertDoesNotExist()
+            snapshot("phone-device-connecting")
         } finally { model.close() }
     }
 
@@ -675,6 +883,7 @@ class ConsoleUiTest {
             rule.onNodeWithTag("script-run-screen").assertIsDisplayed()
             rule.onNodeWithTag("script-run-log").assertIsDisplayed()
             rule.onNodeWithText("运行日志").assertIsDisplayed()
+            rule.onNodeWithText("运行标识：$runId").assertIsDisplayed()
             rule.onNodeWithText("我的脚本").assertDoesNotExist()
             snapshot("active-script-run-phone")
             rule.runOnIdle { width.value = 320.dp; height.value = 568.dp }
@@ -746,6 +955,11 @@ class ConsoleUiTest {
         val model = testConsoleModel()
         try {
             rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(393.dp, 740.dp)) { SettingsPage(model) } } }
+            rule.onNodeWithTag("settings-section-shortcuts-toggle").performScrollTo().performClick()
+            rule.onNodeWithText("对话快捷键").assertIsDisplayed()
+            rule.onNodeWithText("Enter", substring = false).assertIsDisplayed()
+            rule.onNodeWithText("Shift+Enter", substring = false).assertIsDisplayed()
+            snapshot("phone-settings-shortcuts")
             rule.onNodeWithText("控制快捷键").performScrollTo().performClick()
             rule.onNodeWithText("切换弹药").performScrollTo().assertIsDisplayed()
             rule.onNodeWithText("G", substring = false).performClick()

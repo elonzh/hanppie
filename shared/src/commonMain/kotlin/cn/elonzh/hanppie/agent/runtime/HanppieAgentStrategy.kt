@@ -13,23 +13,32 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.withTimeout
 
 /** Explicit LLM -> tools -> LLM graph used for every Hanppie agent run. */
 @OptIn(ExperimentalUuidApi::class)
 internal fun hanppieAgentStrategy(
     onStreamFrame: suspend (StreamFrame) -> Unit,
     onMessage: suspend (Message) -> Unit,
+    terminalToolNames: Set<String> = emptySet(),
+    maxExecutionsPerTool: Int = 2,
     maxModelRequests: Int = 8,
+    modelRequestTimeoutMillis: Long = 120_000,
 ): AIAgentGraphStrategy<String, String> {
+    require(maxExecutionsPerTool > 0) { "maxExecutionsPerTool must be positive" }
     require(maxModelRequests > 0) { "maxModelRequests must be positive" }
+    require(modelRequestTimeoutMillis > 0) { "modelRequestTimeoutMillis must be positive" }
     var modelRequests = 0
+    val toolExecutions = mutableMapOf<String, Int>()
 
     return strategy("hanppie-agent") {
         val nodeExecuteTool by nodeExecuteTools(parallel = false)
 
         suspend fun AIAgentLLMWriteSession.requestResponse(): Message.Assistant {
             check(++modelRequests <= maxModelRequests) { "Agent model request limit reached" }
-            val frames = requestLLMStreaming().onEach(onStreamFrame).toList()
+            val frames = withTimeout(modelRequestTimeoutMillis) {
+                requestLLMStreaming().onEach(onStreamFrame).toList()
+            }
             check(frames.any { frame -> frame is StreamFrame.End }) { "Model output was interrupted" }
             check(frames.filterIsInstance<StreamFrame.End>().none { frame -> frame.finishReason.isTokenLimit() }) {
                 "Model output was truncated"
@@ -50,15 +59,22 @@ internal fun hanppieAgentStrategy(
             }
         }
 
-        val nodeCallModelAfterTools by node<ReceivedToolResults, Message.Assistant> { results ->
+        val nodeRecordToolResults by node<ReceivedToolResults, ReceivedToolResults> { results ->
             val resultMessage = prompt("hanppie-tool-results") {
                 user { results.toolResults.forEach { result -> toolResult(result.toMessagePart()) } }
             }.messages.single()
             onMessage(resultMessage)
             llm.writeSession {
                 appendPrompt { message(resultMessage) }
-                requestResponse()
             }
+            results.toolResults.forEach { result ->
+                toolExecutions[result.tool] = toolExecutions.getOrElse(result.tool) { 0 } + 1
+            }
+            results
+        }
+
+        val nodeCallModelAfterTools by node<ReceivedToolResults, Message.Assistant> {
+            llm.writeSession { requestResponse() }
         }
 
         edge(nodeStart forwardTo nodeCallInitialModel)
@@ -68,7 +84,26 @@ internal fun hanppieAgentStrategy(
                 onCondition { response -> !response.hasToolCall() }
                 transformed { response -> response.visibleText() },
         )
-        edge(nodeExecuteTool forwardTo nodeCallModelAfterTools)
+        edge(nodeExecuteTool forwardTo nodeRecordToolResults)
+        edge(
+            (nodeRecordToolResults forwardTo nodeFinish)
+                .onCondition { results -> results.endsRun(
+                    terminalToolNames,
+                    toolExecutions,
+                    maxExecutionsPerTool,
+                    modelRequests >= maxModelRequests,
+                ) }
+                .transformed { results -> results.visibleOutput() },
+        )
+        edge(
+            (nodeRecordToolResults forwardTo nodeCallModelAfterTools)
+                .onCondition { results -> !results.endsRun(
+                    terminalToolNames,
+                    toolExecutions,
+                    maxExecutionsPerTool,
+                    modelRequests >= maxModelRequests,
+                ) },
+        )
         edge(nodeCallModelAfterTools forwardTo nodeExecuteTool onToolCalls { true })
         edge(
             (nodeCallModelAfterTools forwardTo nodeFinish)
@@ -77,6 +112,18 @@ internal fun hanppieAgentStrategy(
         )
     }
 }
+
+private fun ReceivedToolResults.endsRun(
+    terminalToolNames: Set<String>,
+    toolExecutions: Map<String, Int>,
+    maxExecutionsPerTool: Int,
+    modelRequestLimitReached: Boolean,
+): Boolean = modelRequestLimitReached || toolResults.any { result ->
+    result.tool in terminalToolNames || toolExecutions.getOrElse(result.tool) { 0 } >= maxExecutionsPerTool
+}
+
+private fun ReceivedToolResults.visibleOutput(): String =
+    toolResults.joinToString("\n") { result -> result.output }.ifBlank { "Tool execution completed" }
 
 private fun Message.Assistant.hasToolCall(): Boolean = parts.any { part -> part is MessagePart.Tool.Call }
 

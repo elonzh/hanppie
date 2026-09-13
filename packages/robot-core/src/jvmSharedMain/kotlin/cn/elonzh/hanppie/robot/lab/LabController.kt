@@ -42,6 +42,7 @@ class LabController internal constructor(private val session: LabChannel,
         val candidate = LabProgram(LabRunProtocol.instrument(source, candidateRunId),
             ByteArray(16).also(random::nextBytes).hex(), candidateRunId, title)
         val bytes = candidate.dsp(LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd")))
+        log("Lab 上传开始；runId=$candidateRunId bytes=${bytes.size}")
         program = null; digest = null; runId = null
         if (!entered) {
             session.labMode()
@@ -67,7 +68,7 @@ class LabController internal constructor(private val session: LabChannel,
         check(session.connected) { "上传期间机器人连接已断开" }
         val hash = MessageDigest.getInstance("MD5").digest(bytes)
         program = candidate; digest = hash; runId = candidateRunId
-        log("FTP 已确认上传 ${bytes.size} 字节，MD5 ${hash.hex()}")
+        log("Lab 上传已确认；runId=$candidateRunId bytes=${bytes.size} md5=${hash.hex()}")
         LabUpload(hash.hex(), candidateRunId)
     }
 
@@ -83,8 +84,9 @@ class LabController internal constructor(private val session: LabChannel,
         session.send(0xa9, 0x40, 0x3f, 0xa3, current.metadata(0x52)); delay(20)
         session.send(0xc9, 0x80, 0x3f, 0xba, byteArrayOf(0), sender = 0x42); delay(20)
         session.send(0xc9, 0x80, 0x3f, 0xab, byteArrayOf(1))
-        log("启动命令已发送；等待机内运行标记")
-        checkNotNull(runId)
+        val currentRunId = checkNotNull(runId)
+        log("Lab 启动序列已发送；runId=$currentRunId 等待 STARTED")
+        currentRunId
     }
 
     suspend fun stop() = mutex.withLock {

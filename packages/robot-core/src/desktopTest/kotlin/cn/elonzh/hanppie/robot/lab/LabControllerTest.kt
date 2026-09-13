@@ -95,6 +95,10 @@ class LabControllerTest {
         val controller = LabController(channel, {})
         assertFailsWith<IllegalArgumentException> { controller.upload(" ", "invalid") }
         assertTrue(channel.commands.isEmpty())
+        assertFailsWith<IllegalArgumentException> {
+            controller.upload("import time\n\ndef start():\n    time.sleep(1)\n", "invalid import")
+        }
+        assertTrue(channel.commands.isEmpty())
         channel.connected = false
         assertFailsWith<IllegalStateException> { controller.upload("pass", "offline") }
         Unit

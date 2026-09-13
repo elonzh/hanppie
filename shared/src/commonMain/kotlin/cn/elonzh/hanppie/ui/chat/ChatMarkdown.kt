@@ -20,7 +20,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 internal fun ChatMarkdown(content: String, modifier: Modifier = Modifier) {
     val state = rememberMarkdownState(content)
     SelectionContainer {
-        Markdown(markdownState = state, modifier = modifier.fillMaxWidth(),
+        Markdown(markdownState = state, modifier = modifier,
             imageTransformer = Coil3ImageTransformerImpl, typography = chatTypography(), colors = chatColors())
     }
 }

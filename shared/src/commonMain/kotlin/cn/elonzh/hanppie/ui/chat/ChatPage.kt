@@ -20,6 +20,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -31,9 +32,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.elonzh.hanppie.resources.*
@@ -48,6 +52,7 @@ import cn.elonzh.hanppie.ui.design.WorkbenchIconButton
 import cn.elonzh.hanppie.ui.i18n.tr
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowListPopup
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
@@ -59,10 +64,16 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
         model.voicePageActive = true
         onDispose { model.voicePageActive = false; model.voiceInput.cancel() }
     }
-    val input = state.draft
+    var composerValue by remember(state.sessionId) { mutableStateOf(TextFieldValue(state.draft)) }
+    LaunchedEffect(state.draft) {
+        if (composerValue.text != state.draft) {
+            composerValue = TextFieldValue(state.draft, TextRange(state.draft.length))
+        }
+    }
     LaunchedEffect(microphone.resultId, state.sessionId) {
         if (microphone.result.isNotBlank()) {
-            model.chat.updateDraft(input + (if (input.isBlank()) "" else "\n") + microphone.result)
+            val draft = model.chat.state.value.draft
+            model.chat.updateDraft(draft + (if (draft.isBlank()) "" else "\n") + microphone.result)
             model.voiceInput.consumeResult()
         }
     }
@@ -75,18 +86,24 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
     var renameTarget by remember { mutableStateOf<AgentSession?>(null) }
     var renameTitle by rememberSaveable { mutableStateOf("") }
     var deleteTarget by remember { mutableStateOf<AgentSession?>(null) }
-    fun submit() {
-        if (state.running) {
+    fun submit(): Boolean {
+        val current = model.chat.state.value
+        val message = current.draft
+        if (current.running) {
             model.chat.cancel()
-        } else if (state.ready && input.isNotBlank() && !microphone.active) {
+            return true
+        }
+        if (current.canSend && message.isNotBlank() && !microphone.active) {
             if (config.apiKey.isBlank()) {
                 focus.clearFocus()
                 keyboard?.hide()
                 onSettings()
+                return true
             } else {
-                model.chat.send(input, config)
+                return model.chat.send(message, config)
             }
         }
+        return false
     }
     val list = rememberLazyListState()
     LaunchedEffect(state.lines.size, state.streaming.length, state.approval) {
@@ -119,16 +136,18 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
     }
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val expanded = maxWidth >= 840.dp
+        val compactHistoryListHeightLimit = (maxHeight - 220.dp).coerceIn(120.dp, 420.dp)
+        val expandedHistoryListHeightLimit = (maxHeight - 88.dp).coerceAtLeast(120.dp)
         if (historyOpen && !expanded) {
             WorkbenchDialog(show = true, onDismissRequest = { historyOpen = false }, title = tr(Res.string.conversations)) {
-                ConversationList(state.sessions, state.archivedSessions, state.sessionId,
+                ConversationList(state.sessions, state.sessionId,
                     onOpen = { model.chat.openSession(it); historyOpen = false },
+                    onNew = { model.chat.newSession(); historyOpen = false },
                     onRename = { item -> renameTitle = item.title; renameTarget = item },
-                    onArchive = model.chat::archiveSession,
-                    onRestore = model.chat::restoreSession,
-                    onDelete = { id -> deleteTarget = (state.sessions + state.archivedSessions).firstOrNull { it.id == id } },
-                    enabled = !state.running,
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp))
+                    onDelete = { id -> deleteTarget = state.sessions.firstOrNull { it.id == id } },
+                    enabled = state.ready,
+                    listHeightLimit = compactHistoryListHeightLimit,
+                    modifier = Modifier.fillMaxWidth())
             }
         }
         Row(Modifier.fillMaxSize().testTag("chat-surface").focusRequester(surfaceFocus).onPreviewKeyEvent { event ->
@@ -139,29 +158,25 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
             }
             if (!event.isCtrlPressed && !event.isMetaPressed) return@onPreviewKeyEvent false
             when (event.key) {
-                Key.N -> { if (!state.running) model.chat.newSession(); true }
+                Key.N -> { if (state.ready) model.chat.newSession(); true }
                 Key.B -> { historyOpen = !historyOpen; true }
                 Key.L -> { composerFocus.requestFocus(); true }
                 Key.Comma -> { onSettings(); true }
-                Key.Enter -> { submit(); true }
                 else -> false
             }
         }.focusable(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        if (expanded) ConversationList(state.sessions, state.archivedSessions, state.sessionId,
+        if (expanded) ConversationList(state.sessions, state.sessionId,
             onOpen = model.chat::openSession,
+            onNew = model.chat::newSession,
             onRename = { item -> renameTitle = item.title; renameTarget = item },
-            onArchive = model.chat::archiveSession,
-            onRestore = model.chat::restoreSession,
-            onDelete = { id -> deleteTarget = (state.sessions + state.archivedSessions).firstOrNull { it.id == id } },
-            enabled = !state.running,
-            modifier = Modifier.width(280.dp).fillMaxHeight())
+            onDelete = { id -> deleteTarget = state.sessions.firstOrNull { it.id == id } },
+            enabled = state.ready,
+            listHeightLimit = expandedHistoryListHeightLimit,
+            modifier = Modifier.width(280.dp))
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            if (!expanded) ComposerIcon(tr(Res.string.conversations), WorkbenchGlyph.CHAT,
-                enabled = !state.running) { historyOpen = true }
-            else Spacer(Modifier.weight(1f))
-            ComposerIcon(tr(Res.string.new_chat), WorkbenchGlyph.ADD,
-                enabled = state.ready && !state.running) { model.chat.newSession() }
+        if (!expanded) Row(Modifier.fillMaxWidth()) {
+            ComposerIcon(tr(Res.string.conversations), WorkbenchGlyph.CHAT,
+                enabled = state.ready) { historyOpen = true }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(Modifier.fillMaxSize().padding(end = 12.dp).testTag("chat-messages"), state = list,
@@ -175,24 +190,13 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
                     }
                 }
                 items(state.lines) { line ->
-                    Column(Modifier.fillMaxWidth().background(if (line.role == ChatRole.USER) MiuixTheme.colorScheme.secondaryContainer else MiuixTheme.colorScheme.surfaceContainer,
-                        RoundedCornerShape(18.dp)).padding(16.dp)) {
-                        Text(tr(line.role.label), fontSize = 11.sp, color = if (line.role == ChatRole.ASSISTANT) MiuixTheme.colorScheme.onTertiaryContainer else MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                        if (line.role == ChatRole.SCRIPT || line.role == ChatRole.TOOL) {
-                            SelectionContainer { Text(line.text, Modifier.padding(top = 6.dp), fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace) }
-                        } else ChatMarkdown(line.text, Modifier.padding(top = 6.dp))
-                    }
+                    ChatMessage(line)
                 }
                 if (state.running) item {
                     if (state.streaming.isNotBlank()) key(state.lines) {
-                        Column(Modifier.fillMaxWidth().background(MiuixTheme.colorScheme.surfaceContainer,
-                            RoundedCornerShape(18.dp)).padding(16.dp)) {
-                            Text(tr(ChatRole.ASSISTANT.label), fontSize = 11.sp, color = MiuixTheme.colorScheme.onTertiaryContainer)
-                            StreamingReply(state.streaming, Modifier.padding(top = 6.dp))
-                        }
+                        StreamingReply(state.streaming, Modifier.fillMaxWidth().padding(horizontal = 4.dp))
                     }
-                    else Text(if (state.approval != null) tr(Res.string.awaiting_approval) else tr(Res.string.hanppie_is_thinking),
+                    else Text(if (state.approval != null) tr(Res.string.awaiting_approval) else tr(Res.string.agent_is_thinking),
                         Modifier.padding(12.dp), color = MiuixTheme.colorScheme.onTertiaryContainer)
                 }
                 state.approval?.let { source -> item {
@@ -208,18 +212,30 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
             }
             DesktopListScrollbar(list, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
         }
-        state.error?.let { Text(it, color = MiuixTheme.colorScheme.error, fontSize = 12.sp) }
+        state.error?.let { error ->
+            SelectionContainer { Text(error, color = MiuixTheme.colorScheme.error, fontSize = 12.sp) }
+        }
         microphone.error?.let { Text(it, color = MiuixTheme.colorScheme.error, fontSize = 12.sp) }
         if (microphone.active) Text(microphone.partial.ifBlank { if (microphone.processing) tr(Res.string.recognizing) else tr(Res.string.listening) }, fontSize = 13.sp)
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
-            TextField(input, { if (it.length <= 12000) model.chat.updateDraft(it) },
-                Modifier.weight(1f).focusRequester(composerFocus).testTag("chat-input"),
+            TextField(composerValue, { value ->
+                if (value.text.length <= 12000) {
+                    composerValue = value
+                    model.chat.updateDraft(value.text)
+                }
+            }, Modifier.weight(1f).focusRequester(composerFocus).testTag("chat-input")
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown && event.key == Key.Enter &&
+                        !event.isShiftPressed && composerValue.composition == null) {
+                        submit()
+                    } else false
+                },
                 label = tr(Res.string.message), maxLines = 4, enabled = !microphone.active)
 
             if (onVoiceInput != null) ComposerIcon(
                 if (!microphone.active) tr(Res.string.voice_input) else if (microphone.processing) tr(Res.string.cancel_recognition) else tr(Res.string.finish_recording),
-                if (microphone.active) WorkbenchGlyph.STOP else WorkbenchGlyph.MICROPHONE, enabled = !state.running,
+                if (microphone.active) WorkbenchGlyph.STOP else WorkbenchGlyph.MICROPHONE, enabled = state.ready,
                 modifier = Modifier.testTag("voice-input"),
             ) {
                 if (microphone.active) {
@@ -228,11 +244,9 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
             }
             ComposerIcon(if (state.running) tr(Res.string.cancel) else tr(Res.string.send),
                 if (state.running) WorkbenchGlyph.STOP else WorkbenchGlyph.SEND,
-                enabled = state.running || (state.ready && input.isNotBlank() && !microphone.active),
-                primary = true, onClick = ::submit)
+                enabled = state.running || (state.canSend && composerValue.text.isNotBlank() && !microphone.active),
+                primary = true, onClick = { submit() })
         }
-        if (expanded) Text(tr(Res.string.chat_shortcuts), fontSize = 11.sp,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
         Spacer(Modifier.height(4.dp))
         }
         }
@@ -241,51 +255,109 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
 
 @Composable
 private fun ConversationList(
-    active: List<AgentSession>,
-    archived: List<AgentSession>,
+    sessions: List<AgentSession>,
     selectedId: String?,
     onOpen: (String) -> Unit,
+    onNew: () -> Unit,
     onRename: (AgentSession) -> Unit,
-    onArchive: (String) -> Unit,
-    onRestore: (String) -> Unit,
     onDelete: (String) -> Unit,
     enabled: Boolean,
+    listHeightLimit: Dp,
     modifier: Modifier = Modifier,
 ) {
-    var showArchived by rememberSaveable { mutableStateOf(false) }
     Column(modifier.testTag("conversation-list")
         .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(18.dp)).padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(tr(Res.string.conversations), Modifier.padding(8.dp), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(active, key = { it.id }) { item ->
-                ConversationRow(item, selected = item.id == selectedId, onClick = { if (enabled) onOpen(item.id) }) {
-                    WorkbenchIconButton(tr(Res.string.rename), WorkbenchGlyph.EDIT, { onRename(item) }, enabled = enabled)
-                    WorkbenchIconButton(tr(Res.string.archive), WorkbenchGlyph.ARCHIVE, { onArchive(item.id) }, enabled = enabled)
-                }
-            }
-            if (showArchived) items(archived, key = { "archived-${it.id}" }) { item ->
-                ConversationRow(item, selected = false, onClick = {}) {
-                    WorkbenchIconButton(tr(Res.string.restore), WorkbenchGlyph.RESTORE, { onRestore(item.id) }, enabled = enabled)
-                    WorkbenchIconButton(tr(Res.string.delete), WorkbenchGlyph.DELETE, { onDelete(item.id) }, enabled = enabled, danger = true)
-                }
-            }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(tr(Res.string.conversations), Modifier.weight(1f).padding(start = 8.dp),
+                fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            WorkbenchIconButton(
+                label = tr(Res.string.new_chat),
+                glyph = WorkbenchGlyph.ADD,
+                onClick = onNew,
+                enabled = enabled,
+                primary = true,
+                tag = "new-conversation",
+            )
         }
-        Button({ showArchived = !showArchived }, Modifier.fillMaxWidth().heightIn(min = 48.dp), enabled = enabled && archived.isNotEmpty()) {
-            Text(if (showArchived) tr(Res.string.hide_archived_conversations) else tr(Res.string.show_archived_conversations_value, archived.size))
+        LazyColumn(Modifier.fillMaxWidth().heightIn(max = listHeightLimit),
+            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(sessions, key = { it.id }) { item ->
+                ConversationRow(item, selected = item.id == selectedId,
+                    onClick = { if (enabled) onOpen(item.id) },
+                    onRename = { onRename(item) }, onDelete = { onDelete(item.id) }, enabled = enabled)
+            }
         }
     }
 }
 
 @Composable
-private fun ConversationRow(item: AgentSession, selected: Boolean, onClick: () -> Unit, actions: @Composable RowScope.() -> Unit) {
-    Column(Modifier.fillMaxWidth().background(
+private fun ConversationRow(
+    item: AgentSession,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+    enabled: Boolean,
+) {
+    Row(Modifier.fillMaxWidth().background(
         if (selected) MiuixTheme.colorScheme.primary.copy(alpha = .14f) else Color.Transparent,
-        RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(10.dp)) {
-        Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-        if (item.lastMessagePreview.isNotBlank()) Text(item.lastMessagePreview, maxLines = 2, overflow = TextOverflow.Ellipsis,
-            fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, content = actions)
+        RoundedCornerShape(14.dp)).clickable(enabled = enabled, onClick = onClick)
+        .padding(start = 12.dp, top = 9.dp, bottom = 9.dp), verticalAlignment = Alignment.Top) {
+        Column(Modifier.weight(1f).padding(end = 4.dp)) {
+            Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            if (item.lastMessagePreview.isNotBlank()) Text(item.lastMessagePreview, maxLines = 2,
+                overflow = TextOverflow.Ellipsis, fontSize = 11.sp,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        }
+        ConversationActions(onRename, onDelete, enabled)
+    }
+}
+
+@Composable
+private fun ConversationActions(onRename: () -> Unit, onDelete: () -> Unit, enabled: Boolean) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }, enabled = enabled, cornerRadius = 14.dp,
+            modifier = Modifier.size(48.dp).semantics {
+                contentDescription = tr(Res.string.conversation_actions)
+                role = Role.Button
+                if (!enabled) disabled()
+            }, backgroundColor = Color.Transparent) {
+            WorkbenchIcon(WorkbenchGlyph.MORE, MiuixTheme.colorScheme.onSurfaceVariantSummary, Modifier.size(20.dp))
+        }
+        WindowListPopup(expanded, onDismissRequest = { expanded = false }) {
+            ListPopupColumn {
+                DropdownImpl(DropdownItem(tr(Res.string.rename)), 2, false, 0,
+                    onSelectedIndexChange = { expanded = false; onRename() })
+                DropdownImpl(DropdownItem(tr(Res.string.delete)), 2, false, 1,
+                    onSelectedIndexChange = { expanded = false; onDelete() })
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChatMessage(line: ChatLine) {
+    when (line.role) {
+        ChatRole.USER -> Row(Modifier.fillMaxWidth().padding(start = 48.dp),
+            horizontalArrangement = Arrangement.End) {
+            Box(Modifier.widthIn(max = 600.dp).wrapContentWidth(Alignment.End).testTag("user-message")
+                .background(MiuixTheme.colorScheme.secondaryContainer, RoundedCornerShape(14.dp))
+                .padding(horizontal = 14.dp, vertical = 10.dp)) {
+                ChatMarkdown(line.text)
+            }
+        }
+        ChatRole.ASSISTANT -> ChatMarkdown(line.text, Modifier.fillMaxWidth().padding(horizontal = 4.dp))
+        ChatRole.SCRIPT, ChatRole.TOOL -> SelectionContainer {
+            Text(line.text, Modifier.fillMaxWidth().padding(horizontal = 4.dp), fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        }
+        ChatRole.SYSTEM -> SelectionContainer {
+            Text(line.text, Modifier.fillMaxWidth().padding(horizontal = 4.dp), fontSize = 12.sp,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        }
     }
 }
 

@@ -14,7 +14,6 @@ internal data class AgentSession(
     val title: String,
     val createdAtEpochMillis: Long,
     val updatedAtEpochMillis: Long,
-    val archivedAtEpochMillis: Long?,
     val latestEventId: String?,
     val lastMessagePreview: String,
 )
@@ -25,7 +24,6 @@ internal data class SessionProjectionEntity(
     val title: String,
     val createdAtEpochMillis: Long,
     val updatedAtEpochMillis: Long,
-    val archivedAtEpochMillis: Long?,
     val latestEventId: String?,
     val lastMessagePreview: String,
 )
@@ -53,7 +51,7 @@ internal data class AgentRunProjection(
     val startedAtEpochMillis: Long,
     val finishedAtEpochMillis: Long?,
     val outcome: String?,
-    val errorType: String?,
+    val failure: String?,
 )
 
 @Entity(tableName = "session_projection_checkpoints")
@@ -65,11 +63,8 @@ internal data class SessionProjectionCheckpoint(
 
 @Dao
 internal interface SessionProjectionDao {
-    @Query("SELECT * FROM session_projection WHERE archivedAtEpochMillis IS NULL ORDER BY updatedAtEpochMillis DESC")
-    suspend fun active(): List<SessionProjectionEntity>
-
-    @Query("SELECT * FROM session_projection WHERE archivedAtEpochMillis IS NOT NULL ORDER BY archivedAtEpochMillis DESC")
-    suspend fun archived(): List<SessionProjectionEntity>
+    @Query("SELECT * FROM session_projection ORDER BY updatedAtEpochMillis DESC")
+    suspend fun sessions(): List<SessionProjectionEntity>
 
     @Query("SELECT * FROM session_projection WHERE id = :id")
     suspend fun find(id: String): SessionProjectionEntity?
@@ -98,8 +93,8 @@ internal interface SessionProjectionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun putCheckpoint(checkpoint: SessionProjectionCheckpoint)
 
-    @Query("UPDATE agent_runs SET finishedAtEpochMillis = :finishedAt, outcome = :outcome, errorType = :errorType WHERE id = :runId")
-    suspend fun finishRun(runId: String, finishedAt: Long, outcome: String, errorType: String?)
+    @Query("UPDATE agent_runs SET finishedAtEpochMillis = :finishedAt, outcome = :outcome, failure = :failure WHERE id = :runId")
+    suspend fun finishRun(runId: String, finishedAt: Long, outcome: String, failure: String?)
 
     @Query("UPDATE session_projection SET updatedAtEpochMillis = :updatedAt, latestEventId = :eventId WHERE id = :sessionId")
     suspend fun touchSession(sessionId: String, updatedAt: Long, eventId: String)
@@ -122,7 +117,6 @@ internal fun SessionProjectionEntity.toAgentSession() = AgentSession(
     title = title,
     createdAtEpochMillis = createdAtEpochMillis,
     updatedAtEpochMillis = updatedAtEpochMillis,
-    archivedAtEpochMillis = archivedAtEpochMillis,
     latestEventId = latestEventId,
     lastMessagePreview = lastMessagePreview,
 )

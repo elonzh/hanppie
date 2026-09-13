@@ -48,7 +48,9 @@ flowchart LR
     START([开始 run]) --> INITIAL[首次模型调用]
     INITIAL -->|无工具调用| FINISH([完成])
     INITIAL -->|有工具调用| TOOLS[串行执行 class-based tools]
-    TOOLS --> FOLLOWUP[携带 Tool Results 调用模型]
+    TOOLS --> TERMINAL{副作用或重复只读工具?}
+    TERMINAL -->|是| FINISH
+    TERMINAL -->|否| FOLLOWUP[携带 Tool Results 调用模型]
     FOLLOWUP -->|无工具调用| FINISH
     FOLLOWUP -->|有工具调用| TOOLS
 ```
@@ -58,8 +60,8 @@ flowchart LR
 1. 概念解释、使用帮助等不依赖实时设备的问题直接回答，不调用工具凑过程。
 2. 涉及当前设备事实时先调用 `robot_status`；模型不得用旧消息猜测连接、型号或脚本状态。
 3. 动作意图不清、目标不明、持续时间缺失或可能伤人/损物时先追问，不能擅自补齐关键参数。
-4. 除停止外，执行前必须生成完整有限程序并进入审批；拒绝后把拒绝作为 Koog `MessagePart.Tool.Result` 返回模型，由模型简短收尾。
-5. 工具串行执行。每次完成后把真实结果送回模型；达到轮数上限、上下文不足或出现结果未知时终止自动循环。
+4. 除停止外，执行前必须生成完整有限程序并进入审批；拒绝仍形成 Koog `MessagePart.Tool.Result`，并与执行或停止结果一样直接结束当前 run。
+5. 工具串行执行。首次只读结果可以交回模型；副作用工具返回后立即结束 run，同一只读工具第二次返回时也收束，不能用模型工具循环轮询脚本状态。
 6. 最终回复只总结已经获得的证据，不把“脚本启动”写成“动作已经完成”。
 
 ## 4. 工具设计
@@ -132,7 +134,7 @@ flowchart TD
     FAST -->|否| SAVE[持久化 Message.User]
     SAVE --> MODEL[Koog AIAgent 生成]
     MODEL --> CALL{产生工具调用?}
-    CALL -->|否| ANSWER[持久化并展示 Message.Assistant]
+    CALL -->|否| ANSWER[持久化终态并展示结果]
     CALL -->|是| POLICY{本地策略判定}
     POLICY -->|拒绝| DENY[形成拒绝 Tool.Result]
     POLICY -->|只读可执行| EXECUTE[持久化 started 后执行]
@@ -140,10 +142,10 @@ flowchart TD
     APPROVAL -->|拒绝| DENY
     APPROVAL -->|同意| EXECUTE
     EXECUTE --> RESULT[持久化 Tool.Result]
-    DENY --> MODEL
+    DENY --> ANSWER
     RESULT --> UNKNOWN{结果未知?}
     UNKNOWN -->|是| ATTENTION[停止循环并要求检查机器人]
-    UNKNOWN -->|否| MODEL
+    UNKNOWN -->|否| ANSWER
 ```
 
 ### 6.2 动作请求时序
@@ -171,10 +173,10 @@ sequenceDiagram
     UI->>R: ToolApprovalResolvedEvent
     R->>R: 持久化 ToolCallStartingEvent
     R->>T: execute
-    T->>B: 上传并启动有限脚本
-    B-->>T: 协议/脚本状态
-    T-->>A: MessagePart.Tool.Result
-    A-->>R: 最终 Message.Assistant
+    T->>B: 上传脚本并发送启动命令
+    B-->>T: 命令发送结果
+    T-->>R: MessagePart.Tool.Result（等待 STARTED）并结束 run
+    B-->>UI: STARTED / 10 秒后状态未知
     R-->>UI: 区分命令、遥测与物理证据
 ```
 
@@ -210,7 +212,7 @@ sequenceDiagram
 - “取消生成”只取消当前 agent run，不代表机器人停止；UI 保留独立“停止机器人”入口。
 - 用户输入在当前机器人会话中形成明确停止意图时，先执行本地快速停止，再决定是否让模型生成解释；包含否定、引用或知识问答的句子不能被关键词误判为停止命令。
 - 安全停止必须幂等，并且是“先落盘再副作用”的 fail-safe 例外：存储暂时不可写也要先停止，之后补记事件并显示记录异常。
-- 当前实现对崩溃前尚未决定的审批追加拒绝决定，并以 `AgentExecutionFailedEvent(errorType=ProcessRestart)` 结束未完成的 agent run；恢复原审批卡片是后续增强。存在 `ToolCallStartingEvent` 而没有对应 Koog `MessagePart.Tool.Result` 时，补记 `isError=true` 的结果未知 Tool Result 并显示“结果未知”，不提供一键重试。
+- 当前实现对崩溃前尚未决定的审批追加拒绝决定，并以 `AgentExecutionFailedEvent(failure=ProcessRestart)` 结束未完成的 agent run；恢复原审批卡片是后续增强。存在 `ToolCallStartingEvent` 而没有对应 Koog `MessagePart.Tool.Result` 时，补记 `isError=true` 的结果未知 Tool Result 并显示“结果未知”，不提供一键重试。
 - 网络失败且尚未开始副作用工具时可以重试当前模型请求；工具开始后不重放整个 agent run。
 - 模型回复被截断时不执行其中尚未形成完整 `MessagePart.Tool.Call` 的内容。
 
@@ -229,6 +231,7 @@ sequenceDiagram
 - 普通知识问答不调用机器人工具；设备事实问题不会凭历史猜测；
 - P0 三个工具直接使用 Koog Tool/MessagePart，全链路没有第二套 ToolCall/ToolResult；
 - 动作请求在审批前不上传或启动脚本，拒绝后不会执行；
+- 一次审批只出现一次；命令发送后不会要求用户再次确认，缺少 `STARTED` 回报会在有限时间内转为结果未知；
 - 工具串行且有明确轮数上限，结果未知时立即停止自动循环；
 - “停下”走本地快速路径，延迟和结果单独记录。
 

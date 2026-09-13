@@ -46,14 +46,6 @@ internal data class SessionRenamedEvent(
 ) : SessionEvent
 
 @Serializable
-@SerialName("SessionArchived")
-internal data class SessionArchivedEvent(
-    override val eventId: String,
-    override val timestamp: Long,
-    val archived: Boolean,
-) : SessionEvent
-
-@Serializable
 @SerialName("AgentStarting")
 internal data class AgentStartingEvent(
     override val eventId: String,
@@ -125,8 +117,7 @@ internal data class AgentExecutionFailedEvent(
     override val runId: String,
     override val timestamp: Long,
     override val executionInfo: AgentExecutionInfo,
-    val errorType: String? = null,
-    val errorMessage: String? = null,
+    val failure: String,
 ) : AgentRunEvent
 
 @Serializable
