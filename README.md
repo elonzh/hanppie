@@ -6,7 +6,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 
-Hanppie 是一个面向 DJI RoboMaster S1 的开源保存与电脑编程工具箱。项目目标是在不依赖手机 App 的前提下，恢复可审计、可回滚的连接、编程、遥测和远程控制能力。
+Hanppie 是一个面向 DJI RoboMaster 系列机器人的开源保存与电脑编程工具箱。项目目标是在不依赖手机 App 的前提下，恢复可审计、可回滚的连接、编程、遥测和远程控制能力。当前实机验证均来自 S1；这不是封闭的支持型号列表，EP 等型号在完成逐项验证前也不宣称受支持。
 
 项目尚处于 Alpha 阶段，不隶属于 DJI，也未获得 DJI 背书。
 
@@ -43,7 +43,7 @@ APK 位于 `androidApp/build/outputs/apk/debug/androidApp-debug.apk`。手机开
 adb -s <手机设备ID> install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
 ```
 
-在手机上连接 S1 所在的 Wi-Fi，打开“憨皮”→“搜索设备”，或选择“手动连接”。连接后可从“诊断”→“FTP”浏览 S1 经匿名 FTP 开放的内部维护数据区，并快速打开、上传、下载、重命名、新建或删除空目录；快速打开先下载到应用临时目录再交给系统，同名上传自动保留为新名称，Lab 当前槽位只读。原厂 FTP 不支持 UTF-8，上传的非 ASCII 文件名会先转换为安全英文名；实机会变换非空上传内容，下载和快速打开取得的是原始机内数据，关联应用不一定能识别。该页面不是普通音频库或 Android 系统分区浏览器。“脚本”页可以新建、导入、保存、重命名、删除和导出本机脚本，也可从预置脚本创建副本；导入/导出 `.py` 使用系统文件选择器。在“设置”→“语音服务”中选择识别服务或配置系统朗读。
+在手机上连接机器人所在的 Wi-Fi，打开“憨皮”→“搜索设备”，或选择“手动连接”。连接后可从“诊断”→“FTP”浏览机器人经匿名 FTP 开放的内部维护数据区，并快速打开、上传、下载、重命名、新建或删除空目录；快速打开先下载到应用临时目录再交给系统，同名上传自动保留为新名称，Lab 当前槽位只读。当前 S1 实机的原厂 FTP 不支持 UTF-8，上传的非 ASCII 文件名会先转换为安全英文名；实机会变换非空上传内容，下载和快速打开取得的是原始机内数据，关联应用不一定能识别。该页面不是普通音频库或系统分区浏览器。“脚本”页可以新建、导入、保存、重命名、删除和导出本机脚本，也可从预置脚本创建副本；导入/导出 `.py` 使用系统文件选择器。在“设置”→“语音服务”中选择识别服务或配置系统朗读。
 
 Android 模拟器使用默认 NAT/DHCP 即可尝试直连机器人，不要把虚拟 Wi-Fi 手动改为家庭局域网的静态 IP；发现不到时使用“手动连接”填写机器人的真实局域网 IPv4 和 AppID。macOS 的“系统设置 → 隐私与安全性 → 本地网络”中需允许启动模拟器的应用访问局域网。若电脑能连接而模拟器报 `No route to host`，先完全退出模拟器，再使用现有 SDK 冷启动（保留应用及数据，不使用 Wipe Data）：
 
@@ -119,7 +119,7 @@ s1 = robot.Robot()
 
 ## 一键实机诊断
 
-`diag` 是项目唯一的实机验证与调试入口。它使用 Typer 和 Rich 提供交互式与非交互式执行，并为每次运行生成 Markdown 报告和 JSONL 事件日志：
+`diag` 是项目唯一的实机验证与调试入口，当前仅针对已经验证的 S1。它使用 Typer 和 Rich 提供交互式与非交互式执行，并为每次运行生成 Markdown 报告和 JSONL 事件日志：
 
 ```bash
 # 查看全部项目和风险等级
@@ -148,7 +148,7 @@ uv run hanppie diag \
 
 ## Python 直控
 
-`DirectRobot` 直接使用 S1 的 App 数据会话，不上传 Lab 程序，也不调用仓库内的官方 SDK fork。机械命令必须显式进入控制模式、arm，并设置短租约：
+`DirectRobot` 直接使用 RoboMaster App 数据会话；这条路径当前只在 S1 上完成实机验证。它不上传 Lab 程序，也不调用仓库内的官方 SDK fork。机械命令必须显式进入控制模式、arm，并设置短租约：
 
 ```python
 import time
@@ -177,17 +177,17 @@ finally:
 Hanppie 提供本机 STDIO MCP 服务。默认安装命令会安全地加入 user 范围的 Codex 共享配置；同一台电脑上的 ChatGPT 桌面端、Codex CLI 和 IDE 扩展共用该配置。Windows、macOS、Linux 和 WSL 都使用当前 Python 解释器的绝对路径启动服务，不要求 `codex` 命令位于 PATH。
 
 ```bash
-# 自动发现并连接局域网内唯一可用的 S1
+# 自动发现并连接局域网内唯一可用的机器人
 uv run hanppie mcp install
 
 # 也可以只写当前项目的 .codex/config.toml
 uv run hanppie mcp install --scope project
 
-# 也可以固定目标，避免存在多台 S1 时需要重新配置
+# 也可以固定目标，避免存在多台机器人时需要重新配置
 uv run hanppie mcp install \
   --replace \
-  --robot-ip "$S1_IP" \
-  --appid "$S1_APPID"
+  --robot-ip "$ROBOT_IP" \
+  --appid "$ROBOT_APPID"
 
 # 需要调试客户端配置时，也可以直接运行服务
 uv run hanppie mcp serve
@@ -195,7 +195,7 @@ uv run hanppie mcp serve
 
 安装后重启对应的 Codex 客户端，并用 `/mcp` 确认 `hanppie` 已连接。`install` 会保留其他 Codex 设置和 MCP 服务；相同配置重复执行不会改文件，已有不同的 Hanppie 配置必须显式传入 `--replace`。user 范围依次使用 `--codex-home`、`CODEX_HOME` 或 `~/.codex/config.toml`，project 范围写入项目根的 `.codex/config.toml`。本地 MCP 配置不适用于 ChatGPT Web，详见 [Codex MCP 文档](https://learn.chatgpt.com/docs/extend/mcp)。
 
-MCP 提供连接、状态、Python 上下文、Python 执行和断开工具。首次连接可以自动选择局域网内唯一可用的 S1，之后同一 MCP 服务在连续对话和多次工具调用之间复用当前 App 连接，不再为每条指令反复初始化。`execute_python` 默认用 `robot_access=auto` 按需连接；`reuse` 只提供已有连接，`none` 明确执行 Host-only Python。每次 Python 调用仍使用新命名空间，提供 `robot`、`time`、`sleep`、`output_dir`、`save_frame` 和 `checkpoint`，并返回 `result`、输出、阶段事件、错误和制品路径；任意源码只在电脑 Python 3.10 worker 中执行。
+MCP 提供连接、状态、Python 上下文、Python 执行和断开工具。首次连接可以自动选择局域网内唯一可用的机器人，之后同一 MCP 服务在连续对话和多次工具调用之间复用当前 App 连接，不再为每条指令反复初始化。`execute_python` 默认用 `robot_access=auto` 按需连接；`reuse` 只提供已有连接，`none` 明确执行 Host-only Python。每次 Python 调用仍使用新命名空间，提供 `robot`、`time`、`sleep`、`output_dir`、`save_frame` 和 `checkpoint`，并返回 `result`、输出、阶段事件、错误和制品路径；任意源码只在电脑 Python 3.10 worker 中执行。
 
 安装和启动没有动作、红外或水弹权限选项。底盘、云台和红外直接使用 `DirectRobot` 的正常 `robot.arm()` 与租约 API；水弹调用 `result = robot.fire_gel()` 或 `robot.fire("gel")`，MCP 会切换到已验证的 Lab/Bridge 路径并等待执行结果。Lab 切换失败会重试并尝试恢复原 Direct 连接；共享灯光和 stop 不会触发无意义的后端切换。每次调用正常或异常结束仍会归零并 `disarm()`，但健康连接不会关闭；超时会结束整个 worker，并在下一次调用时重建连接。速度乘以持续时间不是精确角度或距离证明，多阶段动作可在每个完成点调用 `checkpoint("阶段名", ...)` 保留部分进度。执行失败会以 MCP 工具错误返回，便于 Codex 直接识别失败而不是误判为完成。
 
@@ -218,8 +218,8 @@ uv run hanppie agent run --auth codex \
 # 多台设备时固定目标
 uv run hanppie agent run \
   --auth codex \
-  --robot-ip "$S1_IP" \
-  --appid "$S1_APPID"
+  --robot-ip "$ROBOT_IP" \
+  --appid "$ROBOT_APPID"
 ```
 
 测试低延迟规划模型，同时指定独立视觉模型：
@@ -236,7 +236,7 @@ Codex 模式由 Hanppie 自己执行 device-code OAuth、刷新凭据，并以 B
 
 本地 `faster-whisper` 负责转写（首次使用默认 `small` 模型时会下载模型），系统语音负责播报。若已有 OpenAI API key，`auto` 会保留原来的 OpenAI 转写、Responses 和 TTS 链路；也可以用 `--auth api-key` 或 `--auth codex` 明确选择。
 
-例如说“小憨批，观察一下附近有些什么东西？”，智能体会读取 S1 当前前向相机帧并用视觉模型回答。唤醒后的默认 45 秒内可以直接追问；说“退下”可让会话休眠，活动会话中的“停止”“停下”“别动”会走不等待大模型的已有连接停止路径。`--wake-phrase` 可重复配置别名，`--active-timeout` 调整连续对话窗口，`--audio-device` 选择电脑音频输入设备，`--local-transcription-model` 选择本地 Whisper 模型，`--no-tts` 关闭语音播放。
+例如说“小憨批，观察一下附近有些什么东西？”，智能体会读取机器人当前前向相机帧并用视觉模型回答。唤醒后的默认 45 秒内可以直接追问；说“退下”可让会话休眠，活动会话中的“停止”“停下”“别动”会走不等待大模型的已有连接停止路径。`--wake-phrase` 可重复配置别名，`--active-timeout` 调整连续对话窗口，`--audio-device` 选择电脑音频输入设备，`--local-transcription-model` 选择本地 Whisper 模型，`--no-tts` 关闭语音播放。
 
 `--prompt` 无需唤醒，禁用音频输入和播放；执行失败返回非零退出码，并停止后续 prompt。对话和调用记录在实际唤醒或执行 prompt 后写入 `.hanppie/agent/`。完整数据边界、LangGraph 状态、代码策略和验证边界见[技术架构](./docs/architecture.md#136-唤醒词连续对话与-langgraph-智能体)。
 

@@ -10,6 +10,9 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.unit.dp
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.protocol.DussFrame
+import cn.elonzh.hanppie.robot.product.RobotComponent
+import cn.elonzh.hanppie.robot.product.RobotModel
+import cn.elonzh.hanppie.robot.product.RobotProduct
 import cn.elonzh.hanppie.ui.chat.ChatLine
 import cn.elonzh.hanppie.ui.chat.ChatPage
 import cn.elonzh.hanppie.ui.chat.ChatRole
@@ -40,12 +43,39 @@ import org.junit.Test
 
 class ConsoleUiTest {
     @get:Rule val rule = createComposeRule()
+
+    @Test fun connectedDeviceUsesTheProtocolReportedProductName() {
+        val model = testConsoleModel()
+        try {
+            model.state.value = ConsoleState(connected = true, connectedAddress = "192.0.2.1",
+                robotProduct = RobotProduct(model = RobotModel.ROBOMASTER_EP))
+            val document = mutableStateOf(EditorDocument())
+            rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(393.dp, 740.dp)) { Console(model, document) } } }
+            rule.onNodeWithText("RoboMaster EP").assertIsDisplayed()
+            rule.onNodeWithText("RoboMaster S1").assertDoesNotExist()
+        } finally { model.close() }
+    }
+
+    @Test fun receivedProductFramesUpdateModelAndCapabilitiesIndependently() {
+        val model = testConsoleModel()
+        try {
+            model.receive(DussFrame(0, 0x28, 2, 1, 0xc0, 0x3f, 0xfe, byteArrayOf(0, 2), true))
+            model.receive(DussFrame(0, 0x28, 2, 2, 0x00, 0x3f, 0x12,
+                byteArrayOf(1, 0, 3, 0), true))
+
+            assertEquals(RobotModel.ROBOMASTER_EP, model.state.value.robotProduct.model)
+            assertTrue(RobotComponent.CHASSIS in model.state.value.robotProduct.capabilities)
+        } finally { model.close() }
+    }
+
     @Test fun languageSwitchPreservesDocumentAndLocalizesNavigation() {
         Localization.initialize("zh",null)
         val model=testConsoleModel()
         val document=mutableStateOf(EditorDocument(source="print('用户脚本')"))
         try {
             rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(393.dp,740.dp)) { Console(model,document) } } }
+            rule.onNodeWithText("RoboMaster").assertIsDisplayed()
+            rule.onNodeWithText("S1").assertDoesNotExist()
             rule.onNodeWithContentDescription("设置").performClick()
             rule.onNodeWithContentDescription("language-selector").performClick()
             rule.onNodeWithContentDescription("language-en").performClick()
@@ -88,6 +118,7 @@ class ConsoleUiTest {
             rule.onNodeWithContentDescription("Gear 3").assertIsDisplayed()
             rule.onNodeWithContentDescription("Signal strength 37").assertIsDisplayed()
             rule.onNodeWithContentDescription("Chassis heading relative to camera -42°").assertIsDisplayed()
+            rule.onNodeWithText("S1", substring = true).assertDoesNotExist()
             snapshot("phone-cockpit-en")
             rule.runOnIdle { width.value=1040.dp }
             rule.waitForIdle()

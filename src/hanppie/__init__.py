@@ -1,4 +1,4 @@
-"""Host and on-device tooling for DJI RoboMaster S1 preservation."""
+"""Host and on-device tooling for DJI RoboMaster preservation."""
 
 from __future__ import annotations
 

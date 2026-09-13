@@ -1,4 +1,4 @@
-"""S1 App-compatible UDP session used to reach the native Lab subsystem."""
+"""RoboMaster App-compatible UDP session used to reach the native Lab subsystem."""
 
 from __future__ import annotations
 
@@ -8,9 +8,10 @@ import threading
 import time
 from collections import deque
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 
 from hanppie.lab import protocol
+from hanppie.lab.product import RobotProduct, updated_product
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,7 @@ class AppConnectionInfo:
     appid: str
     state: str
     mac: str = ""
+    product: RobotProduct = field(default_factory=RobotProduct)
 
 
 def open_udp(bind_ip: str, port: int, *, broadcast: bool = False) -> socket.socket:
@@ -392,6 +394,10 @@ class AppConnection:
             with self._frame_condition:
                 self._recent_frames.append(frame)
                 self._frame_condition.notify_all()
+            product = updated_product(self.info.product, frame)
+            if product is not None:
+                self.info = replace(self.info, product=product)
+                self._emit("product", product)
             self._emit("duss", frame)
             if frame.cmdset == 0x48 and frame.cmdid == 0x08 and len(frame.payload) == 62:
                 self._battery = frame.payload[10]
@@ -400,6 +406,10 @@ class AppConnection:
 
     def get_battery(self) -> int | None:
         return self._battery
+
+    @property
+    def product(self) -> RobotProduct:
+        return self.info.product
 
     def _log(self, message: str) -> None:
         if self.debug:

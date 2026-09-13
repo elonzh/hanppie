@@ -2,6 +2,7 @@ package cn.elonzh.hanppie.ui.app
 
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
+import cn.elonzh.hanppie.robot.product.RobotProduct
 import cn.elonzh.hanppie.robot.telemetry.GimbalTelemetry
 import cn.elonzh.hanppie.ui.i18n.UiText
 import cn.elonzh.hanppie.ui.i18n.uiText
@@ -24,6 +25,7 @@ internal data class ConsoleState(
     val statusMessage: UiText = uiText(Res.string.disconnected),
     val error: String? = null,
     val devices: List<DiscoveredRobot> = emptyList(),
+    val robotProduct: RobotProduct = RobotProduct(),
     val packets: Long = 0,
     val battery: Int? = null,
     val signalQuality: Int? = null,
@@ -47,7 +49,7 @@ internal data class ConsoleState(
             scriptRunPhase == ScriptRunPhase.UNKNOWN)
 
     fun lost(reason: String): ConsoleState = copy(connected = false, connectedAddress = null, reconnecting = false, statusMessage = uiText(Res.string.connection_lost), error = reason,
-        battery = null, signalQuality = null, values = emptyList(), gimbal = null,
+        robotProduct = RobotProduct(), battery = null, signalQuality = null, values = emptyList(), gimbal = null,
         scriptRunPhase = if (scriptRunPhase.mayBeExecuting) ScriptRunPhase.UNKNOWN else scriptRunPhase,
         scriptMessage = if (scriptRunPhase.mayBeExecuting) uiText(Res.string.connection_lost_robot_execution_state_unknown) else scriptMessage)
 }

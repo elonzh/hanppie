@@ -1,4 +1,4 @@
-"""Configuration for Hanppie's S1 App/Lab backend."""
+"""Configuration for Hanppie's RoboMaster App/Lab backend."""
 
 from __future__ import annotations
 

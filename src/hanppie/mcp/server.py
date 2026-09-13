@@ -14,7 +14,7 @@ from mcp.types import ToolAnnotations
 
 from hanppie.mcp.executor import ExecutorConfig, PythonExecutor, RobotAccess
 
-SERVER_INSTRUCTIONS = """Hanppie controls one local DJI RoboMaster S1 through a persistent worker. Call get_python_context before unfamiliar code; it contains the supported robot facade signatures, execution-access modes, version, and log paths. execute_python defaults to robot_access='auto', which reuses or opens a connection. Use robot_access='reuse' to expose only an existing connection and 'none' for host-only Python. Normal calls keep the active App connection but always neutralize and disarm before returning. Direct chassis, gimbal, and infrared code uses the normal robot.arm() and lease API. Velocity duration is not proof of an exact angle or distance; use checkpoint() to retain partial progress. Gel firing is available as robot.fire_gel() or robot.fire('gel') through the persistent LabRobot/Bridge backend. Never expose this trusted local arbitrary-Python tool to untrusted users or the public internet."""
+SERVER_INSTRUCTIONS = """Hanppie controls one local DJI RoboMaster robot through a persistent worker. Call get_python_context before unfamiliar code; it contains the available robot facade signatures, execution-access modes, version, and log paths. Do not infer the connected model or unverified capabilities from the S1 validation baseline. execute_python defaults to robot_access='auto', which reuses or opens a connection. Use robot_access='reuse' to expose only an existing connection and 'none' for host-only Python. Normal calls keep the active App connection but always neutralize and disarm before returning. Direct chassis, gimbal, and infrared code uses the normal robot.arm() and lease API. Velocity duration is not proof of an exact angle or distance; use checkpoint() to retain partial progress. Gel firing is available as robot.fire_gel() or robot.fire('gel') through the persistent LabRobot/Bridge backend. Never expose this trusted local arbitrary-Python tool to untrusted users or the public internet."""
 
 
 @dataclass
@@ -57,16 +57,16 @@ def create_server(
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
     )
     async def get_connection_status(ctx: Context) -> dict[str, object]:
-        """Report whether the persistent worker currently holds an S1 connection."""
+        """Report whether the persistent worker currently holds a robot connection."""
 
         return _checked(await asyncio.to_thread(_executor(ctx).connection_status))
 
     @server.tool(
-        title="Connect RoboMaster S1",
+        title="Connect RoboMaster",
         annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True),
     )
     async def connect_robot(ctx: Context) -> dict[str, object]:
-        """Discover or select the configured S1 and keep its App session connected."""
+        """Discover or select the configured robot and keep its App session connected."""
 
         return _checked(await asyncio.to_thread(_executor(ctx).connect))
 
@@ -99,7 +99,7 @@ def create_server(
         )
 
     @server.tool(
-        title="Disconnect RoboMaster S1",
+        title="Disconnect RoboMaster",
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=False,
@@ -107,7 +107,7 @@ def create_server(
         ),
     )
     async def disconnect_robot(ctx: Context) -> dict[str, object]:
-        """Neutralize, disarm, and close the persistent S1 connection."""
+        """Neutralize, disarm, and close the persistent robot connection."""
 
         return _checked(await asyncio.to_thread(_executor(ctx).disconnect))
 

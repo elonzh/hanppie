@@ -205,7 +205,7 @@ internal fun RemotePage(
                     verticalAlignment = Alignment.CenterVertically) {
                     Image(painterResource(HanppieBrandAssets.expression(ledState)), null,
                         Modifier.size(if (compactHud) 28.dp else 40.dp, if (compactHud) 14.dp else 20.dp))
-                    Text(if (connected.connected) "S1 · ${connected.battery ?: "—"}%" else tr(Res.string.not_connected),
+                    Text(if (connected.connected) "${connected.battery ?: "—"}%" else tr(Res.string.not_connected),
                         color = HanppieDesignTokens.RemoteHudContent, style = MiuixTheme.textStyles.footnote1)
                     SignalIndicator(connected.signalQuality, compactHud)
                     HeadingIndicator(connected.gimbal?.yawDegrees)

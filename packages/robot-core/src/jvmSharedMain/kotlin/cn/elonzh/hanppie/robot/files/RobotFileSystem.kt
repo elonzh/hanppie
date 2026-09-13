@@ -18,7 +18,7 @@ import org.apache.commons.net.ftp.FTPFile
 import org.apache.commons.net.ftp.FTPReply
 
 /**
- * Bounded view of the anonymous FTP tree exposed by the S1 at `/data/ftp`.
+ * Bounded view of the anonymous FTP tree currently verified at `/data/ftp` on S1.
  * Paths are always absolute inside the FTP chroot and never refer to Android system paths.
  */
 class RobotFileSystem(

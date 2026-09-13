@@ -3,6 +3,8 @@ package cn.elonzh.hanppie.robot.session
 import cn.elonzh.hanppie.robot.media.SpeakerAudio
 import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.protocol.Protocol
+import cn.elonzh.hanppie.robot.product.RobotComponent
+import cn.elonzh.hanppie.robot.product.RobotModel
 import cn.elonzh.hanppie.robot.remote.RemoteControl
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -72,7 +74,8 @@ class AppSessionIntegrationTest {
                 }
             }
             val session = AppSession(RobotTarget("127.0.0.1", "12345678", localPort = 0,
-                remotePort = robot.localPort), onFrame = { received.add(it) }, network = network, onLost = { losses.add(it) })
+                remotePort = robot.localPort), onFrame = { received.add(it) }, network = network,
+                onLost = { losses.add(it) })
             try {
                 session.connect()
                 assertTrue(session.connected)
@@ -80,6 +83,17 @@ class AppSessionIntegrationTest {
                 withTimeout(2000) { while (received.isEmpty()) delay(10) }
                 assertTrue(sent.all { it.valid })
                 assertTrue(sent.any { it.set == 0x48 && it.id == 3 })
+                assertTrue(sent.any { it.receiver == 0x28 && it.set == 0x3f && it.id == 0xfe && it.payload.contentEquals(byteArrayOf(0)) })
+                session.send(0x28, 0xc0, 0x3f, 0xfe, byteArrayOf(0, 1))
+                session.send(0x28, 0x00, 0x3f, 0x12, byteArrayOf(2,
+                    0x00, 0x03, 0,
+                    0x00, 0x17, 1, 0, 0))
+                withTimeout(1_000) {
+                    while (session.product.model != RobotModel.ROBOMASTER_S1 ||
+                        RobotComponent.WATER_GUN !in session.product.capabilities) delay(5)
+                }
+                assertTrue(RobotComponent.CHASSIS in session.product.capabilities)
+                assertEquals(listOf(0), session.product.capabilities.workingDevices[1].details)
                 assertTrue(sent.filter { it.set == 1 && it.id == 4 }.all { it.payload.contentEquals(Protocol.neutral) })
                 val safetyMark = sent.size
                 session.safetyStop()
@@ -195,6 +209,7 @@ class AppSessionIntegrationTest {
                 session.close(); alive.set(false); responder.join(1000)
             }
             assertFalse(session.connected)
+            assertEquals(RobotModel.UNKNOWN, session.product.model)
             assertFailsWith<IllegalStateException> { session.send(9, 0, 1, 4) }
             Unit
         }

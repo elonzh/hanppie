@@ -180,7 +180,7 @@ class PythonExecutor:
                     "(*, fire: bool, enabled: bool, timeout=1.0); no RGB parameters"
                 ),
                 "robot.play_sound": "(sound_id: int, *, timeout=1.0) -> DirectAck",
-                "robot.capture": "(*, timeout=1.0) -> DirectAck; trigger the S1 shutter",
+                "robot.capture": "(*, timeout=1.0) -> DirectAck; trigger the robot shutter",
                 "robot.fire_infrared": "(*, lease_seconds=0.12) -> None; requires robot.arm()",
                 "robot.fire_gel": "() -> dict; switches to or reuses LabRobot/Bridge",
                 "robot.fire": "(fire_type='infrared') -> object; infrared|gel",
@@ -469,13 +469,13 @@ class PythonExecutor:
                 filters.append(f"AppID {self.config.appid}")
             suffix = f" matching {' and '.join(filters)}" if filters else ""
             raise RuntimeError(
-                f"No usable S1 broadcast was discovered{suffix}; keep the computer and S1 "
+                f"No usable RoboMaster broadcast was discovered{suffix}; keep the computer and robot "
                 "on the same LAN, or pass --robot-ip and --appid explicitly"
             )
         if len(targets) > 1:
             addresses = ", ".join(target[0] for target in targets)
             raise RuntimeError(
-                f"Multiple S1 robots were discovered ({addresses}); select one with "
+                f"Multiple RoboMaster robots were discovered ({addresses}); select one with "
                 "--robot-ip or --appid"
             )
 

@@ -5,6 +5,7 @@ import cn.elonzh.hanppie.robot.lab.LabRunEvent
 import cn.elonzh.hanppie.robot.lab.LabRunEventType
 import cn.elonzh.hanppie.robot.lab.LabRunProtocol
 import cn.elonzh.hanppie.robot.telemetry.Telemetry
+import cn.elonzh.hanppie.robot.product.RobotModel
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
@@ -15,6 +16,23 @@ import org.junit.Assume.assumeTrue
 
 /** Opt-in only. No target defaults, no motion, no firmware modification. */
 class HardwareIntegrationTest {
+    @Test fun explicitTargetReportsProductTypeWithoutMotion() = runBlocking {
+        val ip = System.getenv("HANPPIE_TEST_ROBOT_IP")
+        val appId = System.getenv("HANPPIE_TEST_APPID")
+        assumeTrue("实机产品识别需要显式 IP 和 AppID", !ip.isNullOrBlank() && !appId.isNullOrBlank())
+        val session = AppSession(RobotTarget(ip!!, appId!!))
+        try {
+            session.connect()
+            withTimeout(3_000) {
+                while (session.product.model == RobotModel.UNKNOWN) delay(25)
+            }
+            assertTrue(session.product.model != RobotModel.UNKNOWN)
+            println("Product query reported ${session.product.model}; working devices=${session.product.capabilities.workingDevices.size}")
+        } finally {
+            session.close()
+        }
+    }
+
     @Test fun explicitTargetConnectUploadAndStartNoMotionScript() = runBlocking {
         val ip = System.getenv("HANPPIE_TEST_ROBOT_IP")
         val appId = System.getenv("HANPPIE_TEST_APPID")

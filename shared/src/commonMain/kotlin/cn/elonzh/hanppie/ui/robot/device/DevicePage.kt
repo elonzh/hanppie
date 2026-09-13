@@ -21,6 +21,7 @@ import cn.elonzh.hanppie.ui.design.WorkbenchGlyph
 import cn.elonzh.hanppie.ui.design.WorkbenchIcon
 import cn.elonzh.hanppie.ui.design.navigationIcons
 import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.robot.product.RobotModel
 import org.jetbrains.compose.resources.painterResource
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -51,7 +52,7 @@ internal fun DevicePage(model: ConsoleController, state: ConsoleState, compact: 
             Button({ model.connect(device.ip, device.appId) }, Modifier.fillMaxWidth().heightIn(min = 56.dp),
                 enabled = !state.connected && !state.busy) {
                 WorkbenchIcon(WorkbenchGlyph.CONNECT)
-                Text("S1  ·  ${device.ip}", Modifier.weight(1f).padding(horizontal = 12.dp))
+                Text("RoboMaster  ·  ${device.ip}", Modifier.weight(1f).padding(horizontal = 12.dp))
                 Text(tr(Res.string.connect))
             }
         }
@@ -102,13 +103,19 @@ private fun DeviceIdentity(state: ConsoleState, modifier: Modifier, compact: Boo
     val colors = MiuixTheme.colorScheme
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("ROBOMASTER", fontSize = 10.sp, fontWeight = FontWeight.Medium, letterSpacing = .6.sp, maxLines = 1,
+            Text("DJI", fontSize = 10.sp, fontWeight = FontWeight.Medium, letterSpacing = .6.sp, maxLines = 1,
                 color = colors.onSurfaceVariantSummary)
-            Text("S1", fontSize = if (compact) 52.sp else 64.sp, fontWeight = FontWeight.Bold, color = colors.onSurface)
+            val productName = when (state.robotProduct.model) {
+                RobotModel.UNKNOWN -> "RoboMaster"
+                RobotModel.ROBOMASTER_S1 -> "RoboMaster S1"
+                RobotModel.ROBOMASTER_EP -> "RoboMaster EP"
+            }
+            Text(productName, fontSize = if (compact) 30.sp else 48.sp, fontWeight = FontWeight.Bold,
+                maxLines = 1, color = colors.onSurface)
             Text(state.connectedAddress?.takeIf { state.connected } ?: tr(Res.string.not_connected),
                 fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
         }
-        // Brand identity in the connection overview; never presented as a picture of the physical S1.
+        // Brand identity in the connection overview; never presented as a picture of the physical robot.
         Box(Modifier.size(if (compact) 100.dp else 128.dp).background(colors.surfaceContainerHigh, CircleShape),
             contentAlignment = Alignment.Center) {
             Image(painterResource(HanppieBrandAssets.avatar), null, Modifier.fillMaxSize().padding(10.dp))

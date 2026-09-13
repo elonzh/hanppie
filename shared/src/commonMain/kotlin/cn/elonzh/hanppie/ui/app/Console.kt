@@ -121,7 +121,7 @@ internal fun Console(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Image(painterResource(HanppieBrandAssets.avatar), null, Modifier.size(64.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("RoboMaster S1", fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
+                    Text("RoboMaster", fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
                     Text(state.status, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 13.sp)
                 }
             }

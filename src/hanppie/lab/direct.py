@@ -1,4 +1,4 @@
-"""Direct S1 control over the RoboMaster App-compatible UDP session."""
+"""Direct robot control over the RoboMaster App-compatible UDP session."""
 
 from __future__ import annotations
 
@@ -406,7 +406,9 @@ class DirectRobot:
     ) -> bool:
         del sn
         if conn_type != "sta" or proto_type != "udp":
-            raise ValueError("the S1 direct backend requires conn_type='sta' and proto_type='udp'")
+            raise ValueError(
+                "the RoboMaster direct backend requires conn_type='sta' and proto_type='udp'"
+            )
         initialized = self.connection.initialize(timeout=timeout)
         self.robot_ip = self.connection.robot_ip
         return initialized

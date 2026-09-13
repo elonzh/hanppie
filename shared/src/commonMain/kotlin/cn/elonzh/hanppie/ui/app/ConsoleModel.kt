@@ -8,6 +8,8 @@ import cn.elonzh.hanppie.robot.lab.LabRunEventType
 import cn.elonzh.hanppie.robot.lab.LabRunProtocol
 import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.protocol.hex
+import cn.elonzh.hanppie.robot.product.RobotProduct
+import cn.elonzh.hanppie.robot.product.RobotProductProtocol
 import cn.elonzh.hanppie.robot.session.RobotLabSession
 import cn.elonzh.hanppie.robot.session.RobotRuntime
 import cn.elonzh.hanppie.robot.session.RobotSession
@@ -319,7 +321,8 @@ internal class ConsoleModel(
             robotFiles.attach(candidate.files)
             desiredTarget.store(target)
             state.update { it.copy(connected = true, connectedAddress = target.ip, reconnecting = false,
-                statusMessage = uiText(Res.string.connected_to_value,target.ip), error = null) }
+                statusMessage = uiText(Res.string.connected_to_value,target.ip), error = null,
+                robotProduct = candidate.product) }
         } catch (error: Exception) {
             candidate.close()
             session.compareAndSet(candidate, null)
@@ -377,7 +380,8 @@ internal class ConsoleModel(
                     lab.store(candidate.lab)
                     robotFiles.attach(candidate.files)
                     state.update { it.copy(connected = true, connectedAddress = target.ip, reconnecting = false,
-                        statusMessage = uiText(Res.string.reconnected_to_value, target.ip), error = null) }
+                        statusMessage = uiText(Res.string.reconnected_to_value, target.ip), error = null,
+                        robotProduct = candidate.product) }
                     log(tr(Res.string.reconnected_to_value, target.ip))
                     return@launch
                 } catch (error: CancellationException) {
@@ -411,7 +415,7 @@ internal class ConsoleModel(
                 statusMessage = uiText(Res.string.disconnected), error = null,
                 scriptRunPhase = if (uncertain) ScriptRunPhase.UNKNOWN else it.scriptRunPhase,
                 scriptMessage = if (uncertain) uiText(Res.string.session_ended_robot_state_unknown) else it.scriptMessage,
-                battery = null, signalQuality = null, values = emptyList(), gimbal = null)
+                robotProduct = RobotProduct(), battery = null, signalQuality = null, values = emptyList(), gimbal = null)
         }
         log(tr(Res.string.connection_closed_scripts_on_the_robot_may_still_be))
     }
@@ -475,6 +479,7 @@ internal class ConsoleModel(
         val eventType = runEvent?.type
         state.update { old -> old.copy(packets = old.packets + 1,
             frames = (old.frames + line).takeLast(250),
+            robotProduct = RobotProductProtocol.updated(old.robotProduct, frame) ?: old.robotProduct,
             battery = if (motion == null) old.battery else motion.batteryPercent,
             signalQuality = signalQuality ?: old.signalQuality,
             gimbal = gimbal ?: old.gimbal,

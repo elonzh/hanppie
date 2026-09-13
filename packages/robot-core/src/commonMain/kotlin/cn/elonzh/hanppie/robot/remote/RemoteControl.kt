@@ -30,7 +30,7 @@ object RemoteControl {
             val bits=value.toFloat().toBits(); List(4) { (bits ushr (it*8)).toByte() }
         }.toByteArray()
     }
-    /** Recovered S1 rm_module.Gimbal.set_accel_ctrl: yaw/roll/pitch in 0.1 deg/s. */
+    /** S1-verified rm_module.Gimbal.set_accel_ctrl: yaw/roll/pitch in 0.1 deg/s. */
     fun gimbalVelocity(pitch: Double, yaw: Double): ByteArray {
         require(pitch.isFinite() && yaw.isFinite())
         return ByteArray(7).apply {
@@ -40,7 +40,7 @@ object RemoteControl {
         }
     }
 
-    /** S1 armor LEDs through RM common LED command 0x3f:0x33. */
+    /** S1-verified armor LEDs through RM common LED command 0x3f:0x33. */
     fun led(red: Int, green: Int, blue: Int, enabled: Boolean = true): ByteArray {
         require(red in 0..255 && green in 0..255 && blue in 0..255)
         return byteArrayOf(
@@ -54,11 +54,11 @@ object RemoteControl {
         )
     }
 
-    /** S1 firing-channel muzzle LED payload for RM common LED command 0x3f:0x33. */
+    /** S1-verified firing-channel muzzle LED payload for RM common LED command 0x3f:0x33. */
     fun muzzleFireLed(enabled: Boolean): ByteArray =
         (if (enabled) "40000000ff0001ffffff6401000100" else "40000000ff0000ffffff6401000100").hexBytes()
 
-    /** Visible S1 blaster LED payload for ProtoBlasterSetLed 0x3f:0x55. */
+    /** S1-verified visible blaster LED payload for ProtoBlasterSetLed 0x3f:0x55. */
     fun blasterLed(enabled: Boolean): ByteArray =
         (if (enabled) "71ffffff0164006400" else "70ffffff0164006400").hexBytes()
 }

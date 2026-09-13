@@ -1,4 +1,4 @@
-"""RoboMaster S1 bidirectional audio transport."""
+"""RoboMaster bidirectional audio transport, currently verified on S1."""
 
 from __future__ import annotations
 
@@ -90,7 +90,7 @@ def _append_encoded_packets(encoded: bytearray, packets: Iterable[object]) -> No
 
 
 def build_audio_block(payload: bytes, index: int) -> bytes:
-    """Wrap one encoded transfer chunk in the S1's audio block header."""
+    """Wrap one encoded transfer chunk in the S1-verified audio block header."""
 
     if not 0 <= index <= 0xFFFF:
         raise ValueError("audio block index must be between 0 and 65535")
@@ -98,7 +98,7 @@ def build_audio_block(payload: bytes, index: int) -> bytes:
 
 
 class OpusDecoder:
-    """Decode one S1 microphone Opus packet to 48 kHz mono signed 16-bit PCM."""
+    """Decode one S1-verified microphone packet to 48 kHz mono signed 16-bit PCM."""
 
     def __init__(self) -> None:
         self._codec = None
@@ -141,7 +141,7 @@ class OpusDecoder:
 
 
 class LabAudio:
-    """Upload 12 kHz mono signed 16-bit PCM and play it on the S1 speaker."""
+    """Upload 12 kHz mono signed 16-bit PCM through the S1-verified speaker route."""
 
     def __init__(self, connection: AppConnection) -> None:
         self._connection = connection

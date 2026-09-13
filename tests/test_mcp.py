@@ -264,7 +264,7 @@ def test_executor_rejects_ambiguous_targets(tmp_path: Path) -> None:
         discover=lambda _: robots,
     )
 
-    with pytest.raises(RuntimeError, match="Multiple S1"):
+    with pytest.raises(RuntimeError, match="Multiple RoboMaster"):
         executor._resolve_target()
 
 

@@ -273,7 +273,7 @@ class PersistentRuntime:
         if self._connected():
             if requested_target != self._target:
                 raise RuntimeError(
-                    "the MCP worker is already connected to another S1; disconnect it first"
+                    "the MCP worker is already connected to another robot; disconnect it first"
                 )
             status = self.status()
             status["reused"] = True
@@ -450,7 +450,7 @@ class PersistentRuntime:
         if self._direct_robot is not None and self._direct_robot.connected:
             return self._direct_robot
         if self._target is None:
-            raise RuntimeError("connect_robot must resolve an S1 target first")
+            raise RuntimeError("connect_robot must resolve a robot target first")
         source = self._backend_name()
         started = self._begin_transition("direct")
         try:
@@ -479,7 +479,7 @@ class PersistentRuntime:
         if self._lab_robot is not None and self._lab_robot.connected:
             return self._lab_robot
         if self._target is None:
-            raise RuntimeError("connect_robot must resolve an S1 target first")
+            raise RuntimeError("connect_robot must resolve a robot target first")
         source = self._backend_name()
         started = self._begin_transition("lab")
         close_errors = self._close_direct()
@@ -552,7 +552,7 @@ class PersistentRuntime:
                 timeout=self.config.connection_timeout,
             )
             if not initialized:
-                raise RuntimeError("S1 App connection initialization failed")
+                raise RuntimeError("RoboMaster App connection initialization failed")
             robot.enter_control_mode()
         except BaseException:
             try:
@@ -579,7 +579,7 @@ class PersistentRuntime:
                 timeout=self.config.connection_timeout,
             )
             if not initialized:
-                raise RuntimeError("S1 App connection initialization failed")
+                raise RuntimeError("RoboMaster App connection initialization failed")
             robot.enter_lab()
             digest = robot.upload_lab_bridge()
             robot.start_lab_program(digest)

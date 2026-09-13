@@ -1,4 +1,4 @@
-"""Native RoboMaster S1 App/Lab transport maintained by Hanppie."""
+"""RoboMaster App/Lab transport maintained by Hanppie."""
 
 from hanppie.lab.config import LabConfig
 from hanppie.lab.direct import DirectRobot

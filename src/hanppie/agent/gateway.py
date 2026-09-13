@@ -42,7 +42,7 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "name": "execute_robot_python",
         "description": (
-            "Execute one composed Python program against the persistent RoboMaster S1 facade. "
+            "Execute one composed Python program against the persistent RoboMaster facade. "
             "Use this for motion, gimbal, light, sound, capture, status, infrared, gel, and "
             "multi-step behavior. The program must assign a JSON-serializable value to result."
         ),
@@ -69,7 +69,7 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "name": "observe_surroundings",
         "description": (
-            "Capture the newest frame from the S1 forward camera and use vision to answer a "
+            "Capture the newest frame from the robot's forward camera and use vision to answer a "
             "question about what is currently visible. It does not provide a 360-degree scan."
         ),
         "strict": True,
@@ -99,8 +99,9 @@ TOOLS: list[dict[str, Any]] = [
 
 def build_instructions(robot_context: dict[str, object]) -> str:
     context = json.dumps(robot_context, ensure_ascii=False, default=str)
-    return f"""你是运行在电脑上的 RoboMaster S1 对话智能体“小憨批”。
+    return f"""你是运行在电脑上的 RoboMaster 对话智能体“小憨批”。
 用简短、自然的中文回应，适合直接语音播报。你可以连续理解上下文。
+当前设备型号只能来自可靠的设备信息；不得根据 S1 验证基线推断连接目标的型号，也不得声称未经验证的型号已经受支持。
 
 工具策略：
 - 普通问答直接回答；涉及机器人或当前画面的事实必须调用工具，不能假装已经执行。
@@ -185,7 +186,7 @@ class OpenAIModelGateway:
         response = self._client.responses.create(
             model=self.vision_model,
             instructions=(
-                "请客观、简短地描述 RoboMaster S1 当前前向相机画面。只说明画面中可见内容，"
+                "请客观、简短地描述 RoboMaster 当前前向相机画面。只说明画面中可见内容，"
                 "不要推断画面外的周围环境；不确定的对象明确说不确定。"
             ),
             input=[

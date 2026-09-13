@@ -1,4 +1,4 @@
-"""High-level lifecycle for the Hanppie S1 App/Lab backend."""
+"""High-level lifecycle for the Hanppie RoboMaster App/Lab backend."""
 
 from __future__ import annotations
 
@@ -144,7 +144,9 @@ class LabRobot:
     ) -> bool:
         del sn
         if conn_type != "sta" or proto_type != "udp":
-            raise ValueError("the S1 App/Lab backend requires conn_type='sta' and proto_type='udp'")
+            raise ValueError(
+                "the RoboMaster App/Lab backend requires conn_type='sta' and proto_type='udp'"
+            )
         initialized = self.connection.initialize(timeout=timeout)
         self.robot_ip = self.connection.robot_ip
         self.bridge.robot_ip = self.robot_ip

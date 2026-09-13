@@ -14,12 +14,12 @@ _OBSERVATION_CODE = """robot.camera.start_video_stream(resolution="720p")
 try:
     frame = robot.camera.read_video_frame(timeout=3.0, strategy="newest")
     if frame is None:
-        raise RuntimeError("S1 camera returned no frame")
+        raise RuntimeError("robot camera returned no frame")
     # S1 stream startup can produce partially refreshed frames without a corrupt flag.
     time.sleep(1.2)
     frame = robot.camera.read_video_frame(timeout=3.0, strategy="newest")
     if frame is None or frame.is_corrupt:
-        raise RuntimeError("S1 camera returned no usable frame after startup")
+        raise RuntimeError("robot camera returned no usable frame after startup")
     result = save_frame(frame, "observation.jpg")
 finally:
     robot.camera.stop_video_stream()

@@ -110,7 +110,7 @@
     <string name="battery">电量</string>
     <string name="signal">信号</string>
     <string name="packets">接收帧</string>
-    <string name="connect_your_phone_or_computer_to_the_same_wi">手机或电脑需与 S1 连接同一 Wi-Fi</string>
+    <string name="connect_your_phone_or_computer_to_the_same_wi">手机或电脑需与机器人连接同一 Wi-Fi</string>
     <string name="new_script">新脚本</string>
     <string name="unsaved"> · 未保存</string>
     <string name="open_py">打开 .py</string>
@@ -396,8 +396,8 @@
     <string name="preset_scripts">预置脚本</string>
     <string name="robot_files">内部文件</string>
     <string name="ftp_files_tab">FTP</string>
-    <string name="connect_to_manage_robot_files">连接 S1 后可浏览内部 FTP 文件</string>
-    <string name="ftp_data_boundary">内部维护工具：只显示 S1 匿名 FTP 开放的持久数据区，不是普通音频库或 Android 系统分区。实机会加密非空上传内容，下载和快速打开得到的是原始机内数据，关联应用可能无法识别。</string>
+    <string name="connect_to_manage_robot_files">连接机器人后可浏览其内部 FTP 文件</string>
+    <string name="ftp_data_boundary">内部维护工具：只显示机器人匿名 FTP 开放的持久数据区，不是普通音频库或系统分区。当前 S1 实机会加密非空上传内容；下载和快速打开得到的是原始机内数据，关联应用可能无法识别。</string>
     <string name="refresh">刷新</string>
     <string name="refreshing_robot_files">正在刷新机内文件…</string>
     <string name="upload_file">上传文件</string>
@@ -425,7 +425,7 @@
     <string name="download_file_value">下载 %1$s</string>
     <string name="rename_file">重命名</string>
     <string name="rename_file_value">重命名 %1$s</string>
-    <string name="delete_robot_file_question">从 S1 删除？</string>
+    <string name="delete_robot_file_question">从机器人删除？</string>
     <string name="delete_robot_file_summary">“%1$s”将从机内持久数据区删除，无法由 Hanppie 撤销。文件夹必须为空。</string>
     <string name="uploading_file_value">正在上传 %1$s…</string>
     <string name="downloading_file_value">正在下载 %1$s…</string>

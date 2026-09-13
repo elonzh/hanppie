@@ -1,4 +1,4 @@
-"""Long-lived isolated process that owns the physical S1 connection."""
+"""Long-lived isolated process that owns the physical robot connection."""
 
 from __future__ import annotations
 

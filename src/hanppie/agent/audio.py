@@ -207,7 +207,7 @@ class FasterWhisperTranscriber:
                 beam_size=1,
                 vad_filter=False,
                 condition_on_previous_text=False,
-                initial_prompt="小憨批，小憨皮，RoboMaster S1，前进，后退，转圈，云台，拍照。",
+                initial_prompt="小憨批，小憨皮，RoboMaster，S1，EP，前进，后退，转圈，云台，拍照。",
             )
             return "".join(str(segment.text) for segment in segments).strip()
         finally:

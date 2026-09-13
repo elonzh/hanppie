@@ -10,6 +10,9 @@ import cn.elonzh.hanppie.robot.protocol.connectionSetup
 import cn.elonzh.hanppie.robot.protocol.hexBytes
 import cn.elonzh.hanppie.robot.protocol.u8
 import cn.elonzh.hanppie.robot.protocol.u16
+import cn.elonzh.hanppie.robot.product.RobotModel
+import cn.elonzh.hanppie.robot.product.RobotProduct
+import cn.elonzh.hanppie.robot.product.RobotProductProtocol
 import cn.elonzh.hanppie.robot.remote.RemoteControl
 import cn.elonzh.hanppie.robot.remote.remoteEffects
 import cn.elonzh.hanppie.robot.remote.remoteExit
@@ -48,6 +51,8 @@ class AppSession(private val target: RobotTarget,
     @Volatile private var mode = "000300"
     @Volatile private var labRunning = false
     @Volatile private var remote = false
+    @Volatile var product: RobotProduct = RobotProduct()
+        private set
     private val modeMutex = Mutex()
     private var controlPayload = RemoteControl.velocity(0.0,0.0,0.0)
     private var gimbalPayload = RemoteControl.gimbalVelocity(0.0, 0.0)
@@ -113,7 +118,7 @@ class AppSession(private val target: RobotTarget,
         cameraInput = 0.0 to 0.0
         gimbalInput = 0.0 to 0.0; chassisYawInput = 0.0
     }
-    /** S1 rm_module.Gun.set_cmd_fire routes 3f:51 to hdvt_uav_id (900 -> 0x09), not EP's 0x17. */
+    /** The S1-verified route sends 3f:51 to hdvt_uav_id (900 -> 0x09), not EP's 0x17. */
     suspend fun fireGelOnce(): Int = withContext(Dispatchers.IO) {
         var fireLedEnabled = false
         var blasterLedEnabled = false
@@ -138,7 +143,7 @@ class AppSession(private val target: RobotTarget,
         }
     }
 
-    /** Upload a bounded, length-prefixed Opus clip and play it on the S1 speaker. */
+    /** Upload a bounded, length-prefixed Opus clip through the S1-verified speaker route. */
     suspend fun playSpeaker(encoded: ByteArray): Int = withContext(Dispatchers.IO) {
         require(encoded.isNotEmpty()) { "对讲录音为空" }
         require(encoded.size <= 0xffff) { "对讲录音过长" }
@@ -216,6 +221,7 @@ class AppSession(private val target: RobotTarget,
 
     suspend fun connect() = withContext(Dispatchers.IO) {
         check(socket == null) { "会话已经打开" }
+        product = RobotProduct()
         try {
             claimIdentity()
             coroutineContext.ensureActive()
@@ -352,9 +358,10 @@ class AppSession(private val target: RobotTarget,
                             onVideo?.invoke(data.copyOfRange(20, data.size))
                         } else {
                         synchronized(txLock) { envelope.observe(data) }
-                        Protocol.frames(data).filter { it.valid }.forEach {
-                            Telemetry.gimbalYaw(it)?.let { yaw -> yawSample = yaw to System.nanoTime() }
-                            if (it.set == 0x3f && it.id == 0x1d) onAudio?.invoke(it.payload) else onFrame(it)
+                        Protocol.frames(data).filter { it.valid }.forEach { frame ->
+                            Telemetry.gimbalYaw(frame)?.let { yaw -> yawSample = yaw to System.nanoTime() }
+                            updateProduct(frame)
+                            if (frame.set == 0x3f && frame.id == 0x1d) onAudio?.invoke(frame.payload) else onFrame(frame)
                         }
                         }
                     }
@@ -374,6 +381,21 @@ class AppSession(private val target: RobotTarget,
         } finally { socket?.close() }
     }
 
+    private fun updateProduct(frame: DussFrame) {
+        RobotProductProtocol.updated(product, frame)?.let { updated ->
+            val previous = product
+            product = updated
+            if (updated.model != previous.model) {
+                val name = when (updated.model) {
+                    RobotModel.UNKNOWN -> "未知"
+                    RobotModel.ROBOMASTER_S1 -> "RoboMaster S1"
+                    RobotModel.ROBOMASTER_EP -> "RoboMaster EP"
+                }
+                onLog("机器人型号：$name")
+            }
+        }
+    }
+
     override fun close() {
         if (active.get()) runCatching { safetyStop() }
         if (active.get() && remote) runCatching { send(0xc3,0x40,0x3f,0x19,byteArrayOf(0)) }
@@ -382,5 +404,6 @@ class AppSession(private val target: RobotTarget,
         if (Thread.currentThread() !== receiver) receiver?.join(1500)
         receiver = null
         socket = null
+        product = RobotProduct()
     }
 }

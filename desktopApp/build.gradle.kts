@@ -21,10 +21,11 @@ compose.desktop {
             jvmArgs("-Xdock:name=Hanppie")
         }
         nativeDistributions {
+            modules("jdk.unsupported")
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "Hanppie"
             packageVersion = "0.1.0"
-            description = "RoboMaster S1 控制台"
+            description = "DJI RoboMaster 控制台"
             vendor = "Hanppie"
             windows { iconFile.set(project.file("src/main/resources/icons/hanppie.ico")) }
             linux { iconFile.set(project.file("src/main/resources/icons/hanppie.png")) }

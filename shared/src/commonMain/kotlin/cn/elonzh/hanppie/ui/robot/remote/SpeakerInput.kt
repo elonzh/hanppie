@@ -1,6 +1,6 @@
 package cn.elonzh.hanppie.ui.robot.remote
 
-/** Captures a bounded host-microphone clip and returns S1 length-prefixed Opus packets. */
+/** Captures a bounded host-microphone clip and returns robot speaker transport packets. */
 internal interface SpeakerInput : AutoCloseable {
     /** onReady runs only after the first captured samples have been retained. */
     fun start(onReady: () -> Unit)

@@ -1,4 +1,4 @@
-"""S1 App video and microphone stream control."""
+"""RoboMaster App video and microphone stream control."""
 
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ class LabCamera:
         return True
 
     def start_audio_stream(self) -> bool:
-        """Request the S1 microphone's Opus stream over the App session."""
+        """Request the robot microphone's Opus stream over the App session."""
 
         self._clear(self._audio_packets)
         self._audio_streaming = True

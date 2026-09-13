@@ -6,6 +6,7 @@ import cn.elonzh.hanppie.robot.lab.LabController
 import cn.elonzh.hanppie.robot.lab.LabUpload
 import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
 import cn.elonzh.hanppie.robot.protocol.DussFrame
+import cn.elonzh.hanppie.robot.product.RobotProduct
 
 /** JVM transport composition. Common callers only observe [RobotRuntime]. */
 class JvmRobotRuntime(
@@ -22,7 +23,12 @@ class JvmRobotRuntime(
     ): RobotSession {
         val network = networkProvider()
         lateinit var result: JvmRobotSession
-        val app = AppSession(target, onFrame, onLog, network) { reason -> onLost(result, reason) }
+        val app = AppSession(
+            target,
+            onFrame,
+            onLog,
+            network,
+        ) { reason -> onLost(result, reason) }
         result = JvmRobotSession(
             app = app,
             labController = LabController(app, target, onLog, network),
@@ -38,6 +44,7 @@ private class JvmRobotSession(
     override val files: RobotFileService,
 ) : RobotSession {
     override val connected: Boolean get() = app.connected
+    override val product: RobotProduct get() = app.product
     override val cameraYaw: Double? get() = app.cameraYaw
     override var onVideo: ((ByteArray) -> Unit)?
         get() = app.onVideo

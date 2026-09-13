@@ -2,7 +2,7 @@
 
 > 文档性质：Hanppie 当前实现、能力和安全边界的长期技术事实源。<br>
 > 最后更新：2026-09-13<br>
-> 已验证固件：RoboMaster S1 `00.06.0521`
+> 已验证设备：RoboMaster S1，固件 `00.06.0521`
 
 本文只记录 Hanppie 当前增加、恢复或组合的主机代码、Kotlin 客户端、机内载荷、能力状态与安全策略。RoboMaster S1 原生硬件、固件、App/Lab、DUSS、协议调查和外部生态统一维护在 [RoboMaster S1 原生架构、协议与调查](./architecture-robomaster.md)。已废弃方案、旧命令、迁移过程和历史取舍由日期化记录与 Git 历史保存。
 
@@ -50,6 +50,10 @@ Hanppie 不替换整套 S1 固件，而是在保留原机控制器、相机、�
 
 当前不以持久 root、替换启动链、提高发射能力或绕过机械安全限制为目标。
 
+设备兼容性按协议入口和能力组合建模，不维护以当前实机型号为唯一成员的封闭支持列表。通用客户端、会话、发现结果和 Host API 只表达 RoboMaster 机器人及其可用能力；型号专属的报文、服务和安全差异留在具体后端并标记证据来源。当前全部实机结论来自 S1 `00.06.0521`，因此只能声明 S1 验证范围；EP 与 S1 的底层模块复用关系见[原生架构 4.5 节](./architecture-robomaster.md#45-s1-与-ep-的产品边界)，但 Hanppie 尚未对 EP 完成发现、会话、执行器、媒体和安全回归，不据此声明 EP 已受支持，也不在通用代码中排除它。
+
+客户端把网络发现、产品型号和组件能力作为三个不同阶段处理。UDP `45678` 广播只产生 IP、MAC、AppID 与配对状态，不猜测型号；App 数据会话建立时，既有初始化序列会发送 DUSS `0x3F/0xFE`、payload `00` 的只读产品查询，Kotlin `RobotProductProtocol` 与 Python `lab.product` 只接受 `attr=0xC0` 有效响应中的显式产品码：`1` 为 S1、`2` 为 EP，其余保持 `UNKNOWN`，查询缺失或报文不完整时同样保持未知，不使用固件版本、上次选择或 S1 默认值兜底。DUSS `attr=0x00`、`0x3F/0x12` 的 working-devices push 独立更新 `RobotCapabilities`：保存每个 16 位设备 ID 及其未解释的附加值，已确认 ID 映射为组件，未知 ID 和附加值原样保留，不能由型号代替组件存在性判断。Kotlin 设备页只在当前会话收到明确型号后显示 `RoboMaster S1` 或 `RoboMaster EP`，断开、失联和重连开始时恢复通用 `RoboMaster`；Python `AppConnection.product` 对每次会话执行相同的重置和更新。原厂机制与消息证据见[原生架构 5.3 节](./architecture-robomaster.md#53-robomaster-app-与-lab-程序机制)。**代码/S1 实机**
+
 ### 1.2 相对原机的改动清单
 
 | 项目增量 | 发生位置 | 对原机做了什么 | 持久性/恢复方式 |
@@ -74,7 +78,7 @@ Hanppie 不修改 `/init.rc`、原厂启动脚本或 `/system` 持久文件。La
 | `androidApp` | 独立 Android 应用入口、权限声明、FileKit 初始化、APK 与真机 UI 测试；只依赖 `shared`，不依赖桌面应用 |
 | `desktopApp` | 独立 Kotlin/JVM 应用入口、FileKit 初始化、Compose application 生命周期及原生桌面打包；只依赖 `shared` |
 | `shared` | KMP 共享 UI 库，无应用 `main` 或打包任务。`commonMain` 保存 Navigation 3 路由、全部页面、`WorkbenchViewModel`、`ConsoleModel`、DataStore/Room 容器、FileKit 文件流程、设置/脚本/机器人文件控制器、主题、Compose Resources、模型配置和 Koog 对话智能体；`jvmSharedMain` 只保存 Android/JVM 共同需要的 Java 文件路径、区域化资源和本地日期格式桥接；`androidMain` 与 `jvmMain` 保留窗口或 Activity 接入、媒体、语音、网络绑定、存储/区域 actual 和各自的 Ktor 客户端初始化 |
-| `packages/robot-core` | 独立 KMP 协议模块，以 `cn.elonzh.hanppie.robot` 为根包并按 `protocol`、`session`、`lab`、`remote`、`media`、`telemetry`、`files` 分责；`commonMain` 实现 DUSS CRC、App 封包、广播解析、Lab DSP、遥控/媒体载荷与遥测，并声明机器人会话、Lab、文件服务、文件路径和流式 `Source`/`Sink` 契约；`jvmSharedMain` 以 `JvmRobotRuntime` 组合 UDP、Apache Commons Net FTP 和 Lab JVM 实现供 Android/JVM 共用 |
+| `packages/robot-core` | 独立 KMP 协议模块，以 `cn.elonzh.hanppie.robot` 为根包并按 `protocol`、`product`、`session`、`lab`、`remote`、`media`、`telemetry`、`files` 分责；`commonMain` 实现 DUSS CRC、App 封包、广播解析、产品与组件能力解析、Lab DSP、遥控/媒体载荷与遥测，并声明机器人会话、Lab、文件服务、文件路径和流式 `Source`/`Sink` 契约；`jvmSharedMain` 以 `JvmRobotRuntime` 组合 UDP、Apache Commons Net FTP 和 Lab JVM 实现供 Android/JVM 共用 |
 | `src/hanppie`、`src/robomaster`、`tests` | 现有 Python 工具、SDK fork 和回归测试，不受客户端拆分影响 |
 
 模块边界遵循 [KMP 官方推荐结构](https://kotlinlang.org/docs/multiplatform/multiplatform-project-recommended-structure.html)：平台应用入口依赖共享库，共享库不反向依赖应用。共享 UI 以 `cn.elonzh.hanppie.ui` 为根包，按职责分为 `app`、`design`、`i18n`、`settings`、`scripts`、`chat`、`speech` 及 `robot.device`、`robot.diagnostics`、`robot.files`、`robot.remote`；测试 source set 镜像生产包，平台 `actual` 与对应 `expect` 位于同一能力包。共享库只向入口暴露 `app` 中的工作台和平台初始化函数，内部状态与控制器不因分包而公开，也不保留旧根包转发类型。一级页面与全屏驾驶舱使用 JetBrains Compose Multiplatform 发布的 Navigation 3 `NavKey`、可序列化 `NavBackStack` 和 `NavDisplay`；Android 配置变化与桌面重组共享同一路由实现，返回驾驶舱会弹出目的地而不是修改独立布尔状态。跨 Android/JVM 的中间源集显式命名为 `jvmSharedMain`，其中每个实现都实际依赖 Java/JVM；不再用中间源集承载可编译为 Kotlin common 的代码。纯逻辑测试在 `commonTest`，JVM/UI 测试在共享库 `jvmTest`，Android instrumentation 在 `androidApp`；桌面启动及打包由 `desktopApp` 负责。当前仅配置 Android/JVM 目标，尚无 iOS target、Xcode 工程或 iOS 平台适配，因此不声明支持 iOS；共享协调器只依赖 `RobotRuntime`，具体 UDP/FTP、Lab 上传、媒体、语音和文件路径仍由目标平台实现。
@@ -93,9 +97,9 @@ Hanppie 不修改 `/init.rc`、原厂启动脚本或 `/system` 持久文件。La
 
 miuix 提供导航、按钮、输入框、卡片、开关和弹窗，`WorkbenchTheme` 统一设置 MiuixTheme，页面不使用 Material Design 组件。`LocalSquircleEnabled=false` 保持使用 miuix 标准圆角路径，避开 0.9.3 squircle shader 与 Compose 1.12.0 桌面 Skia 的 ABI 不兼容。脚本编辑器使用 Compose BasicTextField。设置语言使用下拉菜单，切换即时生效。
 
-桌面入口在支持 AWT Taskbar 图标设置的平台上从 classpath 加载 `icons/hanppie.png` 并设置运行进程图标，覆盖 Gradle／IDE 开发启动；macOS Gradle 启动名为 Hanppie。Compose Window 使用资源库中的 `hanppie_app_icon.png`，原生安装包继续通过平台配置引用 PNG／ICO／ICNS。上述品牌资源均由品牌导出脚本生成。一级导航、普通页面、对话和遥控 HUD 的通用静态图标全部由 Compose Icons Lucide 提供，并通过唯一的 `WorkbenchGlyph` 语义映射交给 Miuix `Icon` 着色；资源库不再保存同义功能 SVG。准星叠层、可变信号条、摇杆和底盘相对相机朝向属于实时状态可视化，继续由 Compose Canvas 绘制。媒体请求仍统一经 `RemoteMediaController`，图标替换不更改请求或协议。
+桌面入口在支持 AWT Taskbar 图标设置的平台上从 classpath 加载 `icons/hanppie.png` 并设置运行进程图标，覆盖 Gradle／IDE 开发启动；macOS Gradle 启动名为 Hanppie。Compose Window 使用资源库中的 `hanppie_app_icon.png`，原生安装包继续通过平台配置引用 PNG／ICO／ICNS；其裁剪运行时显式包含 DataStore 外部 protobuf 所需的 `jdk.unsupported`。上述品牌资源均由品牌导出脚本生成。一级导航、普通页面、对话和遥控 HUD 的通用静态图标全部由 Compose Icons Lucide 提供，并通过唯一的 `WorkbenchGlyph` 语义映射交给 Miuix `Icon` 着色；资源库不再保存同义功能 SVG。准星叠层、可变信号条、摇杆和底盘相对相机朝向属于实时状态可视化，继续由 Compose Canvas 绘制。媒体请求仍统一经 `RemoteMediaController`，图标替换不更改请求或协议。
 
-`AppearanceController` 只保存独立于连接与模型配置的显示模式，支持跟随系统、浅色和深色，默认跟随系统。软件主题固定为 Graphite Orange，不再提供 miuix 原生、查派、海蓝、森林等预设或自定义色板；浅色/深色色表集中在 `HanppieDesignTokens.kt`，页面不动态派生主题。设置页只显示一个显示模式下拉行。显示模式以 `SYSTEM`、`LIGHT` 或 `DARK` 保存到共享 Preferences DataStore；不存在记录时使用初始值，无效值直接报告加载失败，不读取或迁移旧平台偏好。Compose 系统明暗状态驱动跟随系统模式，Android 系统栏图标按当前背景亮度同步。设置页的全局“恢复默认”经过二次确认后同时恢复语言、显示模式、模型服务、自动朗读、控制参数、快捷键和 LED 状态色，并从 DataStore 清除已保存的 API Key；环境变量覆盖保持生效但不会被重置操作复制进持久化配置。品牌头像、小标记和四种点阵表情通过 Compose Resources 共享；侧栏复用共享机器人头像，驾驶舱状态只显示一处点阵表情。设备页不绘制虚构的 S1 外形。`DevicePage` 将设备身份、连接动作、三项状态和现有页面入口分层呈现；宽屏连接动作限制为 260 dp 列，窄屏纵排。对话空状态使用共享品牌头像，脚本与诊断空状态使用 Lucide 文件图标。
+`AppearanceController` 只保存独立于连接与模型配置的显示模式，支持跟随系统、浅色和深色，默认跟随系统。软件主题固定为 Graphite Orange，不再提供 miuix 原生、查派、海蓝、森林等预设或自定义色板；浅色/深色色表集中在 `HanppieDesignTokens.kt`，页面不动态派生主题。设置页只显示一个显示模式下拉行。显示模式以 `SYSTEM`、`LIGHT` 或 `DARK` 保存到共享 Preferences DataStore；不存在记录时使用初始值，无效值直接报告加载失败，不读取或迁移旧平台偏好。Compose 系统明暗状态驱动跟随系统模式，Android 系统栏图标按当前背景亮度同步。设置页的全局“恢复默认”经过二次确认后同时恢复语言、显示模式、模型服务、自动朗读、控制参数、快捷键和 LED 状态色，并从 DataStore 清除已保存的 API Key；环境变量覆盖保持生效但不会被重置操作复制进持久化配置。品牌头像、小标记和四种点阵表情通过 Compose Resources 共享；侧栏复用共享机器人头像，驾驶舱状态只显示一处点阵表情。设备页使用 RoboMaster 家族身份，不把当前验证型号写成固定产品类型，也不绘制虚构的具体机器人外形。`DevicePage` 将设备身份、连接动作、三项状态和现有页面入口分层呈现；宽屏连接动作限制为 260 dp 列，窄屏纵排。对话空状态使用共享品牌头像，脚本与诊断空状态使用 Lucide 文件图标。
 
 对话通过 multiplatform-markdown-renderer 0.45.0 的无主题核心渲染，颜色与字阶来自 MiuixTheme，不依赖其 Material 适配模块，已完成消息使用 `rememberMarkdownState`；当前回复使用 `rememberStreamingMarkdownState`，将智能体累积字符串的新增后缀顺序追加到渲染器，每条新回复建立独立状态。Coil 3.5.0 与其 OkHttp 网络模块负责 Markdown 图片加载；机器人实时视频仍由平台视频解码器处理，不经 Coil。工具记录和待审批脚本保留原文，Markdown 不触发机器人执行。
 
@@ -490,7 +494,7 @@ Hanppie 自行维护的主机代码由 Ruff、pytest、coverage 和 prek 检查�
 
 ### 1.11 当前能力矩阵
 
-下表记录的是 **Hanppie 当前验证结果**，不是 S1 出厂能力表。
+下表记录的是 **Hanppie 当前验证结果**，不是 S1 出厂能力表或封闭的支持型号列表；其中全部实机证据仍来自 S1。
 
 `src/hanppie/lab` 是项目独立维护的 S1 App 直连与 Lab 实现，已通过固定报文向量、模拟生命周期、Python 3.6 载荷语法、wheel 安装和固件 `00.06.0521` 真机回归。
 
@@ -528,11 +532,11 @@ Hanppie 自行维护的主机代码由 Ruff、pytest、coverage 和 prek 检查�
 
 ### 1.12 远程控制当前边界
 
-当前仓库只支持电脑和 S1 位于同一可信、可双向访问的 IP 网络。主直控路径只使用 UDP `45678/56789` 完成身份交换，并通过 UDP `10609/10607` 传输数据、媒体、DUSS 和 control；它不要求 USB、FTP 或 Lab Bridge。可选 Lab 路径额外使用 FTP `21` 和 Bridge UDP `40923/40924`。**代码/实测**
+当前已验证的部署要求电脑和机器人位于同一可信、可双向访问的 IP 网络。主直控路径只使用 UDP `45678/56789` 完成身份交换，并通过 UDP `10609/10607` 传输数据、媒体、DUSS 和 control；它不要求 USB、FTP 或 Lab Bridge。可选 Lab 路径额外使用 FTP `21` 和 Bridge UDP `40923/40924`。这些端口与行为来自 S1 实测，不能直接外推到尚未验证的型号。**代码/实测**
 
-语音智能体的 Codex 模式在本机转写和播报，只在唤醒后通过互联网把文本、工具结果及观察帧发送给 Codex；模型文件首次下载仍需要网络。API key 模式还会把 VAD 切分的有声 WAV 发送给转写模型，并可把回复发送给语音合成模型。该出站模型调用不是 S1 的远程控制入口，但属于音频、文本、图像和设备结果的数据出境边界。部署者必须自行选择合适的授权模式和数据策略；两种模式的对话/视觉都依赖外部模型服务，所以当前不提供完全离线的智能体。**代码边界**
+语音智能体的 Codex 模式在本机转写和播报，只在唤醒后通过互联网把文本、工具结果及观察帧发送给 Codex；模型文件首次下载仍需要网络。API key 模式还会把 VAD 切分的有声 WAV 发送给转写模型，并可把回复发送给语音合成模型。该出站模型调用不是机器人的远程控制入口，但属于音频、文本、图像和设备结果的数据出境边界。部署者必须自行选择合适的授权模式和数据策略；两种模式的对话/视觉都依赖外部模型服务，所以当前不提供完全离线的智能体。**代码边界**
 
-当前增加了只在本机工作的 STDIO MCP Python 入口、局域网广播自动发现和 MCP 生命周期内的 App 连接复用，但仍没有远程网关、身份验证、加密会话、Web UI、手柄输入、跨进程控制源仲裁或公网传输实现，因此项目当前不具备跨互联网远程控制能力。上述 S1 和 Bridge 端口均不得直接暴露到公网、路由器端口转发或 VPN Overlay。
+当前增加了只在本机工作的 STDIO MCP Python 入口、局域网广播自动发现和 MCP 生命周期内的 App 连接复用，但仍没有远程网关、身份验证、加密会话、Web UI、手柄输入、跨进程控制源仲裁或公网传输实现，因此项目当前不具备跨互联网远程控制能力。上述设备端口和 Bridge 端口均不得直接暴露到公网、路由器端口转发或 VPN Overlay。
 
 局域网程序控制已经具备 `DirectRobot` API 和 MCP 生命周期内的持续连接，但持续连接不提供持续运动租约，也不等于完整遥控器。MCP 不能协调另一个进程或 App；接入手柄、键盘、Web 或 ROS 2 时，输入仍必须经过跨输入源的单一控制仲裁层，维护当前控制源、显式 arm、速度限制、短租约、断连 neutral 和紧急停止。当前 250 ms 主机租约、MCP worker 超时终止与一次进程异常退出位移测试只能作为底层证据，不能替代远程网关的认证、加密、心跳、速率限制和多控制源抢占策略。
 

@@ -5,14 +5,14 @@ build-backend = "uv_build"
 [project]
 name = "hanppie"
 version = "0.1.0"
-description = "Open tooling for preserving and programming DJI RoboMaster S1 robots"
+description = "Open tooling for preserving and programming DJI RoboMaster robots"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [
   { name = "Elon Zhou" },
 ]
-keywords = ["dji", "robomaster", "robotics", "s1", "reverse-engineering"]
+keywords = ["dji", "robomaster", "robotics", "reverse-engineering"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",

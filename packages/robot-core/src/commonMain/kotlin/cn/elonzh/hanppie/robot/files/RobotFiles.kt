@@ -43,11 +43,11 @@ object RobotFilePath {
     }
 
     fun requireName(name: String): String {
-        require(isSafeName(name)) { "S1 FTP 名称需为 1–128 个 ASCII 字符，且不能包含 /、\\、控制字符或首尾空格" }
+        require(isSafeName(name)) { "机器人 FTP 名称需为 1–128 个 ASCII 字符，且不能包含 /、\\、控制字符或首尾空格" }
         return name
     }
 
-    /** Produces the ASCII-only name required by the stock S1 FTP server. */
+    /** Produces the ASCII-only name required by the current robot FTP service. */
     fun portableUploadName(preferredName: String): String {
         val trimmed = preferredName.trim().ifEmpty { "upload" }
         val extensionStart = trimmed.lastIndexOf('.').takeIf { it > 0 }

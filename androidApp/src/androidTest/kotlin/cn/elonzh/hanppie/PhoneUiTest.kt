@@ -28,7 +28,7 @@ class PhoneUiTest {
         rule.onNodeWithText("语言", substring=false).assertIsDisplayed()
         rule.onNodeWithContentDescription("脚本").performClick()
         rule.onNodeWithTag("script-new").performClick()
-        rule.onNodeWithTag("script-editor").performTextReplacement("def start():\n    print('Hello S1')")
+        rule.onNodeWithTag("script-editor").performTextReplacement("def start():\n    print('Hello robot')")
         rule.onNodeWithText("新脚本 · 未保存").assertExists()
         screenshot("script-keyboard")
         rule.runOnUiThread { rule.activity.window.insetsController?.hide(android.view.WindowInsets.Type.ime()) }

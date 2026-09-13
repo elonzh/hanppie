@@ -110,7 +110,7 @@
     <string name="battery">Battery</string>
     <string name="signal">Signal</string>
     <string name="packets">Packets</string>
-    <string name="connect_your_phone_or_computer_to_the_same_wi">Connect your phone or computer to the same Wi-Fi as S1.</string>
+    <string name="connect_your_phone_or_computer_to_the_same_wi">Connect your phone or computer to the same Wi-Fi as the robot.</string>
     <string name="new_script">New script</string>
     <string name="unsaved"> · Unsaved</string>
     <string name="open_py">Open .py</string>
@@ -396,8 +396,8 @@
     <string name="preset_scripts">Preset scripts</string>
     <string name="robot_files">Internal files</string>
     <string name="ftp_files_tab">FTP</string>
-    <string name="connect_to_manage_robot_files">Connect the S1 to browse its internal FTP files</string>
-    <string name="ftp_data_boundary">Internal maintenance tool: this is the persistent data area exposed by anonymous FTP, not a normal audio library or Android system partitions. A real S1 encrypts non-empty uploads; downloads and quick open receive raw onboard data that associated apps may not recognize.</string>
+    <string name="connect_to_manage_robot_files">Connect the robot to browse its internal FTP files</string>
+    <string name="ftp_data_boundary">Internal maintenance tool: this is the persistent data area exposed by anonymous FTP, not a normal audio library or system partitions. The currently verified S1 encrypts non-empty uploads; downloads and quick open receive raw onboard data that associated apps may not recognize.</string>
     <string name="refresh">Refresh</string>
     <string name="refreshing_robot_files">Refreshing onboard files…</string>
     <string name="upload_file">Upload file</string>
@@ -425,7 +425,7 @@
     <string name="download_file_value">Download %1$s</string>
     <string name="rename_file">Rename</string>
     <string name="rename_file_value">Rename %1$s</string>
-    <string name="delete_robot_file_question">Delete from S1?</string>
+    <string name="delete_robot_file_question">Delete from the robot?</string>
     <string name="delete_robot_file_summary">“%1$s” will be removed from the onboard persistent data area. Hanppie cannot undo this. Folders must be empty.</string>
     <string name="uploading_file_value">Uploading %1$s…</string>
     <string name="downloading_file_value">Downloading %1$s…</string>

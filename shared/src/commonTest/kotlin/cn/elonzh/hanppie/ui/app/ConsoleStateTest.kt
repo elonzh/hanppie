@@ -1,5 +1,7 @@
 package cn.elonzh.hanppie.ui.app
 
+import cn.elonzh.hanppie.robot.product.RobotModel
+import cn.elonzh.hanppie.robot.product.RobotProduct
 import cn.elonzh.hanppie.robot.telemetry.GimbalTelemetry
 import kotlin.test.*
 
@@ -27,6 +29,7 @@ class ConsoleStateTest {
 
     @Test fun lossInvalidatesStaleTelemetryAndRunPermission() {
         val state = ConsoleState(connected = true, battery = 90, signalQuality = 36, values = listOf("raw" to "1"),
+            robotProduct = RobotProduct(model = RobotModel.ROBOMASTER_S1),
             gimbal = GimbalTelemetry(0.0,0.0,10.0,20.0,0),
             scriptRunPhase = ScriptRunPhase.RUNNING).lost("timeout")
         assertFalse(state.connected)
@@ -34,6 +37,7 @@ class ConsoleStateTest {
         assertNull(state.signalQuality)
         assertTrue(state.values.isEmpty())
         assertNull(state.gimbal)
+        assertEquals(RobotModel.UNKNOWN, state.robotProduct.model)
         assertEquals(ScriptRunPhase.UNKNOWN, state.scriptRunPhase)
         assertFalse(state.canRun("pass"))
         assertFalse(state.canStop)

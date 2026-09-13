@@ -3,7 +3,7 @@ package cn.elonzh.hanppie.ui.robot.remote
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-/** Packetized S1 Opus -> streaming Ogg pages. No audio is written to disk. */
+/** Packetized S1-verified Opus -> streaming Ogg pages. No audio is written to disk. */
 internal class OpusOgg {
     private var sequence = 0
     private var granule = 0L

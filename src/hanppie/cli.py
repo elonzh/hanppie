@@ -28,20 +28,20 @@ from hanppie.mcp.server import serve
 
 app = typer.Typer(
     name="hanppie",
-    help="保存、研究和编程控制 DJI RoboMaster S1。",
+    help="保存、研究和编程控制 DJI RoboMaster 机器人。",
     no_args_is_help=True,
     rich_markup_mode="rich",
     pretty_exceptions_enable=False,
 )
 console = Console()
 mcp_app = typer.Typer(
-    help="运行持久 S1 MCP 服务，并配置 Codex 客户端。",
+    help="运行持久 RoboMaster MCP 服务，并配置 Codex 客户端。",
     no_args_is_help=True,
     rich_markup_mode="rich",
 )
 app.add_typer(mcp_app, name="mcp")
 agent_app = typer.Typer(
-    help="运行带唤醒词、连续对话和视觉观察的 S1 语音智能体。",
+    help="运行带唤醒词、连续对话和视觉观察的 RoboMaster 语音智能体。",
     no_args_is_help=True,
     rich_markup_mode="rich",
 )
@@ -66,16 +66,16 @@ def root(
 
 @mcp_app.command("serve")
 def mcp_serve_command(
-    robot_ip: Annotated[str | None, typer.Option(help="显式 S1 IPv4 地址")] = None,
+    robot_ip: Annotated[str | None, typer.Option(help="显式机器人 IPv4 地址")] = None,
     appid: Annotated[str | None, typer.Option(help="显式 8 位十六进制 AppID")] = None,
     local_ip: Annotated[str, typer.Option(help="本机 IPv4 绑定地址")] = "0.0.0.0",
     discovery_timeout: Annotated[
         float,
-        typer.Option(min=0.1, help="自动发现 S1 的广播监听时长（秒）"),
+        typer.Option(min=0.1, help="自动发现机器人的广播监听时长（秒）"),
     ] = 4.0,
     connection_timeout: Annotated[
         float,
-        typer.Option(min=0.1, help="S1 连接超时（秒）"),
+        typer.Option(min=0.1, help="机器人连接超时（秒）"),
     ] = 10.0,
     execution_timeout: Annotated[
         float,
@@ -91,7 +91,7 @@ def mcp_serve_command(
     ] = Path(".hanppie/mcp"),
     debug: Annotated[bool, typer.Option(help="捕获 App 协议调试输出")] = False,
 ) -> None:
-    """通过 STDIO 运行 MCP, 同一服务生命周期复用一个 S1 连接。"""
+    """通过 STDIO 运行 MCP，同一服务生命周期复用一个机器人连接。"""
 
     try:
         config = ExecutorConfig(
@@ -128,16 +128,16 @@ def mcp_install_command(
         bool,
         typer.Option(help="只替换已有的 mcp_servers.hanppie 表"),
     ] = False,
-    robot_ip: Annotated[str | None, typer.Option(help="显式 S1 IPv4 地址")] = None,
+    robot_ip: Annotated[str | None, typer.Option(help="显式机器人 IPv4 地址")] = None,
     appid: Annotated[str | None, typer.Option(help="显式 8 位十六进制 AppID")] = None,
     local_ip: Annotated[str, typer.Option(help="本机 IPv4 绑定地址")] = "0.0.0.0",
     discovery_timeout: Annotated[
         float,
-        typer.Option(min=0.1, help="自动发现 S1 的广播监听时长（秒）"),
+        typer.Option(min=0.1, help="自动发现机器人的广播监听时长（秒）"),
     ] = 4.0,
     connection_timeout: Annotated[
         float,
-        typer.Option(min=0.1, help="S1 连接超时（秒）"),
+        typer.Option(min=0.1, help="机器人连接超时（秒）"),
     ] = 10.0,
     execution_timeout: Annotated[
         float,
@@ -261,16 +261,16 @@ def agent_run_command(
             "--prompt", "-p", help="直接执行文本；可重复以连续对话，完成后退出，不启用音频"
         ),
     ] = None,
-    robot_ip: Annotated[str | None, typer.Option(help="显式 S1 IPv4 地址")] = None,
+    robot_ip: Annotated[str | None, typer.Option(help="显式机器人 IPv4 地址")] = None,
     appid: Annotated[str | None, typer.Option(help="显式 8 位十六进制 AppID")] = None,
     local_ip: Annotated[str, typer.Option(help="本机 IPv4 绑定地址")] = "0.0.0.0",
     discovery_timeout: Annotated[
         float,
-        typer.Option(min=0.1, help="自动发现 S1 的广播监听时长（秒）"),
+        typer.Option(min=0.1, help="自动发现机器人的广播监听时长（秒）"),
     ] = 4.0,
     connection_timeout: Annotated[
         float,
-        typer.Option(min=0.1, help="S1 连接超时（秒）"),
+        typer.Option(min=0.1, help="机器人连接超时（秒）"),
     ] = 10.0,
     execution_timeout: Annotated[
         float,
@@ -349,7 +349,7 @@ def agent_run_command(
     ] = Path(".hanppie/agent"),
     debug: Annotated[bool, typer.Option(help="捕获 App 协议调试输出")] = False,
 ) -> None:
-    """通过 LangGraph 控制 S1：持续语音对话，或直接执行 --prompt。"""
+    """通过 LangGraph 控制机器人：持续语音对话，或直接执行 --prompt。"""
 
     from hanppie.agent.audio import VoiceActivityConfig
     from hanppie.agent.model import AgentConfig

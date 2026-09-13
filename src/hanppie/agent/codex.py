@@ -93,7 +93,7 @@ class CodexModelGateway:
         response = self._request(
             model=self.vision_model,
             instructions=(
-                "请客观、简短地描述 RoboMaster S1 当前前向相机画面。只说明画面中可见内容，"
+                "请客观、简短地描述 RoboMaster 当前前向相机画面。只说明画面中可见内容，"
                 "不要推断画面外的周围环境；不确定的对象明确说不确定。"
             ),
             input=[

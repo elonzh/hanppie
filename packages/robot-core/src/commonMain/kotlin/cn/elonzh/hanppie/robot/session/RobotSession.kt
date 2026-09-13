@@ -4,6 +4,7 @@ import cn.elonzh.hanppie.robot.files.RobotFileService
 import cn.elonzh.hanppie.robot.lab.LabUpload
 import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
 import cn.elonzh.hanppie.robot.protocol.DussFrame
+import cn.elonzh.hanppie.robot.product.RobotProduct
 
 data class RobotTarget(
     val ip: String,
@@ -31,6 +32,7 @@ interface RobotLabSession {
 
 interface RobotSession : AutoCloseable {
     val connected: Boolean
+    val product: RobotProduct
     val cameraYaw: Double?
     var onVideo: ((ByteArray) -> Unit)?
     var onAudio: ((ByteArray) -> Unit)?

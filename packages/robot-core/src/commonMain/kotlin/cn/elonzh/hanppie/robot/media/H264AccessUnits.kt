@@ -1,6 +1,6 @@
 package cn.elonzh.hanppie.robot.media
 
-/** S1 Annex-B: group slices into complete access units for Android MediaCodec. */
+/** S1-verified Annex-B: group slices into complete access units for Android MediaCodec. */
 class H264AccessUnits {
     private var bytes = byteArrayOf()
     private var hasSlice = false

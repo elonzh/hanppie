@@ -1,8 +1,8 @@
-"""Binary protocol primitives for the S1 App-compatible transport.
+"""Binary protocol primitives for the RoboMaster App-compatible transport.
 
-The outer envelope and setup sequence are interoperability facts recovered
-from S1/App traffic. DUSS CRC calculation reuses the runtime recovered from the
-robot instead of maintaining a second copy of its lookup tables.
+The outer envelope and setup sequence are interoperability facts recovered from
+the currently verified S1/App traffic. DUSS CRC calculation reuses the runtime
+recovered from the robot instead of maintaining a second copy of its lookup tables.
 """
 
 from __future__ import annotations

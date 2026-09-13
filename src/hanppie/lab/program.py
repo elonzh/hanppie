@@ -1,4 +1,4 @@
-"""Build and upload S1 Lab DSP program containers."""
+"""Build and upload RoboMaster Lab DSP program containers."""
 
 from __future__ import annotations
 
