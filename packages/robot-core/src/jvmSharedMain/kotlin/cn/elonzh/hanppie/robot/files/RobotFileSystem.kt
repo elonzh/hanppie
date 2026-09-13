@@ -4,29 +4,18 @@ import cn.elonzh.hanppie.robot.session.RobotNetwork
 import cn.elonzh.hanppie.robot.session.RobotTarget
 import java.io.FilterInputStream
 import java.io.InputStream
-import java.io.OutputStream
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.io.Sink
+import kotlinx.io.Source
+import kotlinx.io.asInputStream
+import kotlinx.io.asOutputStream
 import org.apache.commons.net.ftp.FTP
 import org.apache.commons.net.ftp.FTPClient
 import org.apache.commons.net.ftp.FTPFile
 import org.apache.commons.net.ftp.FTPReply
-
-enum class RobotFileKind { DIRECTORY, FILE, LINK, UNKNOWN }
-
-data class RobotFileEntry(
-    val path: String,
-    val name: String,
-    val kind: RobotFileKind,
-    val size: Long = 0,
-    val modifiedAtEpochMillis: Long? = null,
-) {
-    val isDirectory: Boolean get() = kind == RobotFileKind.DIRECTORY
-    val isRegularFile: Boolean get() = kind == RobotFileKind.FILE
-    val isProtected: Boolean get() = RobotFileSystem.isProtected(path)
-}
 
 /**
  * Bounded view of the anonymous FTP tree exposed by the S1 at `/data/ftp`.
@@ -36,14 +25,14 @@ class RobotFileSystem(
     private val target: RobotTarget,
     private val network: RobotNetwork = RobotNetwork.Default,
     private val port: Int = 21,
-) : AutoCloseable {
+) : RobotFileService {
     private val activeClients = ConcurrentHashMap.newKeySet<FTPClient>()
     @Volatile private var closed = false
 
     init { require(port in 1..65535) }
 
-    suspend fun list(path: String): List<RobotFileEntry> = withContext(Dispatchers.IO) {
-        val directory = normalizePath(path)
+    override suspend fun list(path: String): List<RobotFileEntry> = withContext(Dispatchers.IO) {
+        val directory = RobotFilePath.normalize(path)
         withClient { ftp ->
             val files = ftp.listFiles(directory)
             check(FTPReply.isPositiveCompletion(ftp.replyCode)) {
@@ -51,9 +40,9 @@ class RobotFileSystem(
             }
             files.mapNotNull { file ->
                 val name = file.name
-                if (name == "." || name == ".." || !isSafeName(name)) return@mapNotNull null
+                if (name == "." || name == ".." || runCatching { RobotFilePath.requireName(name) }.isFailure) return@mapNotNull null
                 RobotFileEntry(
-                    path = child(directory, name),
+                    path = RobotFilePath.child(directory, name),
                     name = name,
                     kind = file.kind(),
                     size = file.size.coerceAtLeast(0),
@@ -64,47 +53,47 @@ class RobotFileSystem(
     }
 
     /** Uploads without overwriting: an occupied name becomes `name-2.ext`, `name-3.ext`, and so on. */
-    suspend fun upload(directory: String, preferredName: String, source: InputStream): RobotFileEntry =
+    override suspend fun upload(directory: String, preferredName: String, source: Source): RobotFileEntry =
         withContext(Dispatchers.IO) {
-            val parent = normalizePath(directory)
-            val safeName = portableUploadName(preferredName)
+            val parent = RobotFilePath.normalize(directory)
+            val safeName = RobotFilePath.portableUploadName(preferredName)
             withClient { ftp ->
                 val occupied = ftp.listFiles(parent).mapTo(mutableSetOf()) { it.name }
                 check(FTPReply.isPositiveCompletion(ftp.replyCode)) {
                     "FTP 目录读取失败：${ftp.replyText()}"
                 }
                 val name = uniqueName(parent, safeName, occupied)
-                val path = child(parent, name)
-                val counted = CountingInputStream(source)
+                val path = RobotFilePath.child(parent, name)
+                val counted = CountingInputStream(source.asInputStream())
                 check(ftp.storeFile(path, counted)) { "FTP 上传失败：${ftp.replyText()}" }
                 RobotFileEntry(path, name, RobotFileKind.FILE, counted.count)
             }
         }
 
-    suspend fun download(path: String, destination: OutputStream) = withContext(Dispatchers.IO) {
-        val source = normalizePath(path)
+    override suspend fun download(path: String, destination: Sink) = withContext(Dispatchers.IO) {
+        val source = RobotFilePath.normalize(path)
         check(source != "/") { "FTP 根目录不能作为文件下载" }
         withClient { ftp ->
-            check(ftp.retrieveFile(source, destination)) { "FTP 下载失败：${ftp.replyText()}" }
+            check(ftp.retrieveFile(source, destination.asOutputStream())) { "FTP 下载失败：${ftp.replyText()}" }
         }
     }
 
-    suspend fun createDirectory(parent: String, name: String): RobotFileEntry = withContext(Dispatchers.IO) {
-        val directory = normalizePath(parent)
-        val path = child(directory, requireName(name))
-        check(!isProtected(path)) { "保留路径不能由文件管理器创建" }
+    override suspend fun createDirectory(parent: String, name: String): RobotFileEntry = withContext(Dispatchers.IO) {
+        val directory = RobotFilePath.normalize(parent)
+        val path = RobotFilePath.child(directory, RobotFilePath.requireName(name))
+        check(!RobotFilePath.isProtected(path)) { "保留路径不能由文件管理器创建" }
         withClient { ftp ->
             check(ftp.makeDirectory(path)) { "FTP 新建目录失败：${ftp.replyText()}" }
             RobotFileEntry(path, path.substringAfterLast('/'), RobotFileKind.DIRECTORY)
         }
     }
 
-    suspend fun rename(path: String, newName: String): String = withContext(Dispatchers.IO) {
-        val source = normalizePath(path)
+    override suspend fun rename(path: String, newName: String): String = withContext(Dispatchers.IO) {
+        val source = RobotFilePath.normalize(path)
         check(source != "/") { "FTP 根目录不能重命名" }
-        check(!isProtected(source)) { "Lab 当前上传槽位不能重命名" }
-        val destination = child(parent(source), requireName(newName))
-        check(!isProtected(destination)) { "不能覆盖 Lab 当前上传槽位" }
+        check(!RobotFilePath.isProtected(source)) { "Lab 当前上传槽位不能重命名" }
+        val destination = RobotFilePath.child(RobotFilePath.parent(source), RobotFilePath.requireName(newName))
+        check(!RobotFilePath.isProtected(destination)) { "不能覆盖 Lab 当前上传槽位" }
         withClient { ftp ->
             check(ftp.rename(source, destination)) { "FTP 重命名失败：${ftp.replyText()}" }
         }
@@ -112,10 +101,10 @@ class RobotFileSystem(
     }
 
     /** Directories are removed only when the server confirms they are empty; recursive deletion is intentionally absent. */
-    suspend fun delete(entry: RobotFileEntry) = withContext(Dispatchers.IO) {
-        val path = normalizePath(entry.path)
+    override suspend fun delete(entry: RobotFileEntry) = withContext(Dispatchers.IO) {
+        val path = RobotFilePath.normalize(entry.path)
         check(path != "/") { "FTP 根目录不能删除" }
-        check(!isProtected(path)) { "Lab 当前上传槽位不能删除" }
+        check(!RobotFilePath.isProtected(path)) { "Lab 当前上传槽位不能删除" }
         withClient { ftp ->
             val deleted = if (entry.isDirectory) ftp.removeDirectory(path) else ftp.deleteFile(path)
             check(deleted) {
@@ -162,68 +151,18 @@ class RobotFileSystem(
     }
 
     private fun uniqueName(parent: String, preferred: String, occupied: Set<String>): String {
-        fun available(name: String) = name !in occupied && !isProtected(child(parent, name))
+        fun available(name: String) = name !in occupied && !RobotFilePath.isProtected(RobotFilePath.child(parent, name))
         if (available(preferred)) return preferred
         val dot = preferred.lastIndexOf('.').takeIf { it > 0 } ?: preferred.length
         val stem = preferred.substring(0, dot)
         val extension = preferred.substring(dot)
         for (suffix in 2..999) {
-            val candidate = requireName("$stem-$suffix$extension")
+            val candidate = RobotFilePath.requireName("$stem-$suffix$extension")
             if (available(candidate)) return candidate
         }
         error("同名文件过多，请先整理当前目录")
     }
 
-    companion object {
-        private val protectedPaths = setOf("/python/python_raw.dsp")
-
-        fun isProtected(path: String): Boolean = runCatching { normalizePath(path) in protectedPaths }.getOrDefault(false)
-
-        fun normalizePath(path: String): String {
-            require(path.startsWith('/')) { "机内路径必须从 / 开始" }
-            if (path == "/") return path
-            require(!path.endsWith('/')) { "机内路径不能以 / 结尾" }
-            val parts = path.drop(1).split('/')
-            require(parts.isNotEmpty() && parts.all(::isSafeName)) { "机内路径包含无效片段" }
-            return "/" + parts.joinToString("/")
-        }
-
-        fun requireName(name: String): String {
-            require(isSafeName(name)) { "S1 FTP 名称需为 1–128 个 ASCII 字符，且不能包含 /、\\、控制字符或首尾空格" }
-            return name
-        }
-
-        /**
-         * The stock S1 FTP server does not advertise UTF-8 and replaces non-ASCII command bytes with question marks.
-         * Uploads therefore receive a predictable portable name instead of silently creating a corrupted one.
-         */
-        fun portableUploadName(preferredName: String): String {
-            val trimmed = preferredName.trim().ifEmpty { "upload" }
-            val extensionStart = trimmed.lastIndexOf('.').takeIf { it > 0 }
-            val rawStem = extensionStart?.let { trimmed.substring(0, it) } ?: trimmed
-            val rawExtension = extensionStart?.let { trimmed.substring(it) }.orEmpty()
-            val stem = rawStem.map { char -> if (char.code in 0x20..0x7e && char != '/' && char != '\\') char else '-' }
-                .joinToString("")
-                .replace(Regex("-+"), "-")
-                .trim(' ', '-', '.')
-                .ifEmpty { "upload" }
-            val extension = rawExtension.takeIf {
-                it.length <= 16 && it.all { char -> char == '.' || char == '-' || char == '_' || char.isLetterOrDigit() }
-            }.orEmpty()
-            val maxStemLength = (128 - extension.length).coerceAtLeast(1)
-            return requireName(stem.take(maxStemLength).trimEnd() + extension)
-        }
-
-        private fun isSafeName(name: String): Boolean =
-            name.isNotEmpty() && name.length <= 128 && name == name.trim() &&
-                name != "." && name != ".." && '/' !in name && '\\' !in name &&
-                name.none(Char::isISOControl) && name.all { it.code in 0x20..0x7e }
-
-        private fun child(parent: String, name: String): String =
-            if (parent == "/") "/$name" else "$parent/$name"
-
-        private fun parent(path: String): String = path.substringBeforeLast('/', "").ifEmpty { "/" }
-    }
 }
 
 private fun FTPFile.kind(): RobotFileKind = when {

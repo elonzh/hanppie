@@ -131,5 +131,3 @@ class LabController internal constructor(private val session: LabChannel,
         }
     }
 }
-
-data class LabUpload(val digest: String, val runId: String)

@@ -14,6 +14,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 
 class DesktopSpeakerInputTest {
     @Test fun readinessFollowsFirstSamplesAndRetainsTheirPrefix() {
@@ -42,7 +43,7 @@ class DesktopSpeakerInputTest {
             kotlin.test.assertEquals(1L, ready.count, "Starting the device must not announce readiness")
             allowRead.countDown()
             check(ready.await(2, java.util.concurrent.TimeUnit.SECONDS))
-            assertContentEquals(prefix, capture.finish())
+            assertContentEquals(prefix, runBlocking { capture.finish() })
         } finally { allowRead.countDown(); capture.cancel() }
     }
 
@@ -50,7 +51,7 @@ class DesktopSpeakerInputTest {
         val callbacks = mutableListOf<() -> Unit>()
         val input = object : SpeakerInput {
             override fun start(onReady: () -> Unit) { callbacks += onReady }
-            override fun finish(): ByteArray = error("Unready recording must not be encoded")
+            override suspend fun finish(): ByteArray = error("Unready recording must not be encoded")
             override fun cancel() = Unit
         }
         val model = testConsoleModel(SystemSpeech(), speakerInput = input)
@@ -137,7 +138,7 @@ class DesktopSpeakerInputTest {
 
         input.start { ready.countDown() }
         assertTrue(ready.await(2, TimeUnit.SECONDS))
-        val finisher = thread { runCatching { input.finish() }.onFailure(failure::set) }
+        val finisher = thread { runCatching { runBlocking { input.finish() } }.onFailure(failure::set) }
         assertTrue(process.waitEntered.await(2, TimeUnit.SECONDS))
         input.cancel()
         finisher.join(2_000)

@@ -3,22 +3,29 @@ package cn.elonzh.hanppie.ui.i18n
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.intl.Locale
 import org.jetbrains.compose.resources.StringResource
 
 /** App language preference; translated content lives only in Compose XML resources. */
 internal object Localization {
     var choice by mutableStateOf("system"); private set
-    var systemLanguage by mutableStateOf("zh"); private set
+    var systemLanguageTag by mutableStateOf("zh-CN"); private set
     private var persist: (String) -> Unit = {}
-    val english get() = (if (choice == "system") systemLanguage else choice) != "zh"
+    val english get() = (if (choice == "system") resolveSupportedLanguage(systemLanguageTag) else choice) != "zh"
     val languageTag get() = if (english) "en-US" else "zh-CN"
 
     fun initialize(systemLanguage: String, saved: String?, save: (String) -> Unit = {}) {
-        this.systemLanguage = if (systemLanguage.startsWith("zh")) "zh" else "en"
+        systemLanguageTag = systemLanguage
+        resolveSupportedLanguage(systemLanguage)
         choice = saved ?: "system"
         require(choice in listOf("system", "zh", "en")) { "Unsupported language preference: $choice" }
         persist = save
         applyAppLocale(languageTag)
+    }
+
+    private fun resolveSupportedLanguage(languageTag: String): String {
+        require(languageTag.isNotBlank()) { "System language tag must not be blank" }
+        return if (Locale(languageTag).language.equals("zh", ignoreCase = true)) "zh" else "en"
     }
 
     fun select(value: String) {

@@ -1,6 +1,7 @@
 package cn.elonzh.hanppie.ui.app
 
 import cn.elonzh.hanppie.robot.session.RobotNetwork
+import cn.elonzh.hanppie.robot.session.JvmRobotRuntime
 import cn.elonzh.hanppie.ui.robot.remote.NoSpeakerInput
 import cn.elonzh.hanppie.ui.robot.remote.SpeakerInput
 import cn.elonzh.hanppie.ui.scripts.ScriptRepository
@@ -68,8 +69,9 @@ internal fun testConsoleModel(
     speech = speech,
     voiceInput = voiceInput,
     speakerInput = speakerInput,
-    robotNetwork = robotNetwork,
+    robotRuntime = JvmRobotRuntime(robotNetwork),
     settingsStore = settingsStore,
     scriptRepository = scriptRepository,
+    createAgentHttpClient = { error("Agent HTTP client must not be created by isolated UI tests") },
     prepareNetwork = prepareNetwork,
 )

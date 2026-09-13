@@ -31,17 +31,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-data class RobotTarget(val ip: String, val appId: String, val localIp: String = "0.0.0.0",
-                       val localPort: Int = 10609, val remotePort: Int = 10607) {
-    init {
-        require(ip.split('.').let { parts -> parts.size == 4 && parts.all { it.toIntOrNull() in 0..255 } }) {
-            "请指定机器人 IPv4 地址"
-        }
-        require(Regex("[0-9a-fA-F]{8}").matches(appId)) { "AppID 必须是 8 位十六进制字符" }
-        require(localPort in 0..65535 && remotePort in 1..65535)
-    }
-}
-
 /** One owner per robot connection. Blocking UDP is confined to IO/a dedicated receive thread. */
 class AppSession(private val target: RobotTarget,
                  private val onFrame: (DussFrame) -> Unit = {},

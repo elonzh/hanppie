@@ -28,6 +28,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.session.RobotNetwork
+import cn.elonzh.hanppie.robot.session.JvmRobotRuntime
+import cn.elonzh.hanppie.ui.chat.createAgentHttpClient
 import cn.elonzh.hanppie.ui.design.WorkbenchDialog
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.tr
@@ -74,9 +76,10 @@ private fun createAndroidWorkbenchViewModel(app: Application, systemLanguage: St
             speech = AndroidSpeech(app),
             voiceInput = speechInput,
             speakerInput = AndroidSpeakerInput(app),
-            robotNetwork = network::network,
+            robotRuntime = JvmRobotRuntime(network::network),
             settingsStore = storage.settings,
             scriptRepository = storage.scripts,
+            createAgentHttpClient = ::createAgentHttpClient,
             prepareNetwork = network::prepare,
         )
         WorkbenchViewModel(
@@ -98,7 +101,7 @@ private fun createAndroidWorkbenchViewModel(app: Application, systemLanguage: St
 @Composable
 fun AndroidWorkbench() {
     val context = LocalContext.current
-    val systemLanguage = androidx.compose.ui.platform.LocalConfiguration.current.locales[0].language
+    val systemLanguage = androidx.compose.ui.platform.LocalConfiguration.current.locales[0].toLanguageTag()
     val holder: WorkbenchViewModel = viewModel(factory = viewModelFactory {
         initializer { createAndroidWorkbenchViewModel(context.applicationContext as Application, systemLanguage) }
     })

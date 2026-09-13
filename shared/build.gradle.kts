@@ -19,19 +19,16 @@ kotlin {
     }
     jvmToolchain(21)
     sourceSets {
-        val androidJvmMain by creating { dependsOn(commonMain.get()) }
-        androidJvmMain.dependencies {
-            implementation(libs.koog.agents)
-            implementation(libs.koog.openai)
-            implementation(libs.koog.ktor)
-            implementation(libs.ktor.okhttp)
+        val jvmSharedMain = create("jvmSharedMain") { dependsOn(commonMain.get()) }
+        jvmSharedMain.dependencies {
             implementation(libs.coil.network)
         }
         named("androidMain") {
-            dependsOn(androidJvmMain)
+            dependsOn(jvmSharedMain)
             dependencies {
                 implementation(libs.androidx.activity.compose)
                 implementation(libs.androidx.core)
+                implementation(libs.ktor.okhttp)
             }
         }
         commonMain.dependencies {
@@ -56,10 +53,15 @@ kotlin {
             implementation(libs.filekit.core)
             implementation(libs.filekit.dialogs)
             implementation(libs.kotlin.logging)
+            implementation(libs.koog.agents)
+            implementation(libs.koog.openai)
+            implementation(libs.koog.ktor)
+            implementation(libs.ktor.core)
         }
-        jvmMain { dependsOn(androidJvmMain); dependencies {
+        jvmMain { dependsOn(jvmSharedMain); dependencies {
             implementation(compose.desktop.currentOs) { exclude(group = "org.jetbrains.compose.material") }
             implementation(libs.coroutines.swing)
+            implementation(libs.ktor.okhttp)
             runtimeOnly(libs.slf4j.simple)
         } }
         commonTest.dependencies { implementation(kotlin("test")) }

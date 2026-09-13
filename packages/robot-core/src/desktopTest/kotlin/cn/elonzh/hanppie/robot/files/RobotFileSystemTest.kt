@@ -2,7 +2,6 @@ package cn.elonzh.hanppie.robot.files
 
 import cn.elonzh.hanppie.robot.session.RobotNetwork
 import cn.elonzh.hanppie.robot.session.RobotTarget
-import java.io.ByteArrayOutputStream
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
@@ -18,26 +17,14 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
+import kotlinx.io.Buffer
+import kotlinx.io.readByteArray
 
 /** Local FTP fixture only; no test in this class talks to a physical robot. */
 class RobotFileSystemTest {
     private var fixture: FtpFileFixture? = null
 
     @AfterTest fun closeFixture() { fixture?.close() }
-
-    @Test fun normalizesOnlyPathsInsideTheFtpRoot() {
-        assertEquals("/", RobotFileSystem.normalizePath("/"))
-        assertEquals("/audio/tone.opus", RobotFileSystem.normalizePath("/audio/tone.opus"))
-        assertFailsWith<IllegalArgumentException> { RobotFileSystem.normalizePath("audio") }
-        assertFailsWith<IllegalArgumentException> { RobotFileSystem.normalizePath("/audio/../python") }
-        assertFailsWith<IllegalArgumentException> { RobotFileSystem.normalizePath("/audio/") }
-        assertFailsWith<IllegalArgumentException> { RobotFileSystem.requireName("bad/name") }
-        assertFailsWith<IllegalArgumentException> { RobotFileSystem.requireName("中文.wav") }
-        assertEquals("upload.wav", RobotFileSystem.portableUploadName("中文.wav"))
-        assertEquals("voice-1.wav", RobotFileSystem.portableUploadName("语音voice-1.wav"))
-        assertTrue(RobotFileSystem.isProtected("/python/python_raw.dsp"))
-        assertFalse(RobotFileSystem.isProtected("/python/archive.dsp"))
-    }
 
     @Test fun browsesAndTransfersWithoutOverwritingExistingFiles() = runBlocking {
         val server = FtpFileFixture().also { fixture = it }
@@ -54,18 +41,18 @@ class RobotFileSystemTest {
         assertEquals(RobotFileKind.FILE, audio.kind)
         assertEquals(3, audio.size)
 
-        val uploaded = storage.upload("/audio", "tone.opus", byteArrayOf(4, 5, 6, 7).inputStream())
+        val uploaded = storage.upload("/audio", "tone.opus", Buffer().apply { write(byteArrayOf(4, 5, 6, 7)) })
         assertEquals("tone-2.opus", uploaded.name)
         assertEquals(4, uploaded.size)
         assertContentEquals(byteArrayOf(4, 5, 6, 7), server.files.getValue(uploaded.path))
 
-        val portable = storage.upload("/audio", "录音.wav", byteArrayOf(8).inputStream())
+        val portable = storage.upload("/audio", "录音.wav", Buffer().apply { write(byteArrayOf(8)) })
         assertEquals("upload.wav", portable.name)
         assertContentEquals(byteArrayOf(8), server.files.getValue(portable.path))
 
-        val downloaded = ByteArrayOutputStream()
+        val downloaded = Buffer()
         storage.download(uploaded.path, downloaded)
-        assertContentEquals(byteArrayOf(4, 5, 6, 7), downloaded.toByteArray())
+        assertContentEquals(byteArrayOf(4, 5, 6, 7), downloaded.readByteArray())
 
         val renamed = storage.rename(uploaded.path, "voice.opus")
         assertEquals("/audio/voice.opus", renamed)
@@ -94,7 +81,7 @@ class RobotFileSystemTest {
         val server = FtpFileFixture().also { fixture = it }
         server.directories += "/python"
         val storage = RobotFileSystem(RobotTarget("127.0.0.1", "01020304"), port = server.port)
-        val uploaded = storage.upload("/python", "python_raw.dsp", byteArrayOf(7).inputStream())
+        val uploaded = storage.upload("/python", "python_raw.dsp", Buffer().apply { write(byteArrayOf(7)) })
         assertEquals("/python/python_raw-2.dsp", uploaded.path)
         assertFalse(server.files.containsKey("/python/python_raw.dsp"))
         assertContentEquals(byteArrayOf(7), server.files.getValue(uploaded.path))

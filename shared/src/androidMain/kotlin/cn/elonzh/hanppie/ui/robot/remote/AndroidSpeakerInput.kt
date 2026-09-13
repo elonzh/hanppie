@@ -20,7 +20,7 @@ internal class AndroidSpeakerInput(private val context: Context) : SpeakerInput 
         capture.start(onReady)
     }
 
-    override fun finish(): ByteArray = capture.finish()
+    override suspend fun finish(): ByteArray = capture.finish()
 
     override fun cancel() = capture.cancel()
 

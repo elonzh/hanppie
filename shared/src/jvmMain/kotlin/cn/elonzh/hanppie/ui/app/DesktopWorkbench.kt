@@ -21,10 +21,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.robot.session.JvmRobotRuntime
+import cn.elonzh.hanppie.ui.chat.createAgentHttpClient
 import cn.elonzh.hanppie.ui.design.WorkbenchDialog
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.robot.remote.DesktopSpeakerInput
+import cn.elonzh.hanppie.ui.settings.ModelSettings
 import cn.elonzh.hanppie.ui.speech.SystemSpeech
 import java.awt.Dimension
 import java.awt.event.WindowAdapter
@@ -40,15 +43,25 @@ private fun createDesktopWorkbenchViewModel(): WorkbenchViewModel {
         val model = ConsoleModel(
             speech = SystemSpeech(),
             speakerInput = DesktopSpeakerInput(),
+            robotRuntime = JvmRobotRuntime(),
             settingsStore = storage.settings,
             scriptRepository = storage.scripts,
+            createAgentHttpClient = ::createAgentHttpClient,
+            runtimeDefaults = { desktopModelOverrides(ModelSettings()) },
+            applyModelOverrides = ::desktopModelOverrides,
         )
-        WorkbenchViewModel(model, storage, Locale.getDefault().language)
+        WorkbenchViewModel(model, storage, Locale.getDefault().toLanguageTag())
     } catch (error: Exception) {
         storage.close()
         throw error
     }
 }
+
+private fun desktopModelOverrides(settings: ModelSettings) = settings.copy(
+    endpoint = System.getenv("HANPPIE_LLM_ENDPOINT") ?: settings.endpoint,
+    model = System.getenv("HANPPIE_LLM_MODEL") ?: settings.model,
+    apiKey = System.getenv("HANPPIE_LLM_API_KEY") ?: settings.apiKey,
+)
 
 @Composable
 fun DesktopWorkbench(onExit: () -> Unit) {

@@ -11,7 +11,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.elonzh.hanppie.resources.*
-import cn.elonzh.hanppie.ui.app.ConsoleModel
+import cn.elonzh.hanppie.ui.app.ConsoleController
 import cn.elonzh.hanppie.ui.design.HanppieDesignTokens
 import cn.elonzh.hanppie.ui.design.WorkbenchGlyph
 import cn.elonzh.hanppie.ui.i18n.tr
@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.*
 
-@Composable internal actual fun RobotVideo(model: ConsoleModel, controls: RemoteMediaController, modifier: Modifier) {
+@Composable internal actual fun RobotVideo(model: ConsoleController, controls: RemoteMediaController, modifier: Modifier) {
     var playing by remember { mutableStateOf(true) }
     var sound by remember { mutableStateOf(false) }
     var frame by remember { mutableStateOf<ImageBitmap?>(null) }

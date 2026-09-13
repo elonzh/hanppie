@@ -21,6 +21,7 @@ kotlin {
         named("androidMain") { dependsOn(jvmSharedMain) }
         commonMain.dependencies {
             implementation(libs.coroutines.core)
+            implementation(libs.kotlinx.io.core)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

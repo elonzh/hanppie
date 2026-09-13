@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.media.AnnexB
-import cn.elonzh.hanppie.ui.app.ConsoleModel
+import cn.elonzh.hanppie.ui.app.ConsoleController
 import cn.elonzh.hanppie.ui.design.HanppieDesignTokens
 import cn.elonzh.hanppie.ui.design.WorkbenchGlyph
 import cn.elonzh.hanppie.ui.i18n.tr
@@ -432,7 +432,7 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
     return output.absolutePath
 }
 
-@Composable internal actual fun RobotVideo(model: ConsoleModel, controls: RemoteMediaController, modifier: Modifier) {
+@Composable internal actual fun RobotVideo(model: ConsoleController, controls: RemoteMediaController, modifier: Modifier) {
     val context = LocalContext.current.applicationContext
     val uiScope = rememberCoroutineScope()
     var surface by remember { mutableStateOf<Surface?>(null) }
