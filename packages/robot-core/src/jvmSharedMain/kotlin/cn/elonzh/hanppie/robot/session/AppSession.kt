@@ -22,6 +22,7 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.NoRouteToHostException
 import java.net.SocketTimeoutException
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -277,11 +278,20 @@ class AppSession(private val target: RobotTarget,
             val claim = target.appId.lowercase().toByteArray(Charsets.US_ASCII)
             val deadline = System.nanoTime() + 4_000_000_000
             var nextSend = 0L
+            var claimSent = false
+            var routeFailure: NoRouteToHostException? = null
             while (System.nanoTime() < deadline) {
                 currentCoroutineContext().ensureActive()
                 if (System.nanoTime() >= nextSend) {
-                    udp.send(DatagramPacket(claim, claim.size, destination, 56789))
-                    nextSend = System.nanoTime() + 1_000_000_000
+                    try {
+                        udp.send(DatagramPacket(claim, claim.size, destination, 56789))
+                        claimSent = true
+                        routeFailure = null
+                        nextSend = System.nanoTime() + 1_000_000_000
+                    } catch (error: NoRouteToHostException) {
+                        routeFailure = error
+                        nextSend = System.nanoTime() + 250_000_000
+                    }
                 }
                 val packet = DatagramPacket(ByteArray(2048), 2048)
                 try {
@@ -292,6 +302,11 @@ class AppSession(private val target: RobotTarget,
                     if (robot.appId.equals(target.appId, true)) return
                     check(robot.pairing || robot.appId == "00000000") { "机器人 AppID 与目标不一致" }
                 } catch (_: SocketTimeoutException) { /* established robots may stop broadcasting */ }
+            }
+            if (!claimSent) {
+                throw NoRouteToHostException(
+                    "无法访问机器人所在本地网络；请检查系统本地网络权限与当前网络路由",
+                ).apply { initCause(routeFailure) }
             }
             onLog("未收到身份广播，使用指定目标进行会话握手")
         }

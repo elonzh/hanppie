@@ -31,7 +31,14 @@ compose.desktop {
             linux { iconFile.set(project.file("src/main/resources/icons/hanppie.png")) }
             macOS {
                 packageVersion = "1.0.0"
+                bundleID = "cn.elonzh.hanppie.desktop"
                 iconFile.set(project.file("src/main/resources/icons/hanppie.icns"))
+                infoPlist {
+                    extraKeysRawXml = """
+                        <key>NSLocalNetworkUsageDescription</key>
+                        <string>Hanppie uses the local network to discover and connect to RoboMaster robots.</string>
+                    """.trimIndent()
+                }
             }
         }
     }

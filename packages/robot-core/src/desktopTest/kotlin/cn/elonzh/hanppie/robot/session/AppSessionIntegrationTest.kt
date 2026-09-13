@@ -9,11 +9,13 @@ import cn.elonzh.hanppie.robot.remote.RemoteControl
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
+import java.net.NoRouteToHostException
 import java.net.SocketTimeoutException
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -45,6 +47,62 @@ class AppSessionIntegrationTest {
             assertFalse(session.connected)
         } finally {
             session.close()
+        }
+    }
+
+    @Test fun identityClaimRetriesWhileLocalNetworkPermissionIsPending() = runBlocking {
+        val loopback = InetAddress.getByName("127.0.0.1")
+        DatagramSocket(0, loopback).use { robot ->
+            robot.soTimeout = 100
+            val alive = AtomicBoolean(true)
+            val attempts = AtomicInteger()
+            val response = robotBroadcast("12345678")
+            val sessionResponder = thread(isDaemon = true) {
+                while (alive.get()) {
+                    val packet = DatagramPacket(ByteArray(65535), 65535)
+                    try {
+                        robot.receive(packet)
+                        robot.send(DatagramPacket(packet.data, packet.length, packet.socketAddress))
+                    } catch (_: SocketTimeoutException) { }
+                    catch (_: java.net.SocketException) { break }
+                }
+            }
+            var opened = 0
+            val network = object : RobotNetwork {
+                override fun datagram(): DatagramSocket = if (opened++ == 0) {
+                    object : DatagramSocket(null as java.net.SocketAddress?) {
+                        override fun send(packet: DatagramPacket) {
+                            if (attempts.getAndIncrement() == 0) {
+                                throw NoRouteToHostException("local network permission pending")
+                            }
+                        }
+
+                        override fun receive(packet: DatagramPacket) {
+                            if (attempts.get() < 2) throw SocketTimeoutException()
+                            response.copyInto(packet.data)
+                            packet.length = response.size
+                            packet.address = loopback
+                            packet.port = 45678
+                        }
+                    }
+                } else {
+                    DatagramSocket(null)
+                }
+            }
+            val session = AppSession(
+                RobotTarget("127.0.0.1", "12345678", localPort = 0, remotePort = robot.localPort),
+                network = network,
+            )
+            try {
+                session.connect()
+                assertTrue(session.connected)
+                assertTrue(attempts.get() >= 2)
+            } finally {
+                session.close()
+                alive.set(false)
+                robot.close()
+                sessionResponder.join(1_000)
+            }
         }
     }
 
@@ -212,6 +270,20 @@ class AppSessionIntegrationTest {
             assertEquals(RobotModel.UNKNOWN, session.product.model)
             assertFailsWith<IllegalStateException> { session.send(9, 0, 1, 4) }
             Unit
+        }
+    }
+
+    private fun robotBroadcast(appId: String): ByteArray {
+        val decoded = ByteArray(24)
+        decoded[0] = 0x5a
+        decoded[1] = 0x5b
+        byteArrayOf(127, 0, 0, 1).copyInto(decoded, 6)
+        appId.encodeToByteArray().copyInto(decoded, 16)
+        var key = 7
+        return ByteArray(decoded.size) { index ->
+            val encoded = (decoded[index].toInt() xor key).toByte()
+            key = ((key + 7) xor 178) and 255
+            encoded
         }
     }
 }
