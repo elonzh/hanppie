@@ -144,9 +144,20 @@ class SessionPersistenceTest {
                 ModelSettings(apiKey = "must-not-be-recorded").llModel,
             ))
             repository.append(session.id, MessageEvent("event-message", runId, 3, executionInfo, assistant))
-            repository.append(session.id, AgentCompletedEvent("event-complete", runId, 4, executionInfo))
+            val toolResult = prompt("test-tool-result") {
+                user {
+                    toolResult(MessagePart.Tool.Result(
+                        "call-1",
+                        "execute_lab_python",
+                        "{\"status\":\"START_COMMAND_SENT\",\"runId\":\"run-1\"}",
+                    ))
+                }
+            }.messages.single()
+            repository.append(session.id, MessageEvent("event-tool-result", runId, 4, executionInfo, toolResult))
+            repository.append(session.id, AgentCompletedEvent("event-complete", runId, 5, executionInfo))
 
-            assertEquals(listOf(user, assistant), repository.messages(session.id))
+            assertEquals(listOf(user, assistant, toolResult), repository.messages(session.id))
+            assertEquals("目前未连接", repository.list().single().lastMessagePreview)
             val jsonl = Files.readString(directory.resolve("events/${session.id}.jsonl"))
             assertTrue(jsonl.contains("AgentStarting"))
             assertTrue(jsonl.contains("Message"))
@@ -157,7 +168,7 @@ class SessionPersistenceTest {
             database.sessionProjectionDao().deleteMessages(session.id)
             assertTrue(database.sessionProjectionDao().messages(session.id).isEmpty())
             repository.rebuild(session.id)
-            assertEquals(listOf(user, assistant), repository.messages(session.id))
+            assertEquals(listOf(user, assistant, toolResult), repository.messages(session.id))
 
             repository.rename(session.id, "重命名")
             assertEquals("重命名", repository.list().single().title)
@@ -168,7 +179,8 @@ class SessionPersistenceTest {
             database = openRuntime(directory.resolve("agent-runtime.db"))
             val reopened = SessionRepository(eventStore, database.sessionProjectionDao(), database)
             reopened.initialize()
-            assertEquals(listOf(user, assistant), reopened.messages(session.id))
+            assertEquals(listOf(user, assistant, toolResult), reopened.messages(session.id))
+            assertEquals("目前未连接", reopened.list().single().lastMessagePreview)
         } finally {
             database?.close()
             directory.toFile().deleteRecursively()

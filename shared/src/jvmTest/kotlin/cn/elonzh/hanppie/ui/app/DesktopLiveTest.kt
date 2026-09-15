@@ -143,15 +143,12 @@ class DesktopLiveTest {
                 rule.onNodeWithContentDescription("对话").performClick()
                 val source = """
                     def start():
-                        builtins = rm_define.__dict__["__builtins__"]
-                        importer = builtins["__import__"] if isinstance(builtins, dict) else builtins.__import__
-                        module = importer("rm_module", globals(), locals(), [], 0)
-                        module.Mobile(chassis_ctrl.event_client).custom_msg_send(0, 0, "HANPPIE_DESKTOP_LIVE")
+                        log_ctrl.print_msg("HANPPIE_DESKTOP_LIVE")
                 """.trimIndent()
                 model.chat.send("请调用 execute_lab_python 执行以下无运动脚本，源码必须完全照抄：\n$source",model.modelSettings.value)
                 rule.waitUntil(60000) { model.chat.state.value.approval != null || !model.chat.state.value.running }
                 assertNull(model.chat.state.value.error, "Model request failed")
-                assertEquals(source.trim(), model.chat.state.value.approval?.trim(),
+                assertEquals(source.trim(), model.chat.state.value.approval?.preview?.trim(),
                     "Expected an execution proposal; replies=${model.chat.state.value.lines}")
                 model.chat.approve(true)
                 rule.waitUntil(60000) { !model.chat.state.value.running }

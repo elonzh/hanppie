@@ -20,21 +20,21 @@ Hanppie 的运行时聚合根是 **Agent Session**，不是 Conversation。一�
 5. 当前格式尚未发布，也没有需要保留的历史 Session 数据，因此不实现旧 schema upcaster、Unknown 事件、双写或兼容读取。格式正式发布后，只有存在真实历史数据时才单独设计并验证迁移。
 6. SQLite 只是可删除、可重建的查询投影；任何写命令先提交 JSONL，再更新投影。
 7. 工具副作用前必须先持久化 `ToolCallStartingEvent`。开始后没有匹配的 Koog `MessagePart.Tool.Result`，恢复时只能记为结果未知，禁止自动重放。
-8. agent 编排使用 Koog graph-based `AIAgent` 和显式策略图；工具实现使用具名的 class-based `Tool`/`SimpleTool`，由 `ToolRegistry` 组合，不引入平行的函数式循环、匿名工具或反射 ToolSet。
-9. 产品适配器把副作用工具声明为 run 终止点；其 Tool Result 持久化后直接完成当前 run，不再交给模型规划下一步。模型请求关闭并行工具调用，同一只读工具在一个 run 内第二次返回后也直接收束，模型不得用工具循环充当状态订阅。
+8. agent 编排使用 Koog graph-based `AIAgent` 和显式策略图；工具实现使用具名的 class-based `Tool<TArgs, TResult>`，由应用 composition root 直接组合为一个 `ToolRegistry` 并一次注入，不引入平行的 Environment 接口、函数式循环、匿名工具或反射 ToolSet。
+9. 产品适配器把机器人副作用工具声明为 run 终止点；其 Tool Result 持久化后直接完成当前 run，不再交给模型规划下一步。模型请求关闭并行工具调用；只读工具可以按任务需要查询多个分类或对象，统一由 run 的模型请求上限阻止无界循环，达到上限必须失败并留下可追踪终态，不能把最后一次工具输出冒充最终答复。
 
 ## 2. 当前实现与后续边界
 
 | 范围 | 当前事实 | 后续工作 |
 | --- | --- | --- |
-| Session 事件 | sealed `SessionEvent` 直接保存 Koog 类型；JSONL 不保存流式 frame | 把事件采集从 `ChatAgent` 适配器下沉为 Koog feature |
+| Session 事件 | sealed `SessionEvent` 直接保存 Koog 类型；JSONL 不保存流式 frame；工具审批、执行开始与超时已由 run-scoped Koog environment feature 采集 | 把其余 run/message 事件采集从 `ChatAgent` 适配器下沉为 Koog feature |
 | 文件存储 | 每 Session 一份 JSONL；进程锁、文件锁、末事件游标、事件 ID 冲突检查、fsync、尾部隔离、坏行拒绝 | 增量读取与 byte offset checkpoint |
 | 查询投影 | 独立 `agent-runtime.db`，可从 JSONL 全量重建 | 分页、搜索、结构化运行详情 |
 | 执行恢复 | 未完成 run 记为失败；待审批安全拒绝；已开始工具生成结果未知的 Koog Tool Result | 恢复仍在等待的审批卡片；Koog graph checkpoint |
 | 模型配置 | DashScope、OpenAI、DeepSeek、MiMo、Custom，模型发现和分阶段测试 | 每供应商独立 profile/key 与能力证据三态 |
-| 产品工具 | 三个具名 `SimpleTool`：`RobotStatusTool`、`ExecuteLabPythonTool`、`StopLabTool` | 本地风险分析和证据等级 |
+| 产品工具 | 八个具名 `Tool<TArgs, TResult>`：状态、Lab API 查询、脚本库 CRUD、执行和停止 | 本地程序风险分析和证据等级 |
 
-`ChatAgent` 目前仍组合 HTTP client、Koog 策略、审批和 UI 状态。事件、Session 查询接口和持久化已经位于 `agent/runtime`，也不依赖应用数据库；下一步应把执行编排移入独立 runtime service，而不是让 UI 继续增长。
+`ChatAgent` 目前仍组合 HTTP client、Koog 策略、审批交互和 UI 状态，但只依赖 Koog `ToolRegistry`，不再知道八个工具实现或转发其参数。工具实现由应用 composition root 构造；run-scoped environment feature 使用 Koog 原始 `MessagePart.Tool.Call` 处理审批、执行开始与超时。事件、Session 查询接口和持久化已经位于 `agent/runtime`，也不依赖应用数据库；下一步应把剩余执行编排移入独立 runtime service，而不是让 UI 继续增长。
 
 ## 3. 运行时与应用边界
 
@@ -61,13 +61,16 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    UI[ui/chat] --> API[SessionHistory]
-    API --> RUNTIME[agent/runtime]
+    APP[应用 composition root] --> UI[ui/chat ChatAgent]
+    APP --> TOOLS[agent/tools ToolRegistry]
+    UI --> API[SessionHistory]
+    UI --> RUNTIME[agent/runtime]
+    API --> RUNTIME
     RUNTIME --> KOOG[Koog types]
     RUNTIME --> FILES[jvmShared file store]
     UI --> PROVIDER[agent/provider]
-    RUNTIME --> TOOLS[agent/tools]
-    TOOLS --> ROBOT[robot-core]
+    TOOLS --> KOOG
+    APP --> ROBOT[robot-core]
 ```
 
 UI 不得直接追加 JSONL 或修改运行时 SQLite 表。投影器是从事件更新查询表的唯一入口。
@@ -251,14 +254,14 @@ sequenceDiagram
     R->>T: execute
     T-->>R: result / error
     R->>E: MessageEvent(MessagePart.Tool.Result)
-    alt 副作用工具或重复只读调用
+    alt run 终止工具
         R-->>K: 以 Tool Result 完成当前 run
-    else 首次只读调用
+    else 其他工具
         R-->>K: 同一个 MessagePart.Tool.Result 继续推理
     end
 ```
 
-`execute_lab_python` 与 `stop_lab` 当前都是 run 终止工具。命令发送后的脚本状态由应用已有的全局状态流异步投影；agent 不通过连续 `robot_status` 查询等待 `STARTED` 或完成。重试必须来自新的用户消息和新的审批，不能由同一 run 自行修正后再次执行。模型请求上限仍是异常供应商输出的最后保险；达到上限时以最后一个已持久化 Tool Result 收束，不再发出必然失败的下一次模型请求，也不承担正常的工具循环控制。
+`execute_lab_python` 与 `stop_lab` 当前都是 run 终止工具。Lab API 查询和脚本库列出/读取属于只读工具；保存和经批准后的删除只修改应用脚本库，可以把结果交回模型整理，但不会上传或运行脚本。命令发送后的脚本状态由应用已有的全局状态流异步投影；agent 不通过连续 `robot_status` 查询等待 `STARTED` 或完成。重试必须来自新的用户消息和新的审批，不能由同一 run 自行修正后再次执行。模型请求上限仍是异常供应商输出的最后保险；达到上限时抛出专用异常，持久化带完整 traceback 的 `AgentExecutionFailedEvent`，并向用户显示与网络或供应商错误不同的本地化终态。
 
 启动恢复按以下规则执行：
 
@@ -299,7 +302,7 @@ sequenceDiagram
 Hanppie 与 DTEmpower 当前均使用 Koog `1.2.0`。本方案采用的是经过 DTEmpower 实现验证的结构，不复制其业务：
 
 - agent 使用显式策略图组织模型节点、工具节点与条件边，不复制 DTEmpower 的业务节点；
-- 产品工具实现为具名的 class-based Koog `Tool`/`SimpleTool`，参数与结果沿用 Koog 类型化序列化；
+- 产品工具实现为具名的 class-based Koog `Tool<TArgs, TResult>`，直接声明可序列化 `Args`/`Result`；不用 `SimpleTool` 把结构化业务结果降级成自然语言字符串；
 - `SessionEvent` 是 sealed 事件，不是“信封 + payload DTO”；
 - `AgentStartingEvent` 保存 `Message.User`，`MessageEvent` 保存完整 Koog `Message`；
 - agent 终态沿用 `AgentCompleted`、`AgentExecutionFailed`、`AgentExecutionCancelled` 命名；

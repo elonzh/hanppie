@@ -199,7 +199,8 @@ internal class SessionRepository(
             dao.putSession(it.copy(
                 updatedAtEpochMillis = timestamp,
                 latestEventId = eventId,
-                lastMessagePreview = text.takeUnless(::isRecoveryNotice)?.take(160) ?: it.lastMessagePreview,
+                lastMessagePreview = text.takeIf(String::isNotBlank)
+                    ?.takeUnless(::isRecoveryNotice)?.take(160) ?: it.lastMessagePreview,
             ))
         }
     }
@@ -210,17 +211,7 @@ internal class SessionRepository(
         else -> message.role.name.uppercase()
     }
 
-    private fun projectedText(message: Message): String {
-        val text = message.textContent().trim()
-        if (text.isNotEmpty()) return text
-        return message.parts.joinToString("\n") { part ->
-            when (part) {
-                is MessagePart.Tool.Call -> "${part.tool}: ${part.args}"
-                is MessagePart.Tool.Result -> "${part.tool}: ${part.output}"
-                else -> part.toString()
-            }
-        }
-    }
+    private fun projectedText(message: Message): String = message.textContent().trim()
 
     private fun String.normalizedTitle() = trim().replace(Regex("\\s+"), " ").take(80).ifBlank { "新对话" }
     private fun isRecoveryNotice(text: String) =

@@ -1,27 +1,41 @@
 package cn.elonzh.hanppie.ui.app
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.unit.dp
 import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.agent.tools.DeleteLabScriptTool
+import cn.elonzh.hanppie.agent.tools.ExecuteLabPythonTool
+import cn.elonzh.hanppie.agent.tools.LabApiReferenceTool
+import cn.elonzh.hanppie.agent.tools.SaveLabScriptTool
+import cn.elonzh.hanppie.agent.tools.StopLabTool
 import cn.elonzh.hanppie.robot.protocol.DussFrame
+import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import cn.elonzh.hanppie.robot.product.RobotComponent
 import cn.elonzh.hanppie.robot.product.RobotModel
 import cn.elonzh.hanppie.robot.product.RobotProduct
 import cn.elonzh.hanppie.ui.chat.ChatLine
+import cn.elonzh.hanppie.ui.chat.ChatMarkdown
 import cn.elonzh.hanppie.ui.chat.ChatPage
 import cn.elonzh.hanppie.ui.chat.ChatPhase
 import cn.elonzh.hanppie.ui.chat.ChatRole
 import cn.elonzh.hanppie.ui.chat.ChatState
+import cn.elonzh.hanppie.ui.chat.ToolApproval
 import ai.koog.agents.core.agent.execution.AgentExecutionInfo
 import cn.elonzh.hanppie.agent.runtime.MessageEvent
 import cn.elonzh.hanppie.agent.runtime.TestSessionHistory
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.message.MessagePart
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
 import cn.elonzh.hanppie.ui.i18n.uiText
@@ -43,7 +57,10 @@ import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.junit.Rule
 import org.junit.Test
 
@@ -387,10 +404,72 @@ class ConsoleUiTest {
             rule.onNodeWithTag("conversation-list").assertIsDisplayed()
             rule.onNodeWithText("机器人巡检").assertIsDisplayed()
             val sidebarBounds = rule.onNodeWithTag("conversation-list").fetchSemanticsNode().boundsInRoot
+            val chatBounds = rule.onNodeWithTag("chat-surface").fetchSemanticsNode().boundsInRoot
             val newConversationBounds = rule.onNodeWithTag("new-conversation").fetchSemanticsNode().boundsInRoot
-            assertTrue(sidebarBounds.height < 400f)
+            assertTrue(sidebarBounds.height >= chatBounds.height * .95f)
             assertTrue(newConversationBounds.left >= sidebarBounds.left && newConversationBounds.right <= sidebarBounds.right)
             snapshot("desktop-conversation-sidebar")
+        } finally { model.close() }
+    }
+
+    @Test fun fencedPythonCodeUsesTheHighlightedMarkdownRenderer() {
+        rule.setContent { WorkbenchTheme {
+            Box(Modifier.requiredSize(700.dp, 320.dp).padding(24.dp)) {
+                ChatMarkdown("""
+                    ```python
+                    def start():
+                        log_ctrl.print_msg("ready")
+                    ```
+                """.trimIndent(), Modifier.testTag("highlighted-python"))
+            }
+        } }
+
+        rule.waitUntil(5_000) {
+            rule.onAllNodesWithText("def start():", substring = true, useUnmergedTree = true)
+                .fetchSemanticsNodes().any { node ->
+                    node.config[SemanticsProperties.Text].any { text ->
+                        text.spanStyles.map { range -> range.item.color }
+                            .filter { color -> color != Color.Unspecified }
+                            .distinct().size >= 2
+                    }
+                }
+        }
+        snapshot("chat-python-syntax-highlight")
+    }
+
+    @Test fun scriptDeletionApprovalNamesTheExactSavedScript() {
+        val model = testConsoleModel()
+        try {
+            rule.setContent { WorkbenchTheme {
+                Box(Modifier.requiredSize(393.dp, 740.dp)) { ChatPage(model) }
+            } }
+            rule.waitUntil(5_000) { model.chat.state.value.ready }
+            rule.runOnIdle {
+                model.chat.state.value = model.chat.state.value.copy(
+                    phase = ChatPhase.RUNNING,
+                    approval = ToolApproval(
+                        MessagePart.Tool.Call("delete-call", DeleteLabScriptTool.NAME, "{\"name\":\"旧巡检\"}"),
+                        "旧巡检",
+                    ),
+                )
+            }
+
+            rule.onNodeWithText("永久删除这段脚本？").assertIsDisplayed()
+            rule.onNodeWithText("旧巡检", substring = false).assertIsDisplayed()
+            rule.onNodeWithText("删除", substring = false).assertIsDisplayed()
+            snapshot("phone-agent-delete-script-approval")
+
+            rule.runOnIdle {
+                model.chat.state.value = model.chat.state.value.copy(
+                    approval = ToolApproval(
+                        MessagePart.Tool.Call("future-call", "future_approval_tool", "{}"),
+                        "通用审批预览",
+                    ),
+                )
+            }
+            rule.onNodeWithText("确认执行此工具操作？").assertIsDisplayed()
+            rule.onNodeWithText("通用审批预览").assertIsDisplayed()
+            rule.onNodeWithText("确认", substring = false).assertIsDisplayed()
         } finally { model.close() }
     }
 
@@ -451,6 +530,199 @@ class ConsoleUiTest {
             rule.runOnIdle { width.value = 1040.dp }
             rule.waitForIdle()
             snapshot("desktop-agent-chat")
+        } finally { model.close() }
+    }
+
+    @Test fun sentMessageAndGrowingReplyStayAtTheBottom() {
+        val model = testConsoleModel()
+        fun isAtBottom(): Boolean {
+            val range = rule.onNodeWithTag("chat-messages").fetchSemanticsNode()
+                .config[SemanticsProperties.VerticalScrollAxisRange]
+            return range.maxValue() - range.value() < 1f
+        }
+        try {
+            rule.setContent { WorkbenchTheme {
+                Box(Modifier.requiredSize(1040.dp, 740.dp)) { ChatPage(model) }
+            } }
+            rule.waitUntil(5_000) { model.chat.state.value.ready }
+            rule.runOnIdle {
+                model.chat.state.value = model.chat.state.value.copy(
+                    lines = List(250) { index -> ChatLine(ChatRole.ASSISTANT, "历史消息 $index") },
+                )
+            }
+            rule.waitUntil(5_000, ::isAtBottom)
+
+            rule.onNodeWithTag("chat-messages").performTouchInput { swipeDown() }
+            rule.waitUntil(5_000) { !isAtBottom() }
+            rule.runOnIdle {
+                val old = model.chat.state.value
+                model.chat.state.value = old.copy(
+                    phase = ChatPhase.RUNNING,
+                    lines = (old.lines + ChatLine(ChatRole.USER, "刚发送的消息")).takeLast(250),
+                    streaming = "正在回复",
+                    userMessageRevision = old.userMessageRevision + 1,
+                )
+            }
+            rule.waitUntil(5_000) {
+                rule.onAllNodesWithText("刚发送的消息").fetchSemanticsNodes().isNotEmpty() && isAtBottom()
+            }
+
+            rule.runOnIdle {
+                model.chat.state.value = model.chat.state.value.copy(
+                    streaming = List(40) { "持续生成的内容 $it" }.joinToString("\n\n") + "\n\n回复末尾",
+                )
+            }
+            rule.waitUntil(5_000, ::isAtBottom)
+            rule.onNodeWithText("回复末尾", substring = true, useUnmergedTree = true).assertIsDisplayed()
+            snapshot("desktop-chat-follow-latest")
+
+            rule.onNodeWithTag("chat-messages").performTouchInput { swipeDown() }
+            rule.waitUntil(5_000) { !isAtBottom() }
+            rule.runOnIdle {
+                model.chat.state.value = model.chat.state.value.copy(
+                    streaming = model.chat.state.value.streaming + "\n\n用户上滚后新增的内容",
+                )
+            }
+            rule.waitForIdle()
+            assertFalse(isAtBottom())
+        } finally { model.close() }
+    }
+
+    @Test fun toolBusinessOutcomesAreLocalizedAndExpandableWithoutRawEnums() {
+        val model = testConsoleModel()
+        val executionRejected = Json.encodeToString(
+            ExecuteLabPythonTool.Result(ExecuteLabPythonTool.Status.USER_REJECTED),
+        )
+        val deletionRejected = Json.encodeToString(
+            DeleteLabScriptTool.Result("旧巡检", DeleteLabScriptTool.Status.USER_REJECTED),
+        )
+        val stopSent = Json.encodeToString(StopLabTool.Result(StopLabTool.Status.STOP_COMMAND_SENT))
+        val executeSent = Json.encodeToString(
+            ExecuteLabPythonTool.Result(ExecuteLabPythonTool.Status.START_COMMAND_SENT, "run-1"),
+        )
+        val rawFailure = "Tool approval arguments could not be parsed"
+        try {
+            rule.setContent { WorkbenchTheme {
+                Box(Modifier.requiredSize(1040.dp, 740.dp)) { ChatPage(model) }
+            } }
+            rule.waitUntil(5_000) { model.chat.state.value.ready }
+            rule.runOnIdle {
+                model.chat.state.value = model.chat.state.value.copy(lines = listOf(
+                    ChatLine(
+                        ChatRole.TOOL,
+                        toolCall = MessagePart.Tool.Call("execute-rejected", ExecuteLabPythonTool.NAME, "{\"source\":\"def start(): pass\"}"),
+                        toolResult = MessagePart.Tool.Result("execute-rejected", ExecuteLabPythonTool.NAME, executionRejected),
+                    ),
+                    ChatLine(
+                        ChatRole.TOOL,
+                        toolCall = MessagePart.Tool.Call("delete-rejected", DeleteLabScriptTool.NAME, "{\"name\":\"旧巡检\"}"),
+                        toolResult = MessagePart.Tool.Result("delete-rejected", DeleteLabScriptTool.NAME, deletionRejected),
+                    ),
+                    ChatLine(
+                        ChatRole.TOOL,
+                        toolCall = MessagePart.Tool.Call("stop-sent", StopLabTool.NAME, "{}"),
+                        toolResult = MessagePart.Tool.Result("stop-sent", StopLabTool.NAME, stopSent),
+                    ),
+                    ChatLine(
+                        ChatRole.TOOL,
+                        toolCall = MessagePart.Tool.Call(
+                            "execute-sent",
+                            ExecuteLabPythonTool.NAME,
+                            "{\"source\":\"def start(): pass\"}",
+                        ),
+                        toolResult = MessagePart.Tool.Result("execute-sent", ExecuteLabPythonTool.NAME, executeSent),
+                    ),
+                    ChatLine(
+                        ChatRole.TOOL,
+                        toolCall = MessagePart.Tool.Call("failed-save", SaveLabScriptTool.NAME, "{}"),
+                        toolResult = MessagePart.Tool.Result("failed-save", SaveLabScriptTool.NAME, rawFailure, isError = true),
+                    ),
+                ))
+            }
+
+            rule.onAllNodesWithText("已取消", substring = false).assertCountEquals(2)
+            rule.onAllNodesWithText("已发送", substring = false).assertCountEquals(2)
+            rule.onNodeWithText("未上传、未启动。").assertIsDisplayed()
+            rule.onNodeWithText("已取消删除，脚本库未变。").assertIsDisplayed()
+            rule.onNodeWithText("停止命令已发送；未获得机内停止确认。").assertIsDisplayed()
+            rule.onNodeWithText("STOP_COMMAND_SENT", substring = false).assertDoesNotExist()
+            rule.onNodeWithText("工具调用失败，请展开查看详情。").assertIsDisplayed()
+            rule.onNodeWithText(rawFailure, substring = false).assertDoesNotExist()
+
+            rule.onNodeWithTag("tool-message-header-${StopLabTool.NAME}")
+                .assertHeightIsAtLeast(48.dp)
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "工具详情已折叠"))
+            rule.onNodeWithTag("tool-message-header-${SaveLabScriptTool.NAME}").performClick()
+            rule.onNodeWithText(rawFailure, substring = false).assertIsDisplayed()
+        } finally { model.close() }
+    }
+
+    @Test fun toolResultsUseCompactToolSpecificRowsAndStayCollapsed() {
+        val model = testConsoleModel()
+        val apiFact = "LAB_API_RESULT_SHOULD_BE_COLLAPSED"
+        val saveName = "结构化脚本"
+        val apiDetails = Json.encodeToString(LabApiReferenceTool.Result(
+            inCatalog = true,
+            availableCategories = listOf("runtime", "logging"),
+            sections = listOf(LabApiReferenceTool.Section("runtime", listOf(apiFact))),
+            guidance = "只使用已核对的 API",
+        ))
+        val saveDetails = Json.encodeToString(SaveLabScriptTool.Result(
+            name = saveName,
+            created = true,
+            sourceLength = 17,
+            updatedAtEpochMillis = 1234,
+        ))
+        try {
+            rule.setContent { WorkbenchTheme {
+                Box(Modifier.requiredSize(1040.dp, 740.dp)) { ChatPage(model) }
+            } }
+            rule.waitUntil(5_000) { model.chat.state.value.ready }
+            rule.runOnIdle {
+                model.chat.state.value = model.chat.state.value.copy(lines = listOf(
+                    ChatLine(
+                        ChatRole.TOOL,
+                        toolCall = MessagePart.Tool.Call("api-call", LabApiReferenceTool.NAME, "{\"query\":\"runtime\"}"),
+                        toolResult = MessagePart.Tool.Result("api-call", LabApiReferenceTool.NAME, apiDetails),
+                    ),
+                    ChatLine(
+                        ChatRole.TOOL,
+                        toolCall = MessagePart.Tool.Call(
+                            "save-call",
+                            SaveLabScriptTool.NAME,
+                            "{\"name\":\"$saveName\",\"source\":\"def start(): pass\"}",
+                        ),
+                        toolResult = MessagePart.Tool.Result("save-call", SaveLabScriptTool.NAME, saveDetails),
+                    ),
+                ))
+            }
+
+            rule.onNodeWithTag("tool-message-${LabApiReferenceTool.NAME}").assertIsDisplayed()
+            rule.onNodeWithTag("tool-message-${SaveLabScriptTool.NAME}").assertIsDisplayed()
+            rule.onNodeWithText("查询 Lab API").assertIsDisplayed()
+            rule.onNodeWithText("保存 Lab 脚本").assertIsDisplayed()
+            rule.onNodeWithText("查询：runtime").assertIsDisplayed()
+            rule.onNodeWithText("脚本：$saveName").assertIsDisplayed()
+            rule.onNodeWithText(apiFact).assertDoesNotExist()
+            rule.onNodeWithText("created").assertDoesNotExist()
+
+            rule.onNodeWithTag("tool-message-header-${LabApiReferenceTool.NAME}").performClick()
+            rule.onNodeWithText("参数").assertIsDisplayed()
+            rule.onNodeWithText("结果").assertIsDisplayed()
+            rule.onNodeWithText("query").assertIsDisplayed()
+            rule.onNodeWithText("inCatalog").assertIsDisplayed()
+            rule.onNodeWithText(apiFact).assertIsDisplayed()
+            rule.onNodeWithText("created").assertDoesNotExist()
+            snapshot("desktop-chat-tool-activities")
+
+            rule.onNodeWithTag("tool-message-header-${LabApiReferenceTool.NAME}").performClick()
+            rule.onNodeWithText(apiFact).assertDoesNotExist()
+            rule.onNodeWithTag("tool-message-header-${SaveLabScriptTool.NAME}").performClick()
+            rule.onNodeWithText("source").assertIsDisplayed()
+            rule.onNodeWithText("def start(): pass", substring = true).assertIsDisplayed()
+            rule.onNodeWithText("created").assertIsDisplayed()
+            snapshot("desktop-chat-script-tool-activity")
         } finally { model.close() }
     }
 
@@ -846,6 +1118,30 @@ class ConsoleUiTest {
             rule.onNodeWithContentDescription("脚本").performClick()
             rule.onNodeWithTag("script-run-screen").assertIsDisplayed()
             rule.onNodeWithText("fixture robot message").assertExists()
+        } finally { model.close() }
+    }
+
+    @Test fun unconfirmedStopKeepsTheRunNoticeVisibleWithoutASecondStop() {
+        Localization.initialize("zh", null)
+        val model = testConsoleModel()
+        try {
+            model.state.value = model.state.value.copy(
+                connected = true,
+                scriptTitle = "好奇哨兵",
+                scriptRunPhase = ScriptRunPhase.STOP_UNCONFIRMED,
+                scriptMessage = uiText(Res.string.stop_command_sent_robot_stop_is_unconfirmed),
+            )
+            rule.setContent { WorkbenchTheme {
+                Box(Modifier.requiredSize(393.dp, 740.dp)) { Console(model, mutableStateOf(EditorDocument())) }
+            } }
+            rule.onNodeWithTag("script-run-banner").assertIsDisplayed()
+            rule.onNode(
+                hasText("停止命令已发送；未获得机内停止确认。") and
+                    hasAnyAncestor(hasTestTag("script-run-banner")),
+                useUnmergedTree = true,
+            ).assertIsDisplayed()
+            rule.onNodeWithTag("script-banner-stop").assertDoesNotExist()
+            snapshot("phone-agent-stop-unconfirmed-banner")
         } finally { model.close() }
     }
 

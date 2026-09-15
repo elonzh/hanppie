@@ -1,14 +1,23 @@
 package cn.elonzh.hanppie.ui.scripts
 
 import androidx.room3.Room
+import cn.elonzh.hanppie.agent.tools.ListLabScriptsTool
+import cn.elonzh.hanppie.agent.tools.NoToolArgs
 import cn.elonzh.hanppie.robot.lab.LabRunProtocol
 import cn.elonzh.hanppie.ui.app.MemoryScriptRepository
 import java.nio.file.Files
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 
 class ScriptLibraryTest {
     @Test fun createUpdateRenameDeleteAndReload() = runBlocking {
@@ -51,6 +60,55 @@ class ScriptLibraryTest {
         assertFailsWith<IllegalArgumentException> { library.create(" demo ", "other") }
         assertEquals(listOf("Demo"), library.state.value.scripts.map { it.name })
         assertEquals("Demo 2", library.uniqueName("Demo"))
+    }
+
+    @Test fun agentFacingNameOperationsCreateReplaceRenameAndDeleteAtomically() = runBlocking {
+        val store = MemoryScriptRepository()
+        val library = ScriptLibrary(store)
+        library.load()
+
+        val created = library.save(null, "巡检", "def start():\n    pass\n")
+        assertEquals(listOf(created), library.savedScripts())
+        assertEquals(created, library.read("巡检"))
+
+        val replaced = library.save("巡检", "夜间巡检", "def start():\n    log_ctrl.print_msg('night')\n")
+        assertEquals(created.id, replaced.id)
+        assertEquals("夜间巡检", replaced.name)
+        assertEquals(listOf(replaced), library.savedScripts())
+        assertFailsWith<IllegalStateException> { library.read("巡检") }
+
+        assertEquals("夜间巡检", library.deleteByName("夜间巡检").name)
+        assertTrue(library.savedScripts().isEmpty())
+    }
+
+    @Test fun canceledLoadReleasesAgentScriptToolsWithoutWaitingForTimeout() = runBlocking {
+        val loadStarted = CompletableDeferred<Unit>()
+        val library = ScriptLibrary(object : ScriptRepository {
+            override suspend fun all(): List<StoredScript> {
+                loadStarted.complete(Unit)
+                awaitCancellation()
+            }
+
+            override suspend fun insert(script: StoredScript) = Unit
+            override suspend fun update(script: StoredScript) = Unit
+            override suspend fun delete(script: StoredScript) = Unit
+        })
+        val load = launch { library.load() }
+        loadStarted.await()
+        load.cancelAndJoin()
+
+        assertFalse(library.state.value.loading)
+        assertEquals("Script library load was interrupted", library.state.value.error)
+        val failure = assertFailsWith<IllegalStateException> {
+            withTimeout(1_000) {
+                ListLabScriptsTool {
+                    ListLabScriptsTool.Result(library.savedScripts().map { script ->
+                        ListLabScriptsTool.Script(script.name, script.source.length, script.updatedAtEpochMillis)
+                    })
+                }.execute(NoToolArgs)
+            }
+        }
+        assertContains(failure.message.orEmpty(), "Script library load was interrupted")
     }
 
     @Test fun presetsHaveStableIdsAndPython36LabEntrypoints() {

@@ -23,6 +23,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import androidx.savedstate.serialization.SavedStateConfiguration
 import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import cn.elonzh.hanppie.ui.chat.ChatPage
 import cn.elonzh.hanppie.ui.design.HanppieBrandAssets
 import cn.elonzh.hanppie.ui.design.HanppieDesignTokens
@@ -309,6 +310,8 @@ internal fun Console(
 private fun ScriptRunBanner(state: ConsoleState, onOpen: () -> Unit, onStop: () -> Unit) {
     var now by remember { mutableStateOf(kotlin.time.Clock.System.now().toEpochMilliseconds()) }
     val active = state.scriptRunPhase.active
+    // A delivered stop command with no onboard confirmation stays in front of the user until the next run.
+    val unconfirmedStop = state.scriptRunPhase == ScriptRunPhase.STOP_UNCONFIRMED
     val recentTerminal = state.scriptFinishedAtEpochMillis?.let { now - it < 8_000 } == true
     LaunchedEffect(active, state.scriptFinishedAtEpochMillis) {
         while (active || state.scriptFinishedAtEpochMillis?.let { now - it < 8_000 } == true) {
@@ -316,7 +319,7 @@ private fun ScriptRunBanner(state: ConsoleState, onOpen: () -> Unit, onStop: () 
             now = kotlin.time.Clock.System.now().toEpochMilliseconds()
         }
     }
-    if (!active && !recentTerminal) return
+    if (!active && !recentTerminal && !unconfirmedStop) return
     val elapsed = state.scriptStartedAtEpochMillis?.let { ((now - it).coerceAtLeast(0) / 1_000) }
     val elapsedText = elapsed?.let { "${it / 60}:${(it % 60).toString().padStart(2, '0')}" }
     Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)

@@ -3,21 +3,10 @@ package cn.elonzh.hanppie.ui.app
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
 import cn.elonzh.hanppie.robot.product.RobotProduct
+import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import cn.elonzh.hanppie.robot.telemetry.GimbalTelemetry
 import cn.elonzh.hanppie.ui.i18n.UiText
 import cn.elonzh.hanppie.ui.i18n.uiText
-
-internal enum class ScriptRunPhase {
-    IDLE, UPLOADING, STARTING, RUNNING, COMPLETING, COMPLETED, FAILED, STOPPING, STOPPED, UNKNOWN;
-
-    val visible: Boolean get() = this != IDLE
-    val active: Boolean get() = this == UPLOADING || this == STARTING || this == RUNNING ||
-        this == COMPLETING || this == STOPPING || this == UNKNOWN
-    val progressing: Boolean get() = this == UPLOADING || this == STARTING || this == RUNNING ||
-        this == COMPLETING || this == STOPPING
-    val mayBeExecuting: Boolean get() = this == STARTING || this == RUNNING || this == COMPLETING ||
-        this == STOPPING || this == UNKNOWN
-}
 
 internal data class ConsoleState(
     val connected: Boolean = false,

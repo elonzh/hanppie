@@ -32,8 +32,12 @@
     <string name="awaiting_approval">Awaiting approval</string>
     <string name="agent_is_thinking">Thinking…</string>
     <string name="run_this_script">Run this script?</string>
+    <string name="delete_this_script">Permanently delete this script?</string>
     <string name="reject">Reject</string>
     <string name="approve_and_run">Approve and run</string>
+    <string name="approve_and_delete">Delete</string>
+    <string name="approve_tool_operation">Approve this tool operation?</string>
+    <string name="approve">Approve</string>
     <string name="recognizing">Recognizing…</string>
     <string name="listening">Listening…</string>
     <string name="message">Message</string>
@@ -249,10 +253,9 @@
     <string name="script_start_state_unknown">Start delivery was interrupted; onboard state is unknown</string>
     <string name="script_start_confirmation_timed_out">No onboard STARTED report was received; run state is unknown. Inspect or stop the script before retrying.</string>
     <string name="stopping_script">Stopping…</string>
-    <string name="script_stopped">Stopped</string>
+    <string name="stop_command_sent_robot_stop_is_unconfirmed">Stop command sent; no onboard stop confirmation was received.</string>
     <string name="script_stop_state_unknown">Stop delivery failed; onboard state is unknown</string>
     <string name="completed_marker_received_but_cleanup_failed">The script reported completion, but Lab cleanup failed</string>
-    <string name="script_start_command_sent_awaiting_confirmation_value">Start command sent; waiting for the onboard STARTED report. Script run ID: %1$s. Progress and completion appear in the global run status.</string>
     <string name="script_run_id_value">Run ID: %1$s</string>
     <string name="script_trace_uploading">[Hanppie] Preparing and uploading script</string>
     <string name="script_trace_uploaded_value">[Hanppie] Upload confirmed; runId=%1$s, DSP MD5=%2$s</string>
@@ -260,7 +263,6 @@
     <string name="script_trace_start_timeout_value">[Hanppie] Start confirmation timed out; runId=%1$s, received %2$s data frames and %3$s Lab message frames</string>
     <string name="script_trace_lifecycle_value">[Hanppie] Received %1$s; runId=%2$s</string>
     <string name="unknown_error">Unknown error</string>
-    <string name="stop_command_sent_robot_stop_is_unconfirmed">Stop command sent; robot stop is unconfirmed.</string>
     <string name="robot_disconnected_or_app_not_in_foreground">Robot disconnected or app not in foreground</string>
     <string name="another_operation_is_in_progress">Another operation is in progress</string>
     <string name="cancel_the_current_chat_before_changing_connections_or_using">Cancel the current chat before changing connections or using manual control</string>
@@ -387,6 +389,7 @@
     <string name="context_full_start_a_new_chat">Context full. Start a new chat.</string>
     <string name="the_model_returned_no_visible_reply">The model returned no visible reply</string>
     <string name="model_or_tool_operation_timed_out_review_tool_history">A model request or tool operation timed out after 120 seconds. Review tool history; robot scripts do not stop automatically.</string>
+    <string name="agent_model_request_limit_reached">This run reached the model request limit and was stopped to prevent a tool loop. Review the tool history before continuing.</string>
     <string name="run_canceled_canceling_chat_does_not_stop_robot_scripts">Agent run canceled; canceling chat does not stop robot scripts.</string>
     <string name="stop_the_running_script_before_uploading_another">Stop the running script before uploading another</string>
     <string name="robot_disconnected_during_upload">Robot disconnected during upload</string>
@@ -418,8 +421,32 @@
     <string name="connected_to_value">Connected to %1$s</string>
     <string name="run_incomplete_value_check_network_model_settings_and_tool">Agent run incomplete (%1$s). Check network, model settings and tool history.</string>
     <string name="read_status">Read status</string>
+    <string name="inspect_lab_api">Inspect Lab API</string>
+    <string name="list_lab_scripts">List Lab scripts</string>
+    <string name="read_lab_script">Read Lab script</string>
+    <string name="save_lab_script">Save Lab script</string>
+    <string name="delete_lab_script">Delete Lab script</string>
     <string name="run_lab_script">Run Lab script</string>
-    <string name="user_rejected_execution_nothing_uploaded_or_started">User rejected execution; nothing uploaded or started.</string>
+    <string name="tool_in_progress">In progress</string>
+    <string name="tool_completed">Completed</string>
+    <string name="tool_failed">Failed</string>
+    <string name="tool_canceled">Canceled</string>
+    <string name="tool_command_sent">Sent</string>
+    <string name="tool_result_unknown">Result unknown</string>
+    <string name="tool_details_expanded">Tool details expanded</string>
+    <string name="tool_details_collapsed">Tool details collapsed</string>
+    <string name="tool_parameters">Parameters</string>
+    <string name="tool_result">Result</string>
+    <string name="tool_query_summary">Query: %1$s</string>
+    <string name="tool_script_summary">Script: %1$s</string>
+    <string name="tool_scripts_summary">%1$s scripts</string>
+    <string name="tool_source_summary">%1$s source characters</string>
+    <string name="tool_battery_summary">Battery %1$s%%</string>
+    <string name="tool_failure_summary">Tool operation failed. Expand for details.</string>
+    <string name="execute_script_rejected_summary">Not uploaded or started.</string>
+    <string name="delete_script_rejected_summary">Deletion canceled; the script library was not changed.</string>
+    <string name="lab_script_requires_start_entry">A Lab script must contain a def start(): entry point.</string>
+    <string name="lab_script_must_not_import_modules">Lab runtime objects are injected; the script must not import modules.</string>
     <string name="code_is_shown_in_the_conversation">Code is shown in the conversation.</string>
     <string name="script_is_empty_or_exceeds_the_32k_character_limit">Script is empty or exceeds the 32K character limit</string>
     <string name="script_awaiting_approval_not_uploaded_or_started">Script awaiting approval; not uploaded or started.</string>

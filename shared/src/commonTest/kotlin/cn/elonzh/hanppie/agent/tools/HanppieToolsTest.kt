@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.agent.tools
 
+import ai.koog.agents.core.tools.ToolRegistry
 import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -26,25 +27,17 @@ class HanppieToolsTest {
         val saveResult = SaveLabScriptTool.Result("新脚本", created = false, sourceLength = 17, updatedAtEpochMillis = 2345)
         val deleteResult = DeleteLabScriptTool.Result("巡检", DeleteLabScriptTool.Status.DELETED)
         val executeResult = ExecuteLabPythonTool.Result(ExecuteLabPythonTool.Status.START_COMMAND_SENT, "run-1")
-        val stopResult = StopLabTool.Result(StopLabTool.Status.STOP_COMMAND_SENT, robotStopConfirmed = false)
-        val environment = object : HanppieToolEnvironment {
-            override suspend fun robotStatus() = statusResult
-
-            override suspend fun labApiReference(query: String) = referenceResult
-
-            override suspend fun listLabScripts() = scriptsResult
-
-            override suspend fun readLabScript(name: String) = readResult
-
-            override suspend fun saveLabScript(originalName: String?, name: String, source: String) = saveResult
-
-            override suspend fun deleteLabScript(name: String) = deleteResult
-
-            override suspend fun executeLabPython(source: String) = executeResult
-
-            override suspend fun stopLab() = stopResult
+        val stopResult = StopLabTool.Result(StopLabTool.Status.STOP_COMMAND_SENT)
+        val registry = ToolRegistry {
+            tool(RobotStatusTool { statusResult })
+            tool(LabApiReferenceTool { referenceResult })
+            tool(ListLabScriptsTool { scriptsResult })
+            tool(ReadLabScriptTool { readResult })
+            tool(SaveLabScriptTool { _, _, _ -> saveResult })
+            tool(DeleteLabScriptTool { deleteResult })
+            tool(ExecuteLabPythonTool { executeResult })
+            tool(StopLabTool { stopResult })
         }
-        val registry = hanppieToolRegistry(environment)
 
         assertEquals(
             setOf(

@@ -29,6 +29,7 @@ espresso = "3.7.0"
 miuix-ui = { module = "top.yukonga.miuix.kmp:miuix-ui", version = "0.9.3" }
 markdown-core = { module = "com.mikepenz:multiplatform-markdown-renderer", version.ref = "markdown" }
 markdown-coil3 = { module = "com.mikepenz:multiplatform-markdown-renderer-coil3", version.ref = "markdown" }
+markdown-code = { module = "com.mikepenz:multiplatform-markdown-renderer-code", version.ref = "markdown" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 commons-net = { module = "commons-net:commons-net", version = "3.13.0" }

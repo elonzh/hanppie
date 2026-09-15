@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.app
 
+import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.Modifier
@@ -41,6 +42,7 @@ class RemoteFireUiTest {
         val infraredCount = AtomicInteger(0)
         val gelCount = AtomicInteger(0)
         val driveCount = AtomicInteger(0)
+        val labStopCount = AtomicInteger(0)
 
         override val connected = true
         override val product = RobotProduct(model = RobotModel.ROBOMASTER_S1)
@@ -52,7 +54,7 @@ class RemoteFireUiTest {
             override suspend fun upload(source: String, title: String): LabUpload =
                 LabUpload("hash", "0123456789abcdef")
             override suspend fun start(): String = "0123456789abcdef"
-            override suspend fun stop() {}
+            override suspend fun stop() { labStopCount.incrementAndGet() }
             override suspend fun complete(runId: String): Boolean = true
         }
         override val files: RobotFileService = object : RobotFileService {
@@ -126,6 +128,36 @@ class RemoteFireUiTest {
             assertTrue(model.state.value.scriptMessages.any {
                 it.contains("runId=0123456789abcdef") && it.contains("0 个 Lab 消息帧")
             })
+        } finally {
+            model.close()
+        }
+    }
+
+    @Test
+    fun stopCommandKeepsTheRobotRunStateUnconfirmed() = runBlocking {
+        val session = FakeRobotSession()
+        val model = testConsoleModel(robotRuntime = FakeRobotRuntime(session))
+        try {
+            model.connect("127.0.0.1", "12345678")
+            withTimeout(5_000) {
+                while (!model.state.value.connected || model.state.value.busy) delay(10)
+            }
+            model.state.value = model.state.value.copy(
+                scriptRunPhase = ScriptRunPhase.RUNNING,
+                scriptFinishedAtEpochMillis = 123,
+            )
+
+            model.stop()
+            withTimeout(5_000) {
+                while (model.state.value.busy || session.labStopCount.get() == 0) delay(10)
+            }
+
+            assertEquals(1, session.labStopCount.get())
+            assertEquals(ScriptRunPhase.STOP_UNCONFIRMED, model.state.value.scriptRunPhase)
+            assertEquals("停止命令已发送；未获得机内停止确认。", model.state.value.scriptStatus)
+            assertNull(model.state.value.scriptFinishedAtEpochMillis)
+            assertTrue(model.state.value.canRun("def start():\n    pass\n"), "A delivered stop command must not block the next run")
+            assertFalse(model.state.value.canStop)
         } finally {
             model.close()
         }

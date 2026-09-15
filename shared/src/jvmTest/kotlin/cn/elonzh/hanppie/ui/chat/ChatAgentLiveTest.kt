@@ -1,6 +1,9 @@
 package cn.elonzh.hanppie.ui.chat
 
+import ai.koog.agents.core.tools.ToolRegistry
 import cn.elonzh.hanppie.agent.runtime.TestSessionHistory
+import cn.elonzh.hanppie.agent.tools.*
+import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import cn.elonzh.hanppie.ui.settings.ModelSettings
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -21,9 +24,25 @@ class ChatAgentLiveTest {
             model = System.getenv("HANPPIE_LLM_MODEL") ?: defaults.model,
         )
         ChatAgent(
-            status = { "测试夹具：未连接机器人，电量未知" },
-            execute = { error("No robot allowed") },
-            stopRobot = { error("No robot allowed") },
+            toolRegistry = ToolRegistry {
+                tool(RobotStatusTool {
+                    RobotStatusTool.Result(
+                        connected = false,
+                        script = RobotStatusTool.ScriptRun(phase = ScriptRunPhase.IDLE),
+                    )
+                })
+                tool(LabApiReferenceTool {
+                    LabApiReferenceTool.Result(true, emptyList(), emptyList(), "test")
+                })
+                tool(ListLabScriptsTool { ListLabScriptsTool.Result(emptyList()) })
+                tool(ReadLabScriptTool { ReadLabScriptTool.Result(it, "script:$it", 1, 1) })
+                tool(SaveLabScriptTool { original, name, source ->
+                    SaveLabScriptTool.Result(name, original == null, source.length, 1)
+                })
+                tool(DeleteLabScriptTool { DeleteLabScriptTool.Result(it, DeleteLabScriptTool.Status.DELETED) })
+                tool(ExecuteLabPythonTool { error("No robot allowed") })
+                tool(StopLabTool { error("No robot allowed") })
+            },
             createHttpClient = ::createAgentHttpClient,
             sessions = TestSessionHistory(),
         ).use { agent ->
@@ -35,7 +54,9 @@ class ChatAgentLiveTest {
             agent.send("口令是什么？并调用工具读取当前连接状态。", config)
             withTimeout(125000) { agent.state.first { !it.running } }
             assertNull(agent.state.value.error)
-            assertTrue(agent.state.value.lines.any { it.role == ChatRole.TOOL && it.text.contains("测试夹具") })
+            assertTrue(agent.state.value.lines.any {
+                it.role == ChatRole.TOOL && it.toolResult?.output?.contains("\"connected\":false") == true
+            })
             assertTrue(agent.state.value.lines.last().text.contains("蓝色"))
             println("live tool round firstTokenMs=${agent.state.value.firstTokenMs} elapsedMs=${agent.state.value.elapsedMs}")
         }

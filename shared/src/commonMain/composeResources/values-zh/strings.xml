@@ -32,8 +32,12 @@
     <string name="awaiting_approval">等待确认</string>
     <string name="agent_is_thinking">正在思考…</string>
     <string name="run_this_script">执行这段脚本？</string>
+    <string name="delete_this_script">永久删除这段脚本？</string>
     <string name="reject">拒绝</string>
     <string name="approve_and_run">确认执行</string>
+    <string name="approve_and_delete">删除</string>
+    <string name="approve_tool_operation">确认执行此工具操作？</string>
+    <string name="approve">确认</string>
     <string name="recognizing">正在识别…</string>
     <string name="listening">正在听，请说话…</string>
     <string name="message">发消息</string>
@@ -249,10 +253,9 @@
     <string name="script_start_state_unknown">启动发送中断，机内状态未知</string>
     <string name="script_start_confirmation_timed_out">未收到机内 STARTED 回报，运行状态未知；请检查或停止脚本后再重试</string>
     <string name="stopping_script">正在停止…</string>
-    <string name="script_stopped">已停止</string>
+    <string name="stop_command_sent_robot_stop_is_unconfirmed">停止命令已发送；未获得机内停止确认。</string>
     <string name="script_stop_state_unknown">停止发送失败，机内状态未知</string>
     <string name="completed_marker_received_but_cleanup_failed">脚本已报告结束，但 Lab 运行收尾失败</string>
-    <string name="script_start_command_sent_awaiting_confirmation_value">启动命令已发送；正在等待机内 STARTED 回报。脚本运行标识：%1$s；进度和完成结果会显示在全局状态栏。</string>
     <string name="script_run_id_value">运行标识：%1$s</string>
     <string name="script_trace_uploading">[Hanppie] 正在准备并上传脚本</string>
     <string name="script_trace_uploaded_value">[Hanppie] 上传已确认；runId=%1$s，DSP MD5=%2$s</string>
@@ -260,7 +263,6 @@
     <string name="script_trace_start_timeout_value">[Hanppie] 启动确认超时；runId=%1$s，期间收到 %2$s 个数据帧、%3$s 个 Lab 消息帧</string>
     <string name="script_trace_lifecycle_value">[Hanppie] 收到 %1$s；runId=%2$s</string>
     <string name="unknown_error">未知错误</string>
-    <string name="stop_command_sent_robot_stop_is_unconfirmed">停止命令已发送；未获得机内停止确认。</string>
     <string name="robot_disconnected_or_app_not_in_foreground">机器人未连接或应用不在前台</string>
     <string name="another_operation_is_in_progress">设备正在执行其他操作</string>
     <string name="cancel_the_current_chat_before_changing_connections_or_using">请先取消当前对话，再切换连接或手动操作</string>
@@ -387,6 +389,7 @@
     <string name="context_full_start_a_new_chat">对话上下文已满，请开启新对话</string>
     <string name="the_model_returned_no_visible_reply">模型没有返回可见回复</string>
     <string name="model_or_tool_operation_timed_out_review_tool_history">模型请求或工具操作连续超过 120 秒，已取消。请检查工具记录；机内脚本不会因此自动停止。</string>
+    <string name="agent_model_request_limit_reached">本轮已达到模型请求上限，为避免工具循环已停止。请检查工具记录后继续。</string>
     <string name="run_canceled_canceling_chat_does_not_stop_robot_scripts">本次智能体运行已取消；取消对话不等于停止机内脚本。</string>
     <string name="stop_the_running_script_before_uploading_another">请先停止已启动的脚本，再上传新脚本</string>
     <string name="robot_disconnected_during_upload">上传期间机器人连接已断开</string>
@@ -418,8 +421,32 @@
     <string name="connected_to_value">已连接 %1$s</string>
     <string name="run_incomplete_value_check_network_model_settings_and_tool">本次智能体运行未完成（%1$s）。请检查网络、模型配置与工具记录。</string>
     <string name="read_status">读取状态</string>
+    <string name="inspect_lab_api">查询 Lab API</string>
+    <string name="list_lab_scripts">列出 Lab 脚本</string>
+    <string name="read_lab_script">读取 Lab 脚本</string>
+    <string name="save_lab_script">保存 Lab 脚本</string>
+    <string name="delete_lab_script">删除 Lab 脚本</string>
     <string name="run_lab_script">执行 Lab 脚本</string>
-    <string name="user_rejected_execution_nothing_uploaded_or_started">用户拒绝执行；未上传、未启动。</string>
+    <string name="tool_in_progress">进行中</string>
+    <string name="tool_completed">已完成</string>
+    <string name="tool_failed">失败</string>
+    <string name="tool_canceled">已取消</string>
+    <string name="tool_command_sent">已发送</string>
+    <string name="tool_result_unknown">结果未知</string>
+    <string name="tool_details_expanded">工具详情已展开</string>
+    <string name="tool_details_collapsed">工具详情已折叠</string>
+    <string name="tool_parameters">参数</string>
+    <string name="tool_result">结果</string>
+    <string name="tool_query_summary">查询：%1$s</string>
+    <string name="tool_script_summary">脚本：%1$s</string>
+    <string name="tool_scripts_summary">%1$s 个脚本</string>
+    <string name="tool_source_summary">源码 %1$s 字符</string>
+    <string name="tool_battery_summary">电量 %1$s%%</string>
+    <string name="tool_failure_summary">工具调用失败，请展开查看详情。</string>
+    <string name="execute_script_rejected_summary">未上传、未启动。</string>
+    <string name="delete_script_rejected_summary">已取消删除，脚本库未变。</string>
+    <string name="lab_script_requires_start_entry">Lab 脚本必须包含 def start(): 入口。</string>
+    <string name="lab_script_must_not_import_modules">Lab 运行时对象由机内注入，脚本不得 import 模块。</string>
     <string name="code_is_shown_in_the_conversation">代码已显示在对话中。</string>
     <string name="script_is_empty_or_exceeds_the_32k_character_limit">脚本为空或超过 32KB 字符限制</string>
     <string name="script_awaiting_approval_not_uploaded_or_started">脚本待确认，尚未上传或启动。</string>

@@ -1,6 +1,6 @@
 package cn.elonzh.hanppie.ui.scripts
 
-import cn.elonzh.hanppie.ui.app.ScriptRunPhase
+import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import cn.elonzh.hanppie.ui.app.testConsoleModel
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.*

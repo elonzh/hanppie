@@ -41,6 +41,7 @@ kotlin {
             implementation(libs.compose.resources)
             implementation(libs.markdown.core)
             implementation(libs.markdown.coil3)
+            implementation(libs.markdown.code)
             implementation(libs.coil.compose)
             implementation(project(":packages:robot-core"))
             implementation(libs.compose.runtime)

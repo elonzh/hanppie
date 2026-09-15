@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 internal enum class ScriptRunPhase {
-    IDLE, UPLOADING, STARTING, RUNNING, COMPLETING, COMPLETED, FAILED, STOPPING, STOPPED, UNKNOWN;
+    IDLE, UPLOADING, STARTING, RUNNING, COMPLETING, COMPLETED, FAILED, STOPPING, STOP_UNCONFIRMED, UNKNOWN;
 
     val visible: Boolean get() = this != IDLE
     val active: Boolean get() = this == UPLOADING || this == STARTING || this == RUNNING ||

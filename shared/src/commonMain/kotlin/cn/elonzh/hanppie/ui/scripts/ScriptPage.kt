@@ -36,7 +36,7 @@ import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.ui.app.ConsoleController
 import cn.elonzh.hanppie.ui.app.ConsoleState
 import cn.elonzh.hanppie.ui.app.PlatformBackHandler
-import cn.elonzh.hanppie.ui.app.ScriptRunPhase
+import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import cn.elonzh.hanppie.ui.design.DesktopListScrollbar
 import cn.elonzh.hanppie.ui.design.HanppieDesignTokens
 import cn.elonzh.hanppie.ui.design.WorkbenchDialog
@@ -710,8 +710,7 @@ private fun RunLogCard(
 @Composable
 internal fun scriptRunColor(phase: ScriptRunPhase) = when (phase) {
     ScriptRunPhase.COMPLETED -> androidx.compose.ui.graphics.Color(0xff32aa78)
-    ScriptRunPhase.FAILED, ScriptRunPhase.UNKNOWN -> MiuixTheme.colorScheme.error
-    ScriptRunPhase.STOPPED -> MiuixTheme.colorScheme.onSurfaceVariantSummary
+    ScriptRunPhase.FAILED, ScriptRunPhase.UNKNOWN, ScriptRunPhase.STOP_UNCONFIRMED -> MiuixTheme.colorScheme.error
     else -> MiuixTheme.colorScheme.primary
 }
 

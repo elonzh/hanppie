@@ -10,6 +10,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import com.mikepenz.markdown.coil3.Coil3ImageTransformerImpl
 import com.mikepenz.markdown.compose.Markdown
+import com.mikepenz.markdown.compose.components.markdownComponents
+import com.mikepenz.markdown.compose.elements.highlightedCodeBlock
+import com.mikepenz.markdown.compose.elements.highlightedCodeFence
 import com.mikepenz.markdown.model.DefaultMarkdownColors
 import com.mikepenz.markdown.model.DefaultMarkdownTypography
 import com.mikepenz.markdown.model.rememberMarkdownState
@@ -21,7 +24,8 @@ internal fun ChatMarkdown(content: String, modifier: Modifier = Modifier) {
     val state = rememberMarkdownState(content)
     SelectionContainer {
         Markdown(markdownState = state, modifier = modifier,
-            imageTransformer = Coil3ImageTransformerImpl, typography = chatTypography(), colors = chatColors())
+            imageTransformer = Coil3ImageTransformerImpl, components = chatComponents(),
+            typography = chatTypography(), colors = chatColors())
     }
 }
 
@@ -38,9 +42,15 @@ internal fun StreamingReply(content: String, modifier: Modifier = Modifier) {
     }
     SelectionContainer {
         Markdown(streamingMarkdownState = state, modifier = modifier.fillMaxWidth(),
-            imageTransformer = Coil3ImageTransformerImpl, typography = chatTypography(), colors = chatColors())
+            imageTransformer = Coil3ImageTransformerImpl, components = chatComponents(),
+            typography = chatTypography(), colors = chatColors())
     }
 }
+
+private fun chatComponents() = markdownComponents(
+    codeBlock = highlightedCodeBlock,
+    codeFence = highlightedCodeFence,
+)
 
 @Composable
 private fun chatTypography() = with(MiuixTheme.textStyles) {

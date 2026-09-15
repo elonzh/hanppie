@@ -28,6 +28,19 @@ class ConsoleStateTest {
         assertFalse(state.copy(scriptRunPhase = ScriptRunPhase.COMPLETING).canStop)
     }
 
+    @Test fun unconfirmedStopReleasesTheRunPermissionButUnknownStateDoesNot() {
+        val unknown = ConsoleState(connected = true, scriptRunPhase = ScriptRunPhase.UNKNOWN)
+        assertFalse(unknown.canRun("pass"))
+        assertTrue(unknown.canStop)
+
+        val stopSent = unknown.copy(scriptRunPhase = ScriptRunPhase.STOP_UNCONFIRMED)
+        assertTrue(stopSent.canRun("pass"))
+        assertFalse(stopSent.canStop)
+
+        val lost = ConsoleState(connected = true, scriptRunPhase = ScriptRunPhase.STOP_UNCONFIRMED).lost("timeout")
+        assertEquals(ScriptRunPhase.STOP_UNCONFIRMED, lost.scriptRunPhase)
+    }
+
     @Test fun lossInvalidatesStaleTelemetryAndRunPermission() {
         val state = ConsoleState(connected = true, battery = 90, signalQuality = 36, values = listOf("raw" to "1"),
             robotProduct = RobotProduct(model = RobotModel.ROBOMASTER_S1),

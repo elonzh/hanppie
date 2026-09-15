@@ -30,12 +30,12 @@ internal object LabApiCatalog {
             aliases = setOf("chassis", "move", "rotate", "底盘", "移动", "旋转"),
             facts = listOf(
                 "`chassis_ctrl.set_trans_speed(speed)`：平移速度 0..3.5 m/s；普通示例优先使用 0.10..0.15 m/s。",
-                "`chassis_ctrl.move_with_time(direction_angle, seconds)`：方向角 -180..180，0 为前进；时长 0..20 秒。",
+                "`chassis_ctrl.move_with_time(direction_angle, time_wait)`：方向角 -180..180，0 为前进；时长 0..20 秒。",
                 "`chassis_ctrl.move_with_distance(direction_angle, distance)`：方向角 -180..180，距离 0..5 m；必须先设置非零平移速度。",
                 "`chassis_ctrl.set_rotate_speed(speed)`：旋转速度 0..600 °/s。",
-                "`chassis_ctrl.rotate_with_time(direction, seconds)`：direction 为 `rm_define.clockwise` 或 `rm_define.anticlockwise`；时长 0..20 秒。",
+                "`chassis_ctrl.rotate_with_time(direction, time_wait)`：direction 为 `rm_define.clockwise` 或 `rm_define.anticlockwise`；时长 0..20 秒。",
                 "`chassis_ctrl.rotate_with_degree(direction, degree)`：direction 同上；角度 0..1800；必须先设置非零旋转速度。",
-                "`chassis_ctrl.move_with_speed(x, y, z)` 是持续的即时速度控制，除非任务确实需要，否则优先使用有界动作；结束时调用 `chassis_ctrl.stop()`。",
+                "`chassis_ctrl.move_with_speed(speed_x, speed_y, speed_z)` 是持续的即时速度控制，除非任务确实需要，否则优先使用有界动作；结束时调用 `chassis_ctrl.stop()`。",
             ),
         ),
         Section(
@@ -43,7 +43,7 @@ internal object LabApiCatalog {
             aliases = setOf("gimbal", "云台", "pitch", "yaw"),
             facts = listOf(
                 "需要独立控制云台时先调用 `robot_ctrl.set_mode(rm_define.robot_mode_free)`。",
-                "`gimbal_ctrl.set_rotate_speed(speed)`：速度 0..540 °/s；普通示例优先使用 30 °/s。",
+                "`gimbal_ctrl.set_rotate_speed(speed, speed2=None)`：speed 设置俯仰速度，speed2 为空时偏航使用相同速度，非空时单独设置偏航速度；speed 的机内校验范围为 0..540 °/s，普通示例优先使用 30 °/s。",
                 "`gimbal_ctrl.rotate_with_degree(direction, degree)`：direction 为 `rm_define.gimbal_up`、`gimbal_down`、`gimbal_left` 或 `gimbal_right`；俯仰单次范围由机内限制为 -55..55°，偏航为 -500..500°，传入正的动作幅度并用 direction 表示方向。",
                 "`gimbal_ctrl.rotate_with_speed(yaw_speed, pitch_speed)` 是持续的即时速度控制，两个速度范围均为 -540..540 °/s。",
                 "`gimbal_ctrl.recenter()` 回中；结束时调用 `gimbal_ctrl.stop()`。",

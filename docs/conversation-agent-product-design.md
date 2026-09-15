@@ -48,7 +48,7 @@ flowchart LR
     START([开始 run]) --> INITIAL[首次模型调用]
     INITIAL -->|无工具调用| FINISH([完成])
     INITIAL -->|有工具调用| TOOLS[串行执行 class-based tools]
-    TOOLS --> TERMINAL{副作用或重复只读工具?}
+    TOOLS --> TERMINAL{机器人副作用工具?}
     TERMINAL -->|是| FINISH
     TERMINAL -->|否| FOLLOWUP[携带 Tool Results 调用模型]
     FOLLOWUP -->|无工具调用| FINISH
@@ -59,24 +59,47 @@ flowchart LR
 
 1. 概念解释、使用帮助等不依赖实时设备的问题直接回答，不调用工具凑过程。
 2. 涉及当前设备事实时先调用 `robot_status`；模型不得用旧消息猜测连接、型号或脚本状态。
-3. 动作意图不清、目标不明、持续时间缺失或可能伤人/损物时先追问，不能擅自补齐关键参数。
-4. 除停止外，执行前必须生成完整有限程序并进入审批；拒绝仍形成 Koog `MessagePart.Tool.Result`，并与执行或停止结果一样直接结束当前 run。
-5. 工具串行执行。首次只读结果可以交回模型；副作用工具返回后立即结束 run，同一只读工具第二次返回时也收束，不能用模型工具循环轮询脚本状态。
-6. 最终回复只总结已经获得的证据，不把“脚本启动”写成“动作已经完成”。
+3. 编写、修改、保存或执行 Lab 脚本前必须用 `lab_api_reference` 一次查询涉及的全部分类；不能从模型记忆或 PC SDK 猜测机内 API。
+4. 修改已有脚本前先用 `read_lab_script` 获取真实源码；`save_lab_script` 只保存，不上传、不运行，不能把保存结果表述为执行结果。
+5. 动作意图不清、目标不明、持续时间缺失或可能伤人/损物时先追问，不能擅自补齐关键参数。
+6. 除停止外，执行前必须生成完整有限程序并进入审批；拒绝仍形成 Koog `MessagePart.Tool.Result`，并与执行或停止结果一样直接结束当前 run。
+7. 永久删除脚本只在用户明确要求时调用，并由界面再次确认；保存和重命名按用户明确指令执行，不增加无意义确认。
+8. 工具串行执行。只读工具可以按任务需要查询多个 API 分类或多个脚本；机器人副作用工具返回后立即结束 run。每个 run 最多发起 8 次模型请求，达到上限按运行失败处理，不能把工具原始结果当作成功答复，也不能用工具循环充当状态订阅。
+9. 最终回复只总结已经获得的证据，不把“脚本已保存”写成“脚本已运行”，也不把“脚本启动”写成“动作已经完成”。
 
 ## 4. 工具设计
 
 ### 4.1 P0 工具集
 
-首阶段保留三个粗粒度工具。它们已从 UI 内联注册移入 `agent/tools`，实现为具名的 `RobotStatusTool`、`ExecuteLabPythonTool` 和 `StopLabTool`，直接继承 Koog `SimpleTool` 并通过 `ToolRegistry` 组合；运行时环境只适配机器人状态、审批和执行。模型调用、审批、执行开始与 Koog `MessagePart.Tool.Result` 沿用同一个 `toolCallId`，未完成执行在取消或重启时生成 `isError=true` 的结果未知 Tool Result，不会自动重试。不为底盘、云台、灯光、音效和发射分别增加模型工具。风险分析卡、执行证据等级和跨重启继续审批仍是后续增强项。
+P0 保留粗粒度设备工具，同时增加 API 查询和脚本库管理工具。八个工具都从 UI 内联注册移入 `agent/tools`，实现为具名 class-based Koog `Tool<TArgs, TResult>`。应用 composition root 构造工具实现并组合为一个 Koog `ToolRegistry`，`ChatAgent` 只接收该 registry，不再逐项声明工具函数或实现平行的 Environment 接口。审批、执行开始和超时作为 run-scoped Koog `AIAgentEnvironment` feature 统一包围工具分派。每个工具直接声明可序列化的 `Args` 和 `Result`，不使用把业务结果拼成自然语言的 `SimpleTool`。模型调用、审批、执行开始与 Koog `MessagePart.Tool.Result` 沿用同一个 `toolCallId`，不增加平行 ToolCall/ToolResult DTO。未完成机器人执行在取消或重启时生成 `isError=true` 的结果未知 Tool Result，不会自动重试。不为底盘、云台、灯光、音效和发射分别增加模型工具。
 
 | 工具 | 用途 | 自动执行 | 核心约束 |
 | --- | --- | --- | --- |
 | `robot_status` | 读取当前连接、能力、可信遥测、脚本状态及最近脚本消息 | 是 | 只读；不连接新设备；返回值必须标明未知或不可信字段 |
+| `lab_api_reference` | 查询已由机内运行时源码核对的 API、参数范围和行为 | 是 | 写脚本前调用；支持一次查询多个分类；目录外接口不得臆造 |
+| `list_lab_scripts` | 列出用户保存的脚本 | 是 | 只返回名称、更新时间和源码长度，不使用内部 ID |
+| `read_lab_script` | 按名称读取保存脚本 | 是 | 修改或替换已有脚本前调用；返回原始源码 |
+| `save_lab_script` | 创建、替换或重命名用户脚本 | 用户明确要求时 | 原子更新；必须是无 import 的 Python 3.6 `def start()` 完整源码；只保存，不运行 |
+| `delete_lab_script` | 永久删除用户保存的脚本 | 否 | 用户明确要求后再显示界面确认；按名称删除，不暴露内部 ID |
 | `execute_lab_python` | 提交一个完整 RoboMaster Lab Python 3.6 程序，表达可组合动作 | 否 | 每次都审批；限制长度与语法；有限时长；异常路径停止；上传/启动不等于完成 |
 | `stop_lab` | 停止当前 Lab 程序 | 用户明确要求停止时可直接执行 | 不等待模型规划更复杂动作；返回“命令已发送”或明确 ACK，不伪造物理停止 |
 
-`execute_lab_python` 的参数继续使用 Koog Tool 的序列化参数和 `MessagePart.Tool.Call`，结果直接形成 `MessagePart.Tool.Result`。Hanppie 只增加本地风险判断和审批事实，不再设计另一组 ToolCall/ToolResult DTO。
+结构化契约由各 Tool 内部的 `@Serializable Args/Result` 唯一定义：
+
+| 工具 | Args | Result |
+| --- | --- | --- |
+| `robot_status` | `{}` | `connected`、`address`、电量、信号，以及带运行标识、阶段、时间和最近消息的 `script` |
+| `lab_api_reference` | `query` | `inCatalog`、`availableCategories`、`sections[{category,facts}]`、`guidance` |
+| `list_lab_scripts` | `{}` | `scripts[{name,sourceLength,updatedAtEpochMillis}]` |
+| `read_lab_script` | `name` | `name`、`source`、创建与更新时间 |
+| `save_lab_script` | `originalName`、`name`、`source` | 最终名称、是否新建、源码长度、更新时间 |
+| `delete_lab_script` | `name` | 最终名称与 `DELETED/USER_REJECTED` 状态 |
+| `execute_lab_python` | `source` | `START_COMMAND_SENT/USER_REJECTED` 状态及可选 `runId` |
+| `stop_lab` | `{}` | `STOP_COMMAND_SENT` 状态；仅证明停止命令已发送，不代表机内停止已确认 |
+
+所有工具参数和结果使用 Koog Tool 的类型化序列化，原始事件继续保存 `MessagePart.Tool.Call/Result`。其中 Call 的 `args` 与 Result 的 `output` 是供应商协议承载的 JSON 文本，不是应用业务模型；运行时和应用适配器直接使用工具类声明的 `Args`/`Result`，界面按 JSON 对象、数组和标量分层展示。脚本管理按用户可见名称工作；数据库 ID 不进入模型参数。`lab_api_reference` 的目录条目来自已恢复的机内 `rm_ctrl.py`/`rm_define.py`，以分类和事实列表返回，只收录适合生成用户脚本且逐项核对过的入口，不把整个恢复源码或 PC SDK 文档塞入系统提示。Hanppie 只增加 Koog 没有的审批事实和产品 UI 状态。
+
+Tool 抛出的异常不伪造成业务 `Result`：Koog 仍以 `MessagePart.Tool.Result(isError=true)` 记录失败，run 边界保存原始异常与 traceback。`USER_REJECTED` 属于已完成的审批决定，才进入对应的类型化结果。
 
 ### 4.2 P1 工具
 
@@ -163,6 +186,8 @@ sequenceDiagram
     UI->>R: send
     R->>R: 持久化 Message.User
     R->>A: 运行当前 Prompt 与 ToolRegistry
+    A->>T: lab_api_reference(runtime chassis)
+    T-->>A: 已核对入口、签名与参数范围
     A->>T: robot_status
     T->>B: 读取当前会话与状态
     B-->>T: 状态快照
@@ -180,11 +205,34 @@ sequenceDiagram
     R-->>UI: 区分命令、遥测与物理证据
 ```
 
-### 6.3 常见场景
+### 6.3 脚本管理时序
+
+```mermaid
+sequenceDiagram
+    actor U as 用户
+    participant A as Koog AIAgent
+    participant C as LabApiCatalog
+    participant L as 脚本库
+    participant UI as 对话 UI
+
+    U->>A: “把巡检脚本改为同时输出进度”
+    A->>C: lab_api_reference(runtime logging)
+    C-->>A: 已核对签名与运行时约束
+    A->>L: read_lab_script(巡检脚本)
+    L-->>A: 原始源码
+    A->>L: save_lab_script(巡检脚本, 新源码)
+    L-->>A: 已原子保存，未运行
+    A-->>UI: 展示带 Python 高亮的修改结果并明确尚未运行
+```
+
+### 6.4 常见场景
 
 | 场景 | 期望行为 |
 | --- | --- |
 | “怎么让 S1 转弯？” | 作为知识问题回答，可给示例；不因出现动作词就执行 |
+| “写一个巡检脚本并保存” | 查询相关 API → 生成完整 Python 3.6 脚本 → 保存到脚本库 → 明确尚未运行 |
+| “修改我的巡检脚本” | 查询相关 API → 按名称读取现有源码 → 展示修改 → 原子替换，不丢失脚本 ID |
+| “删除巡检脚本” | 按名称定位 → 展示删除确认 → 同意后删除；拒绝时脚本库不变 |
 | “让它左转一秒” | 读取状态 → 生成有限脚本 → 展示审批 → 执行 → 汇报证据 |
 | “继续” | 只有上下文中存在唯一明确的待续意图时才继续；不能重跑结果未知的工具 |
 | “停下” | 本地快速停止，不等待模型；随后把结果写回对话 |
@@ -200,6 +248,7 @@ sequenceDiagram
 | --- | --- | --- |
 | 身份与回答风格 | 产品固定资源 | 随版本发布 |
 | 工具语义 | Koog `ToolDescriptor` | 与工具实现同源 |
+| Lab API 与运行时约束 | `agent/lab/LabApiCatalog` | 通过 `lab_api_reference` 按任务查询，不复制到无限增长的系统提示 |
 | 机器人能力与安全规则 | `docs/architecture.md` 对应的代码能力模型 | 由当前会话动态生成，不复制静态能力列表 |
 | 当前设备上下文 | `robot_status` | 每次需要事实时读取 |
 | Session 历史 | `SessionHistory.messages(sessionId)` 返回的 Koog `Message` | 从 JSONL 事件投影，可由事实来源重建 |
@@ -229,7 +278,9 @@ sequenceDiagram
 ### 10.1 策略与工具
 
 - 普通知识问答不调用机器人工具；设备事实问题不会凭历史猜测；
-- P0 三个工具直接使用 Koog Tool/MessagePart，全链路没有第二套 ToolCall/ToolResult；
+- P0 八个工具直接使用 Koog Tool/MessagePart，全链路没有第二套 ToolCall/ToolResult；
+- 编写或修改脚本前能按相关分类查询受控 API 目录，目录外接口不会被当成已核对事实；
+- 脚本可以按名称列出、读取、原子保存/重命名和经确认后删除，保存不会触发上传或执行；
 - 动作请求在审批前不上传或启动脚本，拒绝后不会执行；
 - 一次审批只出现一次；命令发送后不会要求用户再次确认，缺少 `STARTED` 回报会在有限时间内转为结果未知；
 - 工具串行且有明确轮数上限，结果未知时立即停止自动循环；

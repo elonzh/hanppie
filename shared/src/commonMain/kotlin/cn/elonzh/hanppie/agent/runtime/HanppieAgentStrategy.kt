@@ -21,21 +21,18 @@ internal fun hanppieAgentStrategy(
     onStreamFrame: suspend (StreamFrame) -> Unit,
     onMessage: suspend (Message) -> Unit,
     terminalToolNames: Set<String> = emptySet(),
-    maxExecutionsPerTool: Int = 2,
     maxModelRequests: Int = 8,
     modelRequestTimeoutMillis: Long = 120_000,
 ): AIAgentGraphStrategy<String, String> {
-    require(maxExecutionsPerTool > 0) { "maxExecutionsPerTool must be positive" }
     require(maxModelRequests > 0) { "maxModelRequests must be positive" }
     require(modelRequestTimeoutMillis > 0) { "modelRequestTimeoutMillis must be positive" }
     var modelRequests = 0
-    val toolExecutions = mutableMapOf<String, Int>()
 
     return strategy("hanppie-agent") {
         val nodeExecuteTool by nodeExecuteTools(parallel = false)
 
         suspend fun AIAgentLLMWriteSession.requestResponse(): Message.Assistant {
-            check(++modelRequests <= maxModelRequests) { "Agent model request limit reached" }
+            if (++modelRequests > maxModelRequests) throw ModelRequestLimitExceededException(maxModelRequests)
             val frames = withTimeout(modelRequestTimeoutMillis) {
                 requestLLMStreaming().onEach(onStreamFrame).toList()
             }
@@ -67,9 +64,6 @@ internal fun hanppieAgentStrategy(
             llm.writeSession {
                 appendPrompt { message(resultMessage) }
             }
-            results.toolResults.forEach { result ->
-                toolExecutions[result.tool] = toolExecutions.getOrElse(result.tool) { 0 } + 1
-            }
             results
         }
 
@@ -87,22 +81,12 @@ internal fun hanppieAgentStrategy(
         edge(nodeExecuteTool forwardTo nodeRecordToolResults)
         edge(
             (nodeRecordToolResults forwardTo nodeFinish)
-                .onCondition { results -> results.endsRun(
-                    terminalToolNames,
-                    toolExecutions,
-                    maxExecutionsPerTool,
-                    modelRequests >= maxModelRequests,
-                ) }
+                .onCondition { results -> results.endsRun(terminalToolNames) }
                 .transformed { results -> results.visibleOutput() },
         )
         edge(
             (nodeRecordToolResults forwardTo nodeCallModelAfterTools)
-                .onCondition { results -> !results.endsRun(
-                    terminalToolNames,
-                    toolExecutions,
-                    maxExecutionsPerTool,
-                    modelRequests >= maxModelRequests,
-                ) },
+                .onCondition { results -> !results.endsRun(terminalToolNames) },
         )
         edge(nodeCallModelAfterTools forwardTo nodeExecuteTool onToolCalls { true })
         edge(
@@ -113,14 +97,11 @@ internal fun hanppieAgentStrategy(
     }
 }
 
-private fun ReceivedToolResults.endsRun(
-    terminalToolNames: Set<String>,
-    toolExecutions: Map<String, Int>,
-    maxExecutionsPerTool: Int,
-    modelRequestLimitReached: Boolean,
-): Boolean = modelRequestLimitReached || toolResults.any { result ->
-    result.tool in terminalToolNames || toolExecutions.getOrElse(result.tool) { 0 } >= maxExecutionsPerTool
-}
+internal class ModelRequestLimitExceededException(limit: Int) :
+    IllegalStateException("Agent model request limit reached: $limit")
+
+private fun ReceivedToolResults.endsRun(terminalToolNames: Set<String>): Boolean =
+    toolResults.any { result -> result.tool in terminalToolNames }
 
 private fun ReceivedToolResults.visibleOutput(): String =
     toolResults.joinToString("\n") { result -> result.output }.ifBlank { "Tool execution completed" }

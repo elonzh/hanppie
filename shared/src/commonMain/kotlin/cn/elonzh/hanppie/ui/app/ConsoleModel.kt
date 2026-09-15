@@ -2,12 +2,23 @@
 
 package cn.elonzh.hanppie.ui.app
 
+import ai.koog.agents.core.tools.ToolRegistry
 import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.agent.lab.LabApiCatalog
 import cn.elonzh.hanppie.agent.provider.ModelConfigurationTester
 import cn.elonzh.hanppie.agent.runtime.SessionHistory
+import cn.elonzh.hanppie.agent.tools.DeleteLabScriptTool
+import cn.elonzh.hanppie.agent.tools.ExecuteLabPythonTool
+import cn.elonzh.hanppie.agent.tools.LabApiReferenceTool
+import cn.elonzh.hanppie.agent.tools.ListLabScriptsTool
+import cn.elonzh.hanppie.agent.tools.ReadLabScriptTool
+import cn.elonzh.hanppie.agent.tools.RobotStatusTool
+import cn.elonzh.hanppie.agent.tools.SaveLabScriptTool
+import cn.elonzh.hanppie.agent.tools.StopLabTool
 import cn.elonzh.hanppie.robot.lab.LabRunEvent
 import cn.elonzh.hanppie.robot.lab.LabRunEventType
 import cn.elonzh.hanppie.robot.lab.LabRunProtocol
+import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
 import cn.elonzh.hanppie.robot.protocol.hex
@@ -90,7 +101,7 @@ internal class ConsoleModel(
     override val scriptLibrary = ScriptLibrary(scriptRepository)
     override val robotFiles = RobotFilesController(scope) { acceptingWork.load() && state.value.connected }
     init {
-        scope.launch { scriptLibrary.load() }
+        scope.launch(start = CoroutineStart.UNDISPATCHED) { scriptLibrary.load() }
     }
     override fun saveSettings() = settings.save()
     override fun loadModelCatalog() = modelTester.loadCatalog(modelSettings.value)
@@ -301,26 +312,75 @@ internal class ConsoleModel(
     }
 
     private val acceptingWork = AtomicBoolean(true)
-    override val chat = ChatAgent(
-        status = { state.value.let { "${it.status}; battery=${it.battery}; script=${it.scriptStatus}; messages=${it.scriptMessages.takeLast(12)}" } },
-        execute = { source -> agentOperation {
+    private val agentTools = ToolRegistry {
+        tool(RobotStatusTool {
+            val snapshot = state.value
+            RobotStatusTool.Result(
+                connected = snapshot.connected,
+                address = snapshot.connectedAddress,
+                batteryPercent = snapshot.battery,
+                signalQualityPercent = snapshot.signalQuality,
+                script = RobotStatusTool.ScriptRun(
+                    id = snapshot.scriptRunId,
+                    title = snapshot.scriptTitle,
+                    phase = snapshot.scriptRunPhase,
+                    startedAtEpochMillis = snapshot.scriptStartedAtEpochMillis,
+                    finishedAtEpochMillis = snapshot.scriptFinishedAtEpochMillis,
+                    recentMessages = snapshot.scriptMessages.takeLast(12),
+                ),
+            )
+        })
+        tool(LabApiReferenceTool(LabApiCatalog::query))
+        tool(ListLabScriptsTool {
+            ListLabScriptsTool.Result(scriptLibrary.savedScripts().map { script ->
+                ListLabScriptsTool.Script(
+                    name = script.name,
+                    sourceLength = script.source.length,
+                    updatedAtEpochMillis = script.updatedAtEpochMillis,
+                )
+            })
+        })
+        tool(ReadLabScriptTool { name ->
+            val script = scriptLibrary.read(name)
+            ReadLabScriptTool.Result(
+                name = script.name,
+                source = script.source,
+                createdAtEpochMillis = script.createdAtEpochMillis,
+                updatedAtEpochMillis = script.updatedAtEpochMillis,
+            )
+        })
+        tool(SaveLabScriptTool { originalName, name, source ->
+            val script = scriptLibrary.save(originalName, name, source)
+            SaveLabScriptTool.Result(
+                name = script.name,
+                created = originalName == null,
+                sourceLength = script.source.length,
+                updatedAtEpochMillis = script.updatedAtEpochMillis,
+            )
+        })
+        tool(DeleteLabScriptTool { name ->
+            val script = scriptLibrary.deleteByName(name)
+            DeleteLabScriptTool.Result(script.name, DeleteLabScriptTool.Status.DELETED)
+        })
+        tool(ExecuteLabPythonTool { source -> agentOperation {
             check(!state.value.scriptRunPhase.mayBeExecuting) { tr(Res.string.stop_the_script_with_unknown_state_first) }
             haltRemote()
             session.load()?.exitRemote()
             val scriptRunId = startScript(source, "Hanppie-Agent")
-            tr(Res.string.script_start_command_sent_awaiting_confirmation_value, scriptRunId)
-        } },
-        stopRobot = { agentOperation {
-            checkNotNull(lab.load()) { tr(Res.string.robot_is_not_connected) }.stop()
-            state.update { it.copy(scriptRunPhase = ScriptRunPhase.STOPPED,
-                scriptMessage = uiText(Res.string.script_stopped), scriptFinishedAtEpochMillis = clock.now().toEpochMilliseconds()) }
-            tr(Res.string.stop_command_sent_robot_stop_is_unconfirmed)
-        } },
+            ExecuteLabPythonTool.Result(ExecuteLabPythonTool.Status.START_COMMAND_SENT, scriptRunId)
+        } })
+        tool(StopLabTool { agentOperation {
+            stopScriptWithoutConfirmation()
+            StopLabTool.Result(StopLabTool.Status.STOP_COMMAND_SENT)
+        } })
+    }
+    override val chat = ChatAgent(
+        toolRegistry = agentTools,
         createHttpClient = createAgentHttpClient,
         sessions = sessionHistory,
     )
 
-    private suspend fun agentOperation(block: suspend () -> String): String {
+    private suspend fun <T> agentOperation(block: suspend () -> T): T {
         check(acceptingWork.load() && state.value.connected) { tr(Res.string.robot_disconnected_or_app_not_in_foreground) }
         val snapshot = state.value
         check(!snapshot.busy && state.compareAndSet(snapshot, snapshot.copy(busy = true))) { tr(Res.string.another_operation_is_in_progress) }
@@ -648,11 +708,18 @@ internal class ConsoleModel(
 
     override fun stop() = work(allowDuringChat = true) {
         chat.cancelAndJoin()
+        stopScriptWithoutConfirmation()
+    }
+
+    private suspend fun stopScriptWithoutConfirmation() {
         state.update { it.copy(scriptRunPhase = ScriptRunPhase.STOPPING, scriptMessage = uiText(Res.string.stopping_script)) }
         try {
             checkNotNull(lab.load()) { tr(Res.string.robot_is_not_connected) }.stop()
-            state.update { it.copy(scriptRunPhase = ScriptRunPhase.STOPPED,
-                scriptMessage = uiText(Res.string.script_stopped), scriptFinishedAtEpochMillis = clock.now().toEpochMilliseconds()) }
+            state.update { it.copy(
+                scriptRunPhase = ScriptRunPhase.STOP_UNCONFIRMED,
+                scriptMessage = uiText(Res.string.stop_command_sent_robot_stop_is_unconfirmed),
+                scriptFinishedAtEpochMillis = null,
+            ) }
         } catch (error: Exception) {
             state.update { it.copy(scriptRunPhase = ScriptRunPhase.UNKNOWN,
                 scriptMessage = uiText(Res.string.script_stop_state_unknown)) }

@@ -1,8 +1,10 @@
 package cn.elonzh.hanppie.ui.chat
 
 import ai.koog.agents.core.tools.ToolDescriptor
+import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.prompt.Prompt
 import ai.koog.prompt.dsl.ModerationResult
+import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.Message
@@ -10,7 +12,10 @@ import ai.koog.prompt.message.MessagePart
 import ai.koog.prompt.streaming.StreamFrame
 import cn.elonzh.hanppie.agent.runtime.*
 import cn.elonzh.hanppie.agent.tools.*
+import cn.elonzh.hanppie.resources.Res
+import cn.elonzh.hanppie.resources.agent_model_request_limit_reached
 import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
+import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.settings.ModelSettings
 import kotlin.test.*
 import kotlinx.coroutines.*
@@ -34,6 +39,36 @@ class ChatAgentTest {
         listOf(StreamFrame.ToolCallComplete(id, name, args), StreamFrame.End("tool_calls"))
     private suspend fun ChatAgent.finished() = withTimeout(5000) { state.first { !it.running } }
     private suspend fun ChatAgent.ready() = withTimeout(5000) { state.first { it.ready } }
+    private fun testTools(
+        status: suspend () -> RobotStatusTool.Result = { testStatus("未连接") },
+        labApiReference: suspend (String) -> LabApiReferenceTool.Result = { testReference(it) },
+        listLabScripts: suspend () -> ListLabScriptsTool.Result = { ListLabScriptsTool.Result(emptyList()) },
+        readLabScript: suspend (String) -> ReadLabScriptTool.Result = {
+            ReadLabScriptTool.Result(it, "script:$it", 1, 1)
+        },
+        saveLabScript: suspend (String?, String, String) -> SaveLabScriptTool.Result = { original, name, source ->
+            SaveLabScriptTool.Result(name, original == null, source.length, 1)
+        },
+        deleteLabScript: suspend (String) -> DeleteLabScriptTool.Result = {
+            DeleteLabScriptTool.Result(it, DeleteLabScriptTool.Status.DELETED)
+        },
+        execute: suspend (String) -> ExecuteLabPythonTool.Result = {
+            ExecuteLabPythonTool.Result(ExecuteLabPythonTool.Status.START_COMMAND_SENT, "run-1")
+        },
+        stopRobot: suspend () -> StopLabTool.Result = {
+            StopLabTool.Result(StopLabTool.Status.STOP_COMMAND_SENT)
+        },
+    ) = ToolRegistry {
+        tool(RobotStatusTool(status))
+        tool(LabApiReferenceTool(labApiReference))
+        tool(ListLabScriptsTool(listLabScripts))
+        tool(ReadLabScriptTool(readLabScript))
+        tool(SaveLabScriptTool(saveLabScript))
+        tool(DeleteLabScriptTool(deleteLabScript))
+        tool(ExecuteLabPythonTool(execute))
+        tool(StopLabTool(stopRobot))
+    }
+
     private fun agent(
         status: () -> String,
         execute: suspend (String) -> String,
@@ -42,19 +77,14 @@ class ChatAgentTest {
         sessions: TestSessionHistory = TestSessionHistory(),
         operationTimeoutMillis: Long = 120_000,
     ) = ChatAgent(
-        status = { testStatus(status()) },
-        labApiReference = { testReference(it) },
-        listLabScripts = { ListLabScriptsTool.Result(emptyList()) },
-        readLabScript = { ReadLabScriptTool.Result(it, "script:$it", 1, 1) },
-        saveLabScript = { originalName, name, source ->
-            SaveLabScriptTool.Result(name, originalName == null, source.length, 1)
-        },
-        deleteLabScript = { DeleteLabScriptTool.Result(it, DeleteLabScriptTool.Status.DELETED) },
-        execute = { ExecuteLabPythonTool.Result(ExecuteLabPythonTool.Status.START_COMMAND_SENT, execute(it)) },
-        stopRobot = {
-            stopRobot()
-            StopLabTool.Result(StopLabTool.Status.STOP_COMMAND_SENT, robotStopConfirmed = false)
-        },
+        toolRegistry = testTools(
+            status = { testStatus(status()) },
+            execute = { ExecuteLabPythonTool.Result(ExecuteLabPythonTool.Status.START_COMMAND_SENT, execute(it)) },
+            stopRobot = {
+                stopRobot()
+                StopLabTool.Result(StopLabTool.Status.STOP_COMMAND_SENT)
+            },
+        ),
         createHttpClient = { error("HTTP client must not be created when a test executor is injected") },
         sessions = sessions,
         executorOverride = executor,
@@ -206,11 +236,12 @@ class ChatAgentTest {
     }
     @Test fun denialIsReturnedToModelWithoutExecuting() = runBlocking {
         var requests = 0
+        val history = TestSessionHistory()
         val fake = Fake {
             check(requests++ == 0) { "Rejected side effect must not trigger another model request" }
             call("execute_lab_python", "{\"source\":\"def start(): pass\"}")
         }
-        agent({ "已连接" }, { error("Must not execute") }, { error("Must not stop") }, fake).use { agent ->
+        agent({ "已连接" }, { error("Must not execute") }, { error("Must not stop") }, fake, history).use { agent ->
             agent.ready()
             agent.send("生成脚本", config)
             withTimeout(5000) { agent.state.first { it.approval != null || !it.running } }
@@ -218,6 +249,7 @@ class ChatAgentTest {
             assertNull(agent.state.value.error)
             assertEquals(1, requests)
             assertContains(agent.state.value.lastReply, "USER_REJECTED")
+            assertTrue(history.events.none { event -> event is ToolCallStartingEvent })
         }
     }
     @Test fun truncatedToolStreamIsNeverExecuted(): Unit = runBlocking {
@@ -277,15 +309,20 @@ class ChatAgentTest {
                 StreamFrame.End("tool_calls"),
             )
         }
-        agent({ statusReads++; "已连接" }, { error("No script") }, { error("No stop") }, fake).use { agent ->
+        val history = TestSessionHistory()
+        agent({ statusReads++; "已连接" }, { error("No script") }, { error("No stop") }, fake, history).use { agent ->
             agent.ready()
             agent.send("持续读取", config)
 
             val error = requireNotNull(agent.finished().error)
-            assertContains(error, "Agent model request limit reached")
+            assertEquals(tr(Res.string.agent_model_request_limit_reached), error)
             assertEquals(8, requests)
             assertEquals(8, statusReads)
             assertTrue(agent.state.value.lastReply.isEmpty())
+            assertContains(
+                history.events.filterIsInstance<AgentExecutionFailedEvent>().single().failure,
+                ModelRequestLimitExceededException::class.simpleName!!,
+            )
         }
     }
 
@@ -304,7 +341,51 @@ class ChatAgentTest {
             assertEquals(1, requests)
             assertEquals(1, stops)
             assertContains(agent.state.value.lastReply, "STOP_COMMAND_SENT")
-            assertContains(agent.state.value.lastReply, "robotStopConfirmed\":false")
+            assertFalse(agent.state.value.lastReply.contains("robotStopConfirmed"))
+        }
+    }
+
+    @Test fun sendingAtTheVisibleLineLimitStillAdvancesTheUserMessageRevision(): Unit = runBlocking {
+        val history = TestSessionHistory()
+        val session = history.create("满记录")
+        repeat(250) { index ->
+            val message = if (index % 2 == 0) {
+                prompt("history-$index") { user("用户历史 $index") }.messages.single()
+            } else {
+                prompt("history-$index") { assistant("回复历史 $index") }.messages.single()
+            }
+            history.append(session.id, MessageEvent(
+                eventId = "history-event-$index",
+                runId = "history-run",
+                timestamp = index.toLong(),
+                executionInfo = ai.koog.agents.core.agent.execution.AgentExecutionInfo(null, "test"),
+                message = message,
+            ))
+        }
+        val releaseModel = CompletableDeferred<Unit>()
+        val fake = Fake {
+            releaseModel.await()
+            text("完成")
+        }
+        ChatAgent(
+            toolRegistry = testTools(),
+            createHttpClient = { error("unused") },
+            sessions = history,
+            executorOverride = fake,
+        ).use { agent ->
+            agent.ready()
+            assertEquals(250, agent.state.value.lines.size)
+            val revision = agent.state.value.userMessageRevision
+            agent.updateDraft("第 251 条")
+            assertTrue(agent.send("第 251 条", config))
+
+            withTimeout(5_000) { agent.state.first { it.userMessageRevision > revision } }
+            assertEquals(250, agent.state.value.lines.size)
+            assertEquals(ChatRole.USER, agent.state.value.lines.last().role)
+            assertEquals("第 251 条", agent.state.value.lines.last().text)
+
+            releaseModel.complete(Unit)
+            assertNull(agent.finished().error)
         }
     }
 
@@ -331,20 +412,18 @@ class ChatAgentTest {
             }
         }
         ChatAgent(
-            status = { testStatus("已连接") },
-            labApiReference = { query -> referenceQueries += query; testReference(query) },
-            listLabScripts = { ListLabScriptsTool.Result(emptyList()) },
-            readLabScript = { ReadLabScriptTool.Result(it, "script:$it", 1, 1) },
-            saveLabScript = { original, name, savedSource ->
-                saved = Triple(original, name, savedSource)
-                SaveLabScriptTool.Result(name, original == null, savedSource.length, 1)
-            },
-            deleteLabScript = { DeleteLabScriptTool.Result(it, DeleteLabScriptTool.Status.DELETED) },
-            execute = {
-                executions++
-                ExecuteLabPythonTool.Result(ExecuteLabPythonTool.Status.START_COMMAND_SENT, "run-1")
-            },
-            stopRobot = { StopLabTool.Result(StopLabTool.Status.STOP_COMMAND_SENT, false) },
+            toolRegistry = testTools(
+                status = { testStatus("已连接") },
+                labApiReference = { query -> referenceQueries += query; testReference(query) },
+                saveLabScript = { original, name, savedSource ->
+                    saved = Triple(original, name, savedSource)
+                    SaveLabScriptTool.Result(name, original == null, savedSource.length, 1)
+                },
+                execute = {
+                    executions++
+                    ExecuteLabPythonTool.Result(ExecuteLabPythonTool.Status.START_COMMAND_SENT, "run-1")
+                },
+            ),
             createHttpClient = { error("unused") },
             sessions = history,
             executorOverride = fake,
@@ -398,19 +477,13 @@ class ChatAgentTest {
             }
         }
         ChatAgent(
-            status = { testStatus("已连接") },
-            labApiReference = { testReference(it) },
-            listLabScripts = { ListLabScriptsTool.Result(emptyList()) },
-            readLabScript = { ReadLabScriptTool.Result(it, "script:$it", 1, 1) },
-            saveLabScript = { original, name, source ->
-                SaveLabScriptTool.Result(name, original == null, source.length, 1)
-            },
-            deleteLabScript = { name ->
-                deleted = name
-                DeleteLabScriptTool.Result(name, DeleteLabScriptTool.Status.DELETED)
-            },
-            execute = { ExecuteLabPythonTool.Result(ExecuteLabPythonTool.Status.START_COMMAND_SENT, "run-1") },
-            stopRobot = { StopLabTool.Result(StopLabTool.Status.STOP_COMMAND_SENT, false) },
+            toolRegistry = testTools(
+                status = { testStatus("已连接") },
+                deleteLabScript = { name ->
+                    deleted = name
+                    DeleteLabScriptTool.Result(name, DeleteLabScriptTool.Status.DELETED)
+                },
+            ),
             createHttpClient = { error("unused") },
             sessions = history,
             executorOverride = fake,

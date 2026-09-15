@@ -59,6 +59,18 @@ class LabApiCatalogTest {
         ).forEach { api -> assertContains(catalog, api) }
     }
 
+    @Test fun keywordArgumentNamesMatchTheRecoveredLabRuntime() {
+        val chassis = LabApiCatalog.query("chassis").facts()
+        val gimbal = LabApiCatalog.query("gimbal").facts()
+
+        assertContains(chassis, "move_with_time(direction_angle, time_wait)")
+        assertContains(chassis, "rotate_with_time(direction, time_wait)")
+        assertContains(chassis, "move_with_speed(speed_x, speed_y, speed_z)")
+        assertContains(gimbal, "set_rotate_speed(speed, speed2=None)")
+        assertFalse(chassis.contains("move_with_time(direction_angle, seconds)"))
+        assertFalse(chassis.contains("move_with_speed(x, y, z)"))
+    }
+
     private fun cn.elonzh.hanppie.agent.tools.LabApiReferenceTool.Result.facts(): String =
         sections.flatMap { it.facts }.joinToString("\n")
 }
