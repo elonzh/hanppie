@@ -350,6 +350,8 @@ Lab 程序不是裸 `.py` 文件，而是 `.dsp` XML 容器，主要包含：
 
 恢复的机内解析器为自定义音频保留十个逻辑 ID `0x10010..0x10019`，从 DSP 的 `<audio>` 节点读取名称、类型、MD5、`modify` 和可选 `audio_data`。RoboMaster macOS 1.1.5 客户端上传前先查询 DSP 与音频资源 MD5；已匹配的音频会把 `modify` 置为 false 并省略数据，未匹配资源随 DSP 继续上传。因此内置音效 ID、Host PCM 临时对讲和 Lab 自定义音频是三条不同路径；自定义音频不是 FTP 根目录中可任意播放的普通媒体库，机内转换后的缓存位置和清理策略仍缺少运行时证据。**代码/客户端静态分析**
 
+Hanppie 客户端按同一形状生成该节点：`<audio id="0..9" name="…" type="opus" duration="秒" md5="<base64 正文 MD5 前 8 位>" modify="true"><audio_data><![CDATA[<base64>]]></audio_data></audio>`，`id` 对应机内全局音效 `0x10010+id`；正文使用客户端容器的 48 kHz 单声道、20 ms（960 样本）帧、12 kbps。机内是否按固定采样率解码、是否重新编码以及缓存位置仍无运行时证据；官方客户端查询机内已有资源的键 `0x0500_001C`/`0x0500_001D` 未接入，Hanppie 始终以 `modify="true"` 携带正文，因此该 MD5 目前只描述正文本身。**客户端静态分析/代码**
+
 兼容客户端先发送 GUID、sign 和字节数等 DUSS 元数据，再以匿名 FTP 把文件写到 `/python/python_raw.dsp`。由于 `/ftp -> /data/ftp`，对应机内文件是 `/data/ftp/python/python_raw.dsp`。FTP 成功只证明文件已写入，不能证明程序已经注册或执行。**代码/实测**
 
 #### 5.3.2 原生程序生命周期
