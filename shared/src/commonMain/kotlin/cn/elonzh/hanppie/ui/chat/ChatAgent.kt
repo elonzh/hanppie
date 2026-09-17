@@ -81,7 +81,7 @@ internal data class ChatState(
 ) {
     val running: Boolean get() = phase == ChatPhase.RUNNING
     val ready: Boolean get() = phase == ChatPhase.IDLE
-    val canSend: Boolean get() = ready && sessionId != null
+    val canSend: Boolean get() = ready
 }
 
 /** Application adapter for one sequential Koog run. Durable state is owned by SessionHistory. */
@@ -109,11 +109,11 @@ internal class ChatAgent(
             val reference = Uuid.random().toString()
             try {
                 sessions.initialize()
-                val selected = sessions.list().firstOrNull() ?: sessions.create(tr(Res.string.new_chat))
-                openInternal(selected.id)
+                val selected = sessions.list().firstOrNull()
+                if (selected == null) openDraft() else openInternal(selected.id)
                 finishPhase(ChatPhase.INITIALIZING)
                 chatLogger.info {
-                    "Agent runtime initialized sessionId=${selected.id} " +
+                    "Agent runtime initialized sessionId=${selected?.id ?: "draft"} " +
                         "activeSessions=${state.value.sessions.size}"
                 }
             } catch (error: CancellationException) {
@@ -135,7 +135,6 @@ internal class ChatAgent(
         val reference = Uuid.random().toString()
         val snapshot = state.value
         if (!snapshot.ready) return rejectCommand("agent.send", reference)
-        val sessionId = snapshot.sessionId ?: return rejectCommand("agent.send", reference)
         try {
             config.validate(); require(text.length <= 12000) { tr(Res.string.message_too_long) }
             val approximateCharacterLimit = ((config.llModel.contextLength ?: 64_000L) * 3L).coerceAtMost(3_000_000L)
@@ -146,7 +145,7 @@ internal class ChatAgent(
             return false
         }
         val runId = Uuid.random().toString()
-        if (!beginRun(sessionId)) return rejectCommand("agent.send", reference)
+        if (!beginRun()) return rejectCommand("agent.send", reference)
         lateinit var launched: Job
         launched = scope.launch(start = CoroutineStart.LAZY) {
             val started = TimeSource.Monotonic.markNow()
@@ -163,27 +162,53 @@ internal class ChatAgent(
                     if (activeToolCalls.compareAndSet(current, emptyList())) return current
                 }
             }
+            var sessionId = snapshot.sessionId
+            if (sessionId == null) {
+                // A conversation exists only once something is sent: the first message creates the session and
+                // names it, so an unused "new chat" leaves nothing in the history. A storage failure falls
+                // back to IDLE with a visible error instead of leaving the composer locked forever.
+                sessionId = try {
+                    val created = sessions.create(sessionTitleFromMessage(text))
+                    drafts.update { current -> current - NEW_CHAT_DRAFT }
+                    state.update { current -> current.copy(sessionId = created.id) }
+                    refreshLists()
+                    created.id
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    logFailure("session.create", reference, null, error)
+                    state.update {
+                        it.copy(error = "${tr(Res.string.conversation_history_operation_failed)}\n$error")
+                    }
+                    finishPhase(ChatPhase.RUNNING)
+                    return@launch
+                }
+            }
+            val currentSessionId = sessionId
             try {
                 val userMessage = prompt("hanppie-user-message") { user(text) }.messages.single() as Message.User
-                sessions.append(sessionId, AgentStartingEvent(
+                sessions.append(currentSessionId, AgentStartingEvent(
                     eventId(), runId, timestamp(), executionInfo, userMessage, model,
                 ))
                 runStarted = true
                 chatLogger.info {
-                    "Agent run started runId=$runId sessionId=$sessionId " +
+                    "Agent run started runId=$runId currentSessionId=$currentSessionId " +
                         "provider=${model.provider.id} model=${model.id}"
                 }
                 drafts.update { current ->
-                    if (current[sessionId] == text) current - sessionId else current
+                    if (current[currentSessionId] == text) current - currentSessionId else current
                 }
                 state.update { current -> current.copy(
                     lines = (current.lines + ChatLine(ChatRole.USER, text)).takeLast(250),
-                    draft = drafts.value[sessionId].orEmpty(),
+                    draft = drafts.value[currentSessionId].orEmpty(),
                     userMessageRevision = current.userMessageRevision + 1,
                 ) }
-                if (state.value.lines.size == 1 && state.value.sessions.firstOrNull { it.id == sessionId }?.title == tr(Res.string.new_chat)) {
-                    sessions.rename(sessionId, text.take(32))
+                if (state.value.lines.size == 1) {
+                    // The first message names the conversation; nothing else renames it except the user.
+                    val title = sessionTitleFromMessage(text)
+                    if (sessions.find(currentSessionId)?.title != title) renameSessionTitle(currentSessionId, title)
                 }
+                drafts.update { current -> if (current[currentSessionId] == text) current - currentSessionId else current }
                 if (settings != config && executorOverride == null) {
                     executor?.close(); http?.close()
                     val newHttp = createHttpClient()
@@ -207,24 +232,24 @@ internal class ChatAgent(
                     val toolCallId = requireNotNull(toolCall.id)
                     val decision = CompletableDeferred<Boolean>()
                     check(approval.compareAndSet(null, decision))
-                    sessions.append(sessionId, ToolApprovalRequestedEvent(
+                    sessions.append(currentSessionId, ToolApprovalRequestedEvent(
                         eventId(), runId, timestamp(), executionInfo, toolCall,
                     ))
                     state.update { it.copy(approval = ToolApproval(toolCall, preview)) }
                     return try {
                         decision.await().also { accepted ->
-                            sessions.append(sessionId, ToolApprovalResolvedEvent(
+                            sessions.append(currentSessionId, ToolApprovalResolvedEvent(
                                 eventId(), runId, timestamp(), executionInfo, toolCallId, accepted,
                             ))
                         }
                     } catch (error: CancellationException) {
                         withContext(NonCancellable) {
                             try {
-                                sessions.append(sessionId, ToolApprovalResolvedEvent(
+                                sessions.append(currentSessionId, ToolApprovalResolvedEvent(
                                     eventId(), runId, timestamp(), executionInfo, toolCallId, accepted = false,
                                 ))
                             } catch (persistenceError: Exception) {
-                                logFailure("tool.approval.persist-cancellation", runId, sessionId, persistenceError)
+                                logFailure("tool.approval.persist-cancellation", runId, currentSessionId, persistenceError)
                             }
                         }
                         throw error
@@ -243,7 +268,7 @@ internal class ChatAgent(
                         ) }
                     },
                     onMessage = { message ->
-                        sessions.append(sessionId, MessageEvent(
+                        sessions.append(currentSessionId, MessageEvent(
                             eventId(), runId, timestamp(), executionInfo, message,
                         ))
                         val calls = message.parts.filterIsInstance<MessagePart.Tool.Call>()
@@ -280,7 +305,7 @@ internal class ChatAgent(
                     install(ToolExecutionFeature) {
                         operationTimeoutMillis = this@ChatAgent.operationTimeoutMillis
                         onStarting = { toolCall ->
-                            sessions.append(sessionId, ToolCallStartingEvent(
+                            sessions.append(currentSessionId, ToolCallStartingEvent(
                                 eventId(), runId, timestamp(), executionInfo, toolCall,
                             ))
                             activeToolCalls.store(activeToolCalls.load() + toolCall)
@@ -290,68 +315,68 @@ internal class ChatAgent(
                     }
                 }
                 val result = try { agent.run(text, runId) } finally { agent.close() }
-                history = completedContext(sessions.messages(sessionId))
+                history = completedContext(sessions.messages(currentSessionId))
                 if (!terminalToolCompleted) append(ChatRole.ASSISTANT, result)
                 state.update { it.copy(replyRevision = it.replyRevision + 1, lastReply = result) }
-                sessions.append(sessionId, AgentCompletedEvent(
+                sessions.append(currentSessionId, AgentCompletedEvent(
                     eventId(), runId, timestamp(), executionInfo, result,
                 ))
                 runTerminal = true
-                chatLogger.info { "Agent run completed runId=$runId sessionId=$sessionId" }
+                chatLogger.info { "Agent run completed runId=$runId currentSessionId=$currentSessionId" }
                 try {
                     refreshLists()
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Exception) {
-                    logFailure("session.refresh", runId, sessionId, error)
+                    logFailure("session.refresh", runId, currentSessionId, error)
                     state.update { it.copy(
                         error = "${tr(Res.string.conversation_history_operation_failed)}\n$error",
                     ) }
                 }
             } catch (e: ModelRequestLimitExceededException) {
-                logFailure("agent.run", runId, sessionId, e)
+                logFailure("agent.run", runId, currentSessionId, e)
                 if (runStarted && !runTerminal) try {
-                    rememberInterrupted(sessionId, runId, executionInfo, consumeActiveToolCalls())
-                    sessions.append(sessionId, AgentExecutionFailedEvent(
+                    rememberInterrupted(currentSessionId, runId, executionInfo, consumeActiveToolCalls())
+                    sessions.append(currentSessionId, AgentExecutionFailedEvent(
                         eventId(), runId, timestamp(), executionInfo, failure = e.stackTraceToString(),
                     ))
                 } catch (persistenceError: Exception) {
-                    logFailure("agent.run.persist-failure", runId, sessionId, persistenceError)
+                    logFailure("agent.run.persist-failure", runId, currentSessionId, persistenceError)
                 }
                 state.update { it.copy(error = tr(Res.string.agent_model_request_limit_reached)) }
             } catch (e: TimeoutCancellationException) {
-                logFailure("agent.run", runId, sessionId, e)
+                logFailure("agent.run", runId, currentSessionId, e)
                 if (runStarted && !runTerminal) try {
-                    rememberInterrupted(sessionId, runId, executionInfo, consumeActiveToolCalls())
-                    sessions.append(sessionId, AgentExecutionFailedEvent(
+                    rememberInterrupted(currentSessionId, runId, executionInfo, consumeActiveToolCalls())
+                    sessions.append(currentSessionId, AgentExecutionFailedEvent(
                         eventId(), runId, timestamp(), executionInfo, failure = e.stackTraceToString(),
                     ))
                 } catch (persistenceError: Exception) {
-                    logFailure("agent.run.persist-failure", runId, sessionId, persistenceError)
+                    logFailure("agent.run.persist-failure", runId, currentSessionId, persistenceError)
                 }
                 state.update { it.copy(error = tr(Res.string.model_or_tool_operation_timed_out_review_tool_history)) }
             } catch (e: CancellationException) {
                 if (runStarted && !runTerminal) withContext(NonCancellable) {
                     try {
-                        rememberInterrupted(sessionId, runId, executionInfo, consumeActiveToolCalls())
-                        sessions.append(sessionId, AgentExecutionCancelledEvent(
+                        rememberInterrupted(currentSessionId, runId, executionInfo, consumeActiveToolCalls())
+                        sessions.append(currentSessionId, AgentExecutionCancelledEvent(
                             eventId(), runId, timestamp(), executionInfo, reason = "UserCancelled",
                         ))
                     } catch (persistenceError: Exception) {
-                        logFailure("agent.run.persist-cancellation", runId, sessionId, persistenceError)
+                        logFailure("agent.run.persist-cancellation", runId, currentSessionId, persistenceError)
                     }
                 }
-                chatLogger.info { "Agent run cancelled runId=$runId sessionId=$sessionId terminal=$runTerminal" }
+                chatLogger.info { "Agent run cancelled runId=$runId currentSessionId=$currentSessionId terminal=$runTerminal" }
                 if (!runTerminal) append(ChatRole.SYSTEM, tr(Res.string.run_canceled_canceling_chat_does_not_stop_robot_scripts))
             } catch (e: Exception) {
-                logFailure("agent.run", runId, sessionId, e)
+                logFailure("agent.run", runId, currentSessionId, e)
                 if (runStarted && !runTerminal) try {
-                    rememberInterrupted(sessionId, runId, executionInfo, consumeActiveToolCalls())
-                    sessions.append(sessionId, AgentExecutionFailedEvent(
+                    rememberInterrupted(currentSessionId, runId, executionInfo, consumeActiveToolCalls())
+                    sessions.append(currentSessionId, AgentExecutionFailedEvent(
                         eventId(), runId, timestamp(), executionInfo, failure = e.stackTraceToString(),
                     ))
                 } catch (persistenceError: Exception) {
-                    logFailure("agent.run.persist-failure", runId, sessionId, persistenceError)
+                    logFailure("agent.run.persist-failure", runId, currentSessionId, persistenceError)
                 }
                 state.update { it.copy(error = tr(
                     Res.string.run_incomplete_value_check_network_model_settings_and_tool, e.toString(),
@@ -372,7 +397,8 @@ internal class ChatAgent(
             launched.cancel()
             finishPhase(ChatPhase.RUNNING)
             chatLogger.error {
-                "Agent runtime unavailable operation=agent.send.start reference=$reference sessionId=$sessionId"
+                "Agent runtime unavailable operation=agent.send.start reference=$reference " +
+                    "sessionId=${snapshot.sessionId ?: "draft"}"
             }
             state.update { it.copy(error = tr(Res.string.agent_runtime_unavailable)) }
             return false
@@ -443,16 +469,17 @@ internal class ChatAgent(
     fun clear() = newSession()
 
     fun updateDraft(text: String) {
-        val sessionId = state.value.sessionId ?: return
+        val key = state.value.sessionId ?: NEW_CHAT_DRAFT
         val bounded = text.take(12_000)
-        drafts.update { it + (sessionId to bounded) }
+        drafts.update { it + (key to bounded) }
         state.update { current ->
-            if (current.sessionId == sessionId) current.copy(draft = bounded) else current
+            if ((current.sessionId ?: NEW_CHAT_DRAFT) == key) current.copy(draft = bounded) else current
         }
     }
 
     fun newSession() = manage("session.create") {
-        openInternal(sessions.create(tr(Res.string.new_chat)).id)
+        // A new conversation is only an empty composer: no session is stored until its first message.
+        openDraft()
     }
 
     fun openSession(sessionId: String) = manage("session.open", sessionId) {
@@ -461,16 +488,15 @@ internal class ChatAgent(
     }
 
     fun renameSession(sessionId: String, title: String) = manage("session.rename", sessionId) {
-        sessions.rename(sessionId, title)
-        refreshLists()
+        renameSessionTitle(sessionId, title)
     }
 
     fun deleteSession(sessionId: String) = manage("session.delete", sessionId) {
         sessions.delete(sessionId)
         drafts.update { it - sessionId }
         if (state.value.sessionId == sessionId) {
-            val next = sessions.list().firstOrNull() ?: sessions.create(tr(Res.string.new_chat))
-            openInternal(next.id)
+            val next = sessions.list().firstOrNull()
+            if (next == null) openDraft() else openInternal(next.id)
         } else refreshLists()
     }
 
@@ -527,6 +553,29 @@ internal class ChatAgent(
 
     private suspend fun refreshLists() {
         state.update { it.copy(sessions = sessions.list()) }
+    }
+
+    /** An empty composer: no stored conversation, so the history stays untouched until a message is sent. */
+    private suspend fun openDraft() {
+        drafts.update { it - NEW_CHAT_DRAFT }
+        history = emptyList()
+        state.update { current -> current.copy(
+            lines = emptyList(),
+            streaming = "",
+            approval = null,
+            error = null,
+            firstTokenMs = null,
+            elapsedMs = null,
+            sessionId = null,
+            draft = "",
+            sessions = sessions.list(),
+        ) }
+    }
+
+    /** Renaming also refreshes the visible list: a title that only lands in storage never shows up. */
+    private suspend fun renameSessionTitle(sessionId: String, title: String) {
+        sessions.rename(sessionId, title)
+        refreshLists()
     }
 
     private fun toChatLines(messages: List<Message>): List<ChatLine> {
@@ -602,10 +651,11 @@ internal class ChatAgent(
     private fun eventId() = Uuid.random().toString()
     private fun timestamp() = Clock.System.now().toEpochMilliseconds()
 
-    private fun beginRun(sessionId: String): Boolean {
+    /** Starts a run for whatever conversation is focused, stored or still an unsent draft. */
+    private fun beginRun(): Boolean {
         while (true) {
             val current = state.value
-            if (current.phase != ChatPhase.IDLE || current.sessionId != sessionId) return false
+            if (current.phase != ChatPhase.IDLE) return false
             if (state.compareAndSet(current, current.copy(
                     phase = ChatPhase.RUNNING,
                     error = null,
@@ -686,6 +736,9 @@ internal class ChatAgent(
 
     companion object {
         private const val AGENT_ID = "hanppie-agent"
+
+        /** Draft key for a conversation that has no stored session yet. */
+        private const val NEW_CHAT_DRAFT = "hanppie-new-chat-draft"
         internal val SYSTEM_PROMPT get() = (if(Localization.english) "Respond concisely in English unless the user requests another language.\n" else "默认用简洁中文回复，除非用户要求其他语言。\n") + """
             你是憨皮，RoboMaster 系列机器人的对话助手。连续对话，理解上下文。
             当前设备型号只能来自可靠的设备信息；不得根据已验证机型推断连接目标的型号，也不得声称未经验证的型号已经受支持。

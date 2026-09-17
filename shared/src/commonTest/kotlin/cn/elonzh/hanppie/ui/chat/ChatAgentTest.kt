@@ -24,13 +24,17 @@ import kotlinx.serialization.json.*
 
 class ChatAgentTest {
     private val config = ModelSettings(apiKey = "test-not-a-secret")
-    private class Fake(private val respond: suspend (Prompt) -> List<StreamFrame>) : PromptExecutor() {
+    private class Fake(
+        private val respond: suspend (Prompt) -> List<StreamFrame>,
+    ) : PromptExecutor() {
         val prompts = mutableListOf<Prompt>()
         override fun executeStreaming(prompt: Prompt, model: LLModel, tools: List<ToolDescriptor>) = flow {
             prompts += prompt
             respond(prompt).forEach { emit(it) }
         }
-        override suspend fun execute(prompt: Prompt, model: LLModel, tools: List<ToolDescriptor>): Message.Assistant = error("Must stream")
+        // Only streaming is used now: no request exists for anything but the conversation itself.
+        override suspend fun execute(prompt: Prompt, model: LLModel, tools: List<ToolDescriptor>): Message.Assistant =
+            error("Must stream")
         override suspend fun moderate(prompt: Prompt, model: LLModel): ModerationResult = error("Unused")
         override fun close() {}
     }
@@ -74,7 +78,7 @@ class ChatAgentTest {
         execute: suspend (String) -> String,
         stopRobot: suspend () -> String,
         executor: PromptExecutor,
-        sessions: TestSessionHistory = TestSessionHistory(),
+        sessions: SessionHistory = TestSessionHistory(),
         operationTimeoutMillis: Long = 120_000,
     ) = ChatAgent(
         toolRegistry = testTools(
@@ -102,6 +106,37 @@ class ChatAgentTest {
         sections = listOf(LabApiReferenceTool.Section("test", listOf(fact))),
         guidance = "verified",
     )
+
+    private class FailingCreateHistory(
+        private val delegate: TestSessionHistory = TestSessionHistory(),
+    ) : SessionHistory by delegate {
+        override suspend fun create(title: String): AgentSession = error("storage is full")
+    }
+
+    @Test fun aSessionCreateFailureLeavesTheComposerUsable() = runBlocking {
+        val fake = Fake { text("unused") }
+        agent({ "未连接" }, { error("No robot") }, { error("No robot") }, fake, FailingCreateHistory()).use { agent ->
+            agent.ready()
+            agent.send("第一条消息", config)
+            val failed = withTimeout(5_000) { agent.state.first { state -> state.error != null } }
+            assertFalse(failed.running, "a storage failure must not leave the conversation running")
+            assertTrue(failed.ready, "the composer has to stay usable after a storage failure")
+            assertNull(failed.sessionId)
+        }
+    }
+
+    /** The title a conversation carries: its first message, and nothing else. */
+    @Test fun theTitleIsTheFirstMessageAndStaysThatWay(): Unit = runBlocking {
+        val sessions = TestSessionHistory()
+        val fake = Fake { text("记住了") }
+        agent({ "未连接" }, { error("No robot") }, { error("No robot") }, fake, sessions).use { agent ->
+            agent.ready()
+            agent.send("记住口令：蓝色", config)
+            agent.finished()
+            delay(200)
+            assertEquals("记住口令：蓝色", sessions.list().first().title)
+        }
+    }
 
     @Test fun continuousConversationUsesCompletedPrompt(): Unit = runBlocking {
         val fake = Fake { text("记住了") }
@@ -579,42 +614,58 @@ class ChatAgentTest {
         }
     }
 
-    @Test fun sessionManagementKeepsTheSessionListConsistent() = runBlocking {
+    @Test fun anEmptyComposerStoresNothingUntilAMessageIsSent() = runBlocking {
         val fake = Fake { text("unused") }
-        agent({ "未连接" }, { error("No robot") }, { error("No robot") }, fake).use { agent ->
-            val first = agent.ready().sessionId
+        agent({ "未连接" }, { error("No robot") }, { error("No robot") }, fake, TestSessionHistory()).use { agent ->
+            val ready = agent.ready()
+            assertNull(ready.sessionId, "an unused new chat must not create a session")
+            assertTrue(ready.sessions.isEmpty())
             agent.newSession()
-            val second = withTimeout(5000) { agent.state.first { it.sessionId != first }.sessionId }
-            assertNotNull(second)
-            agent.renameSession(second, "巡检")
-            withTimeout(5000) { agent.state.first { state -> state.sessions.any { it.id == second && it.title == "巡检" } } }
-            agent.deleteSession(second)
-            withTimeout(5000) { agent.state.first { state -> state.sessions.none { it.id == second } } }
+            assertNull(agent.state.value.sessionId)
+            assertTrue(agent.state.value.sessions.isEmpty())
         }
-        Unit
     }
 
-    @Test fun draftsAreScopedToSessionAndAcceptedTextClearsAfterPersistence() = runBlocking {
-        val fake = Fake { text("完成") }
-        agent({ "未连接" }, { error("No robot") }, { error("No robot") }, fake).use { agent ->
-            val first = requireNotNull(agent.ready().sessionId)
-            agent.updateDraft("第一段草稿")
-            agent.newSession()
-            val second = requireNotNull(withTimeout(5000) {
-                agent.state.first { it.sessionId != first }.sessionId
-            })
-            assertEquals("", agent.state.value.draft)
-            agent.updateDraft("第二段草稿")
-            agent.openSession(first)
-            withTimeout(5000) { agent.state.first { it.sessionId == first } }
-            assertEquals("第一段草稿", agent.state.value.draft)
-
-            agent.send(agent.state.value.draft, config)
+    @Test fun theFirstMessageCreatesTheSessionAndTheListKeepsTheTitle() = runBlocking {
+        val fake = Fake { text("unused") }
+        agent({ "未连接" }, { error("No robot") }, { error("No robot") }, fake, TestSessionHistory()).use { agent ->
+            agent.ready()
+            agent.send("看看电量", config)
             agent.finished()
+            val created = withTimeout(5_000) { agent.state.first { it.sessionId != null } }
+            val sessionId = requireNotNull(created.sessionId)
+            assertEquals(1, created.sessions.size)
+            assertEquals("看看电量", created.sessions.single { it.id == sessionId }.title)
+
+            agent.renameSession(sessionId, "巡检")
+            withTimeout(5_000) { agent.state.first { state -> state.sessions.any { it.id == sessionId && it.title == "巡检" } } }
+            agent.deleteSession(sessionId)
+            withTimeout(5_000) { agent.state.first { state -> state.sessions.none { it.id == sessionId } } }
+            // Deleting the open conversation falls back to an empty composer, not to a new stored session.
+            assertNull(agent.state.value.sessionId)
+        }
+    }
+
+    @Test fun draftsAreScopedToConversationAndClearedOnceSent() = runBlocking {
+        val fake = Fake { text("完成") }
+        agent({ "未连接" }, { error("No robot") }, { error("No robot") }, fake, TestSessionHistory()).use { agent ->
+            agent.ready()
+            agent.updateDraft("第一个会话的草稿")
+            assertEquals("第一个会话的草稿", agent.state.value.draft)
+
+            agent.send("第一条消息", config)
+            agent.finished()
+            val first = requireNotNull(agent.state.value.sessionId)
+            assertEquals("", agent.state.value.draft, "a sent draft is cleared")
+
+            agent.updateDraft("第一个会话的新草稿")
+            agent.newSession()
+            withTimeout(5_000) { agent.state.first { it.sessionId == null } }
             assertEquals("", agent.state.value.draft)
-            agent.openSession(second)
-            withTimeout(5000) { agent.state.first { it.sessionId == second } }
-            assertEquals("第二段草稿", agent.state.value.draft)
+
+            agent.openSession(first)
+            withTimeout(5_000) { agent.state.first { it.sessionId == first } }
+            assertEquals("第一个会话的新草稿", agent.state.value.draft)
         }
     }
 }

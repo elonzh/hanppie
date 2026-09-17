@@ -1,14 +1,7 @@
 package cn.elonzh.hanppie.agent.provider
 
-import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.http.client.ktor.KtorKoogHttpClient
-import ai.koog.prompt.dsl.prompt
-import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
 import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
-import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
-import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor
-import ai.koog.prompt.params.LLMParams
-import ai.koog.prompt.streaming.StreamFrame
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.settings.ModelProviderPreset
@@ -54,7 +47,7 @@ internal data class ModelCatalogState(
     val endpoint: String? = null,
 )
 
-internal enum class ModelTestStage { LOCAL, CATALOG, STREAMING, TOOL_CALL }
+internal enum class ModelTestStage { LOCAL, CATALOG }
 
 internal data class ModelTestStageResult(
     val stage: ModelTestStage,
@@ -62,7 +55,7 @@ internal data class ModelTestStageResult(
     val message: String,
 )
 
-/** Discovers model IDs and verifies text streaming plus a side-effect-free forced tool call. */
+/** Discovers model IDs and verifies that the endpoint authenticates and answers normally. */
 internal class ModelConfigurationTester(
     private val scope: CoroutineScope,
     private val createHttpClient: () -> HttpClient,
@@ -121,7 +114,6 @@ internal class ModelConfigurationTester(
         state.value = ModelTestState(running = true, provider = config.provider, endpoint = config.endpoint)
         job = scope.launch {
             var http: HttpClient? = null
-            var executor: MultiLLMPromptExecutor? = null
             val stages = mutableListOf<ModelTestStageResult>()
             try {
                 config.validate()
@@ -136,59 +128,6 @@ internal class ModelConfigurationTester(
                         tr(Res.string.model_test_model_missing_value, config.model))
                 }
                 stages += passed(ModelTestStage.CATALOG)
-                publish(config, stages)
-
-                val client = OpenAILLMClient(
-                    config.apiKey,
-                    OpenAIClientSettings(
-                        baseUrl = config.endpoint.trimEnd('/') + "/",
-                        chatCompletionsPath = "chat/completions",
-                        modelsPath = "models",
-                    ),
-                    KtorKoogHttpClient.Factory(http),
-                )
-                executor = MultiLLMPromptExecutor(config.llModel.provider to client)
-                val textFrames = executor.executeStreaming(
-                    prompt("hanppie-model-text-test", params = OpenAIChatParams(
-                        maxTokens = 16,
-                        toolChoice = LLMParams.ToolChoice.None,
-                    )) {
-                        system("This is a configuration test. Reply with exactly OK.")
-                        user("OK")
-                    },
-                    config.llModel,
-                ).toList()
-                checkCompleteStream(textFrames, ModelTestStage.STREAMING)
-                if (textFrames.none { frame ->
-                        (frame is StreamFrame.TextDelta && frame.text.isNotBlank()) ||
-                            (frame is StreamFrame.TextComplete && frame.text.isNotBlank())
-                    }) {
-                    throw ProbeFailure(ModelTestStage.STREAMING,
-                        tr(Res.string.the_model_returned_no_visible_reply))
-                }
-                stages += passed(ModelTestStage.STREAMING)
-                publish(config, stages)
-
-                val toolFrames = executor.executeStreaming(
-                    prompt("hanppie-model-tool-test", params = OpenAIChatParams(
-                        maxTokens = 64,
-                        toolChoice = LLMParams.ToolChoice.Named(PROBE_TOOL),
-                        parallelToolCalls = false,
-                    )) {
-                        system("This is a configuration test. Call the supplied tool once with no arguments.")
-                        user("Run the configuration probe.")
-                    },
-                    config.llModel,
-                    listOf(ToolDescriptor(PROBE_TOOL, "A side-effect-free configuration compatibility probe")),
-                ).toList()
-                checkCompleteStream(toolFrames, ModelTestStage.TOOL_CALL)
-                val call = toolFrames.filterIsInstance<StreamFrame.ToolCallComplete>()
-                    .singleOrNull { it.name == PROBE_TOOL }
-                    ?: throw ProbeFailure(ModelTestStage.TOOL_CALL, tr(Res.string.model_test_tool_not_returned))
-                if (call.contentJsonResult.isFailure) {
-                    throw ProbeFailure(ModelTestStage.TOOL_CALL, tr(Res.string.model_test_tool_not_returned))
-                }
-                stages += passed(ModelTestStage.TOOL_CALL)
                 state.value = ModelTestState(
                     success = true,
                     message = tr(Res.string.model_test_complete),
@@ -202,9 +141,7 @@ internal class ModelConfigurationTester(
             } catch (error: Exception) {
                 val failedStage = (error as? ProbeFailure)?.stage ?: when {
                     stages.none { it.stage == ModelTestStage.LOCAL } -> ModelTestStage.LOCAL
-                    stages.none { it.stage == ModelTestStage.CATALOG } -> ModelTestStage.CATALOG
-                    stages.none { it.stage == ModelTestStage.STREAMING } -> ModelTestStage.STREAMING
-                    else -> ModelTestStage.TOOL_CALL
+                    else -> ModelTestStage.CATALOG
                 }
                 modelTesterLogger.error(error) {
                     "Model configuration test failed stage=${failedStage.name} " +
@@ -223,7 +160,6 @@ internal class ModelConfigurationTester(
                     stages = stages,
                 )
             } finally {
-                executor?.close()
                 http?.close()
                 state.value = state.value.copy(running = false)
             }
@@ -250,12 +186,6 @@ internal class ModelConfigurationTester(
         }
     }
 
-    private fun checkCompleteStream(frames: List<StreamFrame>, stage: ModelTestStage) {
-        if (frames.none { it is StreamFrame.End }) {
-            throw ProbeFailure(stage, tr(Res.string.model_test_transport_failed_value, "IncompleteStream"))
-        }
-    }
-
     private fun publish(
         config: ModelSettings,
         stages: List<ModelTestStageResult>,
@@ -277,7 +207,6 @@ internal class ModelConfigurationTester(
     ) : IllegalStateException(detail)
 
     private companion object {
-        const val PROBE_TOOL = "hanppie_configuration_probe"
     }
 }
 

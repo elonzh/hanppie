@@ -107,7 +107,6 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
     var historyOpen by rememberSaveable { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<AgentSession?>(null) }
     var renameTitle by rememberSaveable { mutableStateOf("") }
-    var deleteTarget by remember { mutableStateOf<AgentSession?>(null) }
     fun submit(): Boolean {
         val current = model.chat.state.value
         val message = current.draft
@@ -184,16 +183,6 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
             }
         }
     }
-    deleteTarget?.let { conversation ->
-        WorkbenchDialog(show = true, onDismissRequest = { deleteTarget = null }, title = tr(Res.string.delete_conversation_question),
-            summary = tr(Res.string.delete_conversation_summary)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button({ deleteTarget = null }, Modifier.weight(1f).heightIn(min = 48.dp)) { Text(tr(Res.string.cancel)) }
-                Button({ model.chat.deleteSession(conversation.id); deleteTarget = null },
-                    Modifier.weight(1f).heightIn(min = 48.dp)) { Text(tr(Res.string.delete)) }
-            }
-        }
-    }
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val expanded = maxWidth >= 840.dp
         val compactHistoryListHeightLimit = (maxHeight - 220.dp).coerceIn(120.dp, 420.dp)
@@ -203,7 +192,9 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
                     onOpen = { model.chat.openSession(it); historyOpen = false },
                     onNew = { model.chat.newSession(); historyOpen = false },
                     onRename = { item -> renameTitle = item.title; renameTarget = item },
-                    onDelete = { id -> deleteTarget = state.sessions.firstOrNull { it.id == id } },
+                    // Deleting is the explicit choice already: the menu row acts at once instead of asking
+                    // the user to confirm wording about their own conversation.
+                    onDelete = { id -> model.chat.deleteSession(id) },
                     enabled = state.ready,
                     listHeightLimit = compactHistoryListHeightLimit,
                     fillAvailableHeight = false,
@@ -229,7 +220,7 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
             onOpen = model.chat::openSession,
             onNew = model.chat::newSession,
             onRename = { item -> renameTitle = item.title; renameTarget = item },
-            onDelete = { id -> deleteTarget = state.sessions.firstOrNull { it.id == id } },
+            onDelete = { id -> model.chat.deleteSession(id) },
             enabled = state.ready,
             fillAvailableHeight = true,
             modifier = Modifier.width(280.dp).fillMaxHeight())
@@ -396,14 +387,10 @@ private fun ConversationRow(
     Row(Modifier.fillMaxWidth().background(
         if (selected) MiuixTheme.colorScheme.primary.copy(alpha = .14f) else Color.Transparent,
         RoundedCornerShape(14.dp)).clickable(enabled = enabled, onClick = onClick)
-        .padding(start = 12.dp, top = 9.dp, bottom = 9.dp), verticalAlignment = Alignment.Top) {
-        Column(Modifier.weight(1f).padding(end = 4.dp)) {
-            Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            if (item.lastMessagePreview.isNotBlank()) Text(item.lastMessagePreview, maxLines = 2,
-                overflow = TextOverflow.Ellipsis, fontSize = 11.sp,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-        }
+        .padding(start = 12.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        // One line per conversation: the title is the whole row and long titles are ellipsized.
+        Text(item.title, Modifier.weight(1f).padding(end = 4.dp), maxLines = 1,
+            overflow = TextOverflow.Ellipsis, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         ConversationActions(onRename, onDelete, enabled)
     }
 }

@@ -419,6 +419,4 @@ private fun actionLabel(action: ControlAction): String = tr(when (action) {
 private fun modelTestStageLabel(stage: ModelTestStage): String = tr(when (stage) {
     ModelTestStage.LOCAL -> Res.string.model_test_local
     ModelTestStage.CATALOG -> Res.string.model_test_catalog
-    ModelTestStage.STREAMING -> Res.string.model_test_streaming
-    ModelTestStage.TOOL_CALL -> Res.string.model_test_tool_call
 })

@@ -109,7 +109,7 @@ class SessionPersistenceTest {
             applicationDatabase = buildHanppieDatabase(
                 Room.databaseBuilder<HanppieDatabase>(applicationPath.toString()),
             )
-            RoomScriptRepository(applicationDatabase.scriptDao()).insert(
+            RoomScriptRepository(applicationDatabase.scriptDao(), applicationDatabase.scriptAudioDao()).insert(
                 StoredScript("script", "保留脚本", "def start(): pass", 1, 1),
             )
             runtimeStorage = openAgentRuntimeStorage(runtimePath, directory.resolve("events"))
