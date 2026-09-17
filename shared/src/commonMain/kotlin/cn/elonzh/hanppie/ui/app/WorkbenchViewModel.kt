@@ -41,8 +41,12 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.io.buffered
+import kotlinx.io.readByteArray
 
 private val workbenchLogger = KotlinLogging.logger {}
+
+/** Container formats the platform importers can decode; the DSP itself always stores Opus. */
+private val AUDIO_EXTENSIONS = FileKitType.File("wav", "mp3", "ogg", "opus", "m4a", "aac", "flac", "wma")
 
 @OptIn(ExperimentalAtomicApi::class, ExperimentalUuidApi::class)
 internal class WorkbenchViewModel(
@@ -105,6 +109,13 @@ internal class WorkbenchViewModel(
     fun importScript() = documentOperation("import script") {
         val file = FileKit.openFilePicker(FileKitType.File("py")) ?: return@documentOperation
         document.value = EditorDocument(source = file.readString(), path = file.name)
+    }
+
+    /** Reads one host audio file and hands the bytes to the script's custom audio library. */
+    fun importScriptAudio() = launchFileAction("import audio") {
+        val file = FileKit.openFilePicker(AUDIO_EXTENSIONS) ?: return@launchFileAction
+        val bytes = withContext(Dispatchers.IO) { file.source().buffered().use { it.readByteArray() } }
+        model.scriptAudio.import(file.name, bytes)
     }
 
     fun exportScript() = documentOperation("export script") {

@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import cn.elonzh.hanppie.robot.files.RobotFileEntry
 import cn.elonzh.hanppie.robot.files.RobotFileKind
 import cn.elonzh.hanppie.robot.files.RobotFileService
+import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.robot.lab.LabUpload
 import cn.elonzh.hanppie.robot.product.RobotModel
 import cn.elonzh.hanppie.robot.product.RobotProduct
@@ -51,7 +52,7 @@ class RemoteFireUiTest {
         override var onAudio: ((ByteArray) -> Unit)? = null
         override val lab: RobotLabSession = object : RobotLabSession {
             override fun invalidateMode() {}
-            override suspend fun upload(source: String, title: String): LabUpload =
+            override suspend fun upload(source: String, title: String, audio: List<LabAudioClip>): LabUpload =
                 LabUpload("hash", "0123456789abcdef")
             override suspend fun start(): String = "0123456789abcdef"
             override suspend fun stop() { labStopCount.incrementAndGet() }

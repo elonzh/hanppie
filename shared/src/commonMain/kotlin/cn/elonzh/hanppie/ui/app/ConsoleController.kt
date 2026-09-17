@@ -1,10 +1,12 @@
 package cn.elonzh.hanppie.ui.app
 
+import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.ui.chat.ChatAgent
 import cn.elonzh.hanppie.agent.provider.ModelCatalogState
 import cn.elonzh.hanppie.agent.provider.ModelTestState
 import cn.elonzh.hanppie.ui.i18n.UiText
 import cn.elonzh.hanppie.ui.robot.files.RobotFilesController
+import cn.elonzh.hanppie.ui.scripts.ScriptAudioLibrary
 import cn.elonzh.hanppie.ui.scripts.ScriptLibrary
 import cn.elonzh.hanppie.ui.settings.ControlSettings
 import cn.elonzh.hanppie.ui.settings.ConnectionPreferences
@@ -27,6 +29,7 @@ internal interface ConsoleController : AutoCloseable {
     val settingsBusy: MutableStateFlow<Boolean>
     val settingsMessage: MutableStateFlow<UiText?>
     val scriptLibrary: ScriptLibrary
+    val scriptAudio: ScriptAudioLibrary
     val robotFiles: RobotFilesController
     val chat: ChatAgent
     val foregroundState: MutableStateFlow<Boolean>
@@ -68,7 +71,7 @@ internal interface ConsoleController : AutoCloseable {
     fun pairRouter(ssid: String, password: String)
     fun connect(ip: String, appId: String)
     fun disconnect()
-    fun runScript(source: String, title: String)
+    fun runScript(source: String, title: String, audio: List<LabAudioClip> = emptyList())
     fun stop()
     fun clearLogs()
     suspend fun pauseConnection()

@@ -26,6 +26,7 @@ import cn.elonzh.hanppie.ui.chat.createAgentHttpClient
 import cn.elonzh.hanppie.ui.design.WorkbenchDialog
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.ui.robot.audio.DesktopLabAudioImporter
 import cn.elonzh.hanppie.ui.robot.remote.DesktopSpeakerInput
 import cn.elonzh.hanppie.ui.settings.ModelSettings
 import cn.elonzh.hanppie.ui.settings.ModelCatalog
@@ -45,6 +46,7 @@ private fun createDesktopWorkbenchViewModel(): WorkbenchViewModel {
     return try {
         val model = ConsoleModel(
             speakerInput = DesktopSpeakerInput(),
+            audioImporter = DesktopLabAudioImporter(),
             robotRuntime = JvmRobotRuntime(),
             settingsStore = storage.settings,
             scriptRepository = storage.scripts,
@@ -149,6 +151,7 @@ private fun DesktopWorkbenchWindow(onExit: () -> Unit) {
                 onCockpitChanged = { cockpitActive = it },
                 onImport = holder::importScript,
                 onExport = holder::exportScript,
+                onImportAudio = holder::importScriptAudio,
                 fileError = holder.fileError,
                 onFileError = holder::updateFileError,
                 onRobotFileUpload = holder::uploadRobotFile,

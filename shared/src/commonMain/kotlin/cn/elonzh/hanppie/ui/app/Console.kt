@@ -83,6 +83,7 @@ internal fun Console(
     onCockpitChanged: (Boolean) -> Unit = {},
     onImport: () -> Unit = {},
     onExport: () -> Unit = {},
+    onImportAudio: () -> Unit = {},
     fileError: String? = null,
     onFileError: (String?) -> Unit = {},
     onSpeechSettings: (() -> Unit)? = null,
@@ -251,7 +252,8 @@ internal fun Console(
                                         RobotRoute -> DevicePage(model, state, compact, Modifier.weight(1f),
                                             onConnectionGuide = ::openConnectionGuide, onRemote = ::openCockpit)
                                         ScriptRoute -> ScriptPage(model, document, compact, onImport, onExport,
-                                            fileError, onFileError, onConnectionDetails = { connectionDetails = true })
+                                            fileError, onFileError, onConnectionDetails = { connectionDetails = true },
+                                            onImportAudio = onImportAudio)
                                         DebugRoute -> DebugPage(model, state, diagnosticTab, { diagnosticTab = it }, compact,
                                             Modifier.weight(1f), onRobotFileUpload, onRobotFileDownload, onRobotFileOpen)
                                         CockpitRoute -> Unit

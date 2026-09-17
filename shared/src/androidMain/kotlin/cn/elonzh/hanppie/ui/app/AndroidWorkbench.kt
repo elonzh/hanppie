@@ -33,6 +33,7 @@ import cn.elonzh.hanppie.ui.chat.createAgentHttpClient
 import cn.elonzh.hanppie.ui.design.WorkbenchDialog
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.ui.robot.audio.AndroidLabAudioImporter
 import cn.elonzh.hanppie.ui.robot.remote.AndroidSpeakerInput
 import cn.elonzh.hanppie.ui.speech.AndroidSpeechInput
 import java.net.DatagramSocket
@@ -78,6 +79,7 @@ private fun createAndroidWorkbenchViewModel(
         val model = ConsoleModel(
             voiceInput = speechInput,
             speakerInput = AndroidSpeakerInput(app),
+            audioImporter = AndroidLabAudioImporter(),
             robotRuntime = JvmRobotRuntime(network::network),
             settingsStore = storage.settings,
             scriptRepository = storage.scripts,
@@ -199,7 +201,7 @@ fun AndroidWorkbench(autoConnectOnStart: Boolean = true) {
                 Button({ (context as? Activity)?.finish() }) { Text(tr(Res.string.quit_anyway)) }
             }
         }
-        Console(holder.model, holder.document, onImport = holder::importScript,
+        Console(holder.model, holder.document, onImport = holder::importScript, onImportAudio = holder::importScriptAudio,
             onVoiceInput = { if (voiceDisclosureAccepted) startVoice() else voiceDisclosure = true },
             onPushToTalkStart = ::startTalk, onPushToTalkStop = ::stopTalk,
             onExport = holder::exportScript, fileError = holder.fileError, onFileError = holder::updateFileError,

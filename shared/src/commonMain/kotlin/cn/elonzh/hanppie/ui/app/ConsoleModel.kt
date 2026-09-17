@@ -15,6 +15,7 @@ import cn.elonzh.hanppie.agent.tools.ReadLabScriptTool
 import cn.elonzh.hanppie.agent.tools.RobotStatusTool
 import cn.elonzh.hanppie.agent.tools.SaveLabScriptTool
 import cn.elonzh.hanppie.agent.tools.StopLabTool
+import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.robot.lab.LabRunEvent
 import cn.elonzh.hanppie.robot.lab.LabRunEventType
 import cn.elonzh.hanppie.robot.lab.LabRunProtocol
@@ -37,8 +38,11 @@ import cn.elonzh.hanppie.ui.i18n.DateTimeStyle
 import cn.elonzh.hanppie.ui.i18n.formatLocalDateTime
 import cn.elonzh.hanppie.ui.robot.files.RobotFilesController
 import cn.elonzh.hanppie.ui.robot.remote.DriveSpeed
+import cn.elonzh.hanppie.ui.robot.audio.LabAudioImporter
+import cn.elonzh.hanppie.ui.robot.audio.NoLabAudioImporter
 import cn.elonzh.hanppie.ui.robot.remote.NoSpeakerInput
 import cn.elonzh.hanppie.ui.robot.remote.SpeakerInput
+import cn.elonzh.hanppie.ui.scripts.ScriptAudioLibrary
 import cn.elonzh.hanppie.ui.scripts.ScriptLibrary
 import cn.elonzh.hanppie.ui.scripts.ScriptRepository
 import cn.elonzh.hanppie.ui.settings.ModelSettings
@@ -69,7 +73,8 @@ internal class ConsoleModel(
     private val speakerInput: SpeakerInput = NoSpeakerInput(),
     private val robotRuntime: RobotRuntime,
     private val settingsStore: SettingsStore,
-    scriptRepository: ScriptRepository,
+    private val scriptRepository: ScriptRepository,
+    private val audioImporter: LabAudioImporter = NoLabAudioImporter(),
     sessionHistory: SessionHistory,
     createAgentHttpClient: () -> HttpClient,
     private val runtimeDefaults: () -> ModelSettings = ::ModelSettings,
@@ -99,6 +104,7 @@ internal class ConsoleModel(
     override val settingsMessage = settings.message
     private val connectionPreferencesScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     override val scriptLibrary = ScriptLibrary(scriptRepository)
+    override val scriptAudio = ScriptAudioLibrary(scriptRepository, audioImporter)
     override val robotFiles = RobotFilesController(scope) { acceptingWork.load() && state.value.connected }
     init {
         scope.launch(start = CoroutineStart.UNDISPATCHED) { scriptLibrary.load() }
@@ -645,12 +651,12 @@ internal class ConsoleModel(
         log(tr(Res.string.connection_closed_scripts_on_the_robot_may_still_be))
     }
 
-    override fun runScript(source: String, title: String) = work {
+    override fun runScript(source: String, title: String, audio: List<LabAudioClip>) = work {
         haltRemote(); session.load()?.exitRemote()
-        startScript(source, title)
+        startScript(source, title, audio)
     }
 
-    private suspend fun startScript(source: String, title: String): String {
+    private suspend fun startScript(source: String, title: String, audio: List<LabAudioClip> = emptyList()): String {
         val controller = checkNotNull(lab.load()) { tr(Res.string.robot_is_not_connected) }
         val startedAt = clock.now().toEpochMilliseconds()
         state.update { it.copy(scriptRunId = null, scriptTitle = title,
@@ -658,7 +664,7 @@ internal class ConsoleModel(
             scriptFinishedAtEpochMillis = null, scriptMessage = uiText(Res.string.uploading),
             scriptMessages = listOf(tr(Res.string.script_trace_uploading))) }
         val upload = try {
-            controller.upload(source, title)
+            controller.upload(source, title, audio)
         } catch (error: Exception) {
             state.update { it.copy(scriptRunPhase = ScriptRunPhase.FAILED,
                 scriptFinishedAtEpochMillis = clock.now().toEpochMilliseconds(), scriptMessage = uiText(Res.string.upload_failed)) }
@@ -813,5 +819,5 @@ internal class ConsoleModel(
                 scriptMessage = if (uncertain) uiText(Res.string.connection_closed_robot_state_unknown) else it.scriptMessage)
         }
     }
-    override fun close() { connectionRevision.addAndFetch(1); robotFiles.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
+    override fun close() { connectionRevision.addAndFetch(1); robotFiles.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
 }

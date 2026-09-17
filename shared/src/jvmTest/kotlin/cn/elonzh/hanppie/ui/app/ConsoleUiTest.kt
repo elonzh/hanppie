@@ -288,7 +288,8 @@ class ConsoleUiTest {
             rule.onNodeWithTag("script-new").performClick()
             rule.onNodeWithTag("script-editor").assertIsDisplayed().performTextReplacement("def start():\n    pass")
             rule.onNodeWithTag("script-save").assertIsDisplayed()
-            rule.onNodeWithText("运行脚本").assertIsDisplayed()
+            rule.onNodeWithTag("script-run").assertIsDisplayed()
+            rule.onNodeWithTag("script-console").assertIsDisplayed()
             snapshot("phone-script")
         } finally { model.close() }
     }
@@ -486,7 +487,9 @@ class ConsoleUiTest {
             rule.onNodeWithTag("chat-input").performClick().performKeyInput {
                 keyDown(Key.CtrlLeft); pressKey(Key.N); keyUp(Key.CtrlLeft)
             }
-            rule.waitUntil(5_000) { model.chat.state.value.sessions.size == initial + 1 }
+            // A new conversation only focuses an empty composer: no session is stored until it is sent.
+            rule.waitUntil(5_000) { model.chat.state.value.sessionId == null }
+            rule.runOnIdle { assertEquals(initial, model.chat.state.value.sessions.size) }
             rule.onNodeWithTag("chat-input").performKeyInput {
                 keyDown(Key.CtrlLeft); pressKey(Key.L); keyUp(Key.CtrlLeft)
             }
@@ -1062,7 +1065,9 @@ class ConsoleUiTest {
             rule.onNodeWithTag("script-new").performClick()
             rule.onNodeWithTag("script-editor").performTextReplacement("def start():\n    pass\n")
             rule.onNodeWithText("新脚本 · 未保存").assertExists()
-            rule.onNodeWithText("运行脚本").assertIsNotEnabled()
+            rule.onNodeWithTag("script-run").assertIsNotEnabled()
+            rule.onNodeWithText("运行脚本").assertDoesNotExist()
+            rule.onNodeWithTag("script-more").performClick()
             rule.onNodeWithTag("script-import").performClick()
             rule.onNodeWithText("替换未保存的脚本？").assertExists()
             rule.onNodeWithText("返回").performClick()
@@ -1116,8 +1121,9 @@ class ConsoleUiTest {
             rule.onNodeWithText("raw[0] / offset 26").assertExists()
             rule.onNodeWithText("1.25", substring = false).assertExists()
             rule.onNodeWithContentDescription("脚本").performClick()
-            rule.onNodeWithTag("script-run-screen").assertIsDisplayed()
+            rule.onNodeWithTag("script-console").assertIsDisplayed()
             rule.onNodeWithText("fixture robot message").assertExists()
+            rule.onNodeWithTag("script-status-strip").assertIsDisplayed()
         } finally { model.close() }
     }
 
@@ -1176,26 +1182,27 @@ class ConsoleUiTest {
             rule.onNodeWithText("Sentry scan 2/3: left").assertIsDisplayed()
             snapshot("active-script-global-status")
             rule.onNodeWithTag("script-run-banner").performClick()
-            rule.onNodeWithTag("script-run-screen").assertIsDisplayed()
+            rule.onNodeWithTag("script-console").assertIsDisplayed()
             rule.onNodeWithTag("script-run-log").assertIsDisplayed()
             rule.onNodeWithText("运行日志").assertIsDisplayed()
             rule.onNodeWithText("运行标识：$runId").assertIsDisplayed()
-            rule.onNodeWithText("我的脚本").assertDoesNotExist()
+            // The console is inline, so the library the user was on is still there.
+            rule.onNodeWithText("我的脚本").assertIsDisplayed()
             snapshot("active-script-run-phone")
             rule.runOnIdle { width.value = 320.dp; height.value = 568.dp }
             rule.waitForIdle()
-            rule.onNodeWithTag("script-run-screen").assertIsDisplayed()
+            rule.onNodeWithTag("script-console").assertIsDisplayed()
             rule.onNodeWithTag("script-run-log").assertIsDisplayed()
             rule.onNodeWithText("Sentry scan 2/3: left").assertIsDisplayed()
             snapshot("active-script-run-compact-phone")
             rule.runOnIdle { width.value = 1040.dp; height.value = 760.dp }
             rule.waitForIdle()
-            rule.onNodeWithTag("script-run-screen").assertIsDisplayed()
+            rule.onNodeWithTag("script-console").assertIsDisplayed()
             rule.onNodeWithText("Sentry scan 2/3: left").assertIsDisplayed()
             snapshot("active-script-run-desktop")
             rule.runOnIdle { width.value = 740.dp; height.value = 393.dp }
             rule.waitForIdle()
-            rule.onNodeWithTag("script-run-screen").assertIsDisplayed()
+            rule.onNodeWithTag("script-console").assertIsDisplayed()
             rule.onNodeWithTag("script-run-log").assertIsDisplayed()
             rule.onNodeWithText("Sentry scan 2/3: left").assertIsDisplayed()
             snapshot("active-script-run-landscape")
@@ -1231,14 +1238,19 @@ class ConsoleUiTest {
             val id = model.scriptLibrary.state.value.scripts.single().id
             rule.onNodeWithTag("script-back").performClick()
             rule.onNodeWithText("我的电量脚本").assertIsDisplayed()
+            rule.onNodeWithText("本地").assertDoesNotExist()
+            // List management lives behind a long press, so the card itself stays button-free.
+            rule.onNodeWithTag("script-card-$id").performTouchInput { longClick() }
             rule.onNodeWithTag("script-rename-$id").performClick()
             rule.onNodeWithContentDescription("script-name").performTextReplacement("电量检查")
             rule.onNodeWithText("保存", substring = false).performClick()
             rule.waitUntil(3_000) { model.scriptLibrary.state.value.scripts.singleOrNull()?.name == "电量检查" }
-            rule.onNodeWithTag("script-delete").performClick()
-            rule.onNodeWithText("删除脚本？").assertIsDisplayed()
-            rule.onAllNodesWithText("删除", substring = false).onLast().performClick()
+            rule.onNodeWithTag("script-back").performClick()
+            rule.onNodeWithTag("script-card-$id").performTouchInput { longClick() }
+            // The menu row is the confirmation: no second dialog is stacked on top of it.
+            rule.onNodeWithTag("script-delete-$id").performClick()
             rule.waitUntil(3_000) { model.scriptLibrary.state.value.scripts.isEmpty() }
+            rule.onNodeWithText("删除脚本").assertDoesNotExist()
             rule.onNodeWithTag("script-library").assertIsDisplayed()
         } finally {
             model.close()

@@ -46,7 +46,7 @@ internal fun createJvmWorkbenchStorage(): WorkbenchStorage {
         storageLogger.info { "Workbench storage initialized" }
         return WorkbenchStorage(
             settings = DataStoreSettingsStore(dataStore),
-            scripts = RoomScriptRepository(applicationDatabase.scriptDao()),
+            scripts = RoomScriptRepository(applicationDatabase.scriptDao(), applicationDatabase.scriptAudioDao()),
             agentRuntime = agentRuntime,
             applicationDatabase = applicationDatabase,
             scope = scope,

@@ -5,10 +5,13 @@ import cn.elonzh.hanppie.agent.runtime.TestSessionHistory
 import cn.elonzh.hanppie.robot.session.RobotNetwork
 import cn.elonzh.hanppie.robot.session.RobotRuntime
 import cn.elonzh.hanppie.robot.session.JvmRobotRuntime
+import cn.elonzh.hanppie.ui.robot.audio.LabAudioImporter
+import cn.elonzh.hanppie.ui.robot.audio.NoLabAudioImporter
 import cn.elonzh.hanppie.ui.robot.remote.NoSpeakerInput
 import cn.elonzh.hanppie.ui.robot.remote.SpeakerInput
 import cn.elonzh.hanppie.ui.scripts.ScriptRepository
 import cn.elonzh.hanppie.ui.scripts.StoredScript
+import cn.elonzh.hanppie.ui.scripts.StoredScriptAudio
 import cn.elonzh.hanppie.ui.settings.AppearanceSettings
 import cn.elonzh.hanppie.ui.settings.ConnectionPreferences
 import cn.elonzh.hanppie.ui.settings.SavedSettings
@@ -20,6 +23,7 @@ import io.ktor.client.HttpClient
 
 internal class MemoryScriptRepository(initial: List<StoredScript> = emptyList()) : ScriptRepository {
     private var saved = initial.toList()
+    private val audio = mutableMapOf<Pair<String, Int>, StoredScriptAudio>()
     override suspend fun all(): List<StoredScript> = saved.toList()
 
     override suspend fun insert(script: StoredScript) {
@@ -32,7 +36,22 @@ internal class MemoryScriptRepository(initial: List<StoredScript> = emptyList())
 
     override suspend fun delete(script: StoredScript) {
         saved = saved.filterNot { it.id == script.id }
+        audio.keys.filter { it.first == script.id }.forEach(audio::remove)
     }
+
+    override suspend fun audio(scriptId: String): List<StoredScriptAudio> =
+        audio.values.filter { it.scriptId == scriptId }.sortedBy { it.nativeId }
+
+    override suspend fun insertAudio(audio: StoredScriptAudio) {
+        this.audio[audio.scriptId to audio.nativeId] = audio
+    }
+
+    override suspend fun updateAudio(audio: StoredScriptAudio) {
+        this.audio[audio.scriptId to audio.nativeId] = audio
+    }
+
+    override suspend fun deleteAudio(scriptId: String, nativeId: Int): Boolean =
+        audio.remove(scriptId to nativeId) != null
 }
 
 internal class MemorySettingsStore : SettingsStore {
@@ -70,6 +89,7 @@ internal class MemorySettingsStore : SettingsStore {
 internal fun testConsoleModel(
     voiceInput: SpeechInput = NoSpeechInput(),
     speakerInput: SpeakerInput = NoSpeakerInput(),
+    audioImporter: LabAudioImporter = NoLabAudioImporter(),
     robotNetwork: () -> RobotNetwork = { RobotNetwork.Default },
     robotRuntime: RobotRuntime = JvmRobotRuntime(robotNetwork),
     settingsStore: SettingsStore = MemorySettingsStore(),
@@ -83,6 +103,7 @@ internal fun testConsoleModel(
 ): ConsoleModel = ConsoleModel(
     voiceInput = voiceInput,
     speakerInput = speakerInput,
+    audioImporter = audioImporter,
     robotRuntime = robotRuntime,
     settingsStore = settingsStore,
     scriptRepository = scriptRepository,

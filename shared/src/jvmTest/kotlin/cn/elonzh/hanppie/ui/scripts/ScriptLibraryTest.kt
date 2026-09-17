@@ -27,7 +27,7 @@ class ScriptLibraryTest {
             val file = directory.resolve("hanppie.db")
             val firstDatabase = buildHanppieDatabase(Room.databaseBuilder<HanppieDatabase>(file.toString()))
             database = firstDatabase
-            val library = ScriptLibrary(RoomScriptRepository(firstDatabase.scriptDao()))
+            val library = ScriptLibrary(RoomScriptRepository(firstDatabase.scriptDao(), firstDatabase.scriptAudioDao()))
             library.load()
             val created = library.create("  巡检脚本  ", "def start():\n    pass\n")
             assertEquals("巡检脚本", created.name)
@@ -40,7 +40,7 @@ class ScriptLibraryTest {
             database = null
             val restoredDatabase = buildHanppieDatabase(Room.databaseBuilder<HanppieDatabase>(file.toString()))
             database = restoredDatabase
-            val restored = ScriptLibrary(RoomScriptRepository(restoredDatabase.scriptDao()))
+            val restored = ScriptLibrary(RoomScriptRepository(restoredDatabase.scriptDao(), restoredDatabase.scriptAudioDao()))
             restored.load()
             assertEquals(listOf(renamed), restored.state.value.scripts)
             restored.delete(created.id)
@@ -92,6 +92,10 @@ class ScriptLibraryTest {
             override suspend fun insert(script: StoredScript) = Unit
             override suspend fun update(script: StoredScript) = Unit
             override suspend fun delete(script: StoredScript) = Unit
+            override suspend fun audio(scriptId: String): List<StoredScriptAudio> = emptyList()
+            override suspend fun insertAudio(audio: StoredScriptAudio) = Unit
+            override suspend fun updateAudio(audio: StoredScriptAudio) = Unit
+            override suspend fun deleteAudio(scriptId: String, nativeId: Int): Boolean = false
         })
         val load = launch { library.load() }
         loadStarted.await()

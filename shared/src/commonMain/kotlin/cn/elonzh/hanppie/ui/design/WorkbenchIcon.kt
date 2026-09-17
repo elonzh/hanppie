@@ -1,5 +1,10 @@
 package cn.elonzh.hanppie.ui.design
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -50,6 +55,7 @@ import com.composables.icons.lucide.Video
 import com.composables.icons.lucide.VideoOff
 import com.composables.icons.lucide.Volume2
 import com.composables.icons.lucide.VolumeX
+import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.Wifi
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -59,6 +65,7 @@ internal enum class WorkbenchGlyph {
     BACK, ADD, IMPORT, EXPORT, UPLOAD, DOWNLOAD, SAVE, EDIT, DELETE, STOP, ACTIVITY, CHEVRON_RIGHT,
     FILE, FILE_TEXT, FOLDER, REFRESH, MORE, OPEN, VIDEO, VIDEO_OFF, SPEAKER, MUTED, CAMERA, RECORD,
     CROSSHAIR, SEARCH, CONNECT, WIFI, ROUTER, BATTERY, SIGNAL, PACKETS, MICROPHONE, SEND, ROBOT, CODE, CHAT, SETTINGS,
+    PLAY,
 }
 
 internal val WorkbenchGlyph.icon: ImageVector get() = when (this) {
@@ -100,6 +107,7 @@ internal val WorkbenchGlyph.icon: ImageVector get() = when (this) {
     WorkbenchGlyph.CODE -> Lucide.CodeXml
     WorkbenchGlyph.CHAT -> Lucide.MessageSquare
     WorkbenchGlyph.SETTINGS -> Lucide.SlidersHorizontal
+    WorkbenchGlyph.PLAY -> Lucide.Play
 }
 
 internal val navigationIcons = listOf(
@@ -145,6 +153,34 @@ internal fun WorkbenchIconButton(
         backgroundColor = background.copy(alpha = if (enabled) 1f else .35f),
     ) {
         WorkbenchIcon(glyph, ink)
+    }
+}
+/**
+ * A secondary, in-place action (renaming a name, for example): a small icon that keeps the visual weight
+ * of the text it belongs to instead of reading as a primary toolbar button.
+ */
+@Composable
+internal fun WorkbenchSmallIconButton(
+    label: String,
+    glyph: WorkbenchGlyph,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    tag: String? = null,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier.then(if (tag != null) Modifier.testTag(tag) else Modifier)
+            .size(30.dp)
+            .clip(RoundedCornerShape(50))
+            .clickable(enabled = enabled, onClick = onClick)
+            .semantics {
+                contentDescription = label
+                role = Role.Button
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        WorkbenchIcon(glyph, if (enabled) MiuixTheme.colorScheme.onSurfaceVariantSummary
+            else MiuixTheme.colorScheme.disabledOnSurface, Modifier.size(17.dp))
     }
 }
 
