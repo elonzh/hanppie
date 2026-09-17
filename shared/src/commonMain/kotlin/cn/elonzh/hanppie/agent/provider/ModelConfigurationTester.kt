@@ -128,6 +128,10 @@ internal class ModelConfigurationTester(
                         tr(Res.string.model_test_model_missing_value, config.model))
                 }
                 stages += passed(ModelTestStage.CATALOG)
+                modelTesterLogger.info {
+                    "Model configuration test passed stages=${stages.joinToString { it.stage.name }} " +
+                        "provider=${config.provider.name} endpoint=${config.endpoint} models=${models.size}"
+                }
                 state.value = ModelTestState(
                     success = true,
                     message = tr(Res.string.model_test_complete),
@@ -198,8 +202,8 @@ internal class ModelConfigurationTester(
         )
     }
 
-    private fun passed(stage: ModelTestStage) =
-        ModelTestStageResult(stage, true, tr(Res.string.model_test_passed))
+    // Stage messages are diagnostics: they are logged, never rendered, so they carry no localized text.
+    private fun passed(stage: ModelTestStage) = ModelTestStageResult(stage, true, stage.name)
 
     private class ProbeFailure(
         val stage: ModelTestStage,

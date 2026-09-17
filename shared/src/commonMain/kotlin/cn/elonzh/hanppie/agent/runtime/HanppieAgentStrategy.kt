@@ -8,6 +8,7 @@ import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.MessagePart
 import ai.koog.prompt.streaming.StreamFrame
+import io.github.oshai.kotlinlogging.KotlinLogging
 import ai.koog.prompt.streaming.toMessageResponse
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -164,7 +165,22 @@ internal fun List<StreamFrame>.withUsableToolCalls(): List<StreamFrame> {
         when {
             frame is StreamFrame.ToolCallComplete -> {
                 val name = nameOf(frame)
-                if (name.isBlank()) null else frame.copy(name = name, content = frame.content.usableArguments())
+                if (name.isBlank()) {
+                    strategyLogger.warn {
+                        "Dropped a tool call frame that named no tool id=${frame.id ?: "none"} index=${frame.index ?: "none"}"
+                    }
+                    null
+                } else {
+                    if (name != frame.name.orEmpty()) {
+                        strategyLogger.info { "Restored tool name '$name' from an earlier delta id=${frame.id ?: "none"}" }
+                    }
+                    if (frame.content != frame.content.usableArguments()) {
+                        strategyLogger.info {
+                            "Replaced unparsable tool arguments with {} tool=$name id=${frame.id ?: "none"}"
+                        }
+                    }
+                    frame.copy(name = name, content = frame.content.usableArguments())
+                }
             }
             frame is StreamFrame.ToolCallDelta &&
                 (frame.index in phantoms || frame.id in phantomIds) -> null
@@ -176,3 +192,5 @@ internal fun List<StreamFrame>.withUsableToolCalls(): List<StreamFrame> {
 /** Argument content must be a JSON document, otherwise materializing the response aborts the whole run. */
 private fun String.usableArguments(): String =
     if (isNotBlank() && runCatching { Json.parseToJsonElement(this) }.isSuccess) this else "{}"
+
+private val strategyLogger = KotlinLogging.logger {}
