@@ -58,8 +58,11 @@
     <string name="model_capability_tools">工具</string>
     <string name="model_capability_tool_choice">可指定工具</string>
     <string name="model_capability_structured">结构化输出</string>
+    <string name="choose_model">选择模型</string>
+    <string name="filter_models">搜索模型 ID</string>
+    <string name="no_matching_models">没有匹配的模型</string>
     <string name="model_provider">供应商</string>
-    <string name="custom_model_id">自定义模型 ID</string>
+    <string name="custom_model_id">模型 ID</string>
     <string name="model_capabilities_value">上下文：%1$s tokens · 最大输出：%2$s · 能力：%3$s</string>
     <string name="unknown">未知</string>
     <string name="test_model_configuration">测试连接</string>
@@ -68,7 +71,6 @@
     <string name="model_test_model_missing_value">模型目录中找不到所选模型：%1$s</string>
     <string name="model_test_catalog_failed_value">目录检查失败：%1$s</string>
     <string name="api_endpoint">API 地址</string>
-    <string name="model">模型</string>
     <string name="loading_model_catalog">正在获取模型列表…</string>
     <string name="model_catalog_load_failed_value">获取模型列表失败：%1$s</string>
     <string name="configure_api_key_to_load_model_catalog">填写 API Key 后可获取供应商模型列表</string>

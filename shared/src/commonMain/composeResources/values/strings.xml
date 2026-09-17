@@ -58,8 +58,11 @@
     <string name="model_capability_tools">Tools</string>
     <string name="model_capability_tool_choice">Forced tools</string>
     <string name="model_capability_structured">Structured output</string>
+    <string name="choose_model">Choose model</string>
+    <string name="filter_models">Search model IDs</string>
+    <string name="no_matching_models">No matching models</string>
     <string name="model_provider">Provider</string>
-    <string name="custom_model_id">Custom model ID</string>
+    <string name="custom_model_id">Model ID</string>
     <string name="model_capabilities_value">Context: %1$s tokens · Max output: %2$s · Capabilities: %3$s</string>
     <string name="unknown">Unknown</string>
     <string name="test_model_configuration">Test connection</string>
@@ -68,7 +71,6 @@
     <string name="model_test_model_missing_value">The selected model is not visible in the catalog: %1$s</string>
     <string name="model_test_catalog_failed_value">Catalog check failed: %1$s</string>
     <string name="api_endpoint">API endpoint</string>
-    <string name="model">Model</string>
     <string name="loading_model_catalog">Loading model list…</string>
     <string name="model_catalog_load_failed_value">Could not load model list: %1$s</string>
     <string name="configure_api_key_to_load_model_catalog">Enter an API key to load the provider model list</string>

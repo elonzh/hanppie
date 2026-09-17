@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.koog.prompt.llm.LLModel
+import cn.elonzh.hanppie.ui.design.WorkbenchIconButton
 import cn.elonzh.hanppie.agent.provider.ModelTestStage
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.ui.app.ConsoleController
@@ -126,6 +127,8 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                 } else ModelCatalog.defaults(provider).copy(apiKey = config.apiKey)
             }
             TextField(config.endpoint, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(endpoint = it) }, label = tr(Res.string.api_endpoint), modifier = Modifier.fillMaxWidth(), enabled = !chat.running && !settingsBusy, singleLine = true)
+            TextField(config.apiKey, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(apiKey = it) }, label = tr(Res.string.api_key), modifier = Modifier.fillMaxWidth(), enabled = !chat.running && !settingsBusy, singleLine = true,
+                visualTransformation = PasswordVisualTransformation())
             val discoveredModels = modelCatalog.models.takeIf {
                 modelCatalog.provider == config.provider && modelCatalog.endpoint == config.endpoint
             }.orEmpty()
@@ -133,28 +136,61 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                 ModelCatalog.models[config.provider].orEmpty().map { it.id } +
                     discoveredModels + config.model
             ).filter(String::isNotBlank).distinct()
-            if (config.provider != ModelProviderPreset.CUSTOM) {
-                SettingsDropdown(tr(Res.string.model), "model-preset", config.model,
-                    availableModels.map { it to it }, onOpen = model::loadModelCatalog) { id ->
-                    model.settingsMessage.value = null
-                    model.modelSettings.value = config.copy(model = id)
+            var modelPickerOpen by remember { mutableStateOf(false) }
+            var modelFilter by remember { mutableStateOf("") }
+            // One row for the model: the id the provider will receive, plus a picker that loads and filters
+            // the catalog instead of repeating the id in a second control.
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextField(config.model, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(model = it) }, label = tr(Res.string.custom_model_id), modifier = Modifier.weight(1f), enabled = !chat.running && !settingsBusy, singleLine = true)
+                WorkbenchIconButton(
+                    label = tr(Res.string.choose_model),
+                    glyph = WorkbenchGlyph.CHEVRON_RIGHT,
+                    onClick = { model.settingsMessage.value = null; model.loadModelCatalog(); modelPickerOpen = true },
+                    enabled = !chat.running && !settingsBusy,
+                    tag = "model-picker",
+                )
+            }
+            if (modelCatalog.provider == config.provider && modelCatalog.endpoint == config.endpoint) {
+                val catalogMessage = if (modelCatalog.loading) {
+                    tr(Res.string.loading_model_catalog)
+                } else {
+                    modelCatalog.message
                 }
-                if (modelCatalog.provider == config.provider && modelCatalog.endpoint == config.endpoint) {
-                    val catalogMessage = if (modelCatalog.loading) {
-                        tr(Res.string.loading_model_catalog)
-                    } else {
-                        modelCatalog.message
+                catalogMessage?.let {
+                    Text(it, fontSize = 12.sp,
+                        color = if (modelCatalog.failed) MiuixTheme.colorScheme.error
+                        else MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                }
+            }
+            WorkbenchDialog(
+                show = modelPickerOpen,
+                onDismissRequest = { modelPickerOpen = false },
+                title = tr(Res.string.choose_model),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TextField(modelFilter, { modelFilter = it }, label = tr(Res.string.filter_models),
+                        modifier = Modifier.fillMaxWidth().testTag("model-filter"),
+                        singleLine = true)
+                    val matching = availableModels.filter {
+                        modelFilter.isBlank() || it.contains(modelFilter.trim(), ignoreCase = true)
                     }
-                    catalogMessage?.let {
-                        Text(it, fontSize = 12.sp,
-                            color = if (modelCatalog.failed) MiuixTheme.colorScheme.error
-                            else MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                    if (matching.isEmpty()) {
+                        Text(tr(Res.string.no_matching_models), fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                    } else {
+                        Column(Modifier.fillMaxWidth().heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                            matching.forEach { id ->
+                                ModelOption(id, selected = id == config.model) {
+                                    model.settingsMessage.value = null
+                                    model.modelSettings.value = config.copy(model = id)
+                                    modelPickerOpen = false
+                                }
+                            }
+                        }
                     }
                 }
             }
-            TextField(config.model, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(model = it) }, label = tr(Res.string.custom_model_id), modifier = Modifier.fillMaxWidth(), enabled = !chat.running && !settingsBusy, singleLine = true)
-            TextField(config.apiKey, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(apiKey = it) }, label = tr(Res.string.api_key), modifier = Modifier.fillMaxWidth(), enabled = !chat.running && !settingsBusy, singleLine = true,
-                visualTransformation = PasswordVisualTransformation())
             SettingsDropdown(tr(Res.string.thinking_depth), "thinking-depth", config.thinkingDepth.name,
                 ThinkingDepth.entries.map { depth -> depth.name to tr(depth.label) }) { id ->
                 model.settingsMessage.value = null
@@ -418,6 +454,22 @@ private fun actionLabel(action: ControlAction): String = tr(when (action) {
     ControlAction.RobotMicrophone -> Res.string.action_robot_microphone
     ControlAction.Stop -> Res.string.action_stop
 })
+
+/** One selectable model id, marked when it is the configured one. */
+@Composable
+private fun ModelOption(id: String, selected: Boolean, onSelect: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().testTag("model-option-$id")
+            .background(if (selected) MiuixTheme.colorScheme.primary.copy(alpha = .12f) else Color.Transparent,
+                RoundedCornerShape(12.dp))
+            .clickable(onClick = onSelect).padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(id, Modifier.weight(1f), fontSize = 14.sp, maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        if (selected) Text("✓", fontSize = 14.sp, color = MiuixTheme.colorScheme.primary)
+    }
+}
 
 /** The model as a user reads it: name, plain-language limits, and only meaningful capabilities. */
 @Composable

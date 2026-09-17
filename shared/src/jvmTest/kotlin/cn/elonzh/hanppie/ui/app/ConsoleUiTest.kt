@@ -501,6 +501,23 @@ class ConsoleUiTest {
         } finally { model.close() }
     }
 
+    @Test fun theModelIdRowOpensAFilterableModelPicker() {
+        Localization.initialize("zh", null)
+        val model = testConsoleModel()
+        try {
+            rule.setContent { WorkbenchTheme {
+                Box(Modifier.requiredSize(393.dp, 740.dp)) { Console(model, mutableStateOf(EditorDocument())) }
+            } }
+            rule.onNodeWithContentDescription("设置").performClick()
+            rule.onNodeWithTag("model-picker").performScrollTo().performClick()
+            rule.onNodeWithTag("model-filter").performTextReplacement("deepseek")
+            rule.waitForIdle()
+            rule.onNodeWithTag("model-option-deepseek-v4-flash").performClick()
+            rule.runOnIdle { assertEquals("deepseek-v4-flash", model.modelSettings.value.model) }
+            snapshot("phone-model-picker")
+        } finally { model.close() }
+    }
+
     @Test fun streamingMarkdownAppendsAndStartsANewReply() {
         val model = testConsoleModel()
         val width = mutableStateOf(393.dp)
@@ -990,9 +1007,9 @@ class ConsoleUiTest {
                 }
             }
 
-            rule.onNodeWithContentDescription("model-preset-selector")
-                .performScrollTo().assertTextContains("qwen-plus").performClick()
-            rule.onNodeWithContentDescription("model-preset-qwen-plus").assertExists()
+            // The id lives in one field and the picker offers it alongside the built-in catalog.
+            rule.onNodeWithTag("model-picker").performScrollTo().performClick()
+            rule.onNodeWithTag("model-option-qwen-plus").assertExists()
         } finally { model.close() }
     }
 
@@ -1012,8 +1029,7 @@ class ConsoleUiTest {
 
             rule.runOnIdle { assertEquals(0, clientCreations) }
             rule.onNodeWithTag("settings-section-model-toggle").performClick()
-            rule.onNodeWithContentDescription("model-preset-selector")
-                .performScrollTo().performClick()
+            rule.onNodeWithTag("model-picker").performScrollTo().performClick()
             rule.waitUntil(3_000) { clientCreations == 1 }
             rule.onNodeWithText("获取模型列表失败", substring = true).assertExists()
         } finally { model.close() }
