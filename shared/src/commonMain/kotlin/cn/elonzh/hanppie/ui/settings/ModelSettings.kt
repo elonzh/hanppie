@@ -2,9 +2,16 @@ package cn.elonzh.hanppie.ui.settings
 
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
+import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import ai.koog.prompt.llm.LLModel
 import cn.elonzh.hanppie.resources.Res
+import org.jetbrains.compose.resources.StringResource
 import cn.elonzh.hanppie.resources.enter_a_model_and_api_key
+import cn.elonzh.hanppie.resources.thinking_depth_default
+import cn.elonzh.hanppie.resources.thinking_depth_off
+import cn.elonzh.hanppie.resources.thinking_depth_low
+import cn.elonzh.hanppie.resources.thinking_depth_medium
+import cn.elonzh.hanppie.resources.thinking_depth_high
 import cn.elonzh.hanppie.resources.enter_an_https_api_endpoint
 import cn.elonzh.hanppie.ui.i18n.tr
 import io.ktor.http.URLProtocol
@@ -16,6 +23,7 @@ internal data class ModelSettings(
     val provider: ModelProviderPreset = ModelProviderPreset.DASHSCOPE,
     val endpoint: String = "https://dashscope.aliyuncs.com/compatible-mode/v1",
     val model: String = "qwen3.8-flash",
+    val thinkingDepth: ThinkingDepth = ThinkingDepth.MODEL_DEFAULT,
     val apiKey: String = "",
 ) {
     val llModel: LLModel get() = ModelCatalog.resolve(provider, model)
@@ -35,6 +43,19 @@ internal data class ModelSettings(
     }
 
     override fun toString() = "ModelSettings(provider=$provider, endpoint=$endpoint, model=$model, apiKey=[redacted])"
+}
+
+/**
+ * How much hidden reasoning the model may spend, sent to the provider as the OpenAI-compatible
+ * `reasoning_effort`. `MODEL_DEFAULT` sends nothing so the model keeps its own default.
+ */
+@Serializable
+internal enum class ThinkingDepth(val effort: ReasoningEffort?, val label: StringResource) {
+    MODEL_DEFAULT(null, Res.string.thinking_depth_default),
+    OFF(ReasoningEffort.NONE, Res.string.thinking_depth_off),
+    LOW(ReasoningEffort.LOW, Res.string.thinking_depth_low),
+    MEDIUM(ReasoningEffort.MEDIUM, Res.string.thinking_depth_medium),
+    HIGH(ReasoningEffort.HIGH, Res.string.thinking_depth_high),
 }
 
 @Serializable

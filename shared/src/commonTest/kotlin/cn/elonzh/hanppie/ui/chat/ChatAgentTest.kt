@@ -5,6 +5,8 @@ import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.prompt.Prompt
 import ai.koog.prompt.dsl.ModerationResult
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
+import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.Message
@@ -17,6 +19,7 @@ import cn.elonzh.hanppie.resources.agent_model_request_limit_reached
 import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.settings.ModelSettings
+import cn.elonzh.hanppie.ui.settings.ThinkingDepth
 import kotlin.test.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -106,6 +109,28 @@ class ChatAgentTest {
         sections = listOf(LabApiReferenceTool.Section("test", listOf(fact))),
         guidance = "verified",
     )
+
+    @Test fun theConfiguredThinkingDepthReachesTheConversationRequest(): Unit = runBlocking {
+        val fake = Fake { text("好") }
+        agent({ "未连接" }, { error("No robot") }, { error("No robot") }, fake, TestSessionHistory()).use { agent ->
+            agent.ready()
+            agent.send("思考一下", config.copy(thinkingDepth = ThinkingDepth.HIGH))
+            agent.finished()
+            val params = fake.prompts.last().params as OpenAIChatParams
+            assertEquals(ReasoningEffort.HIGH, params.reasoningEffort)
+        }
+    }
+
+    @Test fun theProviderDefaultSendsNoReasoningEffort(): Unit = runBlocking {
+        val fake = Fake { text("好") }
+        agent({ "未连接" }, { error("No robot") }, { error("No robot") }, fake, TestSessionHistory()).use { agent ->
+            agent.ready()
+            agent.send("直接回答", config)
+            agent.finished()
+            val params = fake.prompts.last().params as OpenAIChatParams
+            assertNull(params.reasoningEffort)
+        }
+    }
 
     private class FailingCreateHistory(
         private val delegate: TestSessionHistory = TestSessionHistory(),

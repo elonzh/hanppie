@@ -288,10 +288,13 @@ internal class ChatAgent(
                     terminalToolNames = terminalToolNames,
                     modelRequestTimeoutMillis = operationTimeoutMillis,
                 )
-                val initial = prompt("hanppie", params = OpenAIChatParams(
-                    maxTokens = 4096,
-                    parallelToolCalls = false,
-                )) {
+                // The configured thinking depth belongs to real conversations, so it is applied here and
+                // left unset when the user keeps the provider default. Nothing else shapes these requests.
+                val baseParams = OpenAIChatParams(maxTokens = 4096, parallelToolCalls = false)
+                val chatParams = config.thinkingDepth.effort
+                    ?.let { effort -> baseParams.copy(reasoningEffort = effort) }
+                    ?: baseParams
+                val initial = prompt("hanppie", params = chatParams) {
                     system(SYSTEM_PROMPT)
                     messages(history)
                 }

@@ -19,9 +19,11 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ai.koog.prompt.llm.LLModel
 import cn.elonzh.hanppie.agent.provider.ModelTestStage
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.ui.app.ConsoleController
@@ -153,25 +155,26 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
             TextField(config.model, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(model = it) }, label = tr(Res.string.custom_model_id), modifier = Modifier.fillMaxWidth(), enabled = !chat.running && !settingsBusy, singleLine = true)
             TextField(config.apiKey, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(apiKey = it) }, label = tr(Res.string.api_key), modifier = Modifier.fillMaxWidth(), enabled = !chat.running && !settingsBusy, singleLine = true,
                 visualTransformation = PasswordVisualTransformation())
-            val llModel = config.llModel
-            Text(tr(Res.string.model_capabilities_value,
-                llModel.contextLength?.toString() ?: tr(Res.string.unknown),
-                llModel.maxOutputTokens?.toString() ?: tr(Res.string.unknown),
-                llModel.capabilities.orEmpty().joinToString { it.id }),
-                fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            SettingsDropdown(tr(Res.string.thinking_depth), "thinking-depth", config.thinkingDepth.name,
+                ThinkingDepth.entries.map { depth -> depth.name to tr(depth.label) }) { id ->
+                model.settingsMessage.value = null
+                model.modelSettings.value = config.copy(thinkingDepth = ThinkingDepth.valueOf(id))
+            }
+            // Model facts read as a short summary. Provider capability identifiers and per-stage test detail
+            // are diagnostics: they belong in the log, not in front of the user.
+            ModelSummary(config.llModel)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(model::testModelSettings, enabled = !modelTest.running && !chat.running && !settingsBusy && config.apiKey.isNotBlank()) {
                     Text(if (modelTest.running) tr(Res.string.testing_model_configuration) else tr(Res.string.test_model_configuration))
                 }
-                modelTest.message?.let { Text(it, fontSize = 12.sp,
-                    color = if (modelTest.success == false) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.onSurfaceVariantSummary) }
-            }
-            Text(tr(Res.string.model_test_cost_notice), fontSize = 11.sp,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-            modelTest.stages.forEach { result ->
-                Text("${if (result.passed) "✓" else "!"} ${modelTestStageLabel(result.stage)} · ${result.message}",
-                    fontSize = 12.sp,
-                    color = if (result.passed) MiuixTheme.colorScheme.onSurfaceVariantSummary else MiuixTheme.colorScheme.error)
+                modelTest.message?.let { message ->
+                    Text(
+                        (if (modelTest.success == false) "✗ " else "✓ ") + message,
+                        fontSize = 13.sp,
+                        color = if (modelTest.success == false) MiuixTheme.colorScheme.error
+                        else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                }
             }
             }
 
@@ -416,7 +419,46 @@ private fun actionLabel(action: ControlAction): String = tr(when (action) {
     ControlAction.Stop -> Res.string.action_stop
 })
 
-private fun modelTestStageLabel(stage: ModelTestStage): String = tr(when (stage) {
-    ModelTestStage.LOCAL -> Res.string.model_test_local
-    ModelTestStage.CATALOG -> Res.string.model_test_catalog
-})
+/** The model as a user reads it: name, plain-language limits, and only meaningful capabilities. */
+@Composable
+private fun ModelSummary(model: LLModel) {
+    val facts = listOfNotNull(
+        model.contextLength?.let { length -> tr(Res.string.model_context_value, formatTokenCount(length)) },
+        model.maxOutputTokens?.let { tokens -> tr(Res.string.model_output_value, formatTokenCount(tokens)) },
+    )
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(model.id, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        if (facts.isNotEmpty()) {
+            Text(facts.joinToString(" · "), fontSize = 12.sp,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        }
+        val labels = model.capabilities.orEmpty().mapNotNull { capability -> capabilityLabel(capability.id) }.distinct()
+        if (labels.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                labels.forEach { label ->
+                    Box(Modifier.background(MiuixTheme.colorScheme.secondaryContainer, RoundedCornerShape(50))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)) {
+                        Text(label, fontSize = 11.sp, color = MiuixTheme.colorScheme.onSecondaryContainer)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Only capabilities a user can act on get a chip; transport details such as `temperature` do not. */
+private fun capabilityLabel(id: String): String? = when {
+    id.contains("thinking") -> tr(Res.string.model_capability_thinking)
+    id.contains("vision") -> tr(Res.string.model_capability_image)
+    id.contains("tool.choice") || id.contains("tool_choice") -> tr(Res.string.model_capability_tool_choice)
+    id.contains("tools") -> tr(Res.string.model_capability_tools)
+    id.contains("schema") -> tr(Res.string.model_capability_structured)
+    else -> null
+}
+
+/** 1_000_000 -> "1M": short enough for a one-line summary. */
+private fun formatTokenCount(value: Long): String = when {
+    value >= 1_000_000L && value % 1_000_000L == 0L -> "${value / 1_000_000L}M"
+    value >= 1_000L && value % 1_000L == 0L -> "${value / 1_000L}K"
+    else -> value.toString()
+}
