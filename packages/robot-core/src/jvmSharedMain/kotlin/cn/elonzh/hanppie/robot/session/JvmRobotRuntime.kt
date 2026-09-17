@@ -2,6 +2,7 @@ package cn.elonzh.hanppie.robot.session
 
 import cn.elonzh.hanppie.robot.files.RobotFileService
 import cn.elonzh.hanppie.robot.files.RobotFileSystem
+import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.robot.lab.LabController
 import cn.elonzh.hanppie.robot.lab.LabUpload
 import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
@@ -60,7 +61,8 @@ private class JvmRobotSession(
         set(value) { app.onAudio = value }
     override val lab: RobotLabSession = object : RobotLabSession {
         override fun invalidateMode() = labController.invalidateMode()
-        override suspend fun upload(source: String, title: String): LabUpload = labController.upload(source, title)
+        override suspend fun upload(source: String, title: String, audio: List<LabAudioClip>): LabUpload =
+            labController.upload(source, title, audio)
         override suspend fun start(): String = labController.start()
         override suspend fun stop() = labController.stop()
         override suspend fun complete(runId: String): Boolean = labController.complete(runId)

@@ -7,7 +7,7 @@ data class LabProgram(val source: String, val guid: String, val sign: String, va
         require(source.isNotBlank())
     }
 
-    fun dsp(date: String): ByteArray {
+    fun dsp(date: String, audioListXml: String = LabAudioClip.EMPTY_AUDIO_LIST): ByteArray {
         require(Regex("[0-9]{4}/[0-9]{2}/[0-9]{2}").matches(date))
         val escapedTitle = title.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         val cdata = source.replace("]]>", "]]]]><![CDATA[>")
@@ -16,9 +16,18 @@ data class LabProgram(val source: String, val guid: String, val sign: String, va
             "<firmware_version_dependency>00.00.0000</firmware_version_dependency>" +
             "<title>$escapedTitle</title><code_type>python</code_type>" +
             "<app_min_version></app_min_version><app_max_version></app_max_version>" +
-            "</attribute><audio-list /><code><python_code><![CDATA[$cdata]]></python_code></code></dji>").encodeToByteArray()
+            "</attribute>$audioListXml<code><python_code><![CDATA[$cdata]]></python_code></code></dji>").encodeToByteArray()
     }
 
     fun metadata(marker: Int): ByteArray = byteArrayOf(marker.toByte()) + (guid + sign).encodeToByteArray()
     fun guidMetadata(): ByteArray = byteArrayOf(0x2d) + guid.encodeToByteArray() + byteArrayOf(0, 0)
+
+    companion object {
+        /**
+         * Recorded upload boundary for one S1 Lab DSP payload is about 31.5 KiB, observed while uploading a
+         * large instrumented bridge program. Custom audio is embedded as base64 inside that same payload, so
+         * the guard stays below the recorded boundary instead of discovering it as a silent upload failure.
+         */
+        const val MAX_DSP_BYTES = 30_000
+    }
 }

@@ -1,6 +1,7 @@
 package cn.elonzh.hanppie.robot.session
 
 import cn.elonzh.hanppie.robot.files.RobotFileService
+import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.robot.lab.LabUpload
 import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
 import cn.elonzh.hanppie.robot.protocol.DussFrame
@@ -40,7 +41,7 @@ data class RouterPairing(
 
 interface RobotLabSession {
     fun invalidateMode()
-    suspend fun upload(source: String, title: String): LabUpload
+    suspend fun upload(source: String, title: String, audio: List<LabAudioClip> = emptyList()): LabUpload
     suspend fun start(): String
     suspend fun stop()
     suspend fun complete(runId: String): Boolean

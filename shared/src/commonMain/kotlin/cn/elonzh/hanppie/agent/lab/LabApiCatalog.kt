@@ -73,6 +73,7 @@ internal object LabApiCatalog {
             facts = listOf(
                 "`media_ctrl.play_sound(sound_id, wait_for_complete=False)` 播放内置音效；可将 `wait_for_complete=True` 用于需要串行等待的音效。",
                 "已核对的常用 sound_id：`rm_define.media_sound_attacked`、`media_sound_shoot`、`media_sound_scanning`、`media_sound_recognize_success`、`media_sound_gimbal_rotate`、`media_sound_count_down`，以及 `media_sound_solmization_1C` 到 `media_sound_solmization_3B` 的音阶常量。",
+                "脚本页可为已保存的脚本导入自定义音频，编号对应 `rm_define.media_custom_audio_0` 到 `media_custom_audio_9`；音频随程序 DSP 一起上传，未导入音频时使用这些常量会播放失败。",
                 "结束媒体动作时调用 `media_ctrl.stop()`。",
             ),
         ),

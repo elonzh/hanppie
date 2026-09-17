@@ -33,7 +33,7 @@ class LabController internal constructor(private val session: LabChannel,
     private var startRequested = false
     fun invalidateMode() { check(!startRequested); entered = false; program = null; digest = null; runId = null }
 
-    suspend fun upload(source: String, title: String): LabUpload = mutex.withLock {
+    suspend fun upload(source: String, title: String, audio: List<LabAudioClip> = emptyList()): LabUpload = mutex.withLock {
         check(session.connected) { "机器人未连接" }
         check(!startRequested) { "请先停止已启动的脚本，再上传新脚本" }
         require(source.isNotBlank()) { "脚本不能为空" }
@@ -41,8 +41,12 @@ class LabController internal constructor(private val session: LabChannel,
         val candidateRunId = ByteArray(8).also(random::nextBytes).hex()
         val candidate = LabProgram(LabRunProtocol.instrument(source, candidateRunId),
             ByteArray(16).also(random::nextBytes).hex(), candidateRunId, title)
-        val bytes = candidate.dsp(LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd")))
-        log("Lab 上传开始；runId=$candidateRunId bytes=${bytes.size}")
+        val bytes = candidate.dsp(LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd")),
+            labAudioListXml(audio))
+        require(bytes.size <= LabProgram.MAX_DSP_BYTES) {
+            "Lab 程序与自定义音频合计 ${bytes.size} 字节，超过上传预算 ${LabProgram.MAX_DSP_BYTES} 字节；请缩短音频或减少数量"
+        }
+        log("Lab 上传开始；runId=$candidateRunId bytes=${bytes.size} audio=${audio.size}")
         program = null; digest = null; runId = null
         if (!entered) {
             session.labMode()

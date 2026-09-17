@@ -2,8 +2,10 @@ package cn.elonzh.hanppie.robot.lab
 
 import cn.elonzh.hanppie.robot.protocol.hex
 import cn.elonzh.hanppie.robot.protocol.hexBytes
+import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.security.MessageDigest
+import javax.xml.parsers.DocumentBuilderFactory
 import kotlinx.coroutines.runBlocking
 import kotlin.test.*
 
@@ -102,5 +104,30 @@ class LabControllerTest {
         channel.connected = false
         assertFailsWith<IllegalStateException> { controller.upload("pass", "offline") }
         Unit
+    }
+
+    @Test fun customAudioTravelsInsideTheUploadedDsp() = runBlocking {
+        val channel = Channel()
+        var uploaded = byteArrayOf()
+        val controller = LabController(channel, { uploaded = it.copyOf() })
+        val clip = LabAudioClip(1, "voice", 2_000, ByteArray(600) { it.toByte() })
+        controller.upload("def start():\n    pass\n", "with audio", listOf(clip))
+        val document = DocumentBuilderFactory.newInstance()
+            .newDocumentBuilder().parse(ByteArrayInputStream(uploaded))
+        assertEquals("1", document.getElementsByTagName("audio").item(0).attributes.getNamedItem("id").nodeValue)
+        val size = channel.commands.single { it.id == 0xa1 }.payload
+        val declared = (0..3).fold(0) { value, index -> value or ((size[index + 4].toInt() and 255) shl (index * 8)) }
+        assertEquals(uploaded.size, declared)
+    }
+
+    @Test fun oversizedAudioIsRejectedBeforeAnyCommand() = runBlocking {
+        val channel = Channel()
+        var uploaded = byteArrayOf()
+        val controller = LabController(channel, { uploaded = it.copyOf() })
+        val clip = LabAudioClip(0, "long", 60_000, ByteArray(LabProgram.MAX_DSP_BYTES))
+        assertFailsWith<IllegalArgumentException> { controller.upload("def start():\n    pass\n", "too large", listOf(clip)) }
+        assertTrue(channel.commands.isEmpty())
+        assertTrue(uploaded.isEmpty())
+        assertEquals(true, channel.running.not())
     }
 }
