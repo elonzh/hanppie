@@ -93,6 +93,21 @@ class SettingsNavigationUiTest {
         } finally { model.close(); Localization.initialize("zh", null) }
     }
 
+    @Test fun aboutPageShowsBuildInfoAndHidesSaveButton() = runDesktopComposeUiTest(width = 393, height = 740) {
+        Localization.initialize("zh", null)
+        val model = testConsoleModel()
+        try {
+            setContent { WorkbenchTheme { SettingsPage(model, Modifier.fillMaxSize().padding(horizontal = 20.dp)) } }
+            onNodeWithTag("settings-category-about").performScrollTo().performClick()
+            onNodeWithTag("about-settings-content").assertIsDisplayed()
+            onNodeWithTag("settings-save").assertDoesNotExist()
+            onNodeWithTag("copy-diagnostic-info").assertIsDisplayed()
+            onNodeWithText("构建信息").assertIsDisplayed()
+            onNodeWithText("开源协议").assertIsDisplayed()
+            snapshot("settings-about-page", onRoot())
+        } finally { model.close() }
+    }
+
     private fun snapshot(name: String, node: SemanticsNodeInteraction) {
         val image = node.captureToImage()
         val pixels = IntArray(image.width * image.height)

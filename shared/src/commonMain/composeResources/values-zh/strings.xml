@@ -571,4 +571,19 @@
     <string name="editor_position">第 %1$s 行 · 第 %2$s 列</string>
     <string name="settings_lights_summary">待机、操控、录像与对讲</string>
     <string name="settings_model_summary">连接与模型配置</string>
+    <string name="about">关于</string>
+    <string name="about_summary">版本与构建信息</string>
+    <string name="about_subtitle">DJI RoboMaster 控制台与智能体助手</string>
+    <string name="about_build_info">构建信息</string>
+    <string name="about_app_version">应用版本</string>
+    <string name="about_platform">运行平台</string>
+    <string name="about_runtime">运行时环境</string>
+    <string name="about_framework">核心框架</string>
+    <string name="about_protocol">支持协议</string>
+    <string name="about_project_info">项目与社区</string>
+    <string name="about_repository">GitHub 仓库</string>
+    <string name="about_license">开源协议</string>
+    <string name="about_developer">开发者</string>
+    <string name="about_copy_system_info">复制构建与系统信息</string>
+    <string name="about_info_copied">已复制到剪贴板</string>
 </resources>

@@ -27,6 +27,7 @@ import com.composables.icons.lucide.ChartNoAxesColumnIncreasing
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Circle
 import com.composables.icons.lucide.CodeXml
+import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.Crosshair
 import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.Ellipsis
@@ -36,6 +37,7 @@ import com.composables.icons.lucide.FileInput
 import com.composables.icons.lucide.FileOutput
 import com.composables.icons.lucide.FileText
 import com.composables.icons.lucide.Folder
+import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageSquare
 import com.composables.icons.lucide.Mic
@@ -65,7 +67,7 @@ internal enum class WorkbenchGlyph {
     BACK, ADD, IMPORT, EXPORT, UPLOAD, DOWNLOAD, SAVE, EDIT, DELETE, STOP, ACTIVITY, CHEVRON_RIGHT,
     FILE, FILE_TEXT, FOLDER, REFRESH, MORE, OPEN, VIDEO, VIDEO_OFF, SPEAKER, MUTED, CAMERA, RECORD,
     CROSSHAIR, SEARCH, CONNECT, WIFI, ROUTER, BATTERY, SIGNAL, PACKETS, MICROPHONE, SEND, ROBOT, CODE, CHAT, SETTINGS,
-    PLAY,
+    PLAY, INFO, COPY,
 }
 
 internal val WorkbenchGlyph.icon: ImageVector get() = when (this) {
@@ -108,6 +110,8 @@ internal val WorkbenchGlyph.icon: ImageVector get() = when (this) {
     WorkbenchGlyph.CHAT -> Lucide.MessageSquare
     WorkbenchGlyph.SETTINGS -> Lucide.SlidersHorizontal
     WorkbenchGlyph.PLAY -> Lucide.Play
+    WorkbenchGlyph.INFO -> Lucide.Info
+    WorkbenchGlyph.COPY -> Lucide.Copy
 }
 
 internal val navigationIcons = listOf(

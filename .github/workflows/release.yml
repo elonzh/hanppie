@@ -1,0 +1,130 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag (e.g. v0.1.0)'
+        required: false
+        type: string
+        default: ''
+      draft:
+        description: 'Create draft release'
+        required: false
+        type: boolean
+        default: false
+      prerelease:
+        description: 'Create pre-release'
+        required: false
+        type: boolean
+        default: false
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Build Android Release APK
+        run: ./gradlew :androidApp:assembleRelease
+      - name: Prepare Android artifact
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp androidApp/build/outputs/apk/release/androidApp-release.apk dist/Hanppie-android.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hanppie-android
+          path: dist/Hanppie-android.apk
+          if-no-files-found: error
+
+  build-macos:
+    name: Build macOS DMG
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Package macOS DMG
+        run: ./gradlew :desktopApp:packageDmg
+      - name: Prepare macOS artifact
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp desktopApp/build/compose/binaries/main/dmg/*.dmg dist/Hanppie-macos.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hanppie-macos
+          path: dist/Hanppie-macos.dmg
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows MSI
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Package Windows MSI
+        shell: bash
+        run: ./gradlew :desktopApp:packageMsi
+      - name: Prepare Windows artifact
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp desktopApp/build/compose/binaries/main/msi/*.msi dist/Hanppie-windows.msi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hanppie-windows
+          path: dist/Hanppie-windows.msi
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-android, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Determine Release Tag
+        id: release_tag
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            TAG="${{ github.event.inputs.tag_name }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="v0.1.0-build.${{ github.run_number }}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: Release ${{ steps.release_tag.outputs.tag }}
+          draft: ${{ github.event.inputs.draft || false }}
+          prerelease: ${{ github.event.inputs.prerelease || false }}
+          generate_release_notes: true
+          files: release-assets/*

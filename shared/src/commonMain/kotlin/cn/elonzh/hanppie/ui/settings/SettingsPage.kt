@@ -47,6 +47,7 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
     var selectedCategory by rememberSaveable { mutableStateOf<SettingsCategory?>(null) }
     var confirmDefaults by remember { mutableStateOf(false) }
     val shortcutFocus = remember { FocusRequester() }
+    val buildInfo = remember { cn.elonzh.hanppie.ui.app.getPlatformBuildInfo() }
     WorkbenchDialog(show = confirmDefaults, onDismissRequest = { confirmDefaults = false },
         title = tr(Res.string.restore_default_settings_question),
         summary = tr(Res.string.restore_default_settings_summary)) {
@@ -104,6 +105,7 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                                 SettingsCategory.CONTROL -> tr(Res.string.control_settings_summary)
                                 SettingsCategory.LIGHTS -> tr(Res.string.settings_lights_summary)
                                 SettingsCategory.SHORTCUTS -> tr(Res.string.keyboard_shortcuts_summary)
+                                SettingsCategory.ABOUT -> "v${buildInfo.versionName} · ${tr(Res.string.about_summary)}"
                             }
                             SettingsCategoryRow(category, summary, wide && activeCategory == category) {
                                 capturing = null
@@ -136,10 +138,11 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                                 SettingsCategory.CONTROL -> ControlSettingsContent(model)
                                 SettingsCategory.LIGHTS -> LightsSettingsContent(model)
                                 SettingsCategory.SHORTCUTS -> ShortcutsSettingsContent(model, capturing) { capturing = it; shortcutFocus.requestFocus() }
+                                SettingsCategory.ABOUT -> AboutSettingsContent(buildInfo = buildInfo)
                             }
                         }
                     }
-                    if (activeCategory != SettingsCategory.GENERAL) {
+                    if (activeCategory.canSave) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             settingsMessage?.let { Text(it.resolve(), fontSize = 13.sp) }
                             Button(model::saveSettings, colors = ButtonDefaults.buttonColorsPrimary(),
@@ -155,13 +158,18 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
     }
 }
 
-private enum class SettingsCategory(val id: String, val title: org.jetbrains.compose.resources.StringResource,
-                                    val glyph: WorkbenchGlyph) {
+private enum class SettingsCategory(
+    val id: String,
+    val title: org.jetbrains.compose.resources.StringResource,
+    val glyph: WorkbenchGlyph,
+    val canSave: Boolean = false,
+) {
     GENERAL("general", Res.string.general_settings, WorkbenchGlyph.SETTINGS),
-    MODEL("model", Res.string.model_service, WorkbenchGlyph.CHAT),
-    CONTROL("control", Res.string.control, WorkbenchGlyph.CROSSHAIR),
-    LIGHTS("lights", Res.string.remote_led_colors, WorkbenchGlyph.RECORD),
-    SHORTCUTS("shortcuts", Res.string.keyboard_shortcuts, WorkbenchGlyph.CODE),
+    MODEL("model", Res.string.model_service, WorkbenchGlyph.CHAT, canSave = true),
+    CONTROL("control", Res.string.control, WorkbenchGlyph.CROSSHAIR, canSave = true),
+    LIGHTS("lights", Res.string.remote_led_colors, WorkbenchGlyph.RECORD, canSave = true),
+    SHORTCUTS("shortcuts", Res.string.keyboard_shortcuts, WorkbenchGlyph.CODE, canSave = true),
+    ABOUT("about", Res.string.about, WorkbenchGlyph.INFO),
 }
 
 @Composable

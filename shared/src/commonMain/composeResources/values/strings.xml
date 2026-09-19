@@ -571,4 +571,19 @@
     <string name="editor_position">Line %1$s · Column %2$s</string>
     <string name="settings_lights_summary">Idle, control, recording and intercom</string>
     <string name="settings_model_summary">Connection and model</string>
+    <string name="about">About</string>
+    <string name="about_summary">Version and build info</string>
+    <string name="about_subtitle">DJI RoboMaster Console &amp; Agent Assistant</string>
+    <string name="about_build_info">Build Information</string>
+    <string name="about_app_version">App Version</string>
+    <string name="about_platform">Target Platform</string>
+    <string name="about_runtime">Runtime Environment</string>
+    <string name="about_framework">Frameworks</string>
+    <string name="about_protocol">Supported Protocols</string>
+    <string name="about_project_info">Project &amp; Community</string>
+    <string name="about_repository">GitHub Repository</string>
+    <string name="about_license">Open Source License</string>
+    <string name="about_developer">Author</string>
+    <string name="about_copy_system_info">Copy Build &amp; System Info</string>
+    <string name="about_info_copied">Copied to clipboard</string>
 </resources>
