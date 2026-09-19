@@ -25,7 +25,7 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "Hanppie"
             packageVersion = "0.1.0"
-            description = "DJI RoboMaster 控制台"
+            description = "DJI RoboMaster Console"
             vendor = "Hanppie"
             windows { iconFile.set(project.file("src/main/resources/icons/hanppie.ico")) }
             linux { iconFile.set(project.file("src/main/resources/icons/hanppie.png")) }
