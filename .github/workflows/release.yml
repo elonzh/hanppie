@@ -82,9 +82,35 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: gradle
+      - name: Setup WiX Toolset for jpackage
+        shell: pwsh
+        run: |
+          $wixDir = Get-ChildItem -Path "C:\Program Files (x86)" -Filter "WiX Toolset*" -Directory | Select-Object -First 1
+          if ($wixDir) {
+            Write-Host "Found WiX Toolset at $($wixDir.FullName)"
+            "$($wixDir.FullName)\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          } else {
+            Write-Host "WiX Toolset not found in Program Files, installing via Chocolatey..."
+            choco install wixtoolset -y
+          }
+      - name: Verify WiX in PATH
+        shell: pwsh
+        run: |
+          Get-Command candle -ErrorAction SilentlyContinue
+          Get-Command light -ErrorAction SilentlyContinue
       - name: Package Windows MSI
         shell: bash
         run: ./gradlew :desktopApp:packageMsi
+      - name: Dump jpackage logs on failure
+        if: failure()
+        shell: bash
+        run: |
+          if [ -d "desktopApp/build/compose/logs/packageMsi" ]; then
+            for f in desktopApp/build/compose/logs/packageMsi/*.txt; do
+              echo "=== $f ==="
+              cat "$f"
+            done
+          fi
       - name: Prepare Windows artifact
         shell: bash
         run: |
