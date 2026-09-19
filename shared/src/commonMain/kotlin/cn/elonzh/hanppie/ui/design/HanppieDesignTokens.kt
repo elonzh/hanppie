@@ -8,6 +8,9 @@ import top.yukonga.miuix.kmp.theme.lightColorScheme
 /** Graphite Orange is the branded surface layer over Miuix, not a replacement component system. */
 internal object HanppieDesignTokens {
     object Light {
+        val CodeKeyword = Color(0xff91401c)
+        val CodeString = Color(0xff28664c)
+        val CodeNumber = Color(0xff5551a0)
         val Background = Color(0xfff3f5f7)
         val Surface = Color(0xffffffff)
         val SurfaceMuted = Color(0xffe9edf1)
@@ -20,6 +23,9 @@ internal object HanppieDesignTokens {
     }
 
     object Dark {
+        val CodeKeyword = Color(0xffffac80)
+        val CodeString = Color(0xff94c9a9)
+        val CodeNumber = Color(0xffbdb5ff)
         val Background = Color(0xff11161c)
         val Surface = Color(0xff1c232b)
         val SurfaceRaised = Color(0xff27313a)

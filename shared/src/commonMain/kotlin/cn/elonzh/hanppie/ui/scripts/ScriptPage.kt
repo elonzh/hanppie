@@ -1,5 +1,7 @@
 package cn.elonzh.hanppie.ui.scripts
 
+import cn.elonzh.hanppie.ui.scripts.editor.CodeHistory
+import cn.elonzh.hanppie.ui.scripts.editor.ScriptCodeEditor
 import androidx.compose.foundation.combinedClickable
 import cn.elonzh.hanppie.ui.design.WorkbenchActionRow
 import cn.elonzh.hanppie.ui.design.WorkbenchSmallIconButton
@@ -9,10 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
@@ -24,13 +23,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
@@ -91,9 +87,12 @@ internal fun ScriptPage(
     var audioRename by remember { mutableStateOf<LabAudioClip?>(null) }
     var audioNameDraft by remember { mutableStateOf("") }
     var audioDelete by remember { mutableStateOf<LabAudioClip?>(null) }
+    var editorGeneration by remember { mutableStateOf(0) }
     val editorField = remember {
         mutableStateOf(TextFieldValue(document.value.source, TextRange(document.value.source.length)))
     }
+
+    val editorHistory = remember(editorGeneration, document.value.path) { CodeHistory(editorField.value) }
 
     LaunchedEffect(document.value) {
         if (!editorOpen && document.value != EditorDocument()) editorOpen = true
@@ -104,10 +103,15 @@ internal fun ScriptPage(
     LaunchedEffect(document.value.source) {
         if (editorField.value.text != document.value.source) {
             editorField.value = TextFieldValue(document.value.source, TextRange(document.value.source.length))
+            // A loaded/replaced document must never undo into the previous script.
+            // Local edits (including audio insertion) update both values together.
+            editorHistory.reset(editorField.value)
         }
     }
 
     fun showEditor(next: EditorDocument) {
+        editorGeneration++
+        editorField.value = TextFieldValue(next.source, TextRange(next.source.length))
         document.value = next
         onFileError(null)
         editorOpen = true
@@ -138,9 +142,9 @@ internal fun ScriptPage(
 
     fun insertAudio(clip: LabAudioClip) {
         val field = editorField.value
-        val cursor = field.selection.end.coerceIn(0, field.text.length)
+        val cursor = field.selection.min.coerceIn(0, field.text.length)
         val prefix = field.text.substring(0, cursor)
-        val suffix = field.text.substring(cursor)
+        val suffix = field.text.substring(field.selection.max.coerceIn(cursor, field.text.length))
         val insertion = scriptAudioInsertion(prefix, suffix, scriptAudioStatement(clip.soundConstant))
         val updated = prefix + insertion + suffix
         editorField.value = TextFieldValue(updated, TextRange(cursor + insertion.length))
@@ -423,6 +427,7 @@ internal fun ScriptPage(
                     ScriptEditor(
                         document = document,
                         field = editorField,
+                        history = editorHistory,
                         robotState = robotState,
                         libraryBusy = libraryState.busy,
                         onSave = {
@@ -469,11 +474,13 @@ internal fun ScriptPage(
             }
             if (compact) {
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // Short landscape windows give the console the larger share: its log lines only need a
-                    // few dp each, while a squeezed panel would compose none at all.
-                    val consoleShare = if (availableHeight < 460.dp) 1.1f else 0.85f
+                    // Keep code primary, while retaining a visible result/stop context.
+                    val consoleHeight = (availableHeight * 0.25f).coerceAtMost(160.dp)
                     Box(Modifier.weight(1f).fillMaxWidth()) { primary(Modifier.fillMaxSize()) }
-                    if (monitoring) ScriptConsolePanel(robotState, Modifier.weight(consoleShare).fillMaxWidth())
+                    if (monitoring) ScriptConsolePanel(robotState,
+                        (if (editorOpen) Modifier.height(consoleHeight) else Modifier.weight(
+                            if (availableHeight < 460.dp) 1.1f else 0.85f
+                        )).fillMaxWidth())
                 }
             } else {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -686,6 +693,7 @@ private fun CapabilityBadge(label: String) {
 private fun ScriptEditor(
     document: MutableState<EditorDocument>,
     field: MutableState<TextFieldValue>,
+    history: CodeHistory,
     robotState: ConsoleState,
     libraryBusy: Boolean,
     onSave: () -> Unit,
@@ -757,21 +765,16 @@ private fun ScriptEditor(
         }
         Box(Modifier.weight(1f).fillMaxWidth()
             .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(HanppieDesignTokens.CardRadius)).padding(16.dp)) {
-            BasicTextField(
-                value = field.value,
-                onValueChange = { updated ->
+            ScriptCodeEditor(
+                history = history,
+                field = field,
+                enabled = !disabled,
+                onChange = { updated ->
                     field.value = updated
                     document.value = document.value.copy(source = updated.text)
                 },
-                modifier = Modifier.fillMaxSize().testTag("script-editor").verticalScroll(rememberScrollState()),
-                enabled = !disabled,
-                cursorBrush = SolidColor(MiuixTheme.colorScheme.primary),
-                textStyle = TextStyle(
-                    color = MiuixTheme.colorScheme.onSurface,
-                    fontSize = 14.sp,
-                    lineHeight = 23.sp,
-                    fontFamily = FontFamily.Monospace,
-                ),
+                onSave = onSave,
+                modifier = Modifier.fillMaxSize(),
             )
         }
     }

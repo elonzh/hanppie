@@ -563,4 +563,10 @@
     <string name="script_monitor">监控</string>
     <string name="script_audio_manage">自定义音频</string>
     <string name="close">关闭</string>
+    <string name="editor_find">查找</string>
+    <string name="editor_replace">替换</string>
+    <string name="editor_previous">上一个</string>
+    <string name="editor_next">下一个</string>
+    <string name="editor_no_matches">没有匹配结果</string>
+    <string name="editor_position">第 %1$s 行 · 第 %2$s 列</string>
 </resources>

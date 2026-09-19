@@ -563,4 +563,10 @@
     <string name="script_monitor">Monitor</string>
     <string name="script_audio_manage">Custom audio</string>
     <string name="close">Close</string>
+    <string name="editor_find">Find</string>
+    <string name="editor_replace">Replace</string>
+    <string name="editor_previous">Previous</string>
+    <string name="editor_next">Next</string>
+    <string name="editor_no_matches">No matches</string>
+    <string name="editor_position">Line %1$s · Column %2$s</string>
 </resources>

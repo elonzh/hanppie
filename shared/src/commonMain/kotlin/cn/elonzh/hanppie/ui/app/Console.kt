@@ -195,6 +195,7 @@ internal fun Console(
                     val routeTab = route.topLevelIndex
                     BoxWithConstraints(Modifier.fillMaxSize().background(CanvasColor).safeDrawingPadding().imePadding()) {
                         val compact = maxWidth < HanppieDesignTokens.CompactBreakpoint
+                        val workspacePage = route == ScriptRoute || route == ChatRoute
                         val isConnectionGuide = route == ConnectionGuideRoute ||
                             route == DirectConnectionGuideRoute || route == RouterConnectionGuideRoute
                         Row(Modifier.fillMaxSize()) {
@@ -214,9 +215,12 @@ internal fun Console(
                                 }
                             }
                             Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Column(Modifier.weight(1f).widthIn(max = HanppieDesignTokens.PageMaxWidth).fillMaxWidth()
+                                Column(Modifier.weight(1f)
+                                    .then(if (workspacePage) Modifier else Modifier.widthIn(max = HanppieDesignTokens.PageMaxWidth))
+                                    .fillMaxWidth()
                                     .padding(horizontal = if (compact) HanppieDesignTokens.PagePaddingCompact
-                                    else HanppieDesignTokens.PagePaddingExpanded)) {
+                                    else HanppieDesignTokens.PagePaddingExpanded)
+                                    .padding(bottom = if (workspacePage) HanppieDesignTokens.PagePaddingCompact else 0.dp)) {
                                     if (routeTab != 1 && !isConnectionGuide) {
                                         Row(Modifier.fillMaxWidth().height(72.dp), verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.SpaceBetween) {
