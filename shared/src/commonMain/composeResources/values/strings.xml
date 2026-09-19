@@ -90,14 +90,14 @@
     <string name="settings">Settings</string>
     <string name="general_settings">General</string>
     <string name="control">Controls</string>
-    <string name="control_settings_summary">Cockpit speed, joystick and status LEDs</string>
+    <string name="control_settings_summary">Speed, gimbal and joystick</string>
     <string name="gimbal_sensitivity">Gimbal sensitivity</string>
     <string name="push_to_talk_sent_packets_value">Intercom sent · %1$s packets</string>
     <string name="motion_parameters">Motion parameters · gears 1–5</string>
     <string name="meters_per_second">m/s</string>
     <string name="degrees_per_second">°/s</string>
     <string name="joystick_dead_zone">Joystick dead zone</string>
-    <string name="remote_led_colors">Robot LED state colors</string>
+    <string name="remote_led_colors">Status lights</string>
     <string name="remote_led_colors_summary">Shown by state after entering the cockpit. Intercom takes priority over recording; LEDs turn off when leaving.</string>
     <string name="remote_led_standby">Standby</string>
     <string name="remote_led_active">Remote active</string>
@@ -569,4 +569,6 @@
     <string name="editor_next">Next</string>
     <string name="editor_no_matches">No matches</string>
     <string name="editor_position">Line %1$s · Column %2$s</string>
+    <string name="settings_lights_summary">Idle, control, recording and intercom</string>
+    <string name="settings_model_summary">Connection and model</string>
 </resources>

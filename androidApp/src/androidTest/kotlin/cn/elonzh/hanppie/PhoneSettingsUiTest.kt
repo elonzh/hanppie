@@ -29,16 +29,18 @@ class PhoneSettingsUiTest {
         try {
             scenario = ActivityScenario.launch(MainActivity::class.java)
             rule.onNodeWithContentDescription("设置").performClick()
+            rule.onNodeWithTag("settings-category-model").performClick()
             rule.waitUntil(5000) {
                 rule.onNodeWithText("API Key").fetchSemanticsNode().config.getOrNull(SemanticsProperties.Disabled) == null
             }
             rule.onNodeWithText("API Key").performTextReplacement(key)
-            rule.onNodeWithText("保存设置").performScrollTo().performClick()
+            rule.onNodeWithText("保存设置").performClick()
             rule.waitUntil(10000) { rule.onAllNodesWithText("已保存").fetchSemanticsNodes().isNotEmpty() }
             check(settingsFile.readBytes().toString(Charsets.ISO_8859_1).contains(key)) { "API key was not stored in DataStore" }
             scenario.close()
             scenario = ActivityScenario.launch(MainActivity::class.java)
             rule.onNodeWithContentDescription("设置").performClick()
+            rule.onNodeWithTag("settings-category-model").performClick()
             rule.waitUntil(5000) {
                 rule.onNodeWithText("API Key").fetchSemanticsNode().config.getOrNull(SemanticsProperties.Disabled) == null
             }

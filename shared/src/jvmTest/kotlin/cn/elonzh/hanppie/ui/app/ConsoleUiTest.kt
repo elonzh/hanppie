@@ -100,7 +100,7 @@ class ConsoleUiTest {
             rule.onNodeWithText("RoboMaster").assertIsDisplayed()
             rule.onNodeWithText("S1").assertDoesNotExist()
             rule.onNodeWithContentDescription("设置").performClick()
-            rule.onNodeWithTag("settings-section-general-toggle").performClick()
+            openSettingsCategory("general")
             rule.onNodeWithContentDescription("language-selector").performClick()
             rule.onNodeWithContentDescription("language-en").performClick()
             rule.onNodeWithText("Language").assertIsDisplayed()
@@ -115,7 +115,7 @@ class ConsoleUiTest {
             rule.onNodeWithContentDescription("Debug").performClick()
             snapshot("phone-debug-en")
             rule.onNodeWithContentDescription("Settings").performClick()
-            rule.onNodeWithTag("settings-section-general-toggle").performClick()
+            openSettingsCategory("general")
             rule.onNodeWithContentDescription("language-selector").performClick()
             rule.onNodeWithContentDescription("language-zh").performClick()
             rule.onNodeWithText("语言").assertIsDisplayed()
@@ -305,6 +305,7 @@ class ConsoleUiTest {
             rule.onNodeWithContentDescription("发送").assertIsNotEnabled()
             snapshot("phone-chat")
             rule.onNodeWithContentDescription("设置").performClick()
+            openSettingsCategory("model")
             rule.onNodeWithText("API Key").performScrollTo().assertIsDisplayed()
             snapshot("phone-chat-settings")
         } finally { model.close() }
@@ -509,6 +510,7 @@ class ConsoleUiTest {
                 Box(Modifier.requiredSize(393.dp, 740.dp)) { Console(model, mutableStateOf(EditorDocument())) }
             } }
             rule.onNodeWithContentDescription("设置").performClick()
+            openSettingsCategory("model")
             rule.onNodeWithTag("model-picker").performScrollTo().performClick()
             rule.onNodeWithTag("model-filter").performTextReplacement("deepseek")
             rule.waitForIdle()
@@ -830,7 +832,7 @@ class ConsoleUiTest {
         try {
             rule.setContent { WorkbenchTheme(appearance) { Box(Modifier.requiredSize(393.dp, 740.dp)) { Console(model, document) } } }
             rule.onNodeWithContentDescription("设置").performClick()
-            rule.onNodeWithTag("settings-section-general-toggle").performClick()
+            openSettingsCategory("general")
             rule.onNodeWithContentDescription("theme-selector").assertDoesNotExist()
             rule.onNodeWithTag("palette-editor").assertDoesNotExist()
             rule.onNodeWithContentDescription("night-mode-selector").performClick()
@@ -949,6 +951,13 @@ class ConsoleUiTest {
         } finally { model.close() }
     }
 
+    private fun openSettingsCategory(id: String) {
+        if (rule.onAllNodesWithTag("settings-category-$id").fetchSemanticsNodes().isEmpty()) {
+            rule.onNodeWithTag("settings-back").performClick()
+        }
+        rule.onNodeWithTag("settings-category-$id").performScrollTo().performClick()
+    }
+
     private fun snapshot(name: String, node: SemanticsNodeInteraction = rule.onRoot()) {
         val image = node.captureToImage()
         val pixels = IntArray(image.width * image.height)
@@ -968,6 +977,7 @@ class ConsoleUiTest {
             rule.onNodeWithText("语音", substring = false).assertDoesNotExist()
             rule.onNodeWithContentDescription("对话").performClick()
             rule.onNodeWithContentDescription("设置").performClick()
+            openSettingsCategory("model")
             rule.onNodeWithText("供应商").performScrollTo().assertExists()
             rule.onNodeWithContentDescription("model-provider-selector").performScrollTo().performClick()
             ModelProviderPreset.entries.forEach { provider ->
@@ -979,8 +989,9 @@ class ConsoleUiTest {
                 assertEquals(ModelProviderPreset.DEEPSEEK.defaultEndpoint, model.modelSettings.value.endpoint)
             }
             rule.onNodeWithText("自动朗读").assertDoesNotExist()
-            rule.onNodeWithTag("settings-section-control-toggle").performScrollTo().performClick()
+            openSettingsCategory("control")
             rule.onNodeWithContentDescription("gimbal-sensitivity-selector").assertExists()
+            openSettingsCategory("lights")
             val original = model.controlSettings.value.remoteLeds.standby
             rule.onNodeWithContentDescription("remote-led-standby").performScrollTo().performClick()
             rule.onNodeWithTag("led-brightness").performTouchInput {
@@ -989,7 +1000,8 @@ class ConsoleUiTest {
             rule.onNodeWithTag("led-color-apply").performClick()
             rule.runOnIdle { assertTrue(original != model.controlSettings.value.remoteLeds.standby) }
             rule.onNodeWithContentDescription("remote-led-talking").performScrollTo().assertExists()
-            rule.onNodeWithContentDescription("restore-default-settings").performScrollTo().assertIsEnabled().performClick()
+            if (rule.onAllNodesWithTag("settings-back").fetchSemanticsNodes().isNotEmpty()) rule.onNodeWithTag("settings-back").performClick()
+            rule.onNodeWithContentDescription("restore-default-settings").assertIsEnabled().performClick()
             rule.onNodeWithText("恢复所有默认设置？").assertIsDisplayed()
             rule.onNodeWithText("取消").performClick()
             rule.onNodeWithText("恢复所有默认设置？").assertDoesNotExist()
@@ -1008,6 +1020,7 @@ class ConsoleUiTest {
             }
 
             // The id lives in one field and the picker offers it alongside the built-in catalog.
+            openSettingsCategory("model")
             rule.onNodeWithTag("model-picker").performScrollTo().performClick()
             rule.onNodeWithTag("model-option-qwen-plus").assertExists()
         } finally { model.close() }
@@ -1028,7 +1041,8 @@ class ConsoleUiTest {
             }
 
             rule.runOnIdle { assertEquals(0, clientCreations) }
-            rule.onNodeWithTag("settings-section-model-toggle").performClick()
+            openSettingsCategory("model")
+            openSettingsCategory("model")
             rule.onNodeWithTag("model-picker").performScrollTo().performClick()
             rule.waitUntil(3_000) { clientCreations == 1 }
             rule.onNodeWithText("获取模型列表失败", substring = true).assertExists()
@@ -1279,7 +1293,7 @@ class ConsoleUiTest {
         val model = testConsoleModel()
         try {
             rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(393.dp, 740.dp)) { SettingsPage(model) } } }
-            rule.onNodeWithTag("settings-section-shortcuts-toggle").performScrollTo().performClick()
+            openSettingsCategory("shortcuts")
             rule.onNodeWithText("对话快捷键").assertIsDisplayed()
             rule.onNodeWithText("Enter", substring = false).assertIsDisplayed()
             rule.onNodeWithText("Shift+Enter", substring = false).assertIsDisplayed()

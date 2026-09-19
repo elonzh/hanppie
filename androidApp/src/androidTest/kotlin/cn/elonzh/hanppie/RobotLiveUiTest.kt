@@ -92,6 +92,7 @@ class RobotLiveUiTest {
             val apiKey = keyFile.readText().trim()
             keyFile.delete()
             rule.onNodeWithContentDescription("设置").performClick()
+            rule.onNodeWithTag("settings-category-model").performClick()
             rule.onNodeWithText("API Key").performTextReplacement(apiKey)
             rule.onNodeWithContentDescription("对话").performClick()
             val script = """def start():

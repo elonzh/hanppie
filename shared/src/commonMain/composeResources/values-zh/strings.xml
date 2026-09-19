@@ -90,14 +90,14 @@
     <string name="settings">设置</string>
     <string name="general_settings">通用</string>
     <string name="control">控制</string>
-    <string name="control_settings_summary">驾驶舱速度、摇杆与状态灯</string>
+    <string name="control_settings_summary">速度、云台与摇杆</string>
     <string name="gimbal_sensitivity">云台灵敏度</string>
     <string name="push_to_talk_sent_packets_value">对讲已发送 · %1$s 个数据包</string>
     <string name="motion_parameters">运动参数 · 1–5 档</string>
     <string name="meters_per_second">m/s</string>
     <string name="degrees_per_second">°/s</string>
     <string name="joystick_dead_zone">摇杆死区</string>
-    <string name="remote_led_colors">机器人 LED 状态颜色</string>
+    <string name="remote_led_colors">状态灯</string>
     <string name="remote_led_colors_summary">进入驾驶舱后按当前状态显示；对讲优先于录像，离开驾驶舱时关闭。</string>
     <string name="remote_led_standby">待机</string>
     <string name="remote_led_active">遥控中</string>
@@ -569,4 +569,6 @@
     <string name="editor_next">下一个</string>
     <string name="editor_no_matches">没有匹配结果</string>
     <string name="editor_position">第 %1$s 行 · 第 %2$s 列</string>
+    <string name="settings_lights_summary">待机、操控、录像与对讲</string>
+    <string name="settings_model_summary">连接与模型配置</string>
 </resources>

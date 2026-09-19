@@ -138,7 +138,7 @@ class DesignUiTest {
             setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
             onNodeWithTag("connection-guide").assertIsDisplayed()
             onNodeWithContentDescription("设置").performClick()
-            onNodeWithTag("settings-section-control-toggle").performScrollTo().performClick()
+            onNodeWithTag("settings-category-control").performScrollTo().performClick()
             onNodeWithContentDescription("gimbal-sensitivity-selector").performScrollTo().assertIsDisplayed()
             saveDesignSnapshot("desktop-minimum-settings", onRoot(), 900, 572)
             onNodeWithContentDescription("设备").performClick()

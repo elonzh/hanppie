@@ -22,6 +22,7 @@ class PhoneUiTest {
         rule.onNodeWithText("自动连接").assertIsDisplayed()
         screenshot("device")
         rule.onNodeWithContentDescription("设置").performClick()
+        rule.onNodeWithTag("settings-category-general").performClick()
         rule.onNodeWithContentDescription("language-selector").performClick()
         rule.onNodeWithContentDescription("language-en").performClick()
         rule.onNodeWithText("Language", substring=false).assertIsDisplayed()
