@@ -2,7 +2,10 @@ package cn.elonzh.hanppie.ui.app
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -27,6 +30,7 @@ import cn.elonzh.hanppie.ui.design.WorkbenchDialog
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.robot.audio.DesktopLabAudioImporter
+import cn.elonzh.hanppie.ui.robot.audio.DesktopLabAudioPlayer
 import cn.elonzh.hanppie.ui.robot.remote.DesktopSpeakerInput
 import cn.elonzh.hanppie.ui.settings.ModelSettings
 import cn.elonzh.hanppie.ui.settings.ModelCatalog
@@ -47,6 +51,7 @@ private fun createDesktopWorkbenchViewModel(): WorkbenchViewModel {
         val model = ConsoleModel(
             speakerInput = DesktopSpeakerInput(),
             audioImporter = DesktopLabAudioImporter(),
+            audioPlayer = DesktopLabAudioPlayer(),
             robotRuntime = JvmRobotRuntime(),
             settingsStore = storage.settings,
             scriptRepository = storage.scripts,
@@ -171,8 +176,12 @@ private fun DesktopWorkbenchWindow(onExit: () -> Unit) {
                 summary = tr(Res.string.unsaved_changes_will_be_lost_disconnecting_does_not_guarantee),
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button({ confirmExit = false }) { Text(tr(Res.string.back)) }
-                    Button(shutdown) { Text(tr(Res.string.quit_anyway)) }
+                    Button({ confirmExit = false }, Modifier.weight(1f).heightIn(min = 48.dp)) {
+                        Text(tr(Res.string.back))
+                    }
+                    Button(shutdown, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.buttonColorsPrimary()) {
+                        Text(tr(Res.string.quit_anyway))
+                    }
                 }
             }
         }

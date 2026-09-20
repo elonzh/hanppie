@@ -1,10 +1,12 @@
 package cn.elonzh.hanppie.ui.scripts
 
-import androidx.room3.Room
 import cn.elonzh.hanppie.agent.tools.ListLabScriptsTool
 import cn.elonzh.hanppie.agent.tools.NoToolArgs
+import cn.elonzh.hanppie.robot.lab.LabAudioClip
+import cn.elonzh.hanppie.robot.lab.LabProgram
 import cn.elonzh.hanppie.robot.lab.LabRunProtocol
 import cn.elonzh.hanppie.ui.app.MemoryScriptRepository
+import io.github.vinceglb.filekit.PlatformFile
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -22,12 +24,11 @@ import kotlinx.coroutines.withTimeout
 class ScriptLibraryTest {
     @Test fun createUpdateRenameDeleteAndReload() = runBlocking {
         val directory = Files.createTempDirectory("hanppie-script-library-")
-        var database: HanppieDatabase? = null
         try {
-            val file = directory.resolve("hanppie.db")
-            val firstDatabase = buildHanppieDatabase(Room.databaseBuilder<HanppieDatabase>(file.toString()))
-            database = firstDatabase
-            val library = ScriptLibrary(RoomScriptRepository(firstDatabase.scriptDao(), firstDatabase.scriptAudioDao()))
+            val userDir = PlatformFile(directory.resolve("scripts").toString())
+            val presetsDir = PlatformFile(directory.resolve("presets").toString())
+            val repository = DirectoryScriptRepository(userDir, presetsDir, enablePresetSync = false)
+            val library = ScriptLibrary(repository)
             library.load()
             val created = library.create("  巡检脚本  ", "def start():\n    pass\n")
             assertEquals("巡检脚本", created.name)
@@ -36,18 +37,14 @@ class ScriptLibraryTest {
             val renamed = library.rename(created.id, "巡检脚本 2")
             assertEquals("巡检脚本 2", renamed.name)
 
-            firstDatabase.close()
-            database = null
-            val restoredDatabase = buildHanppieDatabase(Room.databaseBuilder<HanppieDatabase>(file.toString()))
-            database = restoredDatabase
-            val restored = ScriptLibrary(RoomScriptRepository(restoredDatabase.scriptDao(), restoredDatabase.scriptAudioDao()))
+            val restoredRepository = DirectoryScriptRepository(userDir, presetsDir, enablePresetSync = false)
+            val restored = ScriptLibrary(restoredRepository)
             restored.load()
             assertEquals(listOf(renamed), restored.state.value.scripts)
             restored.delete(created.id)
             assertTrue(restored.state.value.scripts.isEmpty())
-            assertTrue(restoredDatabase.scriptDao().getAll().isEmpty())
+            assertTrue(restoredRepository.all().isEmpty())
         } finally {
-            database?.close()
             directory.toFile().deleteRecursively()
         }
     }
@@ -89,13 +86,15 @@ class ScriptLibraryTest {
                 awaitCancellation()
             }
 
+            override suspend fun presets(): List<StoredScript> = emptyList()
             override suspend fun insert(script: StoredScript) = Unit
             override suspend fun update(script: StoredScript) = Unit
             override suspend fun delete(script: StoredScript) = Unit
-            override suspend fun audio(scriptId: String): List<StoredScriptAudio> = emptyList()
-            override suspend fun insertAudio(audio: StoredScriptAudio) = Unit
-            override suspend fun updateAudio(audio: StoredScriptAudio) = Unit
+            override suspend fun audio(scriptId: String): List<LabAudioClip> = emptyList()
+            override suspend fun insertAudio(scriptId: String, audio: LabAudioClip) = Unit
+            override suspend fun updateAudio(scriptId: String, audio: LabAudioClip) = Unit
             override suspend fun deleteAudio(scriptId: String, nativeId: Int): Boolean = false
+            override suspend fun replaceAllAudio(scriptId: String, clips: List<LabAudioClip>) = Unit
         })
         val load = launch { library.load() }
         loadStarted.await()
@@ -115,40 +114,106 @@ class ScriptLibraryTest {
         assertContains(failure.message.orEmpty(), "Script library load was interrupted")
     }
 
-    @Test fun presetsHaveStableIdsAndPython36LabEntrypoints() {
-        assertEquals(presetScripts.size, presetScripts.map { it.id }.distinct().size)
-        assertEquals(12, presetScripts.size)
-        presetScripts.forEach {
-            assertTrue(Regex("(?m)^def start\\(\\):$").containsMatchIn(it.source), it.id)
-            assertTrue(it.source.endsWith("\n"), it.id)
-            assertTrue(it.source.length <= MAX_SCRIPT_LENGTH, it.id)
-            assertTrue("REPEAT_COUNT" in it.source, it.id)
-            assertTrue("for " in it.source, it.id)
-        }
-        presetScripts.filter { it.capability == PresetCapability.GIMBAL_MOTION }.forEach {
-            assertTrue("robot_ctrl.set_mode(rm_define.robot_mode_free)" in it.source, it.id)
-            assertTrue(it.source.indexOf("finally:") < it.source.indexOf("gimbal_ctrl.stop()"), it.id)
-        }
-        presetScripts.filter { it.capability == PresetCapability.CHASSIS_MOTION }.forEach {
-            assertTrue("robot_ctrl.set_mode(rm_define.robot_mode_free)" in it.source, it.id)
-            assertTrue(it.source.indexOf("finally:") < it.source.indexOf("chassis_ctrl.stop()"), it.id)
+    @Test fun presetsHaveStableIdsAndPython36LabEntrypoints() = runBlocking {
+        val tempDir = Files.createTempDirectory("hanppie-presets-test-")
+        try {
+            val repo = DirectoryScriptRepository(
+                PlatformFile(tempDir.resolve("scripts").toString()),
+                PlatformFile(tempDir.resolve("presets").toString()),
+                enablePresetSync = true,
+            )
+            val presets = repo.presets()
+            assertEquals(13, presets.size)
+            assertEquals(13, presets.map { it.id }.distinct().size)
+            presets.forEach {
+                assertTrue(Regex("(?m)^def start\\(\\):$").containsMatchIn(it.source), it.id)
+                assertTrue(it.source.endsWith("\n"), it.id)
+                assertTrue(it.source.length <= MAX_SCRIPT_LENGTH, it.id)
+                assertTrue("REPEAT_COUNT" in it.source, it.id)
+                assertTrue("for " in it.source, it.id)
+            }
+            presets.filter { "gimbal_ctrl.stop()" in it.source }.forEach {
+                assertTrue("robot_ctrl.set_mode(rm_define.robot_mode_free)" in it.source, it.id)
+                assertTrue(it.source.indexOf("finally:") < it.source.indexOf("gimbal_ctrl.stop()"), it.id)
+            }
+            presets.filter { "chassis_ctrl.stop()" in it.source }.forEach {
+                assertTrue("robot_ctrl.set_mode(rm_define.robot_mode_free)" in it.source, it.id)
+                assertTrue(it.source.indexOf("finally:") < it.source.indexOf("chassis_ctrl.stop()"), it.id)
+            }
+        } finally {
+            tempDir.toFile().deleteRecursively()
         }
     }
 
-    @Test fun instrumentedPresetsParseAsPython36() {
-        val python = System.getenv("PYTHON")?.takeIf { it.isNotBlank() }
-            ?: if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) "python" else "python3"
-        presetScripts.forEach { preset ->
-            val process = ProcessBuilder(
-                python,
-                "-c",
-                "import ast,sys; ast.parse(sys.stdin.read(), feature_version=(3,6))",
-            ).start()
-            process.outputStream.bufferedWriter(Charsets.UTF_8).use {
-                it.write(LabRunProtocol.instrument(preset.source, "0123456789abcdef"))
+    @Test fun instrumentedPresetsParseAsPython36() = runBlocking {
+        val tempDir = Files.createTempDirectory("hanppie-python-presets-test-")
+        try {
+            val repo = DirectoryScriptRepository(
+                PlatformFile(tempDir.resolve("scripts").toString()),
+                PlatformFile(tempDir.resolve("presets").toString()),
+                enablePresetSync = true,
+            )
+            val presets = repo.presets()
+            val python = System.getenv("PYTHON")?.takeIf { it.isNotBlank() }
+                ?: if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) "python" else "python3"
+            presets.forEach { preset ->
+                val process = ProcessBuilder(
+                    python,
+                    "-c",
+                    "import ast,sys; ast.parse(sys.stdin.read(), feature_version=(3,6))",
+                ).start()
+                process.outputStream.bufferedWriter(Charsets.UTF_8).use {
+                    it.write(LabRunProtocol.instrument(preset.source, "0123456789abcdef"))
+                }
+                val stderr = process.errorStream.bufferedReader(Charsets.UTF_8).readText()
+                assertEquals(0, process.waitFor(), "${preset.id}: $stderr")
             }
-            val stderr = process.errorStream.bufferedReader(Charsets.UTF_8).readText()
-            assertEquals(0, process.waitFor(), "${preset.id}: $stderr")
+        } finally {
+            tempDir.toFile().deleteRecursively()
+        }
+    }
+
+    @Test fun scriptsAreSortedByCreationTimeDescending() = runBlocking {
+        var time = 1000L
+        val clock = object : kotlin.time.Clock {
+            override fun now(): kotlin.time.Instant = kotlin.time.Instant.fromEpochMilliseconds(time++)
+        }
+        val store = MemoryScriptRepository()
+        val library = ScriptLibrary(store, clock = clock)
+        library.load()
+        val s1 = library.create("Script 1", "pass")
+        val s2 = library.create("Script 2", "pass")
+        assertEquals(listOf(s2.id, s1.id), library.state.value.scripts.map { it.id })
+
+        library.update(s1.id, "pass # updated")
+        assertEquals(listOf(s2.id, s1.id), library.state.value.scripts.map { it.id })
+    }
+
+    @Test fun fridayDiscoCarriesOriginalAudioClipWithinUploadBudget() = runBlocking {
+        val tempDir = Files.createTempDirectory("hanppie-friday-test-")
+        try {
+            val repo = DirectoryScriptRepository(
+                PlatformFile(tempDir.resolve("scripts").toString()),
+                PlatformFile(tempDir.resolve("presets").toString()),
+                enablePresetSync = true,
+            )
+            val friday = repo.presets().first { it.id == "friday-disco" }
+            assertEquals(4, friday.audioClips.size)
+            assertEquals(0, friday.audioClips[0].id)
+            assertEquals("friday_ready", friday.audioClips[0].name)
+            assertTrue(friday.audioClips[0].durationMillis >= 14_000L)
+            assertEquals(1, friday.audioClips[1].id)
+            assertEquals("friday_verse", friday.audioClips[1].name)
+            assertTrue(friday.audioClips[1].durationMillis >= 25_000L)
+            assertEquals(2, friday.audioClips[2].id)
+            assertEquals("friday_chorus", friday.audioClips[2].name)
+            assertTrue(friday.audioClips[2].durationMillis >= 25_000L)
+            assertEquals(3, friday.audioClips[3].id)
+            assertEquals("friday_climax", friday.audioClips[3].name)
+            assertTrue(friday.audioClips[3].durationMillis >= 24_000L)
+            assertTrue(LabAudioClip.totalEncodedBytes(friday.audioClips) + friday.source.length <= LabProgram.MAX_DSP_BYTES)
+        } finally {
+            tempDir.toFile().deleteRecursively()
         }
     }
 

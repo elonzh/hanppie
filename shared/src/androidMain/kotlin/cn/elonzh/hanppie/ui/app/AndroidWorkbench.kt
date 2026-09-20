@@ -15,8 +15,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -34,6 +36,7 @@ import cn.elonzh.hanppie.ui.design.WorkbenchDialog
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.robot.audio.AndroidLabAudioImporter
+import cn.elonzh.hanppie.ui.robot.audio.AndroidLabAudioPlayer
 import cn.elonzh.hanppie.ui.robot.remote.AndroidSpeakerInput
 import cn.elonzh.hanppie.ui.speech.AndroidSpeechInput
 import java.net.DatagramSocket
@@ -80,6 +83,7 @@ private fun createAndroidWorkbenchViewModel(
             voiceInput = speechInput,
             speakerInput = AndroidSpeakerInput(app),
             audioImporter = AndroidLabAudioImporter(),
+            audioPlayer = AndroidLabAudioPlayer(),
             robotRuntime = JvmRobotRuntime(network::network),
             settingsStore = storage.settings,
             scriptRepository = storage.scripts,
@@ -190,15 +194,15 @@ fun AndroidWorkbench(autoConnectOnStart: Boolean = true) {
         WorkbenchDialog(show = voiceDisclosure, onDismissRequest = { voiceDisclosure = false }, title = tr(Res.string.use_phone_microphone),
             summary = tr(Res.string.your_system_speech_service_may_process_audio_online_recognized)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button({ voiceDisclosure = false }) { Text(tr(Res.string.cancel)) }
-                Button({ voiceDisclosureAccepted = true; voiceDisclosure = false; startVoice() }) { Text(tr(Res.string.action_continue)) }
+                Button({ voiceDisclosure = false }, Modifier.weight(1f).heightIn(min = 48.dp)) { Text(tr(Res.string.cancel)) }
+                Button({ voiceDisclosureAccepted = true; voiceDisclosure = false; startVoice() }, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.buttonColorsPrimary()) { Text(tr(Res.string.action_continue)) }
             }
         }
         WorkbenchDialog(show = confirmExit, onDismissRequest = { confirmExit = false }, title = tr(Res.string.quit_hanppie_2),
             summary = tr(Res.string.unsaved_changes_will_be_lost_disconnecting_does_not_guarantee)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button({ confirmExit = false }) { Text(tr(Res.string.back)) }
-                Button({ (context as? Activity)?.finish() }) { Text(tr(Res.string.quit_anyway)) }
+                Button({ confirmExit = false }, Modifier.weight(1f).heightIn(min = 48.dp)) { Text(tr(Res.string.back)) }
+                Button({ (context as? Activity)?.finish() }, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.buttonColorsPrimary()) { Text(tr(Res.string.quit_anyway)) }
             }
         }
         Console(holder.model, holder.document, onImport = holder::importScript, onImportAudio = holder::importScriptAudio,

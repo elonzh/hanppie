@@ -75,6 +75,7 @@ internal fun ScriptPage(
     val robotState by model.state.collectAsState()
     val libraryState by model.scriptLibrary.state.collectAsState()
     val audioState by model.scriptAudio.state.collectAsState()
+    val audioPlaybackState by model.scriptAudio.playbackState.collectAsState()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var editorOpen by rememberSaveable { mutableStateOf(document.value != EditorDocument()) }
     var pendingReplacement by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -97,8 +98,8 @@ internal fun ScriptPage(
     LaunchedEffect(document.value) {
         if (!editorOpen && document.value != EditorDocument()) editorOpen = true
     }
-    LaunchedEffect(document.value.scriptId, editorOpen) {
-        model.scriptAudio.open(if (editorOpen) document.value.scriptId else null)
+    LaunchedEffect(document.value.scriptId, document.value.initialAudio, editorOpen) {
+        model.scriptAudio.open(if (editorOpen) document.value.scriptId else null, document.value.initialAudio)
     }
     LaunchedEffect(document.value.source) {
         if (editorField.value.text != document.value.source) {
@@ -107,6 +108,9 @@ internal fun ScriptPage(
             // Local edits (including audio insertion) update both values together.
             editorHistory.reset(editorField.value)
         }
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { model.scriptAudio.stop() }
     }
 
     fun showEditor(next: EditorDocument) {
@@ -140,17 +144,6 @@ internal fun ScriptPage(
         }
     }
 
-    fun insertAudio(clip: LabAudioClip) {
-        val field = editorField.value
-        val cursor = field.selection.min.coerceIn(0, field.text.length)
-        val prefix = field.text.substring(0, cursor)
-        val suffix = field.text.substring(field.selection.max.coerceIn(cursor, field.text.length))
-        val insertion = scriptAudioInsertion(prefix, suffix, scriptAudioStatement(clip.soundConstant))
-        val updated = prefix + insertion + suffix
-        editorField.value = TextFieldValue(updated, TextRange(cursor + insertion.length))
-        document.value = document.value.copy(source = updated)
-    }
-
     fun audioOperation(action: suspend () -> Unit) {
         scope.launch {
             try {
@@ -168,7 +161,11 @@ internal fun ScriptPage(
         scope.launch {
             try {
                 val saved = if (snapshot.scriptId == null) {
-                    model.scriptLibrary.create(checkNotNull(name), snapshot.source)
+                    val created = model.scriptLibrary.create(checkNotNull(name), snapshot.source, snapshot.initialAudio)
+                    if (snapshot.initialAudio.isNotEmpty()) {
+                        model.scriptAudio.saveClipsFor(created.id, snapshot.initialAudio)
+                    }
+                    created
                 } else {
                     model.scriptLibrary.update(snapshot.scriptId, snapshot.source)
                 }
@@ -314,7 +311,7 @@ internal fun ScriptPage(
         show = scriptMenu != null,
         onDismissRequest = { scriptMenu = null },
         title = scriptMenu?.name ?: tr(Res.string.script),
-        summary = scriptMenu?.let { formatUpdatedTime(it.updatedAtEpochMillis) },
+        summary = scriptMenu?.let { formatUpdatedTime(it.createdAtEpochMillis) },
     ) {
         val target = scriptMenu
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -382,7 +379,10 @@ internal fun ScriptPage(
 
     WorkbenchDialog(
         show = audioOpen,
-        onDismissRequest = { audioOpen = false },
+        onDismissRequest = {
+            audioOpen = false
+            model.scriptAudio.stop()
+        },
         title = tr(Res.string.script_audio_manage),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -390,12 +390,19 @@ internal fun ScriptPage(
                 audio = audioState,
                 scriptId = document.value.scriptId,
                 sourceLength = document.value.source.length,
+                playbackState = audioPlaybackState,
+                onPlay = model.scriptAudio::play,
+                onPause = model.scriptAudio::pause,
+                onResume = model.scriptAudio::resume,
+                onMove = { from, to -> scope.launch { model.scriptAudio.move(from, to) } },
                 onImport = onImportAudio,
-                onInsert = ::insertAudio,
                 onRename = { clip -> audioNameDraft = clip.name; audioRename = clip },
                 onDelete = { audioDelete = it },
             )
-            Button({ audioOpen = false }, Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Button({
+                audioOpen = false
+                model.scriptAudio.stop()
+            }, Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                 Text(tr(Res.string.close))
             }
         }
@@ -406,16 +413,15 @@ internal fun ScriptPage(
             title = if (editorOpen) document.value.displayName ?: tr(Res.string.new_script) else tr(Res.string.script),
             dirty = editorOpen && document.value.dirty,
             state = robotState,
-            onRename = document.value.scriptId?.let {
+            onRename = if (editorOpen) document.value.scriptId?.let {
                 {
                     nameDraft = document.value.displayName.orEmpty()
                     nameOperation = NameOperation.RENAME
                 }
-            },
+            } else null,
             onConnectionDetails = onConnectionDetails,
             onBack = navigateBack.takeIf { editorOpen },
         )
-        if (robotState.busy) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
         fileError?.let {
             Text(it, Modifier.padding(vertical = 8.dp), color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
         }
@@ -464,7 +470,7 @@ internal fun ScriptPage(
                     onOpen = { showEditor(EditorDocument.from(it)) },
                     onManage = { scriptMenu = it },
                     onPreset = {
-                        showEditor(EditorDocument(source = it.source, title = tr(it.name)))
+                        showEditor(EditorDocument(source = it.source, title = it.name, initialAudio = it.audioClips))
                     },
                     modifier = libraryModifier,
                 )
@@ -508,7 +514,7 @@ private fun ScriptLibraryView(
     onImport: () -> Unit,
     onOpen: (StoredScript) -> Unit,
     onManage: (StoredScript) -> Unit,
-    onPreset: (PresetScript) -> Unit,
+    onPreset: (StoredScript) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     androidx.compose.foundation.lazy.LazyColumn(
@@ -565,14 +571,16 @@ private fun ScriptLibraryView(
         state.error?.let { error ->
             item { Text(error, color = MiuixTheme.colorScheme.error, fontSize = 12.sp) }
         }
-        item { SectionHeader(tr(Res.string.preset_scripts)) }
-        item {
-            FlowRow(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                presetScripts.forEach { preset -> PresetScriptCard(preset, compact, onPreset) }
+        if (state.presets.isNotEmpty()) {
+            item { SectionHeader(tr(Res.string.preset_scripts)) }
+            item {
+                FlowRow(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    state.presets.forEach { preset -> PresetScriptCard(preset, compact, onPreset) }
+                }
             }
         }
     }
@@ -651,7 +659,7 @@ private fun StoredScriptCard(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(script.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
                     overflow = TextOverflow.Ellipsis)
-                Text(formatUpdatedTime(script.updatedAtEpochMillis), fontSize = 12.sp,
+                Text(formatUpdatedTime(script.createdAtEpochMillis), fontSize = 12.sp,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             }
         }
@@ -659,19 +667,14 @@ private fun StoredScriptCard(
 }
 
 @Composable
-private fun PresetScriptCard(preset: PresetScript, compact: Boolean, onOpen: (PresetScript) -> Unit) {
+private fun PresetScriptCard(preset: StoredScript, compact: Boolean, onOpen: (StoredScript) -> Unit) {
     Card(ProgramCardModifier(compact).clickable { onOpen(preset) }
         .semantics { contentDescription = "script-preset-${preset.id}" }) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(tr(preset.name), Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                CapabilityBadge(tr(when (preset.capability) {
-                    PresetCapability.EFFECT -> Res.string.light_or_sound
-                    PresetCapability.GIMBAL_MOTION -> Res.string.moves_gimbal
-                    PresetCapability.CHASSIS_MOTION -> Res.string.moves_robot
-                }))
+            Text(preset.name, Modifier.fillMaxWidth(), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            preset.summary?.takeIf { it.isNotBlank() }?.let {
+                Text(it, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             }
-            Text(tr(preset.summary), fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
         }
     }
 }
@@ -680,13 +683,6 @@ private fun PresetScriptCard(preset: PresetScript, compact: Boolean, onOpen: (Pr
 private fun ProgramCardModifier(compact: Boolean): Modifier =
     (if (compact) Modifier.fillMaxWidth() else Modifier.width(300.dp))
         .heightIn(min = 142.dp)
-
-@Composable
-private fun CapabilityBadge(label: String) {
-    Box(Modifier.background(MiuixTheme.colorScheme.secondaryContainer, RoundedCornerShape(50)).padding(horizontal = 9.dp, vertical = 4.dp)) {
-        Text(label, fontSize = 11.sp, color = MiuixTheme.colorScheme.onSecondaryContainer)
-    }
-}
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)

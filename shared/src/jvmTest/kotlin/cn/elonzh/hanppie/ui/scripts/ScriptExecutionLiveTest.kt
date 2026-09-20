@@ -27,7 +27,8 @@ class ScriptExecutionLiveTest {
         try {
             model.connect(ip!!, appId!!)
             withTimeout(25_000) { model.state.first { it.connected && !it.busy } }
-            val preset = presetScripts.single { it.id == "curious-sentry" }
+            model.scriptLibrary.load()
+            val preset = model.scriptLibrary.state.value.presets.single { it.id == "curious-sentry" }
 
             model.runScript(preset.source, "好奇哨兵")
             withTimeout(45_000) { model.state.first {

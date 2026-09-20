@@ -84,8 +84,16 @@ private fun ScriptRunStatusRow(state: ConsoleState, tight: Boolean) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(if (tight) 8.dp else 10.dp).background(color, RoundedCornerShape(50)))
             Spacer(Modifier.width(8.dp))
-            Text(state.scriptStatus, Modifier.weight(1f), fontSize = if (tight) 13.sp else 15.sp,
-                fontWeight = FontWeight.SemiBold, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            SelectionContainer(Modifier.weight(1f)) {
+                Text(
+                    state.scriptStatus,
+                    fontSize = if (tight) 13.sp else 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = color,
+                    maxLines = if (tight || state.scriptRunPhase != ScriptRunPhase.FAILED) 1 else 4,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             elapsedText?.let {
                 Text(it, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary)

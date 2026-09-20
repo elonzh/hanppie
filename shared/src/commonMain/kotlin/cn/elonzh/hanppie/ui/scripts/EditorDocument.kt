@@ -1,5 +1,7 @@
 package cn.elonzh.hanppie.ui.scripts
 
+import cn.elonzh.hanppie.robot.lab.LabAudioClip
+
 internal data class EditorDocument(
     val source: String = DEFAULT_SCRIPT_SOURCE,
     val savedSource: String = source,
@@ -7,6 +9,7 @@ internal data class EditorDocument(
     val busy: Boolean = false,
     val scriptId: String? = null,
     val title: String? = null,
+    val initialAudio: List<LabAudioClip> = emptyList(),
 ) {
     val dirty: Boolean get() = source != savedSource
     val displayName: String? get() = title ?: path?.substringAfterLast('/')?.substringAfterLast('\\')
@@ -18,6 +21,7 @@ internal data class EditorDocument(
         busy = false,
         scriptId = script.id,
         title = script.name,
+        initialAudio = emptyList(),
     )
 
     companion object {

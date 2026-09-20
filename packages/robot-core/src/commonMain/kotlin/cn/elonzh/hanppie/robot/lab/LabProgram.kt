@@ -24,10 +24,10 @@ data class LabProgram(val source: String, val guid: String, val sign: String, va
 
     companion object {
         /**
-         * Recorded upload boundary for one S1 Lab DSP payload is about 31.5 KiB, observed while uploading a
-         * large instrumented bridge program. Custom audio is embedded as base64 inside that same payload, so
-         * the guard stays below the recorded boundary instead of discovering it as a silent upload failure.
+         * Upload byte budget for one S1 Lab DSP payload.
+         * The S1 /data partition has gigabytes of storage and DUSS 0x3F/0xA1 supports 32-bit sizes.
+         * Relaxed to 256 KiB to allow longer audio and multi-slot chained audio (Schemes A and B).
          */
-        const val MAX_DSP_BYTES = 30_000
+        const val MAX_DSP_BYTES = 256_000
     }
 }

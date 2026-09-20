@@ -81,6 +81,7 @@ extend-exclude = [
   "src/robomaster",
   "src/hanppie/runtime",
   "src/hanppie/resources/dji_scratch.py.txt",
+  "shared/src/commonMain/composeResources/files/presets",
 ]
 
 [tool.ruff.lint]

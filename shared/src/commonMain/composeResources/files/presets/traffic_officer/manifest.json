@@ -1,0 +1,7 @@
+{
+  "id": "traffic-officer",
+  "name": "路口协管员",
+  "summary": "红灯等待、云台左右查看，再亮绿灯放行，黄灯提醒收尾；模拟路口执勤，底盘不动。",
+  "createdAtEpochMillis": 1726838400000,
+  "updatedAtEpochMillis": 1726838400000
+}

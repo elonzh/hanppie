@@ -178,9 +178,11 @@ internal class ChatAgent(
                 } catch (error: Exception) {
                     logFailure("session.create", reference, null, error)
                     state.update {
-                        it.copy(error = "${tr(Res.string.conversation_history_operation_failed)}\n$error")
+                        it.copy(
+                            phase = if (it.phase == ChatPhase.RUNNING) ChatPhase.IDLE else it.phase,
+                            error = "${tr(Res.string.conversation_history_operation_failed)}\n$error",
+                        )
                     }
-                    finishPhase(ChatPhase.RUNNING)
                     return@launch
                 }
             }

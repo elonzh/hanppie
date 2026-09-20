@@ -1,0 +1,7 @@
+{
+  "id": "penalty-keeper",
+  "name": "点球守门员",
+  "summary": "底盘在小范围左右扑救，第一球判断错方向再补救，第二球成功后鸣音庆祝；左右各留 1 米。",
+  "createdAtEpochMillis": 1726838400000,
+  "updatedAtEpochMillis": 1726838400000
+}

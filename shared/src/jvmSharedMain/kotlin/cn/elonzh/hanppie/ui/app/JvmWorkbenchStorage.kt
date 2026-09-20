@@ -1,12 +1,9 @@
 package cn.elonzh.hanppie.ui.app
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
-import androidx.room3.Room
 import cn.elonzh.hanppie.agent.runtime.AgentRuntimeStorage
 import cn.elonzh.hanppie.agent.runtime.openAgentRuntimeStorage
-import cn.elonzh.hanppie.ui.scripts.HanppieDatabase
-import cn.elonzh.hanppie.ui.scripts.RoomScriptRepository
-import cn.elonzh.hanppie.ui.scripts.buildHanppieDatabase
+import cn.elonzh.hanppie.ui.scripts.DirectoryScriptRepository
 import cn.elonzh.hanppie.ui.settings.DataStoreSettingsStore
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.vinceglb.filekit.FileKit
@@ -31,29 +28,25 @@ internal fun createJvmWorkbenchStorage(): WorkbenchStorage {
         scope = scope,
         produceFile = { File(PlatformFile(filesDirectory, "settings.preferences_pb").path) },
     )
-    var applicationDatabase: HanppieDatabase? = null
     var agentRuntime: AgentRuntimeStorage? = null
     try {
-        applicationDatabase = buildHanppieDatabase(
-            Room.databaseBuilder<HanppieDatabase>(
-                name = PlatformFile(databasesDirectory, "hanppie.db").path,
-            ),
-        )
         agentRuntime = openAgentRuntimeStorage(
             databasePath = File(PlatformFile(databasesDirectory, "agent-runtime.db").path).toPath(),
             eventDirectory = File(PlatformFile(filesDirectory, "agent-runtime").path).toPath().resolve("sessions"),
         )
+        val scriptRepository = DirectoryScriptRepository(
+            userDirectory = PlatformFile(filesDirectory, "scripts"),
+            presetsDirectory = PlatformFile(filesDirectory, "presets"),
+        )
         storageLogger.info { "Workbench storage initialized" }
         return WorkbenchStorage(
             settings = DataStoreSettingsStore(dataStore),
-            scripts = RoomScriptRepository(applicationDatabase.scriptDao(), applicationDatabase.scriptAudioDao()),
+            scripts = scriptRepository,
             agentRuntime = agentRuntime,
-            applicationDatabase = applicationDatabase,
             scope = scope,
         )
     } catch (error: Exception) {
         agentRuntime?.close()
-        applicationDatabase?.close()
         scope.cancel()
         throw error
     }

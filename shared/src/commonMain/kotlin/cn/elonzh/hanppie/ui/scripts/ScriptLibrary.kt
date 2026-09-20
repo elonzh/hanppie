@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.scripts
 
+import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlin.time.Clock
 import kotlin.uuid.ExperimentalUuidApi
@@ -16,6 +17,7 @@ private const val LOAD_INTERRUPTED = "Script library load was interrupted"
 
 internal data class ScriptLibraryState(
     val scripts: List<StoredScript> = emptyList(),
+    val presets: List<StoredScript> = emptyList(),
     val loading: Boolean = true,
     val busy: Boolean = false,
     val error: String? = null,
@@ -33,22 +35,32 @@ internal class ScriptLibrary(
         state.value = state.value.copy(loading = true, error = null)
         try {
             val scripts = repository.all()
-            state.value = ScriptLibraryState(scripts = scripts.sortedByDescending { it.updatedAtEpochMillis }, loading = false)
+            val presets = repository.presets()
+            state.value = ScriptLibraryState(
+                scripts = scripts.sortedByDescending { it.createdAtEpochMillis },
+                presets = presets,
+                loading = false,
+            )
         } catch (error: CancellationException) {
-            state.value = ScriptLibraryState(loading = false, error = LOAD_INTERRUPTED)
+            state.value = state.value.copy(loading = false, error = LOAD_INTERRUPTED)
             throw error
         } catch (error: Exception) {
             scriptLibraryLogger.error(error) { "Could not load the script library" }
-            state.value = ScriptLibraryState(loading = false, error = error.message ?: error.javaClass.simpleName)
+            state.value = state.value.copy(loading = false, error = error.message ?: error.javaClass.simpleName)
         }
     }
 
-    suspend fun create(name: String, source: String): StoredScript = operation {
+    suspend fun create(
+        name: String,
+        source: String,
+        audioClips: List<LabAudioClip> = emptyList(),
+    ): StoredScript = operation {
         val normalized = normalizeScriptName(name)
         ensureUnique(normalized)
         require(source.length <= MAX_SCRIPT_LENGTH) { "Script is too large" }
         val now = clock.now().toEpochMilliseconds()
-        val script = StoredScript(Uuid.random().toString(), normalized, source, now, now)
+        val sanitizedAudio = audioClips.distinctBy { it.id }.sortedBy { it.id }
+        val script = StoredScript(Uuid.random().toString(), normalized, source, now, now, audioClips = sanitizedAudio)
         repository.insert(script)
         refresh(script)
         script
@@ -137,7 +149,7 @@ internal class ScriptLibrary(
 
     private fun refresh(script: StoredScript) {
         val scripts = listOf(script) + state.value.scripts.filterNot { it.id == script.id }
-        state.value = state.value.copy(scripts = scripts.sortedByDescending { it.updatedAtEpochMillis }, error = null)
+        state.value = state.value.copy(scripts = scripts.sortedByDescending { it.createdAtEpochMillis }, error = null)
     }
 
     private fun ensureUnique(name: String, exceptId: String? = null) {

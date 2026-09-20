@@ -58,6 +58,8 @@ import com.composables.icons.lucide.VideoOff
 import com.composables.icons.lucide.Volume2
 import com.composables.icons.lucide.VolumeX
 import com.composables.icons.lucide.Play
+import com.composables.icons.lucide.Pause
+import com.composables.icons.lucide.GripVertical
 import com.composables.icons.lucide.Wifi
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -67,7 +69,7 @@ internal enum class WorkbenchGlyph {
     BACK, ADD, IMPORT, EXPORT, UPLOAD, DOWNLOAD, SAVE, EDIT, DELETE, STOP, ACTIVITY, CHEVRON_RIGHT,
     FILE, FILE_TEXT, FOLDER, REFRESH, MORE, OPEN, VIDEO, VIDEO_OFF, SPEAKER, MUTED, CAMERA, RECORD,
     CROSSHAIR, SEARCH, CONNECT, WIFI, ROUTER, BATTERY, SIGNAL, PACKETS, MICROPHONE, SEND, ROBOT, CODE, CHAT, SETTINGS,
-    PLAY, INFO, COPY,
+    PLAY, PAUSE, GRIP_VERTICAL, INFO, COPY,
 }
 
 internal val WorkbenchGlyph.icon: ImageVector get() = when (this) {
@@ -110,6 +112,8 @@ internal val WorkbenchGlyph.icon: ImageVector get() = when (this) {
     WorkbenchGlyph.CHAT -> Lucide.MessageSquare
     WorkbenchGlyph.SETTINGS -> Lucide.SlidersHorizontal
     WorkbenchGlyph.PLAY -> Lucide.Play
+    WorkbenchGlyph.PAUSE -> Lucide.Pause
+    WorkbenchGlyph.GRIP_VERTICAL -> Lucide.GripVertical
     WorkbenchGlyph.INFO -> Lucide.Info
     WorkbenchGlyph.COPY -> Lucide.Copy
 }

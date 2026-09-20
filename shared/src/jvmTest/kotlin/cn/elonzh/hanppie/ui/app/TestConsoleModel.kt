@@ -5,13 +5,13 @@ import cn.elonzh.hanppie.agent.runtime.TestSessionHistory
 import cn.elonzh.hanppie.robot.session.RobotNetwork
 import cn.elonzh.hanppie.robot.session.RobotRuntime
 import cn.elonzh.hanppie.robot.session.JvmRobotRuntime
+import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.ui.robot.audio.LabAudioImporter
 import cn.elonzh.hanppie.ui.robot.audio.NoLabAudioImporter
 import cn.elonzh.hanppie.ui.robot.remote.NoSpeakerInput
 import cn.elonzh.hanppie.ui.robot.remote.SpeakerInput
 import cn.elonzh.hanppie.ui.scripts.ScriptRepository
 import cn.elonzh.hanppie.ui.scripts.StoredScript
-import cn.elonzh.hanppie.ui.scripts.StoredScriptAudio
 import cn.elonzh.hanppie.ui.settings.AppearanceSettings
 import cn.elonzh.hanppie.ui.settings.ConnectionPreferences
 import cn.elonzh.hanppie.ui.settings.SavedSettings
@@ -21,10 +21,20 @@ import cn.elonzh.hanppie.ui.speech.NoSpeechInput
 import cn.elonzh.hanppie.ui.speech.SpeechInput
 import io.ktor.client.HttpClient
 
-internal class MemoryScriptRepository(initial: List<StoredScript> = emptyList()) : ScriptRepository {
+internal class MemoryScriptRepository(
+    initial: List<StoredScript> = emptyList(),
+    presets: List<StoredScript>? = null,
+) : ScriptRepository {
     private var saved = initial.toList()
-    private val audio = mutableMapOf<Pair<String, Int>, StoredScriptAudio>()
+    private var presetList: List<StoredScript>? = presets?.toList()
+    private val audio = mutableMapOf<Pair<String, Int>, LabAudioClip>()
     override suspend fun all(): List<StoredScript> = saved.toList()
+    override suspend fun presets(): List<StoredScript> {
+        if (presetList == null) {
+            presetList = try { cn.elonzh.hanppie.ui.scripts.loadAllBundledPresets() } catch (_: Exception) { emptyList() }
+        }
+        return presetList.orEmpty()
+    }
 
     override suspend fun insert(script: StoredScript) {
         saved = listOf(script) + saved
@@ -39,19 +49,24 @@ internal class MemoryScriptRepository(initial: List<StoredScript> = emptyList())
         audio.keys.filter { it.first == script.id }.forEach(audio::remove)
     }
 
-    override suspend fun audio(scriptId: String): List<StoredScriptAudio> =
-        audio.values.filter { it.scriptId == scriptId }.sortedBy { it.nativeId }
+    override suspend fun audio(scriptId: String): List<LabAudioClip> =
+        audio.entries.filter { it.key.first == scriptId }.map { it.value }.sortedBy { it.id }
 
-    override suspend fun insertAudio(audio: StoredScriptAudio) {
-        this.audio[audio.scriptId to audio.nativeId] = audio
+    override suspend fun insertAudio(scriptId: String, audio: LabAudioClip) {
+        this.audio[scriptId to audio.id] = audio
     }
 
-    override suspend fun updateAudio(audio: StoredScriptAudio) {
-        this.audio[audio.scriptId to audio.nativeId] = audio
+    override suspend fun updateAudio(scriptId: String, audio: LabAudioClip) {
+        this.audio[scriptId to audio.id] = audio
     }
 
     override suspend fun deleteAudio(scriptId: String, nativeId: Int): Boolean =
         audio.remove(scriptId to nativeId) != null
+
+    override suspend fun replaceAllAudio(scriptId: String, clips: List<LabAudioClip>) {
+        audio.keys.filter { it.first == scriptId }.forEach(audio::remove)
+        clips.forEach { clip -> audio[scriptId to clip.id] = clip }
+    }
 }
 
 internal class MemorySettingsStore : SettingsStore {

@@ -1,0 +1,7 @@
+{
+  "id": "music-sprinkler",
+  "name": "音乐洒水车",
+  "summary": "循环模拟《兰花草》开头乐句，蓝灯模拟洒水，低速直行后停车收工。前方留出 2 米；不发射。",
+  "createdAtEpochMillis": 1726838400000,
+  "updatedAtEpochMillis": 1726838400000
+}

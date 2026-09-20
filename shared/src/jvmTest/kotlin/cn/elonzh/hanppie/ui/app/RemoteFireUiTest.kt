@@ -322,4 +322,53 @@ class RemoteFireUiTest {
         rule.waitForIdle()
         assertEquals(listOf(true, false), history, "onPressChange must record press down and release")
     }
+
+    @Test
+    fun scriptFailureRecordsErrorDetailsInRunLogAndConsoleLog() = runBlocking {
+        var frameHandler: ((DussFrame) -> Unit)? = null
+        val session = FakeRobotSession()
+        val runtime = object : RobotRuntime {
+            override suspend fun discover(timeoutMillis: Long): List<DiscoveredRobot> = emptyList()
+            override suspend fun waitForRouterPairing(appId: String): RouterPairing = error("unused")
+            override suspend fun acknowledgeRouterPairing(pairing: RouterPairing, appId: String) {}
+            override fun open(
+                target: RobotTarget,
+                onFrame: (DussFrame) -> Unit,
+                onLog: (String) -> Unit,
+                onLost: (RobotSession, String) -> Unit,
+            ): RobotSession {
+                frameHandler = onFrame
+                return session
+            }
+        }
+        val model = testConsoleModel(robotRuntime = runtime)
+        try {
+            model.connect("127.0.0.1", "12345678")
+            withTimeout(5_000) {
+                while (!model.state.value.connected || model.state.value.busy) delay(10)
+            }
+            model.runScript("def start():\n    pass\n", "Fail test")
+            withTimeout(2_000) {
+                while (model.state.value.scriptRunId == null) delay(10)
+            }
+            val runId = model.state.value.scriptRunId!!
+
+            val errorMsg = "AttributeError: 'RobotTools' object has no attribute 'time'"
+            val rawMsg = "__HANPPIE_RUN__|$runId|FAILED|$errorMsg".encodeToByteArray()
+            val payload = byteArrayOf(1, 2, (rawMsg.size and 0xFF).toByte(), ((rawMsg.size ushr 8) and 0xFF).toByte()) + rawMsg
+            val frame = DussFrame(20, 9, 2, 1, 0, 0x3f, 0xa4, payload, true)
+            frameHandler?.invoke(frame)
+
+            withTimeout(5_000) {
+                while (model.state.value.scriptRunPhase != ScriptRunPhase.FAILED) delay(10)
+            }
+
+            assertEquals(ScriptRunPhase.FAILED, model.state.value.scriptRunPhase)
+            assertTrue(model.state.value.scriptStatus.contains(errorMsg), "Script status must contain error: ${model.state.value.scriptStatus}")
+            assertTrue(model.state.value.scriptMessages.contains(errorMsg), "Script messages must contain error message: ${model.state.value.scriptMessages}")
+            assertTrue(model.state.value.logs.any { it.contains(errorMsg) }, "Console logs must contain error message: ${model.state.value.logs}")
+        } finally {
+            model.close()
+        }
+    }
 }

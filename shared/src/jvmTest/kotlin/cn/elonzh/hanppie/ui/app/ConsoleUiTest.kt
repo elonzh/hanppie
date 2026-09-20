@@ -1141,7 +1141,8 @@ class ConsoleUiTest {
             model.receive(DussFrame(20, 9, 2, 2, 0, 0x3f, 0xa4,
                 byteArrayOf(1, 2, message.size.toByte(), 0) + message, true))
             rule.setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
-            rule.onNodeWithText("88%", substring = true).assertExists()
+            rule.onNodeWithTag("connection-status").assertTextContains("88%")
+            rule.onAllNodesWithText("88%", substring = true).assertCountEquals(2)
             rule.onNodeWithContentDescription("诊断").performClick()
             rule.onNodeWithText("遥测").performClick()
             rule.onNodeWithText("云台协议角度 · 最近接收").assertExists()

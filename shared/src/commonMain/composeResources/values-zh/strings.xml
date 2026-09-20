@@ -218,9 +218,6 @@
     <string name="discard_changes">放弃修改</string>
     <string name="save">保存</string>
     <string name="back_to_script_library">返回脚本库</string>
-    <string name="light_or_sound">灯光 / 声音</string>
-    <string name="moves_gimbal">云台会移动</string>
-    <string name="moves_robot">机器人会移动</string>
     <string name="use_template">使用模板</string>
     <string name="preset_curious_sentry">好奇哨兵</string>
     <string name="preset_curious_sentry_summary">云台左右观察 3 轮，同时播放扫描音并保持蓝色呼吸灯。</string>
@@ -490,6 +487,8 @@
     <string name="preset_traffic_officer_summary">红灯等待、云台左右查看，再亮绿灯放行，黄灯提醒收尾；模拟路口执勤，底盘不动。</string>
     <string name="preset_bomb_squad">拆弹倒计时</string>
     <string name="preset_bomb_squad_summary">提示音越来越急、红灯加速闪动，最后一刻停顿并转为绿灯解除危机；纯灯光音效剧情。</string>
+    <string name="preset_friday_disco">周五狂欢舞</string>
+    <string name="preset_friday_disco_summary">致敬《The X Factor》Beck Martin 经典神曲《Friday Night》：自带干冰烟雾机开场、健身教练律动滑步，再到指天摇摆与 360 度大回旋，全场评委起立狂欢！四周留出 1.5 米空间。</string>
     <string name="preset_scripts">预置脚本</string>
     <string name="robot_files">内部文件</string>
     <string name="ftp_files_tab">FTP</string>
@@ -545,7 +544,6 @@
     <string name="script_audio_import">导入音频</string>
     <string name="script_audio_empty">尚未添加自定义音频。导入 wav、mp3、ogg、opus、m4a、aac 或 flac 文件后即可在脚本中播放。</string>
     <string name="script_audio_needs_script">请先保存脚本：自定义音频属于已保存的程序，并随其 DSP 一起上传。</string>
-    <string name="script_audio_insert">插入代码</string>
     <string name="script_audio_rename">重命名音频</string>
     <string name="script_audio_delete">删除音频</string>
     <string name="script_audio_delete_question">删除这段自定义音频？</string>
@@ -553,7 +551,10 @@
     <string name="script_audio_footprint_value">音频 %1$s KB · 上传预算剩余 %2$s KB</string>
     <string name="script_audio_over_budget">音频与代码合计超过 Lab 上传预算，请缩短或删除音频后再运行。</string>
     <string name="script_audio_slot_value">编号 %1$s · %2$s 秒 · %3$s KB</string>
-    <string name="script_audio_hint">插入会写入 media_ctrl.play_sound(...) 并使用该音频的常量。</string>
+    <string name="script_audio_slot_playing_value">编号 %1$s · %2$s / %3$s · %4$s KB</string>
+    <string name="script_audio_play">播放试听</string>
+    <string name="script_audio_pause">暂停播放</string>
+    <string name="script_audio_hint">可拖拽左侧手柄调整顺序，在脚本中通过 media_ctrl.play_sound(rm_define.media_custom_audio_X) 播放对应槽位。</string>
     <string name="script_status_battery_value">电量 %1$s</string>
     <string name="script_status_signal_value">信号 %1$s</string>
     <string name="script_status_packets_value">报文 %1$s</string>

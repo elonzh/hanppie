@@ -39,7 +39,9 @@ import cn.elonzh.hanppie.ui.i18n.formatLocalDateTime
 import cn.elonzh.hanppie.ui.robot.files.RobotFilesController
 import cn.elonzh.hanppie.ui.robot.remote.DriveSpeed
 import cn.elonzh.hanppie.ui.robot.audio.LabAudioImporter
+import cn.elonzh.hanppie.ui.robot.audio.LabAudioPlayer
 import cn.elonzh.hanppie.ui.robot.audio.NoLabAudioImporter
+import cn.elonzh.hanppie.ui.robot.audio.NoLabAudioPlayer
 import cn.elonzh.hanppie.ui.robot.remote.NoSpeakerInput
 import cn.elonzh.hanppie.ui.robot.remote.SpeakerInput
 import cn.elonzh.hanppie.ui.scripts.ScriptAudioLibrary
@@ -75,6 +77,7 @@ internal class ConsoleModel(
     private val settingsStore: SettingsStore,
     private val scriptRepository: ScriptRepository,
     private val audioImporter: LabAudioImporter = NoLabAudioImporter(),
+    private val audioPlayer: LabAudioPlayer = NoLabAudioPlayer(),
     sessionHistory: SessionHistory,
     createAgentHttpClient: () -> HttpClient,
     private val runtimeDefaults: () -> ModelSettings = ::ModelSettings,
@@ -104,7 +107,7 @@ internal class ConsoleModel(
     override val settingsMessage = settings.message
     private val connectionPreferencesScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     override val scriptLibrary = ScriptLibrary(scriptRepository)
-    override val scriptAudio = ScriptAudioLibrary(scriptRepository, audioImporter)
+    override val scriptAudio = ScriptAudioLibrary(scriptRepository, audioImporter, audioPlayer)
     override val robotFiles = RobotFilesController(scope) { acceptingWork.load() && state.value.connected }
     init {
         scope.launch(start = CoroutineStart.UNDISPATCHED) { scriptLibrary.load() }
@@ -756,11 +759,19 @@ internal class ConsoleModel(
             signalQuality = signalQuality ?: old.signalQuality,
             gimbal = gimbal ?: old.gimbal,
             scriptMessages = when {
-                runEvent != null && eventRunId == old.scriptRunId -> (old.scriptMessages + tr(
-                    Res.string.script_trace_lifecycle_value,
-                    requireNotNull(eventType).name,
-                    requireNotNull(eventRunId),
-                )).takeLast(200)
+                runEvent != null && eventRunId == old.scriptRunId -> {
+                    val lifecycle = tr(
+                        Res.string.script_trace_lifecycle_value,
+                        requireNotNull(eventType).name,
+                        requireNotNull(eventRunId),
+                    )
+                    val errorLines = if (eventType == LabRunEventType.FAILED && runEvent.text.isNotBlank()) {
+                        runEvent.text.lines()
+                    } else {
+                        emptyList()
+                    }
+                    (old.scriptMessages + lifecycle + errorLines).takeLast(200)
+                }
                 runEvent == null && message != null -> (old.scriptMessages + message.text).takeLast(200)
                 else -> old.scriptMessages
             },
@@ -790,6 +801,11 @@ internal class ConsoleModel(
                 val phase = if (event.type == LabRunEventType.COMPLETED) ScriptRunPhase.COMPLETED else ScriptRunPhase.FAILED
                 val message = if (phase == ScriptRunPhase.COMPLETED) uiText(Res.string.script_completed) else
                     uiText(Res.string.script_failed_value, event.text.ifBlank { tr(Res.string.unknown_error) })
+                if (phase == ScriptRunPhase.FAILED) {
+                    log(tr(Res.string.script_failed_value, event.text.ifBlank { tr(Res.string.unknown_error) }))
+                } else {
+                    log(tr(Res.string.script_completed))
+                }
                 state.update { current -> if (current.scriptRunId == event.runId) current.copy(
                     scriptRunPhase = phase, scriptMessage = message,
                     scriptFinishedAtEpochMillis = clock.now().toEpochMilliseconds()) else current }

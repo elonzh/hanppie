@@ -5,10 +5,8 @@ import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.MessagePart
 import androidx.room3.Room
-import cn.elonzh.hanppie.ui.scripts.HanppieDatabase
-import cn.elonzh.hanppie.ui.scripts.RoomScriptRepository
+import cn.elonzh.hanppie.ui.scripts.DirectoryScriptRepository
 import cn.elonzh.hanppie.ui.scripts.StoredScript
-import cn.elonzh.hanppie.ui.scripts.buildHanppieDatabase
 import cn.elonzh.hanppie.ui.settings.ModelSettings
 import java.nio.file.Files
 import java.nio.file.StandardOpenOption.APPEND
@@ -99,30 +97,27 @@ class SessionPersistenceTest {
     }
 
     @Test
-    fun runtimeDatabaseAndApplicationDatabaseHaveIndependentLifecycles() = runBlocking {
+    fun runtimeDatabaseAndScriptStorageHaveIndependentLifecycles() = runBlocking {
         val directory = Files.createTempDirectory("hanppie-storage-boundary-")
-        val applicationPath = directory.resolve("hanppie.db")
         val runtimePath = directory.resolve("agent-runtime.db")
-        var applicationDatabase: HanppieDatabase? = null
         var runtimeStorage: AgentRuntimeStorage? = null
         try {
-            applicationDatabase = buildHanppieDatabase(
-                Room.databaseBuilder<HanppieDatabase>(applicationPath.toString()),
+            val scriptRepo = DirectoryScriptRepository(
+                userDirectory = io.github.vinceglb.filekit.PlatformFile(directory.resolve("scripts").toString()),
+                presetsDirectory = io.github.vinceglb.filekit.PlatformFile(directory.resolve("presets").toString()),
+                enablePresetSync = false,
             )
-            RoomScriptRepository(applicationDatabase.scriptDao(), applicationDatabase.scriptAudioDao()).insert(
+            scriptRepo.insert(
                 StoredScript("script", "保留脚本", "def start(): pass", 1, 1),
             )
             runtimeStorage = openAgentRuntimeStorage(runtimePath, directory.resolve("events"))
             val session = runtimeStorage.sessions.create("独立会话")
 
-            assertTrue(Files.exists(applicationPath))
             assertTrue(Files.exists(runtimePath))
-            assertNotEquals(applicationPath, runtimePath)
-            assertEquals("保留脚本", applicationDatabase.scriptDao().getAll().single().name)
+            assertEquals("保留脚本", scriptRepo.all().single().name)
             assertEquals(session.id, runtimeStorage.sessions.list().single().id)
         } finally {
             runtimeStorage?.close()
-            applicationDatabase?.close()
             directory.toFile().deleteRecursively()
         }
     }

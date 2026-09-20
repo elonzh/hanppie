@@ -24,7 +24,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 internal fun ConnectionStatusChip(state: ConsoleState, onClick: () -> Unit) {
     val colors = MiuixTheme.colorScheme
     val label = when {
-        state.connected -> tr(Res.string.connected)
+        state.connected -> state.battery?.let { "$it%" } ?: tr(Res.string.connected)
         state.connecting -> tr(Res.string.connecting)
         else -> tr(Res.string.disconnected)
     }

@@ -3,6 +3,7 @@ package cn.elonzh.hanppie.ui.scripts
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
+import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import cn.elonzh.hanppie.ui.app.ConsoleState
 import cn.elonzh.hanppie.ui.app.MemoryScriptRepository
@@ -10,13 +11,12 @@ import cn.elonzh.hanppie.ui.app.testConsoleModel
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
 import kotlin.test.Test
-import kotlin.test.assertContains
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
 @OptIn(ExperimentalTestApi::class)
 class ScriptAudioUiTest {
-    @Test fun savedScriptManagesAudioFromTheDialogAndInsertsTheConstant() =
+    @Test fun savedScriptManagesAudioFromTheDialog() =
         runDesktopComposeUiTest(width = 1040, height = 700) {
             Localization.initialize("zh", null)
             val repository = MemoryScriptRepository()
@@ -26,7 +26,7 @@ class ScriptAudioUiTest {
                 library.create("巡检", "def start():\n    pass\n")
             }
             runBlocking {
-                repository.insertAudio(StoredScriptAudio(script.id, 0, "voice", 1_000, ByteArray(600)))
+                repository.insertAudio(script.id, LabAudioClip(0, "voice", 1_000, ByteArray(600)))
             }
             val model = testConsoleModel(scriptRepository = repository)
             val document = mutableStateOf(EditorDocument.from(script))
@@ -93,12 +93,24 @@ class ScriptAudioUiTest {
                     val pencil = onNodeWithTag("script-audio-rename-0").fetchSemanticsNode().boundsInRoot
                     assertTrue(pencil.left >= name.right - 1f, "rename must sit with the name, not in a button row")
                 }
-                onNodeWithTag("script-audio-insert-0").assertIsDisplayed().performClick()
+                onNodeWithTag("script-audio-play-0").assertIsDisplayed()
+                onNodeWithTag("script-audio-delete-0").assertIsDisplayed()
                 runOnIdle {
-                    assertContains(document.value.source, "media_ctrl.play_sound(rm_define.media_custom_audio_0)")
+                    val importBtn = onNodeWithTag("script-audio-import").fetchSemanticsNode().boundsInRoot
+                    val deleteBtn = onNodeWithTag("script-audio-delete-0").fetchSemanticsNode().boundsInRoot
+                    assertTrue(kotlin.math.abs(importBtn.right - deleteBtn.right) < 2f, "import button must align with delete button right edge")
                 }
+                onNodeWithTag("script-audio-insert-0").assertDoesNotExist()
+                onNodeWithTag("script-audio-up-0").assertDoesNotExist()
+                onNodeWithTag("script-audio-down-0").assertDoesNotExist()
                 onNodeWithTag("script-audio-import").performClick()
                 runOnIdle { assertTrue(importRequested) }
+
+                onNodeWithText("关闭").performClick()
+                onNodeWithTag("script-back").performClick()
+                onNodeWithText("脚本").assertIsDisplayed()
+                onNodeWithTag("script-back").assertDoesNotExist()
+                onNodeWithTag("script-rename").assertDoesNotExist()
             } finally {
                 model.close()
                 Localization.initialize("zh", null)

@@ -218,9 +218,6 @@
     <string name="discard_changes">Discard changes</string>
     <string name="save">Save</string>
     <string name="back_to_script_library">Back to script library</string>
-    <string name="light_or_sound">Light / sound</string>
-    <string name="moves_gimbal">Moves gimbal</string>
-    <string name="moves_robot">Moves robot</string>
     <string name="use_template">Use template</string>
     <string name="preset_curious_sentry">Curious sentry</string>
     <string name="preset_curious_sentry_summary">Scan left and right with the gimbal for three rounds, with breathing lights and scanning sounds.</string>
@@ -490,6 +487,8 @@
     <string name="preset_traffic_officer_summary">Wait at red, check both sides with the gimbal, open the green light and close with amber; chassis stays still.</string>
     <string name="preset_bomb_squad">Bomb squad</string>
     <string name="preset_bomb_squad_summary">Ticks and red flashes accelerate, then a last-second silence gives way to a green all-clear; lights and sound only.</string>
+    <string name="preset_friday_disco">Friday night party</string>
+    <string name="preset_friday_disco_summary">Tribute to Beck Martin\'s legendary \'Friday Night\' audition on The X Factor: smoke machine blasts, gym instructor groove, side shuffles, sky pointing, and a 360 spin as judges dance along. Keep 1.5 m clear around the robot.</string>
     <string name="preset_scripts">Preset scripts</string>
     <string name="robot_files">Internal files</string>
     <string name="ftp_files_tab">FTP</string>
@@ -545,7 +544,6 @@
     <string name="script_audio_import">Import audio</string>
     <string name="script_audio_empty">No custom audio yet. Import a wav, mp3, ogg, opus, m4a, aac or flac file to play it from the script.</string>
     <string name="script_audio_needs_script">Save the script first: custom audio belongs to a saved program and is uploaded inside its DSP.</string>
-    <string name="script_audio_insert">Insert into code</string>
     <string name="script_audio_rename">Rename audio</string>
     <string name="script_audio_delete">Delete audio</string>
     <string name="script_audio_delete_question">Delete this custom audio?</string>
@@ -553,7 +551,10 @@
     <string name="script_audio_footprint_value">Audio %1$s KB · upload budget %2$s KB left</string>
     <string name="script_audio_over_budget">Audio and code exceed the Lab upload budget. Shorten or remove audio before running.</string>
     <string name="script_audio_slot_value">Slot %1$s · %2$s s · %3$s KB</string>
-    <string name="script_audio_hint">Inserting writes media_ctrl.play_sound(...) with this sound's constant.</string>
+    <string name="script_audio_slot_playing_value">Slot %1$s · %2$s / %3$s · %4$s KB</string>
+    <string name="script_audio_play">Play audio</string>
+    <string name="script_audio_pause">Pause audio</string>
+    <string name="script_audio_hint">Drag the left handle to reorder. Play in script via media_ctrl.play_sound(rm_define.media_custom_audio_X).</string>
     <string name="script_status_battery_value">Battery %1$s</string>
     <string name="script_status_signal_value">Signal %1$s</string>
     <string name="script_status_packets_value">Frames %1$s</string>

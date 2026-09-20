@@ -76,6 +76,8 @@ class RobotFilesUiTest {
             WorkbenchGlyph.CHAT to "message-square",
             WorkbenchGlyph.SETTINGS to "sliders-horizontal",
             WorkbenchGlyph.PLAY to "play",
+            WorkbenchGlyph.PAUSE to "pause",
+            WorkbenchGlyph.GRIP_VERTICAL to "grip-vertical",
             WorkbenchGlyph.INFO to "info",
             WorkbenchGlyph.COPY to "copy",
         )
