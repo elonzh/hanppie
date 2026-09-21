@@ -24,10 +24,11 @@ data class LabProgram(val source: String, val guid: String, val sign: String, va
 
     companion object {
         /**
-         * Upload byte budget for one S1 Lab DSP payload.
+         * Upload byte ceiling for one S1 Lab DSP payload.
          * The S1 /data partition has gigabytes of storage and DUSS 0x3F/0xA1 supports 32-bit sizes.
-         * Relaxed to 256 KiB to allow longer audio and multi-slot chained audio (Schemes A and B).
+         * Real-device verified up to 16 MiB payload uploads and executions without firmware refusal.
+         * Set to 16 MiB as host memory safety ceiling.
          */
-        const val MAX_DSP_BYTES = 256_000
+        const val MAX_DSP_BYTES = 16 * 1024 * 1024
     }
 }

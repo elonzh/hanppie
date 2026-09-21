@@ -130,4 +130,65 @@ class LabControllerTest {
         assertTrue(uploaded.isEmpty())
         assertEquals(true, channel.running.not())
     }
+
+    @Test fun repeatedUploadWithSameAudioUsesIncrementalModifyFalse() = runBlocking {
+        val channel = Channel()
+        var uploaded = byteArrayOf()
+        val controller = LabController(channel, { uploaded = it.copyOf() })
+        val script = "def start():\n    pass\n"
+        val clipA = LabAudioClip(0, "clipA", 1000, ByteArray(2000) { it.toByte() })
+
+        // First upload: cold slot -> modify="true" with full audio body
+        val upload1 = controller.upload(script, "fixture", listOf(clipA))
+        val doc1 = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(ByteArrayInputStream(uploaded))
+        val node1 = doc1.getElementsByTagName("audio").item(0)
+        assertEquals("true", node1.attributes.getNamedItem("modify").nodeValue)
+        assertEquals(1, doc1.getElementsByTagName("audio_data").length)
+        val initialSize = uploaded.size
+        assertTrue(initialSize > 2000)
+
+        // Second upload: warm slot -> modify="false" without audio body (~1 KB)
+        val upload2 = controller.upload("def start():\n    # modified code\n    pass\n", "fixture", listOf(clipA))
+        val doc2 = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(ByteArrayInputStream(uploaded))
+        val node2 = doc2.getElementsByTagName("audio").item(0)
+        assertEquals("false", node2.attributes.getNamedItem("modify").nodeValue)
+        assertEquals(0, doc2.getElementsByTagName("audio_data").length)
+        assertTrue(uploaded.size < 1500)
+        assertNotEquals(upload1.runId, upload2.runId) // fresh random runId per run
+
+        // Third upload: modified audio in slot 0 -> modify="true" with new body
+        val clipB = LabAudioClip(0, "clipB", 2000, ByteArray(3000) { it.toByte() })
+        val upload3 = controller.upload(script, "fixture", listOf(clipB))
+        val doc3 = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(ByteArrayInputStream(uploaded))
+        val node3 = doc3.getElementsByTagName("audio").item(0)
+        assertEquals("true", node3.attributes.getNamedItem("modify").nodeValue)
+        assertEquals(1, doc3.getElementsByTagName("audio_data").length)
+        assertTrue(uploaded.size > 3000)
+    }
+
+    @Test fun invalidateModeClearsCachedAudioSlots() = runBlocking {
+        val channel = Channel()
+        var uploaded = byteArrayOf()
+        val controller = LabController(channel, { uploaded = it.copyOf() })
+        val script = "def start():\n    pass\n"
+        val clip = LabAudioClip(0, "clip", 1000, ByteArray(2000) { it.toByte() })
+
+        controller.upload(script, "fixture", listOf(clip))
+        val doc1 = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(ByteArrayInputStream(uploaded))
+        assertEquals("true", doc1.getElementsByTagName("audio").item(0).attributes.getNamedItem("modify").nodeValue)
+
+        // Repeat -> cached
+        controller.upload(script, "fixture", listOf(clip))
+        val doc2 = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(ByteArrayInputStream(uploaded))
+        assertEquals("false", doc2.getElementsByTagName("audio").item(0).attributes.getNamedItem("modify").nodeValue)
+
+        // Invalidate mode (reconnect / exit lab)
+        controller.invalidateMode()
+
+        // After invalidation -> must upload full audio again
+        controller.upload(script, "fixture", listOf(clip))
+        val doc3 = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(ByteArrayInputStream(uploaded))
+        assertEquals("true", doc3.getElementsByTagName("audio").item(0).attributes.getNamedItem("modify").nodeValue)
+        assertEquals(1, doc3.getElementsByTagName("audio_data").length)
+    }
 }

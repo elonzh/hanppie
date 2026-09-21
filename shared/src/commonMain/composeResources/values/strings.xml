@@ -548,8 +548,8 @@
     <string name="script_audio_delete">Delete audio</string>
     <string name="script_audio_delete_question">Delete this custom audio?</string>
     <string name="script_audio_delete_summary">“%1$s” will be removed from the script and from the next DSP upload.</string>
-    <string name="script_audio_footprint_value">Audio %1$s KB · upload budget %2$s KB left</string>
-    <string name="script_audio_over_budget">Audio and code exceed the Lab upload budget. Shorten or remove audio before running.</string>
+    <string name="script_audio_footprint_value">Audio %1$s KB · %2$s/%3$s slots used</string>
+    <string name="script_audio_over_budget">Audio and code exceed the Lab upload ceiling (16 MB). Shorten or remove audio before running.</string>
     <string name="script_audio_slot_value">Slot %1$s · %2$s s · %3$s KB</string>
     <string name="script_audio_slot_playing_value">Slot %1$s · %2$s / %3$s · %4$s KB</string>
     <string name="script_audio_play">Play audio</string>

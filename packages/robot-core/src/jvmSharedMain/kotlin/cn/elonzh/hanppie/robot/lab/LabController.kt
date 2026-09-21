@@ -30,8 +30,16 @@ class LabController internal constructor(private val session: LabChannel,
     private var program: LabProgram? = null
     private var digest: ByteArray? = null
     private var runId: String? = null
+    private val uploadedAudioSlots = mutableMapOf<Int, String>()
     private var startRequested = false
-    fun invalidateMode() { check(!startRequested); entered = false; program = null; digest = null; runId = null }
+    fun invalidateMode() {
+        check(!startRequested)
+        entered = false
+        program = null
+        digest = null
+        runId = null
+        uploadedAudioSlots.clear()
+    }
 
     suspend fun upload(source: String, title: String, audio: List<LabAudioClip> = emptyList()): LabUpload = mutex.withLock {
         check(session.connected) { "机器人未连接" }
@@ -39,12 +47,21 @@ class LabController internal constructor(private val session: LabChannel,
         require(source.isNotBlank()) { "脚本不能为空" }
         val random = SecureRandom()
         val candidateRunId = ByteArray(8).also(random::nextBytes).hex()
-        val candidate = LabProgram(LabRunProtocol.instrument(source, candidateRunId),
-            ByteArray(16).also(random::nextBytes).hex(), candidateRunId, title)
-        val bytes = candidate.dsp(LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd")),
-            labAudioListXml(audio))
+        val candidate = LabProgram(
+            LabRunProtocol.instrument(source, candidateRunId),
+            ByteArray(16).also(random::nextBytes).hex(),
+            candidateRunId,
+            title,
+        )
+        val audioXml = labAudioListXml(audio) { slotId, md5 ->
+            uploadedAudioSlots[slotId] == md5
+        }
+        val bytes = candidate.dsp(
+            LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd")),
+            audioXml,
+        )
         require(bytes.size <= LabProgram.MAX_DSP_BYTES) {
-            "Lab 程序与自定义音频合计 ${bytes.size} 字节，超过上传预算 ${LabProgram.MAX_DSP_BYTES} 字节；请缩短音频或减少数量"
+            "Lab 程序与自定义音频合计 ${bytes.size} 字节，超过上传上限 ${LabProgram.MAX_DSP_BYTES / (1024 * 1024)} MB；请缩短音频或减少数量"
         }
         log("Lab 上传开始；runId=$candidateRunId bytes=${bytes.size} audio=${audio.size}")
         program = null; digest = null; runId = null
@@ -72,6 +89,12 @@ class LabController internal constructor(private val session: LabChannel,
         check(session.connected) { "上传期间机器人连接已断开" }
         val hash = MessageDigest.getInstance("MD5").digest(bytes)
         program = candidate; digest = hash; runId = candidateRunId
+        val activeSlots = mutableSetOf<Int>()
+        audio.forEach { clip ->
+            activeSlots.add(clip.id)
+            uploadedAudioSlots[clip.id] = labAudioDigest(clip.packets)
+        }
+        uploadedAudioSlots.keys.retainAll(activeSlots)
         log("Lab 上传已确认；runId=$candidateRunId bytes=${bytes.size} md5=${hash.hex()}")
         LabUpload(hash.hex(), candidateRunId)
     }

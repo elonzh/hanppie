@@ -133,13 +133,36 @@ UDP 会话只接受指定机器人地址，身份交换与持久 App 会话复�
 
 被动发现不主动接管。GUI 不把唯一的机内上传位置表现为程序管理；点击“运行脚本”本身就是执行意图，不再要求额外复选框。客户端先结束可能由旧客户端遗留的原生运行态，再把当前源码写入 `python/python_raw.dsp`，以 FTP 成功应答确认传输并完成 DSP MD5 注册，最后发送启动命令；再次运行其他脚本会覆盖该文件。Lab 环境已直接提供 `time` 等 SDK 对象，上传前拒绝普通 `import`/`from import`，避免模块加载失败发生在生命周期包装器运行之前。客户端为每次运行生成随机标识，将源码中第一个顶层 `def start()` 改为内部入口，并注入唯一的 `start()` 包装器；包装器直接复用已实机验证的 `log_ctrl.print_msg(...)` 路径报告 `STARTED`、`COMPLETED` 或 `FAILED`，不在首条回报前动态导入私有 `rm_module`。`log_ctrl` 可能为消息增加时间前缀，主机在完整消息中定位项目运行标记后再解码。对话请求在物化模型响应前会修复工具调用的异常形状（部分 OpenAI 兼容端点，含 DashScope，在流式返回里给出残缺的工具调用帧）：只在首个增量里出现的工具名会被补回完整帧，否则调用会以 `Tool with name '' not found` 在工具注册表处中断整轮对话；参数内容为空时替换为空对象 `{}`，否则物化响应会把空文档当 JSON 解析并以 `unexpected end of the input` 中断；自始至终没有给出工具名的帧视为流中的幻影调用，连同其增量一并丢弃，让该轮保留模型已产生的文本。回填、参数替换与丢弃都写日志（含工具名、id 与 index）供排查，不在界面上暴露这类帧级细节。以上三种行为都有离线测试固定。发送启动命令后 10 秒内没有匹配的 `STARTED` 时，界面从“等待启动”转为“状态未知”并提供停止入口，不自动重试或覆盖可能已经执行的脚本。控制台始终显示可复制的脚本运行标识，并记录主机侧上传确认、DSP MD5、启动序列和超时窗口内收到的数据帧/Lab 消息帧数量；agent 工具结果也带回该运行标识，使 Session 事件可以关联到脚本运行。收到匹配运行标识的结束事件后，客户端发送结束 metadata 和原生 runtime stop，清除单一槽位并把界面更新为完成或失败；当运行失败（FAILED）时，客户端将机内返回的具体异常类名与错误原因（`runEvent.text`）分发并追加至脚本运行消息（`scriptMessages`），同时记入主控制台日志流（`logs`）；运行面板的状态栏在失败时允许多行展示并支持选中文本复制，运行日志展示完整的多行错误堆栈，彻底解决此前因单行截断导致排查困难的问题；旧运行的迟到事件不能结束新运行。普通脚本日志必须显式调用 `log_ctrl.print_msg(...)`，客户端不替换固件全局 `print`，也不把任意 stdout 推定为日志。运行不再切换页面：控制台内联在脚本页，展示运行阶段、名称、耗时、运行标识和本次运行保留的最近 200 条输出，日志可选择、自动跟随最新输出并占据该面板的主要剩余空间，窄屏位于编辑器下方、宽屏位于编辑器右侧；短横屏窗口给控制台更大的高度份额，避免日志被状态行挤成零高度。返回或编辑不停止脚本；其他一级页面在运行期间显示可点击全局运行状态条、最近输出和停止入口，结束状态继续显示 8 秒。启动/停止命令的发送本身仍不是完成证据：停止命令发送成功后运行状态标为“未确认”，全局运行状态条持续显示未获得机内停止确认直到下一次运行，且不阻塞下一次运行或进入驾驶舱，也不再提供第二次停止入口；失联时保留运行名称和输出但将状态标为未知。启动注册部分失败后禁止直接重试或覆盖上传，必须先结束可能的运行态。文件页可以枚举和下载 FTP 数据树，但不会把 DSP 文件存在推定为已注册或正在运行；`/python/python_raw.dsp` 作为 Lab 当前上传槽位禁止通过文件页上传覆盖、重命名或删除，切换遥控或重连后仍不保留可再次启动的上传态。
 
-脚本自定义音频属于已保存的脚本目录（`audio/<slot>_<name>.opus`），随程序在运行前动态打包进临时 DSP 上传，不是机内媒体库。导入只接受主机文件，由平台能力解码（桌面 FFmpeg，Android `MediaExtractor`/`MediaCodec`），统一为 DSP 容器要求的 48 kHz 单声道 20 ms 帧，再编码成带双字节小端长度前缀的 Opus；时长直接通过 Opus 数据包帧数（`frameCount * 20 ms`）动态计算，杜绝元数据与实际音频的时长漂移。编号取 0..9 的首个空位，名称取文件名并截断到 64 字符，超过 4 MB 的输入在任何解码之前被拒绝。运行脚本时把 `<audio-list>` 渲染进 DSP：每个节点写 id、name、`type="opus"`、整数秒 duration、base64 正文的 MD5 前 8 位与 `modify="true"`，正文放在 base64 CDATA 中；官方客户端的“机内是否已有该资源”查询未实现，因此每次上传都携带正文。上传前用 `LabProgram.MAX_DSP_BYTES`（已放宽至 256 KiB）拒绝超额组合，校验发生在任何协议帧之前，超额时保留脚本与音频、只报错不静默截断。脚本中直接通过 `media_ctrl.play_sound(rm_define.media_custom_audio_N)` 语句播放对应槽位的自定义音频。自定义音频管理面板提供跨平台音频试听播放器（`LabAudioPlayer`）：桌面端基于 Java Sound (`SourceDataLine`) 与 FFmpeg 解码，Android 端基于系统原生 `MediaCodec` 与 `AudioTrack` 进行 48 kHz 单声道 PCM16 播放，支持播放、暂停、恢复与停止，并在 UI 上呈现微进度条与播放进度；音频切片支持通过左侧手柄进行指针垂直拖拽实时排序，重排后 0..9 槽位连续重新分配，通过 `DirectoryScriptRepository.replaceAllAudio` 实现音频切片文件与 manifest 的原子同步与持久化。**代码/离线测试**
+脚本自定义音频属于已保存的脚本目录（`audio/<slot>_<name>.opus`），随程序在运行前动态打包进临时 DSP 上传，不是机内媒体库。导入只接受主机文件，由平台能力解码（桌面 FFmpeg，Android `MediaExtractor`/`MediaCodec`），统一为 DSP 容器要求的 48 kHz 单声道 20 ms 帧，再编码成带双字节小端长度前缀的 Opus；时长直接通过 Opus 数据包帧数（`frameCount * 20 ms`）动态计算，杜绝元数据与实际音频的时长漂移。编号取 0..9 的首个空位，名称取文件名并截断到 64 字符，超过 50 MB 的原始输入在任何解码之前被拒绝。运行脚本时把 `<audio-list>` 渲染进 DSP：每个节点写 id、name、`type="opus"`、整数秒 duration、base64 正文的 MD5 前 8 位与 `modify` 标志，未缓存资源正文放在 base64 CDATA 中，已缓存资源省略正文以实现增量极速上传（详见下文）。上传前用 `LabProgram.MAX_DSP_BYTES`（已通过实机 16 MiB 阶梯测试验证并设为 16 MiB 主机安全上限）拒绝超额组合，校验发生在任何协议帧之前，超额时保留脚本与音频、只报错不静默截断。脚本中直接通过 `media_ctrl.play_sound(rm_define.media_custom_audio_N)` 语句播放对应槽位的自定义音频。自定义音频管理面板提供跨平台音频试听播放器（`LabAudioPlayer`）：桌面端基于 Java Sound (`SourceDataLine`) 与 FFmpeg 解码，Android 端基于系统原生 `MediaCodec` 与 `AudioTrack` 进行 48 kHz 单声道 PCM16 播放，支持播放、暂停、恢复与停止，并在 UI 上呈现微进度条与播放进度；音频切片支持通过左侧手柄进行指针垂直拖拽实时排序，重排后 0..9 槽位连续重新分配，通过 `DirectoryScriptRepository.replaceAllAudio` 实现音频切片文件与 manifest 的原子同步与持久化。**代码/离线测试/S1 实机**
 
 **音频时长突破方案（方案 A 与方案 B）：**
 此前客户端单脚本音频受旧上传边界限制（约 30 KiB），在 12 kbps Opus 编码与 Base64 膨胀（~2.1 KB/s）下单次只能容纳约 11～12 秒音频。针对真机原声音频长播放需求，本项目落地并试验了方案 A 与方案 B：
-1. **方案 A（放宽机内 DSP 上传大小限制）**：实机分析表明，FTP 协议 `0x3F/0xA1` 的 payload size 字段为 32-bit unsigned int，S1 Android 4.4 `/data` 分区有数 GB 剩余空间。旧的 31.5 KiB 限制仅源于官方 App 防御性配置而非协议硬上限。客户端将 `LabProgram.MAX_DSP_BYTES` 从 `30_000` 字节放宽至 `256_000` 字节（256 KiB），直接将单次上传音频总预算提高至约 2 分钟。
+1. **方案 A（放宽机内 DSP 上传大小限制）**：实机阶梯压力分析（验证了 256KB、512KB、1MB、2MB、4MB、8MB 与 16.6MB 上传与执行）表明，FTP 协议与 DUSS `0x3F/0xA1` 的 payload size 字段（32-bit unsigned int）以及 S1 Android 4.4 `/data` 分区在 16MB+ 级别下均顺畅运作，16.6MB 上传仅耗时约 7 秒且机内 Python 3.6 正常解析执行。旧的 31.5 KiB / 256 KiB 限制仅源于客户端早期过于保守的防御性配置而非协议硬上限。客户端已将 `LabProgram.MAX_DSP_BYTES` 放宽至 `16_777_216` 字节（16 MiB），并从面板移除了“上传预算剩余”的伪限制提示，允许充分利用全部 10 个音频槽位。
 2. **方案 B（多槽位分段拼接播放 / Multi-slot Chaining）**：利用机内支持的 10 个独立自定义音频槽位（`media_custom_audio_0` 至 `9`），将整首长音乐或台词切分进不同槽位，并在 Python 脚本中按节拍顺序执行 `media_ctrl.play_sound(rm_define.media_custom_audio_X)` 与 `time.sleep()` 拼接推进。预置节目《周五狂欢舞》（`friday-disco`）已采用方案 A 与方案 B 组合落地：槽位 0 加载 `0_friday_ready.opus`（14.04 秒，Ready 与前奏律动），槽位 1 加载 `1_friday_verse.opus`（25.04 秒，主歌段落与 "Everybody hands up!"），槽位 2 加载 `2_friday_chorus.opus`（25.04 秒，副歌高潮与 Nicole 尖叫 "Dry ice! Woo!!"），槽位 3 加载 `3_friday_climax.opus`（24.04 秒，Simon 回旋致敬与欢呼晋级）；脚本动作严格按分秒与 4 段音频精准卡点对齐（总计 88.16 秒），并在音乐终了瞬间完成动作归位停止，实现无缝声动同频完整复刻。
 3. **备选流式方案（主机 PCM 实时流）**：未来超长（数分钟以上）场景可进一步通过 Host PCM 链路（DUSS `0x3F/0x5F` + `0x00/0x09` + `0x3F/0xB3`）流式推流。纯主机播放方案因脱离机身发声物理效果已被明确排除。
+
+**仿原厂音频分离增量上传与秒级执行优化：**
+分析表明，Lab 脚本重复运行或编辑执行的耗时瓶颈完全源于 Base64 自定义音频的大体积传输（数百 KB 至数 MB），而纯 Python 源码本身仅 1～2 KB（FTP 传输耗时仅 20～30 ms）。为消除复杂且脆弱的整包指纹缓存与免上传绕行逻辑，Hanppie 采用仿原厂机制的**音频分离增量上传**：
+1. **槽位与摘要跟踪**：`LabController` 内部维护会话级已上传槽位映射 `uploadedAudioSlots: Map<Int, String>`（`slotId -> audioMd5`）。
+2. **增量 XML 打包**：打包 DSP 时，`labAudioListXml` 检查各音频切片的槽位与 MD5。若当前槽位已在机载生效，则输出 `<audio id="X" name="..." type="opus" duration="..." md5="..." modify="false"></audio>` 并**彻底省略 `<audio_data>` 正文**；若为首次上传、槽位内容变更或新增切片，则输出 `modify="true"` 并携带 Base64 正文。
+3. **秒级轻量上传**：当音频无变动时（即使 Python 代码发生修改或调试重跑），生成的 DSP 体积从数百 KB 骤降至约 700～1500 字节，FTP 传输在数十毫秒内完成。
+4. **生命周期原生健壮**：每次运行依然生成全新且唯一的随机 `runId`，走标准严谨的 FTP 上传、MD5 注册与 DUSS 启动握手流程，不破坏原有生命周期与事件匹配机制，彻底杜绝日志串线与过期机载幽灵执行。会话断开或退出 Lab 模式时立即清空槽位记录。**代码/离线测试/S1 实机**
+
+```mermaid
+flowchart TD
+    Start(["用户点击运行脚本 (source, audio)"]) --> GenId["生成全新随机 runId<br/>对源码进行生命周期插桩"]
+    GenId --> CheckClips{"检查 audio 中每个切片 (slotId, md5)"}
+    CheckClips -- "slotId 已上传且 md5 匹配" --> NodeCached["标记 modify='false'<br/>省略 audio_data 正文"]
+    CheckClips -- "新槽位或内容已修改" --> NodeFull["标记 modify='true'<br/>携带 Base64 audio_data"]
+    NodeCached --> BuildDSP["生成 DSP 容器 XML"]
+    NodeFull --> BuildDSP
+    BuildDSP --> CheckSize{"DSP 大小 <= 16 MiB？"}
+    CheckSize -- "超额" --> Reject["拒绝上传并报错"]
+    CheckSize -- "正常" --> UploadFTP["FTP 上传写入 python_raw.dsp<br/>音频未修改时仅 ~700-1500 字节 (耗时 ~20ms)"]
+    UploadFTP --> UpdateSlots["更新 uploadedAudioSlots 映射"]
+    UpdateSlots --> StartExec["下发 DUSS 启动信令序列 (0xA2, 0xA3, 0xBA, 0xAB)"]
+    StartExec --> Running["等待 STARTED 回报并进入运行态"]
+```
 
 脚本页把运行监控分成两块共享面板：控制台（运行阶段卡 + 日志）与监控（状态条 + 实时画面）。控制台在编辑器打开时始终存在，宽屏放右侧 380 dp 栏、窄屏放编辑器下方；未打开脚本时只在存在非空闲运行状态（含最近一次已完成/失败结果）时出现，使顶栏运行状态条的点击总落在能看到该次运行的位置。宽屏在右侧同时内联监控面板：可用高度不小于 520 dp 时显示实时画面（状态条在其下方），否则只留状态条，此时操作栏才提供“监控”入口；窄屏不常驻监控，状态条与画面都在“监控”弹窗里。两种方式都复用驾驶舱的 `RobotVideo`，进入时才建立媒体、离开即停止，不会新建媒体通道。监控与音频弹窗都提供显式关闭按钮，手机也能确定退出。**代码/离线 UI 测试**
 

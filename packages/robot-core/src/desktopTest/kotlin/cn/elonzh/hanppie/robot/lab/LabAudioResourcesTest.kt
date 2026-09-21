@@ -68,8 +68,17 @@ class LabAudioResourcesTest {
         assertFailsWith<IllegalArgumentException> { clip(name = " ") }
         assertFailsWith<IllegalArgumentException> { clip(name = "n".repeat(65)) }
         assertFailsWith<IllegalArgumentException> { clip(durationMillis = 0) }
-        assertFailsWith<IllegalArgumentException> { clip(packets = ByteArray(0)) }
         assertFailsWith<IllegalArgumentException> { labAudioListXml(listOf(clip(id = 1), clip(id = 1))) }
         assertFailsWith<IllegalArgumentException> { labAudioListXml((0..10).map { clip(id = it % LabAudioClip.MAX_CLIPS) }) }
+    }
+
+    @Test fun cachedAudioSlotOmitsAudioDataAndMarksModifyFalse() {
+        val clip = clip(id = 0, packets = ByteArray(600) { it.toByte() })
+        val digest = labAudioDigest(clip.packets)
+        val xml = labAudioListXml(listOf(clip)) { slotId, md5 -> slotId == 0 && md5 == digest }
+        val document = parse(xml.encodeToByteArray())
+        val node = document.getElementsByTagName("audio").item(0)
+        assertEquals("false", node.attributes.getNamedItem("modify").nodeValue)
+        assertEquals(0, document.getElementsByTagName("audio_data").length)
     }
 }

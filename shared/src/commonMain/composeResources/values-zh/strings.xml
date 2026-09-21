@@ -548,8 +548,8 @@
     <string name="script_audio_delete">删除音频</string>
     <string name="script_audio_delete_question">删除这段自定义音频？</string>
     <string name="script_audio_delete_summary">“%1$s”将从脚本和下一次 DSP 上传中移除。</string>
-    <string name="script_audio_footprint_value">音频 %1$s KB · 上传预算剩余 %2$s KB</string>
-    <string name="script_audio_over_budget">音频与代码合计超过 Lab 上传预算，请缩短或删除音频后再运行。</string>
+    <string name="script_audio_footprint_value">音频 %1$s KB · 已用 %2$s/%3$s 槽位</string>
+    <string name="script_audio_over_budget">音频与代码合计超过 Lab 上传上限（16 MB），请缩短或删除音频后再运行。</string>
     <string name="script_audio_slot_value">编号 %1$s · %2$s 秒 · %3$s KB</string>
     <string name="script_audio_slot_playing_value">编号 %1$s · %2$s / %3$s · %4$s KB</string>
     <string name="script_audio_play">播放试听</string>

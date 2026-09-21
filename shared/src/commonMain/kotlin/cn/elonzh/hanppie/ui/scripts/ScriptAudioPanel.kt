@@ -64,8 +64,7 @@ internal fun ScriptAudioPanel(
     modifier: Modifier = Modifier,
 ) {
     val encoded = LabAudioClip.totalEncodedBytes(audio.clips)
-    val available = (LabProgram.MAX_DSP_BYTES - sourceLength).coerceAtLeast(0)
-    val overBudget = encoded > available
+    val overBudget = encoded + sourceLength > LabProgram.MAX_DSP_BYTES
     var draggingIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
 
@@ -79,7 +78,12 @@ internal fun ScriptAudioPanel(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                tr(Res.string.script_audio_footprint_value, kiloBytes(encoded), kiloBytes(available)),
+                tr(
+                    Res.string.script_audio_footprint_value,
+                    kiloBytes(encoded),
+                    audio.clips.size.toString(),
+                    LabAudioClip.MAX_CLIPS.toString(),
+                ),
                 Modifier.weight(1f),
                 fontSize = 12.sp,
                 color = if (overBudget) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.onSurfaceVariantSummary,

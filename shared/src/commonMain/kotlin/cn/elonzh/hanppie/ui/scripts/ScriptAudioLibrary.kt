@@ -15,8 +15,8 @@ import kotlinx.coroutines.sync.withLock
 
 private val audioLogger = KotlinLogging.logger {}
 
-/** The DSP budget only fits seconds of audio, so oversized host files are refused before decoding. */
-private const val MAX_AUDIO_FILE_BYTES = 4 * 1024 * 1024
+/** Refuses oversized host files before decoding to prevent host memory exhaustion. */
+private const val MAX_AUDIO_FILE_BYTES = 50 * 1024 * 1024
 
 internal data class ScriptAudioState(
     val scriptId: String? = null,
@@ -95,7 +95,7 @@ internal class ScriptAudioLibrary(
         val decoded = importer.decode(name, bytes)
         val clip = LabAudioClip(id, labAudioName(name), decoded.durationMillis, decoded.packets)
         require(LabAudioClip.totalEncodedBytes(current + clip) <= LabProgram.MAX_DSP_BYTES) {
-            "音频体积超过 Lab 程序上传预算（${LabProgram.MAX_DSP_BYTES} 字节），请选择更短的音频"
+            "音频体积超过 Lab 程序上传上限（${LabProgram.MAX_DSP_BYTES / (1024 * 1024)} MB），请选择更短的音频"
         }
         repository.insertAudio(scriptId, clip)
         publish(clip)

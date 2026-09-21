@@ -78,7 +78,7 @@ class ScriptAudioLibraryTest {
         val library = ScriptAudioLibrary(repository, oversized)
         library.open(script.id)
         val failure = assertFailsWith<IllegalArgumentException> { library.import("long.mp3", byteArrayOf(1)) }
-        assertContains(failure.message.orEmpty(), "上传预算")
+        assertContains(failure.message.orEmpty(), "上传上限")
         assertTrue(repository.audio(script.id).isEmpty())
         assertTrue(library.state.value.clips.isEmpty())
     }
