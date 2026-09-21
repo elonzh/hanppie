@@ -7,12 +7,22 @@ from hanppie.lab.protocol import (
     APP_CONNECTION_SETUP,
     AppEnvelope,
     build_duss,
+    crc8,
+    crc16,
     is_video_packet,
     next_session,
     normalize_appid,
     parse_duss_frames,
     parse_robot_broadcast,
 )
+
+
+def test_crc_known_vectors() -> None:
+    assert crc8([0x55, 0x0D, 0x04]) == 0x33
+    assert crc8(bytes([0x55, 0x0D, 0x04])) == 0x33
+    frame = build_duss(0x02, 0x09, 0x40, 0x3F, 0x57, b"", 10072)
+    # Whole frame excluding last 2 bytes CRC16
+    assert crc16(frame[:-2]) == int.from_bytes(frame[-2:], "little")
 
 
 def test_appid_and_configuration_validation() -> None:

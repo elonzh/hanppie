@@ -27,7 +27,7 @@
 ### 1. 受击事件的推送被显式门控（不是"模式"）
 
 - `rm_ctrl.ArmorCtrl.hit_event_process` 只在 `sdk_hit_event_push_enable_flag` 为真时，才把
-  `hit` 放进 SDK 推送（`src/hanppie/runtime/rm_ctrl.py:2398-2422`）；该标志默认 **False**。
+  `hit` 放进 SDK 推送（`assets/s1-system/data/dji_scratch/src/robomaster/rm_ctrl.py:2398-2422`）；该标志默认 **False**。
 - 事件推送还有独立的开关方法：`sdk_event_push_enable_flag_set(hit_flag='on'|'off')`。
 - 受击事件载荷结构：`hit_index = (data[0] >> 4) & 0x0f`（装甲编号）、`hit_type = data[0] & 0x0f`。
 - 红外受击是独立通道：`armor.ir_event_register()`（cmdset `0x3f` / cmdid `0x10`），

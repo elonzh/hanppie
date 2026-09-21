@@ -5,7 +5,7 @@ repo = "https://github.com/pre-commit/pre-commit-hooks"
 rev = "v6.0.0"
 hooks = [
   { id = "check-added-large-files", args = ["--maxkb=500"] },
-  { id = "check-json", exclude = "^src/hanppie/resources/dji\\.json$" },
+  { id = "check-json", exclude = "^assets/s1-system/.*dji\\.json$" },
   { id = "check-toml" },
   { id = "check-yaml" },
   { id = "end-of-file-fixer" },

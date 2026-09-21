@@ -6,7 +6,7 @@ import cn.elonzh.hanppie.agent.tools.LabApiReferenceTool
  * Curated RoboMaster Lab API facts exposed to the model.
  *
  * Keep this narrower than the recovered runtime: every signature and limit here must be backed by
- * src/hanppie/runtime/rm_ctrl.py or rm_define.py and be appropriate for generated user scripts.
+ * assets/s1-system/data/dji_scratch/src/robomaster/rm_ctrl.py or rm_define.py and be appropriate for generated user scripts.
  */
 internal object LabApiCatalog {
     private data class Section(

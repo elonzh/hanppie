@@ -79,8 +79,7 @@ target-version = "py310"
 force-exclude = true
 extend-exclude = [
   "src/robomaster",
-  "src/hanppie/runtime",
-  "src/hanppie/resources/dji_scratch.py.txt",
+  "assets/s1-system",
   "shared/src/commonMain/composeResources/files/presets",
 ]
 
@@ -119,8 +118,6 @@ source = ["hanppie"]
 omit = [
   "src/hanppie/__main__.py",
   "src/hanppie/payloads/*",
-  "src/hanppie/resources/*",
-  "src/hanppie/runtime/*",
 ]
 
 [tool.coverage.report]

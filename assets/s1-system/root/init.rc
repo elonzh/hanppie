@@ -1,0 +1,291 @@
+import /init.environ.rc
+import /init.usb.rc
+
+on early-init
+    start ueventd
+
+
+on init
+    export PATH /sbin:/system/sbin:/bin:/system/bin:/system/xbin
+    export ANDROID_ROOT /system
+    export ANDROID_DATA /data
+    export EXTERNAL_STORAGE /sdcard
+    export DEVICE_TYPE UAV
+    export PYTHONPATH /data/dji_scratch/lib:/data/dji_scratch/src:/data/dji_scratch/src/robomaster
+
+    symlink /system/etc /etc
+    symlink /data/ftp /ftp
+
+    mkdir /amt
+    mkdir /sdcard
+    mkdir /system
+    mkdir /data
+    mkdir /blackbox
+    mkdir /cache
+    mkdir /vendor
+    mkdir /tmp
+    mount tmpfs tmpfs /tmp size=32M
+    mkdir /var
+    mount tmpfs tmpfs /var size=2M
+    mkdir /var/run
+    chmod 0755  /startup.sh
+#   mount ext4 /dev/block/platform/comip-mmc.1/by-name/userdata /ftp/upgrade wait rw
+#   mount ext4 /dev/block/platform/comip-mmc.1/by-name/blackbox /ftp/blackbox sync rw
+#   mount debugfs nodev /sys/kernel/debug wait rw
+#   mount vfat /dev/block/mmcblk1p1 /sdcard nowait rw
+    mount ext4 /dev/block/platform/comip-mmc.1/by-name/amt /amt wait ro
+    mount ext4 /dev/block/platform/comip-mmc.1/by-name/userdata /data wait rw
+    mount ext4 /dev/block/platform/comip-mmc.1/by-name/vendor /vendor wait ro
+#   mount ext4 /dev/block/platform/comip-mmc.1/by-name/blackbox /blackbox sync rw
+    mount ext4 /dev/block/platform/comip-mmc.1/by-name/system /system wait ro
+    mount ext4 /dev/block/platform/comip-mmc.1/by-name/cache /cache wait rw
+#   mount vfat /dev/block/platform/comip-mmc.1/by-name/udisk /sdcard nowait rw
+#   mount vfat /dev/block/mmcblk0p18 /sdcard wait rw
+
+    start system_check
+    wait /tmp/sys_check_done
+
+on post-fs-data
+    mount rootfs rootfs / ro remount
+    mkdir /data/misc 01771 system misc
+    mkdir /data/misc/wifi 0770 wifi wifi
+    chmod 0660 /data/misc/wifi/wpa_supplicant.conf
+    mkdir /data/misc/wifi/sockets 0770 wifi wifi
+    mkdir /data/misc/dhcp 0770 dhcp dhcp
+    mkdir /data/system 0775 system system
+    chown system system /data/system
+    chmod 0777 /sys/class/rfkill/rfkill0/state
+    # add by martin.wei 2017.10.26
+    mkdir /data/audio_files
+    #add by grwhale.zhang 2018.3.12
+    chmod 0755 /data/python_files/bin/python
+
+    write /proc/sys/vm/dirty_expire_centisecs 10
+    write /proc/sys/vm/dirty_writeback_centisecs 10
+    write /proc/sys/vm/extra_free_kbytes 32768
+    write /proc/sys/vm/min_free_kbytes 16384
+
+    #set FC udisk as read only
+    write /sys/class/android_usb/android0/f_mass_storage/lun1/ro 1
+    write /proc/sys/vm/panic_on_oom 0
+
+on fs
+    mount ext4 /dev/block/platform/comip-mmc.1/by-name/system /system wait rw
+
+on boot
+    ifup lo
+    hostname localhost
+    domainname localdomain
+
+    write /sys/block/mmcblk0boot0/force_ro 0
+    write /sys/devices/platform/comip-hotplug/hotplug/user_lock 1
+
+    # Permissions for System Server and daemons.
+    chmod 0777 /system/bin/sensord
+    chmod 0777 /system/bin/ubloxtest
+    chown gps system /system/bin/ubloxtest
+    chown system system /sys/class/input/input1/enable
+    chown system system /sys/class/input/input1/poll
+    chown system system /sys/class/i2c-adapter/i2c-1/1-0019/enable
+
+    chown system system /sys/class/misc/light/ps_calibration
+    chown system system /sys/devices/platform/comip-i2c.1/i2c-1/1-000e/enable
+    chown system system /sys/devices/platform/comip-i2c.1/i2c-1/1-000e/delay
+    chown system system /sys/devices/platform/comip-i2c.1/i2c-1/1-000e/direct
+    chown system system /sys/devices/platform/comip-i2c.1/i2c-1/1-000e/data
+    chown system system /sys/devices/platform/comip-i2c.1/i2c-1/1-000e/cali
+
+    chown system system /sys/class/input/input2/enable
+    chown system system /sys/class/input/input2/poll
+    chown system system /sys/class/input/input2/min
+    chown system system /sys/class/input/input2/max
+
+    class_start default
+
+    #insmod /system/lib/modules/comip-sdr.ko
+    insmod /system/lib/modules/ov5695.ko
+    insmod /system/lib/modules/comip_cam.ko
+    insmod /system/lib/modules/lib80211.ko
+    insmod /system/lib/modules/lib80211_crypt_ccmp.ko
+    insmod /system/lib/modules/lib80211_crypt_tkip.ko
+    insmod /system/lib/modules/lib80211_crypt_wep.ko
+    insmod /system/lib/modules/michael_mic.ko
+    insmod /system/lib/modules/hostap.ko
+
+    start start_dji_system
+
+service system_check /sbin/system_check
+    disabled
+    oneshot
+    user root
+
+service usbmuxd /system/bin/usbmuxd -v
+    disabled
+    user root
+
+service dji_monitor /system/bin/dji_monitor -m
+    disabled
+    user root
+
+service dji_sys /system/bin/dji_sys
+    disabled
+    user root
+
+service dji_vision /system/bin/dji_vision
+    disabled
+    user root
+
+service dji_hdvt_uav /system/bin/dji_hdvt_uav -g
+    disabled
+    user root
+
+# HDVT clean style:disable game system #
+service dji_hdvt_cls /system/bin/dji_hdvt_uav
+    disabled
+    user root
+
+service dji_blackbox /system/bin/dji_blackbox
+    disabled
+    user root
+
+service dji_camera /system/bin/dji_camera
+    disabled
+    user root
+
+service dji_network /system/bin/dji_network -t wifi -i 10 -t sdr -i 5
+    disabled
+    user root
+
+service start_dji_system /system/bin/start_dji_system.sh
+    disabled
+    oneshot
+
+service dji_sw_uav /system/bin/dji_sw_uav
+    disabled
+    user root
+
+service dji_scratch /data/python_files/bin/python /data/dji_scratch/bin/dji_scratch.py
+    setenv HOME /data
+    disabled
+    user root
+
+service dji_perception /system/bin/dji_perception
+    disabled
+    user root
+
+on property:dji.usbmuxd=1
+    start usbmuxd
+
+on property:dji.sdrs=1
+    start sdrs
+
+on property:dji.sdrs=0
+    stop  sdrs
+
+on property:dji.sdrs_log=1
+    start sdrs_log
+
+on property:dji.sdrs_log=0
+    stop  sdrs_log
+
+on property:dji.blackbox_service=1
+    start dji_blackbox
+
+on property:dji.blackbox_service=0
+    stop  dji_blackbox
+
+on property:dji.monitor_service=1
+    start dji_monitor
+
+on property:dji.monitor_service=0
+    stop  dji_monitor
+
+on property:dji.system_service=1
+    start dji_sys
+
+on property:dji.system_service=0
+    stop  dji_sys
+
+on property:dji.camera_service=1
+   start dji_camera
+
+on property:dji.camera_service=0
+   stop dji_camera
+
+on property:dji.network_service=1
+    start dji_network
+
+on property:dji.network_service=0
+    stop  dji_network
+
+on property:dji.sw_uav_service=1
+    start dji_sw_uav
+
+on property:dji.sw_uav_service=0
+    stop dji_sw_uav
+
+on property:dji.vision_service=1
+    start dji_vision
+
+on property:dji.vision_service=0
+    stop  dji_vision
+
+on property:dji.hdvt_service=1
+    start dji_hdvt_uav
+
+on property:dji.hdvt_service=0
+    stop  dji_hdvt_uav
+
+on property:dji.hdvt_cls=1
+    start dji_hdvt_cls
+
+on property:dji.hdvt_cls=0
+    stop  dji_hdvt_cls
+
+on property:dji.perception_service=1
+    start dji_perception
+
+on property:dji.perception_service=0
+    stop  dji_perception
+
+on property:dji.factory_out=0
+    start dji_camera
+
+on property:dji.factory_out=1
+    stop  dji_camera
+
+on property:dji.factory_out=0
+    start dji_network
+
+on property:dji.factory_out=1
+    stop  dji_network
+
+on property:sys.powerctl=*
+    powerctl ${sys.powerctl}
+
+on property:dji.scratch_service=1
+    start dji_scratch
+
+on property:dji.scratch_service=0
+    stop dji_scratch
+
+service ueventd /sbin/ueventd
+    critical
+
+service console /system/bin/mksh
+    console
+    user root
+#    disabled
+
+service adbd /sbin/adbd
+    disabled
+
+service sdrs_log /system/bin/sdrs_log
+    class main
+    user root
+    group radio cache inet misc
+
+service sdrs /system/bin/sdrs
+    class main
+    user root
+    group radio cache inet misc

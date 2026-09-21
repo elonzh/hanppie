@@ -41,9 +41,9 @@ RoboMaster S1 并不是“硬件无法编程”，而是被 DJI 的产品分层�
 
 关键代码位置：
 
-- S1 机内 Unix Socket/DUSS 客户端：[`event_client.py`](../src/hanppie/runtime/event_client.py)
-- S1 底盘、云台和 SDK 模式控制：[`rm_ctrl.py`](../src/hanppie/runtime/rm_ctrl.py)
-- S1 DUSS 命令封装：[`rm_module.py`](../src/hanppie/runtime/rm_module.py)
+- S1 机内 Unix Socket/DUSS 客户端：[`event_client.py`](../assets/s1-system/data/dji_scratch/src/robomaster/event_client.py)
+- S1 底盘、云台和 SDK 模式控制：[`rm_ctrl.py`](../assets/s1-system/data/dji_scratch/src/robomaster/rm_ctrl.py)
+- S1 DUSS 命令封装：[`rm_module.py`](../assets/s1-system/data/dji_scratch/src/robomaster/rm_module.py)
 - 官方 SDK 网络端口和连接过程：[`conn.py`](https://github.com/dji-sdk/RoboMaster-SDK/blob/ff6646e115ab125af3207a4ed3df42cc76c795b2/src/robomaster/conn.py)
 - 官方 SDK 端口常量：[`config.py`](https://github.com/dji-sdk/RoboMaster-SDK/blob/ff6646e115ab125af3207a4ed3df42cc76c795b2/src/robomaster/config.py)
 - 明文 SDK 连接说明：[`connection.rst`](https://github.com/dji-sdk/RoboMaster-SDK/blob/ff6646e115ab125af3207a4ed3df42cc76c795b2/docs/source/text_sdk/connection.rst)

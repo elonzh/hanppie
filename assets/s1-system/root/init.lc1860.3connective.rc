@@ -1,0 +1,139 @@
+on post-fs-data
+    mkdir /data/misc 01771 system misc
+
+    chmod 0666 /dev/REALTEK_FM
+    mkdir /data/misc/wifi 0770 wifi wifi
+    chmod 0777 /data/misc/wifi/wpa_supplicant.conf
+    mkdir /data/misc/wifi/sockets 0770 wifi wifi
+    mkdir /data/misc/dhcp 0770 dhcp dhcp
+    chown dhcp dhcp /data/misc/dhcp
+
+    mkdir /data/system 0775 system system
+    mkdir /data/system/wpa_supplicant 0770 wifi wifi
+    chown system system /data/system
+    chown wifi wifi /data/system/wpa_supplicant
+
+    # change back to bluetooth from system
+    chown bluetooth net_bt_stack /data/misc/Bluetooth
+    mkdir /data/misc/bluedroid 0770 bluetooth net_bt_stack
+    # UART device
+    chmod 0666 /dev/ttyS2
+    chown bluetooth net_bt_stack /dev/ttyS2
+    # power up/down interface
+    chmod 0666 /sys/class/rfkill/rfkill0/state
+    chmod 0666 /sys/class/rfkill/rfkill0/type
+    write /sys/class/rfkill/rfkill0/state 0
+    chown bluetooth net_bt_stack /sys/class/rfkill/rfkill0/state
+    chown bluetooth net_bt_stack /sys/class/rfkill/rfkill0/type
+    # bluetooth MAC address programming
+    chown bluetooth net_bt_stack ro.bt.bdaddr_path
+    chown bluetooth net_bt_stack /system/etc/bluetooth
+    chown bluetooth net_bt_stack /data/misc/bluetooth
+    setprop ro.bt.bdaddr_path "/amt/BT/BT_Address.txt"
+    #REALTEK_FM
+    chmod 666 /dev/REALTEK_FM
+
+
+#DHCPv6
+chown dhcp dhcp /data/etc/dhcp6c.conf
+chown dhcp dhcp /data/etc/dhcp6cctlkey
+chown dhcp dhcp /data/etc/dhcp6cDNS.conf
+chown dhcp dhcp /data/etc/dhcp6c.script
+chmod 777 /data/etc/dhcp6c.script
+
+#service wpa_supplicant /system/bin/wpa_supplicant \
+#	-iwlan0 -Dnl80211 -c/data/misc/wifi/wpa_supplicant.conf -e/data/misc/wifi/entropy.bin
+#	#   we will start as root and wpa_supplicant will switch to user wifi
+#	#   after setting up the capabilities required for WEXT
+#	#   user wifi
+#	#   group wifi inet keystore
+#	socket wpa_wlan0 dgram 660 wifi wifi
+#	group wifi inet
+#	disabled
+#	oneshot
+
+##service p2p_supplicant /system/bin/wpa_supplicant \
+##	-iwlan0 -Dnl80211 -c/data/misc/wifi/wpa_supplicant.conf -N \
+##	-ip2p0 -Dnl80211 -c/data/misc/wifi/p2p_supplicant.conf -e/data/misc/wifi/entropy.bin -puse_p2p_group_interf#ace=1
+#service p2p_supplicant /system/bin/wpa_supplicant \
+#	-ip2p0 -Dnl80211 -c/data/misc/wifi/p2p_supplicant.conf -e/data/misc/wifi/entropy.bin -N \
+#	-iwlan0 -Dnl80211 -c/data/misc/wifi/wpa_supplicant.conf
+
+#	#   we will start as root and wpa_supplicant will switch to user wifi
+#	#   after setting up the capabilities required for WEXT
+#	#   user wifi
+#	#   group wifi inet keystore
+#	class main
+#	socket wpa_wlan0 dgram 660 wifi wifi
+#	disabled
+#	oneshot
+
+service rtw_suppl_con /system/bin/wpa_supplicant \
+	-ip2p0 -Dnl80211 -c/data/misc/wifi/p2p_supplicant.conf \
+	-e/data/misc/wifi/entropy.bin -N \
+	-iwlan0 -Dnl80211 -c/data/misc/wifi/wpa_supplicant.conf \
+	-O/data/misc/wifi/sockets \
+	-g@android:wpa_wlan0
+	class main
+	socket wpa_wlan0 dgram 660 wifi wifi
+	disabled
+	oneshot
+
+service rtw_suppl /system/bin/wpa_supplicant \
+	-iwlan0 -Dnl80211 -c/data/misc/wifi/wpa_supplicant.conf \
+	-O/data/misc/wifi/sockets \
+	-e/data/misc/wifi/entropy.bin
+	-g@android:wpa_wlan0
+	class main
+	socket wpa_wlan0 dgram 660 wifi wifi
+	disabled
+	oneshot
+
+service dhcpcd_wlan0 /system/bin/dhcpcd -aABDKL
+	class main
+	disabled
+	oneshot
+
+service dhcpcd_p2p /system/bin/dhcpcd -aABKL
+	class main
+	disabled
+	oneshot
+
+service dhcpcd_bt-pan /system/bin/dhcpcd -ABKL
+	class main
+	disabled
+	oneshot
+
+service dhcpcd_eth0 /system/bin/dhcpcd -ABDKL
+	class main
+	disabled
+	oneshot
+
+service iprenew_wlan0 /system/bin/dhcpcd -n
+	class main
+	disabled
+	oneshot
+
+service iprenew_p2p /system/bin/dhcpcd -n
+	class main
+	disabled
+	oneshot
+
+service iprenew_bt-pan /system/bin/dhcpcd -n
+	class main
+	disabled
+	oneshot
+#add for ipv6
+service dhcp6cDNS_wlan0 /system/bin/dhcp6c -c "/data/etc/dhcp6cDNS.conf" -Df wlan0
+        disabled
+        oneshot
+
+service dhcp6c_wlan0 /system/bin/dhcp6c -c "/data/etc/dhcp6c.conf" -Df wlan0
+    disabled
+    oneshot
+
+on property:service.dhcp6c_wlan0.enable=0
+    stop dhcp6c_wlan0
+
+on property:service.dhcp6c_wlan0.enable=1
+    start dhcp6c_wlan0

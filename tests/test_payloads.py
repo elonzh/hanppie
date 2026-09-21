@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from importlib.resources import files
 
 
@@ -9,9 +8,3 @@ def test_packaged_adb_payload() -> None:
     source = payload.read_text(encoding="utf-8")
     assert "service.adb.tcp.port" in source
     assert "setprop" in source
-
-
-def test_packaged_dji_configuration() -> None:
-    resource = files("hanppie.resources").joinpath("dji.json")
-    configuration = json.loads(resource.read_text(encoding="utf-8"))
-    assert isinstance(configuration, dict)

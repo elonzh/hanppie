@@ -64,7 +64,7 @@ Hanppie 不替换整套 S1 固件，而是在保留原机控制器、相机、�
 | Hanppie Lab Bridge DSP | `/data/ftp/python/python_raw.dsp` | 上传白名单 JSON 控制与遥测程序 | 文件写入 `/data`；可停止或覆盖，不等于开机自启         |
 | ADB 启动载荷 | Lab 用户程序 | 调用原机 `adb_en.sh` 并重启 `adbd` | 运行态变化；重启后关闭                         |
 | PyAV 媒体兼容层 | 电脑 | 替代官方 SDK 缺失的 macOS `libmedia_codec` 扩展 | 不修改 S1，也不能改变 S1 命令支持情况              |
-| `runtime/`、`resources/` 分析副本 | Git 仓库 | 保存恢复的原机运行库和配置供研究/测试 | 只影响仓库；不是部署到 S1 的新运行时                |
+| `assets/s1-system/` 原机参考系统 | Git 仓库（`assets/s1-system/`） | 按系统原始绝对路径保存恢复的原机运行库、启动脚本与配置供研究/测试；已剥离出 `src/hanppie`，不随包打包分发 | 只影响仓库；不是部署到 S1 的新运行时                |
 | 官方基准固件归档 | `assets/firmware/` | 归档官方最终完整固件 `00.06.0521.tar`（Git LFS）与清单，提供整机恢复基底 | Git LFS 存储；不修改实机；原厂二进制              |
 
 Hanppie 不修改 `/init.rc`、原厂启动脚本或 `/system` 持久文件。Lab DSP 会写入 `/data`，但不等于开机自动运行；TCP 5555 ADB 只在诊断采集阶段临时启用，并由清理阶段重启设备关闭。
@@ -201,7 +201,7 @@ Android 和桌面通过同一 App UDP 会话接收 H.264（外层类型 2）和 
 
 供应商预设为 DashScope、OpenAI、DeepSeek 和 MiMo；设置直接映射成 Koog `LLMProvider` / `LLModel`，支持预设模型与手动 ID。已维护模型包含上下文、最大输出和 `LLMCapability` 快照；未知 ID 使用工具/Chat Completions 的保守基线并把 token 上限显示为未知，不从名称猜测。配置测试不写入用户对话，也不调用机器人：先校验 HTTPS、模型与 key，再按供应商目录协议验证所选 ID，随后分别发起短流式文本请求和强制的无副作用工具调用；只有收到完整 End frame 和合法 `hanppie_configuration_probe` 工具调用才显示四阶段全部通过。DashScope 读取 `/api/v1/models` 的 `output.models`，其余预设读取 `/v1/models` 的 `data`。真实测试可能产生少量费用，UI 明确提示。平台组合根注入 Ktor `HttpClient` 工厂，Android 与桌面分别显式创建 OkHttp 引擎；没有模型 fallback 或整轮自动重试。配置由 Preferences DataStore 保存，桌面环境变量可覆盖后续 run；Android 暂未接入 Codex OAuth。
 
-**产品智能体：** 工具集合位于 `agent/tools`，当前暴露八个具名 class-based Koog `Tool<TArgs, TResult>`：`RobotStatusTool`、`LabApiReferenceTool`、`ListLabScriptsTool`、`ReadLabScriptTool`、`SaveLabScriptTool`、`DeleteLabScriptTool`、`ExecuteLabPythonTool`、`StopLabTool`；参数与结果继续使用 Koog 的类型化序列化和 `MessagePart.Tool.Call/Result`，不按自然语言动作逐个硬编码，也不另建工具 DTO。状态结果包含连接、遥测与脚本运行字段；Lab API 结果包含命中状态、可用分类及分类事实；脚本工具返回脚本元数据或源码；执行、停止和删除返回明确状态枚举及必要关联标识。`agent/lab/LabApiCatalog` 是提供给模型的受控机内 API 目录，条目逐项来自仓库内已恢复的 `src/hanppie/runtime/rm_ctrl.py` 与 `rm_define.py`；模型在编写、修改、保存或执行脚本前必须查询相关分类，目录外 API 不得臆造。脚本库工具按用户可见名称列出、读取和原子创建/替换/重命名，保存只写本地脚本目录（`manifest.json` 与 `script.py`），不会上传或运行；永久删除必须由用户明确提出并在界面再次确认。执行 Python 的位置是机器人 Lab 解释器而非手机/电脑，源码为标准 Python 3.6 `def start()` 程序。执行前在界面呈现完整源码，只有用户确认后才记录批准、上传及启动；审批可以等待用户，不会因 agent 总时限在确认瞬间被取消。工具等待共享 `LabController` 的真实调用返回，机器人副作用结果持久化后结束本次 run；后续 `STARTED`、完成、失败或 10 秒未确认转为未知由全局脚本状态持续展示，模型不在同一 run 内轮询或自行重试。对话期间禁止手动切换目标、上传和启动，设备操作用原子 busy 状态互斥；手动停止会先取消对话。取消 LLM 不等于停止机内脚本，失联/部分启动仍报告未知结果。智能体没有视觉工具，不能回答实时观察环境的问题；不继承 Python 智能体的相机或媒体能力。产品交互、风险与未来工具边界见[对话产品智能体设计](./conversation-agent-product-design.md)，持久化与演进原则见[智能体运行时技术方案](./agent-runtime-plan.md)，对话页功能范围见[对话体验产品需求](./conversation-product-requirements.md)。
+**产品智能体：** 工具集合位于 `agent/tools`，当前暴露八个具名 class-based Koog `Tool<TArgs, TResult>`：`RobotStatusTool`、`LabApiReferenceTool`、`ListLabScriptsTool`、`ReadLabScriptTool`、`SaveLabScriptTool`、`DeleteLabScriptTool`、`ExecuteLabPythonTool`、`StopLabTool`；参数与结果继续使用 Koog 的类型化序列化和 `MessagePart.Tool.Call/Result`，不按自然语言动作逐个硬编码，也不另建工具 DTO。状态结果包含连接、遥测与脚本运行字段；Lab API 结果包含命中状态、可用分类及分类事实；脚本工具返回脚本元数据或源码；执行、停止和删除返回明确状态枚举及必要关联标识。`agent/lab/LabApiCatalog` 是提供给模型的受控机内 API 目录，条目逐项来自仓库内已恢复的 `assets/s1-system/data/dji_scratch/src/robomaster/rm_ctrl.py` 与 `rm_define.py`；模型在编写、修改、保存或执行脚本前必须查询相关分类，目录外 API 不得臆造。脚本库工具按用户可见名称列出、读取和原子创建/替换/重命名，保存只写本地脚本目录（`manifest.json` 与 `script.py`），不会上传或运行；永久删除必须由用户明确提出并在界面再次确认。执行 Python 的位置是机器人 Lab 解释器而非手机/电脑，源码为标准 Python 3.6 `def start()` 程序。执行前在界面呈现完整源码，只有用户确认后才记录批准、上传及启动；审批可以等待用户，不会因 agent 总时限在确认瞬间被取消。工具等待共享 `LabController` 的真实调用返回，机器人副作用结果持久化后结束本次 run；后续 `STARTED`、完成、失败或 10 秒未确认转为未知由全局脚本状态持续展示，模型不在同一 run 内轮询或自行重试。对话期间禁止手动切换目标、上传和启动，设备操作用原子 busy 状态互斥；手动停止会先取消对话。取消 LLM 不等于停止机内脚本，失联/部分启动仍报告未知结果。智能体没有视觉工具，不能回答实时观察环境的问题；不继承 Python 智能体的相机或媒体能力。产品交互、风险与未来工具边界见[对话产品智能体设计](./conversation-agent-product-design.md)，持久化与演进原则见[智能体运行时技术方案](./agent-runtime-plan.md)，对话页功能范围见[对话体验产品需求](./conversation-product-requirements.md)。
 
 **验证边界：** 固定抓包向量、CRC/截断、DSP、遥测、回环 UDP、FTP、Lab 生命周期和桌面组件测试已通过；回环测试覆盖网络工厂用于身份/会话 UDP 以及 FTP 控制/数据连接，内部文件回环另覆盖目录列表、ASCII 名称转换、同名安全上传、流式下载、重命名、新建和非递归删除。共享页面有 393 dp 手机尺寸编辑、导航、对话、设置与内部文件截图检查，macOS 宽屏设备页、脚本页与内部文件页已实际渲染检查。新增运行时持久化测试覆盖 Agent 运行时 Room 数据库（`agent-runtime.db`）独立生命周期、JSONL 未提交尾部隔离、已提交坏行拒绝、末事件游标冲突、事件 ID 幂等与冲突、SQLite 清空后重建、Session 管理、重启后 agent run 失败、待审批安全拒绝和未完成工具的 Koog 错误 Result；基于目录树的脚本存取测试覆盖新建、重命名、保存、加载、音频切片增删、预置脚本首次同步与不可直接覆盖等契约；Koog 离线测试覆盖多轮上下文、实时 `StreamFrame` 不进入耐久事件、工具结果、同一工具 ID 的审批与执行生命周期、拒绝、取消、截断、关闭等待终态、每 Session 草稿隔离、审批等待不消耗操作超时、副作用后终止、多分类只读查询、无界只读循环失败、完成/失败后立即继续发送、忙状态拒绝可追踪以及 key 不进入日志、原始异常传播和 traceback 持久化。四个供应商的目录路径、响应形状与预设能力由本机模拟协议测试覆盖。对话历史已按 393 dp 弹层和 1040 dp 侧栏渲染检查，桌面快捷键由 Compose UI 测试覆盖。Android APK、测试包与 lint 构建结果以本次交付记录为准。小米 13 / HyperOS 3（Android 16、1080×2400、440 dpi）已有四页面导航及脚本编辑测试；此前新对话页通过显式 shell 启动 Activity 的 instrumentation 测试，但本轮新增的持久历史、模型目录和快捷键尚未在物理手机上复验。真实兼容模型调用、界面确认、Lab 上传启动、机内自定义标记回传及停止/断开此前通过端到端测试；四个供应商的新版分阶段配置测试本轮没有真实 key，不能据离线测试声称云端通过。当前 S1 已实测发现、FTP 根目录列举、临时目录创建、ASCII/非 ASCII 上传、下载、重命名、新建和非递归删除；名称与内容边界按上一段记录，所有临时目录均确认清除。短时云台触摸和红外触发通过 UI 命令路径测试，但不能替代运动角度/红外命中的物理验收；底盘行驶、水弹实射、音频主观听感、Windows/Linux 桌面实机和机器人热点与蜂窝并行联网尚未完成验证。KMP 回复 TTS 已移除，因此不再保留或声称其平台播放验收。CI 包含 Android APK/lint 和三平台桌面测试/打包配置，本次未运行远程 CI。
 
@@ -403,8 +403,7 @@ Codex 模式用 CPU `faster-whisper` 的 int8 模型在本机转写，每句使�
 | `mcp/install.py` | 保留现有 TOML 内容并跨平台安装 user 或 project 范围的 Codex MCP 配置 |
 | `mcp/recorder.py` | 为每个 MCP 服务会话保存运行日志、完整工具调用 JSONL 和 Python 调用制品目录 |
 | `payloads/` | 临时上传到 S1 的最小机内载荷 |
-| `runtime/` | 恢复的 S1 Lab/DUSS 运行时参考；不作为桌面 SDK 重构 |
-| `resources/` | 原机配置和非执行参考资源 |
+| `assets/s1-system/` | 按机内系统原始绝对路径保存的原机运行库、启动脚本与配置参考副本；不随 `hanppie` 打包 |
 | `src/robomaster/` | 从 DJI SDK 固定提交导入的纯 Python fork；保留官方 API，由 Hanppie 针对 S1 维护 |
 
 ### 1.5 SDK 打包与 Python 边界
@@ -530,7 +529,7 @@ flowchart LR
 
 报告器原样保存本次运行中的 IP、AppID、MAC、ADB target、临时 DSP 摘要、命令输出和检查证据，不包含任何替换或过滤逻辑。唯一存储边界是输出目录 `.hanppie/diagnosis` 默认由 Git 忽略；报告标题明确其“单次证据”性质，能力是否从接口存在提升为命令通过、遥测通过或物理通过，仍只在第 1.11 节维护。
 
-Hanppie 自行维护的主机代码由 Ruff、pytest、coverage 和 prek 检查。恢复的 `runtime` 与从 Apache-2.0 上游导入的 `src/robomaster` 保留接近来源的结构，不做无关格式化；前者覆盖 CRC 和消息往返，后者覆盖官方导入 API、版本、媒体 fallback、许可证和 wheel 内容。构建使用 uv 的锁文件生成同时包含两个顶层包的 sdist 和 wheel。
+Hanppie 自行维护的主机代码由 Ruff、pytest、coverage 和 prek 检查。恢复的 `assets/s1-system` 机载分析副本与从 Apache-2.0 上游导入的 `src/robomaster` 保留接近来源的结构，不做无关格式化；构建使用 uv 的锁文件生成同时包含两个顶层包（`hanppie` 与 `robomaster`）的 sdist 和 wheel，机载参考副本不随包分发。
 
 ### 1.11 当前能力矩阵
 

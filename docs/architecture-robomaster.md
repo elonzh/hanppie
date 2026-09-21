@@ -247,13 +247,13 @@ RoboMaster macOS 1.1.5 客户端中的媒体库由 `DJILocalAlbumController` 管
 
 ### 4.4 DUSS 路由与模块
 
-恢复的 [`event_client.py`](../src/hanppie/runtime/event_client.py) 使用 Android 抽象 Unix Datagram Socket，例如 `\0/duss/mb/0x...`。[`dji.json`](../src/hanppie/resources/dji.json) 描述服务、模块和路由关系。**代码**
+恢复的 [`event_client.py`](../assets/s1-system/data/dji_scratch/src/robomaster/event_client.py) 使用 Android 抽象 Unix Datagram Socket，例如 `\0/duss/mb/0x...`。[`dji.json`](../assets/s1-system/system/etc/dji.json) 描述服务、模块和路由关系。**代码**
 
 Lab 系统客户端和用户脚本分别绑定类似 `\0/duss/mb/0x905`、`\0/duss/mb/0x906` 的本地地址，未命中专用路由时把消息发往默认代理 `\0/duss/mb/0x900`。路由器再按 receiver 映射到相机、视觉、系统或 `vt_air` 等本地进程。底盘、云台、电池、ESC、装甲和发射器等模块在原厂 `dji.json` 中主要经 `/dev/ttyS3`、`921600 baud` 的 DUSS V1 路由连接。**代码**
 
-[`rm_module.py`](../src/hanppie/runtime/rm_module.py) 把底盘、云台、灯光、相机、视觉、声音、装甲等能力封装为 DUSS 消息；[`rm_ctrl.py`](../src/hanppie/runtime/rm_ctrl.py) 再提供面向 Lab 程序的高层控制对象。**代码**
+[`rm_module.py`](../assets/s1-system/data/dji_scratch/src/robomaster/rm_module.py) 把底盘、云台、灯光、相机、视觉、声音、装甲等能力封装为 DUSS 消息；[`rm_ctrl.py`](../assets/s1-system/data/dji_scratch/src/robomaster/rm_ctrl.py) 再提供面向 Lab 程序的高层控制对象。**代码**
 
-仓库中的 `src/hanppie/runtime` 和 `resources/dji.json` 是从原机恢复并整理的分析副本，不是桌面 SDK，也不是 Hanppie 重新设计的协议实现。对这些副本所做的必要整理见 [Hanppie 技术架构](./architecture.md#18-内置-sdk-fork-的边界)。
+仓库中的 `assets/s1-system` 是从原机恢复并按系统原始路径整理的分析副本，不是桌面 SDK，也不随 `hanppie` 打包，更不是 Hanppie 重新设计的协议实现。对这些副本所做的必要整理见 [Hanppie 技术架构](./architecture.md#18-内置-sdk-fork-的边界)。
 
 这说明“DUSS 总线”不是单根物理总线：在智能控制器内它表现为 Unix Datagram Socket 和消息路由，在控制器到下级模块之间又可以映射为 UART 等传输。内部 CAN 研究是另一层硬件路径，不能与这里的机内 DUSS 路由直接画等号。
 
@@ -283,7 +283,7 @@ DJI 官方 Python SDK 以 EP/EP Core 为正式对象。S1 拥有大量相同的 
 | payload | 参数或遥测数据 |
 | CRC16 | 保护完整消息 |
 
-恢复的 [`duss_event_msg.py`](../src/hanppie/runtime/duss_event_msg.py) 负责打包和解包，[`duml_crc.py`](../src/hanppie/runtime/duml_crc.py) 实现 CRC8/CRC16。**代码**
+恢复的 [`duss_event_msg.py`](../assets/s1-system/data/dji_scratch/src/robomaster/duss_event_msg.py) 负责打包和解包，[`duml_crc.py`](../assets/s1-system/data/dji_scratch/src/robomaster/duml_crc.py) 实现 CRC8/CRC16。**代码**
 
 DUSS 是多个传输上的共同消息语义，不等同于某个固定网口：智能控制器内使用抽象 Unix Datagram Socket，智能控制器与部分下级模块之间映射到 UART 等链路，App 会话又可在外层报文中承载 DUSS。
 
