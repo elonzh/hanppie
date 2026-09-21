@@ -587,4 +587,16 @@
     <string name="about_developer">开发者</string>
     <string name="about_copy_system_info">复制构建与系统信息</string>
     <string name="about_info_copied">已复制到剪贴板</string>
+    <string name="chat_script_unavailable">此脚本已不在脚本库中，请刷新脚本列表。</string>
+    <string name="chat_open_editor">编辑</string>
+    <string name="chat_script_created">已创建到脚本库，尚未运行。</string>
+    <string name="chat_script_updated">已更新脚本库，尚未运行。</string>
+    <string name="chat_script_deleted">已从脚本库删除。</string>
+    <string name="chat_script_start_sent">启动命令已发送，请读取机器人状态确认机内是否开始执行。</string>
+    <string name="back_to_chat">返回对话</string>
+    <string name="chat_script_not_found">脚本不存在，请刷新脚本列表后重新选择。</string>
+    <string name="chat_reasoning">思考过程</string>
+    <string name="chat_reasoning_streaming">思考中…</string>
+    <string name="chat_reasoning_expanded">思考过程已展开</string>
+    <string name="chat_reasoning_collapsed">思考过程已折叠</string>
 </resources>

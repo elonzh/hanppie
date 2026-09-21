@@ -1,11 +1,31 @@
-package cn.elonzh.hanppie.ui.scripts.editor
+package cn.elonzh.hanppie.ui.code
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.luminance
+import cn.elonzh.hanppie.ui.design.HanppieDesignTokens
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+
+@Composable
+internal fun rememberPythonHighlight(cursor: Int = -1): PythonHighlight {
+    val colors = MiuixTheme.colorScheme
+    return remember(colors, cursor) {
+        val dark = colors.surface.luminance() < .179f
+        PythonHighlight(
+            if (dark) HanppieDesignTokens.Dark.CodeKeyword else HanppieDesignTokens.Light.CodeKeyword,
+            if (dark) HanppieDesignTokens.Dark.CodeString else HanppieDesignTokens.Light.CodeString,
+            colors.onSurfaceVariantSummary,
+            if (dark) HanppieDesignTokens.Dark.CodeNumber else HanppieDesignTokens.Light.CodeNumber,
+            cursor, colors.primary.copy(alpha = .22f),
+        )
+    }
+}
 
 internal enum class PythonTokenKind { KEYWORD, STRING, COMMENT, NUMBER }
 internal data class PythonToken(val start: Int, val end: Int, val kind: PythonTokenKind)

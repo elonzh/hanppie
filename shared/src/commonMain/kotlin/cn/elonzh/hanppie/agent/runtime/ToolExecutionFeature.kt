@@ -26,10 +26,16 @@ private val toolExecutionLogger = KotlinLogging.logger {}
 
 /** A class-based Koog tool whose call must be approved before its implementation runs. */
 internal interface ApprovalRequiredTool<TArgs, TResult> {
-    fun approvalPreview(args: TArgs): String
-    fun rejectedResult(args: TArgs): TResult
+    suspend fun prepareApproval(args: TArgs): ToolApprovalPreparation
+    fun rejectedResult(args: TArgs, preparation: ToolApprovalPreparation): TResult
     val displayPreviewAfterApproval: Boolean get() = false
 }
+
+/** Per-call data stays inside Koog metadata, never in model arguments or a shared mutable cache. */
+internal data class ToolApprovalPreparation(
+    val preview: String,
+    val metadata: ToolCallMetadata = ToolCallMetadata.EMPTY,
+)
 
 /** A tool whose result completes the current agent run without another model request. */
 internal interface TerminalTool
@@ -80,31 +86,33 @@ private class PolicyAgentEnvironment(
     ): ReceivedToolResult {
         val tool = toolRegistry.getToolOrNull(toolCall.tool)
             ?: return delegate.executeTool(toolCall, metadata)
+        var executionMetadata = metadata
         val approvalTool = tool as? ApprovalRequiredTool<*, *>
         if (approvalTool != null) {
             val prepared = try {
-                prepareApproval(toolCall, tool, approvalTool)
+                withTimeout(config.operationTimeoutMillis) { prepareApproval(toolCall, tool, approvalTool) }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: ToolApprovalPreparationException) {
                 return validationFailure(toolCall, tool, error.cause ?: error, error.args)
             }
-            val accepted = config.requestApproval(toolCall, prepared.preview)
+            val accepted = config.requestApproval(toolCall, prepared.preparation.preview)
             if (!accepted) return rejected(toolCall, tool, prepared.args, prepared.rejectedResult)
+            executionMetadata += prepared.preparation.metadata
             if (prepared.displayPreviewAfterApproval) {
-                config.onApprovedPreview(toolCall, prepared.preview)
+                config.onApprovedPreview(toolCall, prepared.preparation.preview)
             }
         }
 
         config.onStarting(toolCall)
         return withTimeout(config.operationTimeoutMillis) {
-            delegate.executeTool(toolCall, metadata)
+            delegate.executeTool(toolCall, executionMetadata)
         }
     }
 
     override suspend fun reportProblem(exception: Throwable) = delegate.reportProblem(exception)
 
-    private fun prepareApproval(
+    private suspend fun prepareApproval(
         toolCall: MessagePart.Tool.Call,
         tool: ToolBase<*, *>,
         approvalTool: ApprovalRequiredTool<*, *>,
@@ -125,10 +133,11 @@ private class PolicyAgentEnvironment(
             @Suppress("UNCHECKED_CAST")
             val typedApproval = approvalTool as ApprovalRequiredTool<Any?, Any?>
             val args = typedTool.decodeArgs(argsJson, config.serializer)
+            val preparation = typedApproval.prepareApproval(args)
             PreparedApproval(
                 args = args,
-                preview = typedApproval.approvalPreview(args),
-                rejectedResult = typedApproval.rejectedResult(args),
+                preparation = preparation,
+                rejectedResult = typedApproval.rejectedResult(args, preparation),
                 displayPreviewAfterApproval = typedApproval.displayPreviewAfterApproval,
             )
         } catch (error: CancellationException) {
@@ -179,7 +188,7 @@ private class PolicyAgentEnvironment(
 
     private data class PreparedApproval(
         val args: Any?,
-        val preview: String,
+        val preparation: ToolApprovalPreparation,
         val rejectedResult: Any?,
         val displayPreviewAfterApproval: Boolean,
     )

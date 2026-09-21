@@ -35,12 +35,12 @@ class ChatAgentLiveTest {
                     ReadSkillTool.Result("test")
                 })
                 tool(ListLabScriptsTool { ListLabScriptsTool.Result(emptyList()) })
-                tool(ReadLabScriptTool { ReadLabScriptTool.Result(it, "script:$it", 1, 1) })
+                tool(ReadLabScriptTool { ReadLabScriptTool.Result("script-1", it, "script:$it", 1, 1, ReadLabScriptTool.Status.FOUND) })
                 tool(SaveLabScriptTool { original, name, source ->
-                    SaveLabScriptTool.Result(name, original == null, source.length, 1)
+                    SaveLabScriptTool.Result("script-1", name, original == null, source.length, 1)
                 })
-                tool(DeleteLabScriptTool { DeleteLabScriptTool.Result(it, DeleteLabScriptTool.Status.DELETED) })
-                tool(ExecuteLabPythonTool { error("No robot allowed") })
+                tool(DeleteLabScriptTool({ "旧巡检" }) { DeleteLabScriptTool.Result(it, "旧巡检", DeleteLabScriptTool.Status.DELETED) })
+                tool(ExecuteLabPythonTool({ error("No script execution allowed") }) { error("No robot allowed") })
                 tool(StopLabTool { error("No robot allowed") })
             },
             createHttpClient = ::createAgentHttpClient,

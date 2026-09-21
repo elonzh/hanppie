@@ -1,10 +1,15 @@
 package cn.elonzh.hanppie.agent.tools
 
+import ai.koog.agents.core.tools.ToolBase
+import ai.koog.agents.core.tools.ToolCallMetadata
 import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.core.tools.validate
 import ai.koog.serialization.typeToken
 import cn.elonzh.hanppie.agent.runtime.ApprovalRequiredTool
+import cn.elonzh.hanppie.agent.runtime.ToolApprovalPreparation
+import cn.elonzh.hanppie.ui.scripts.StoredScript
+import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.agent.runtime.TerminalTool
 import cn.elonzh.hanppie.resources.Res
 import cn.elonzh.hanppie.resources.lab_script_must_not_import_modules
@@ -52,17 +57,18 @@ internal class RobotStatusTool(
 }
 
 internal class ExecuteLabPythonTool(
-    private val execute: suspend (String) -> Result,
-) : Tool<ExecuteLabPythonTool.Args, ExecuteLabPythonTool.Result>(
+    private val loadScript: suspend (String) -> StoredScript,
+    private val execute: suspend (StoredScript) -> Result,
+) : ToolBase<ExecuteLabPythonTool.Args, ExecuteLabPythonTool.Result>(
     argsType = typeToken<Args>(),
     resultType = typeToken<Result>(),
     name = NAME,
-    description = "提交完整且不含 import 的 RoboMaster Lab Python 3.6 脚本。用户确认后上传并发送启动命令，必须等待机内回报才能视为已启动。",
+    description = "按脚本库 ID 执行已保存的 Lab 脚本，自动携带关联音频。先通过列表、读取或保存取得 ID。用户确认源码及音频清单后上传并发送启动命令，必须等待机内回报才能视为已启动。",
 ), ApprovalRequiredTool<ExecuteLabPythonTool.Args, ExecuteLabPythonTool.Result>, TerminalTool {
     @Serializable
     data class Args(
-        @property:LLMDescription("完整脚本，包含 def start()；不得使用 import，time 等 SDK 对象直接可用")
-        val source: String,
+        @property:LLMDescription("脚本库中的脚本 ID，取自 list_lab_scripts、read_lab_script 或 save_lab_script 返回的 id；不接受名称或源码")
+        val scriptId: String,
     )
 
     @Serializable
@@ -74,19 +80,36 @@ internal class ExecuteLabPythonTool(
     @Serializable
     enum class Status { START_COMMAND_SENT, USER_REJECTED }
 
-    override suspend fun execute(args: Args): Result {
-        validateLabSource(args.source)
-        return execute(args.source)
+    override suspend fun execute(args: Args, metadata: ToolCallMetadata): Result {
+        val script = checkNotNull(metadata[APPROVED_SCRIPT] as? StoredScript) { "Missing approved script snapshot" }
+        check(script.id == args.scriptId) { "Approved script does not match requested ID" }
+        return execute(script)
     }
 
-    override fun approvalPreview(args: Args): String = args.source.also(::validateLabSource)
+    override suspend fun prepareApproval(args: Args): ToolApprovalPreparation {
+        val loaded = loadScript(args.scriptId)
+        check(loaded.id == args.scriptId) { "Loaded script does not match requested ID" }
+        validateLabSource(loaded.source)
+        val snapshot = loaded.copy(audioClips = loaded.audioClips.map {
+            LabAudioClip(it.id, it.name, it.durationMillis, it.packets.copyOf())
+        })
+        val preview = buildString {
+            appendLine("# ${snapshot.name}")
+            snapshot.audioClips.forEach { clip ->
+                appendLine("# audio[${clip.id}]: ${clip.name.replace('\n', ' ')} (${clip.durationMillis} ms)")
+            }
+            append(snapshot.source)
+        }
+        return ToolApprovalPreparation(preview, ToolCallMetadata.of(APPROVED_SCRIPT to snapshot))
+    }
 
-    override fun rejectedResult(args: Args) = Result(Status.USER_REJECTED)
+    override fun rejectedResult(args: Args, preparation: ToolApprovalPreparation) = Result(Status.USER_REJECTED)
 
     override val displayPreviewAfterApproval: Boolean get() = true
 
     companion object {
         const val NAME = "execute_lab_python"
+        private const val APPROVED_SCRIPT = "hanppie.approvedScript"
     }
 }
 
@@ -122,13 +145,14 @@ internal class ListLabScriptsTool(
     argsType = typeToken<NoToolArgs>(),
     resultType = typeToken<Result>(),
     name = NAME,
-    description = "列出用户保存的 Lab 脚本名称、更新时间和源码长度，不读取预置脚本内容",
+    description = "列出用户保存的 Lab 脚本 ID、名称、更新时间和源码长度，不读取预置脚本内容",
 ) {
     @Serializable
     data class Result(val scripts: List<Script>)
 
     @Serializable
     data class Script(
+        val id: String,
         val name: String,
         val sourceLength: Int,
         val updatedAtEpochMillis: Long,
@@ -147,23 +171,28 @@ internal class ReadLabScriptTool(
     argsType = typeToken<Args>(),
     resultType = typeToken<Result>(),
     name = NAME,
-    description = "按名称读取一个用户保存的 Lab 脚本；修改已有脚本前先读取，避免覆盖未知内容",
+    description = "按脚本 ID 读取一个用户保存的 Lab 脚本；修改已有脚本前先读取，避免覆盖未知内容。不存在时返回 NOT_FOUND，可重新列出脚本选择 ID。",
 ) {
     @Serializable
     data class Args(
-        @property:LLMDescription("保存脚本的完整名称，不是内部 ID")
-        val name: String,
+        @property:LLMDescription("脚本库返回的 id，不是脚本名称")
+        val scriptId: String,
     )
 
     @Serializable
     data class Result(
-        val name: String,
-        val source: String,
-        val createdAtEpochMillis: Long,
-        val updatedAtEpochMillis: Long,
+        val id: String,
+        val name: String? = null,
+        val source: String? = null,
+        val createdAtEpochMillis: Long? = null,
+        val updatedAtEpochMillis: Long? = null,
+        val status: Status,
     )
 
-    override suspend fun execute(args: Args): Result = readScript(args.name)
+    @Serializable
+    enum class Status { FOUND, NOT_FOUND }
+
+    override suspend fun execute(args: Args): Result = readScript(args.scriptId)
 
     companion object {
         const val NAME = "read_lab_script"
@@ -176,12 +205,12 @@ internal class SaveLabScriptTool(
     argsType = typeToken<Args>(),
     resultType = typeToken<Result>(),
     name = NAME,
-    description = "创建或更新用户的 Lab 脚本，仅保存到脚本库，不上传、不运行。更新或重命名时必须提供 originalName。",
+    description = "创建或更新用户的 Lab 脚本，仅保存到脚本库，不上传、不运行。更新或重命名时必须提供 scriptId。",
 ) {
     @Serializable
     data class Args(
-        @property:LLMDescription("创建时为 null；更新或重命名时为现有脚本的完整名称")
-        val originalName: String? = null,
+        @property:LLMDescription("创建时不传或为 null；更新或重命名时必须提供现有脚本的 id，不能使用名称")
+        val scriptId: String? = null,
         @property:LLMDescription("保存后的脚本名称")
         val name: String,
         @property:LLMDescription("完整 Python 3.6 Lab 源码，包含 def start()")
@@ -190,6 +219,7 @@ internal class SaveLabScriptTool(
 
     @Serializable
     data class Result(
+        val id: String,
         val name: String,
         val created: Boolean,
         val sourceLength: Int,
@@ -198,7 +228,7 @@ internal class SaveLabScriptTool(
 
     override suspend fun execute(args: Args): Result {
         validateLabSource(args.source)
-        return saveScript(args.originalName, args.name, args.source)
+        return saveScript(args.scriptId, args.name, args.source)
     }
 
     companion object {
@@ -207,21 +237,23 @@ internal class SaveLabScriptTool(
 }
 
 internal class DeleteLabScriptTool(
+    private val scriptName: suspend (String) -> String,
     private val deleteScript: suspend (String) -> Result,
 ) : Tool<DeleteLabScriptTool.Args, DeleteLabScriptTool.Result>(
     argsType = typeToken<Args>(),
     resultType = typeToken<Result>(),
     name = NAME,
-    description = "永久删除一个用户保存的 Lab 脚本。仅在用户明确要求删除时调用，执行前还会显示界面确认。",
+    description = "按脚本 ID 永久删除一个用户保存的 Lab 脚本。仅在用户明确要求删除时调用，执行前还会显示界面确认。",
 ), ApprovalRequiredTool<DeleteLabScriptTool.Args, DeleteLabScriptTool.Result> {
     @Serializable
     data class Args(
-        @property:LLMDescription("要删除的保存脚本完整名称，不是内部 ID")
-        val name: String,
+        @property:LLMDescription("要删除的脚本 id，取自脚本库工具的结果，不是名称")
+        val scriptId: String,
     )
 
     @Serializable
     data class Result(
+        val id: String,
         val name: String,
         val status: Status,
     )
@@ -229,11 +261,12 @@ internal class DeleteLabScriptTool(
     @Serializable
     enum class Status { DELETED, USER_REJECTED }
 
-    override suspend fun execute(args: Args): Result = deleteScript(args.name)
+    override suspend fun execute(args: Args): Result = deleteScript(args.scriptId)
 
-    override fun approvalPreview(args: Args): String = args.name
+    override suspend fun prepareApproval(args: Args) = ToolApprovalPreparation(scriptName(args.scriptId))
 
-    override fun rejectedResult(args: Args) = Result(args.name, Status.USER_REJECTED)
+    override fun rejectedResult(args: Args, preparation: ToolApprovalPreparation) =
+        Result(args.scriptId, preparation.preview, Status.USER_REJECTED)
 
     companion object {
         const val NAME = "delete_lab_script"

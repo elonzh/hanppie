@@ -9,18 +9,18 @@ description: 编写、修改和管理 RoboMaster 机内 Lab Python 脚本，并�
 
 ## 管理脚本
 
-- `list_lab_scripts({})` 返回用户保存脚本的 `name`、`sourceLength` 和 `updatedAtEpochMillis`；不含预置脚本源码。
-- `read_lab_script({"name":"完整名称"})` 返回 `name`、`source`、创建和更新时间。修改前先读取，保留用户已有意图；按名称操作，不使用数据库 ID。
-- `save_lab_script({"originalName":null,"name":"名称","source":"完整源码"})` 创建脚本；更新或重命名时 `originalName` 必须是原名称。返回 `name`、`created`、`sourceLength`、`updatedAtEpochMillis`。重名或不存在等错误需要纠正，不要盲目覆盖。
+- `list_lab_scripts({})` 返回用户保存脚本的 `id`、`name`、`sourceLength` 和 `updatedAtEpochMillis`；不含预置脚本源码。
+- `read_lab_script({"scriptId":"脚本 id"})` 找到时返回 `status: FOUND`、`id`、`name`、`source`、创建和更新时间；不存在时返回 `status: NOT_FOUND` 和所请求的 `id`，此时应重新列出脚本选择有效 ID，不视为工具执行异常。修改前先读取，保留用户已有意图；读取、更新、删除和执行统一使用脚本 `id`；名称仅用于展示和编辑，不能作为定位键。
+- `save_lab_script({"name":"名称","source":"完整源码"})` 创建脚本；更新或重命名时必须额外传入 `scriptId`，`name` 是保存后的名称。无效 ID 会失败，不会降级为创建。返回 `id`、`name`、`created`、`sourceLength`、`updatedAtEpochMillis`。重名或不存在等错误需要纠正，不要盲目覆盖。
 - 保存只写本地脚本库，不上传、不运行。源码非空且最多 32,000 字符，包含顶层 `def start():`，不得 import。
-- `delete_lab_script({"name":"完整名称"})` 仅在用户明确要求永久删除时调用；界面确认后返回 `DELETED` 或 `USER_REJECTED`。不把删除当作更新步骤。
+- `delete_lab_script({"scriptId":"脚本 id"})` 仅在用户明确要求永久删除时调用；界面显示实际脚本名称以供确认，结果返回 `id`、`name` 及 `DELETED` 或 `USER_REJECTED`。不把删除当作更新步骤。
 
 ## 执行与检查
 
-1. 只在用户要求运行时执行。要求“保存并运行”时先保存，再执行；展示代码使用 python Markdown 围栏。
+1. 只在用户要求运行时执行。新代码必须先保存再执行；已有脚本先列出或读取以取得 `id`；展示代码使用 python Markdown 围栏。
 2. `robot_status({})` 读取连接、目标地址、电量、信号及 `script`（ID、标题、阶段、起止时间、最近消息）。不自动连接或切换设备；启动未知或已有活动脚本时先与用户确认处理方式，不擅自覆盖。
-3. `execute_lab_python({"source":"完整源码"})` 提交完整程序，在界面展示源码并等待用户批准。拒绝返回 `USER_REJECTED`；批准后上传并发送启动命令，返回 `START_COMMAND_SENT` 和 `runId`。工具返回后不要再次要求审批。
-4. 执行工具只有源码参数，不会按保存名称携带音频附件；依赖自定义音频的保存脚本应从脚本页执行，不能假设对话执行已上传附件。
+3. `execute_lab_python({"scriptId":"脚本库返回的 id"})` 加载已保存脚本及关联音频，在界面展示脚本名称、完整源码与音频编号/名称/时长并等待用户批准。拒绝返回 `USER_REJECTED`；批准后上传并发送启动命令，返回 `START_COMMAND_SENT` 和 `runId`。工具返回后不要再次要求审批。
+4. 审批前固定源码与音频快照，批准后上传同一份内容，等待期间的编辑不会悄悄替换执行内容。音频从该脚本的存储目录读取，不取当前编辑器的音频列表。无效 ID、脚本不存在或源码不合规时在审批前失败；不要改成仅复制源码运行。
 5. 启动命令发送成功不等于收到机内 `STARTED`，也不证明物理动作完成。后续启动、完成、失败或超时未知由全局脚本状态展示。检查需要用户发起下一条消息；同一 run 在执行或停止返回后结束，不轮询、不再次执行。
 6. `stop_lab({})` 发送停止请求并返回 `STOP_COMMAND_SENT`，不证明设备已停止。取消对话也不等于停止机内程序；失联、部分启动或工具失败时报告未知，不自动重试副作用。
 

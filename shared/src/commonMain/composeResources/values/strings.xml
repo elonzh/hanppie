@@ -587,4 +587,16 @@
     <string name="about_developer">Author</string>
     <string name="about_copy_system_info">Copy Build &amp; System Info</string>
     <string name="about_info_copied">Copied to clipboard</string>
+    <string name="chat_script_unavailable">This script is no longer in the library. Refresh the script list.</string>
+    <string name="chat_open_editor">Edit</string>
+    <string name="chat_script_created">Created in the script library; not run.</string>
+    <string name="chat_script_updated">Updated in the script library; not run.</string>
+    <string name="chat_script_deleted">Removed from the script library.</string>
+    <string name="chat_script_start_sent">Start command sent. Check robot status for onboard execution confirmation.</string>
+    <string name="back_to_chat">Back to chat</string>
+    <string name="chat_script_not_found">Script not found. Refresh the script list to choose an existing script.</string>
+    <string name="chat_reasoning">Reasoning</string>
+    <string name="chat_reasoning_streaming">Thinking…</string>
+    <string name="chat_reasoning_expanded">Reasoning expanded</string>
+    <string name="chat_reasoning_collapsed">Reasoning collapsed</string>
 </resources>

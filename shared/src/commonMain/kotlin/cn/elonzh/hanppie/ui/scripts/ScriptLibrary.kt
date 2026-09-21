@@ -19,6 +19,7 @@ internal data class ScriptLibraryState(
     val scripts: List<StoredScript> = emptyList(),
     val presets: List<StoredScript> = emptyList(),
     val loading: Boolean = true,
+    val initialized: Boolean = false,
     val busy: Boolean = false,
     val error: String? = null,
 )
@@ -32,7 +33,7 @@ internal class ScriptLibrary(
     private val mutex = Mutex()
 
     suspend fun load() = mutex.withLock {
-        state.value = state.value.copy(loading = true, error = null)
+        state.value = state.value.copy(loading = true, initialized = false, error = null)
         try {
             val scripts = repository.all()
             val presets = repository.presets()
@@ -40,6 +41,7 @@ internal class ScriptLibrary(
                 scripts = scripts.sortedByDescending { it.createdAtEpochMillis },
                 presets = presets,
                 loading = false,
+                initialized = true,
             )
         } catch (error: CancellationException) {
             state.value = state.value.copy(loading = false, error = LOAD_INTERRUPTED)
@@ -85,56 +87,53 @@ internal class ScriptLibrary(
         updated
     }
 
-    suspend fun delete(id: String) = operation {
-        check(state.value.scripts.any { it.id == id }) { "Script no longer exists" }
-        val current = state.value.scripts.first { it.id == id }
-        repository.delete(current)
-        state.value = state.value.copy(scripts = state.value.scripts.filterNot { it.id == id }, error = null)
+    suspend fun delete(id: String): StoredScript {
+        awaitReady()
+        return operation {
+            val current = state.value.scripts.firstOrNull { it.id == id } ?: error("Script no longer exists")
+            repository.delete(current)
+            state.value = state.value.copy(scripts = state.value.scripts.filterNot { it.id == id }, error = null)
+            current
+        }
     }
 
     suspend fun savedScripts(): List<StoredScript> = awaitReady().scripts
 
-    suspend fun read(name: String): StoredScript {
-        val normalized = normalizeScriptName(name)
-        return awaitReady().scripts.firstOrNull { it.name.equals(normalized, ignoreCase = true) }
-            ?: error("A script named '$normalized' does not exist")
+    suspend fun read(id: String): StoredScript? =
+        awaitReady().scripts.firstOrNull { it.id == id }
+
+    /** Load audio from storage, independently of whichever document the editor has open. */
+    suspend fun executionSnapshot(id: String): StoredScript {
+        awaitReady()
+        return mutex.withLock {
+            val script = state.value.scripts.firstOrNull { it.id == id }
+                ?: error("A saved script with ID '$id' does not exist")
+            script.copy(audioClips = repository.audio(script.id))
+        }
     }
 
-    /** Creates or atomically replaces/renames a saved script by its user-visible name. */
-    suspend fun save(originalName: String?, name: String, source: String): StoredScript {
+    /** Creates or atomically replaces/renames a saved script by its stable ID. */
+    suspend fun save(scriptId: String?, name: String, source: String): StoredScript {
         awaitReady()
         return operation {
             val normalized = normalizeScriptName(name)
             require(source.length <= MAX_SCRIPT_LENGTH) { "Script is too large" }
             val now = clock.now().toEpochMilliseconds()
-            if (originalName == null) {
+            if (scriptId == null) {
                 ensureUnique(normalized)
                 StoredScript(Uuid.random().toString(), normalized, source, now, now).also { script ->
                     repository.insert(script)
                     refresh(script)
                 }
             } else {
-                val original = normalizeScriptName(originalName)
-                val current = state.value.scripts.firstOrNull { it.name.equals(original, ignoreCase = true) }
-                    ?: error("A script named '$original' does not exist")
+                val current = state.value.scripts.firstOrNull { it.id == scriptId }
+                    ?: error("A saved script with ID '$scriptId' does not exist")
                 ensureUnique(normalized, exceptId = current.id)
                 current.copy(name = normalized, source = source, updatedAtEpochMillis = now).also { script ->
                     repository.update(script)
                     refresh(script)
                 }
             }
-        }
-    }
-
-    suspend fun deleteByName(name: String): StoredScript {
-        awaitReady()
-        return operation {
-            val normalized = normalizeScriptName(name)
-            val current = state.value.scripts.firstOrNull { it.name.equals(normalized, ignoreCase = true) }
-                ?: error("A script named '$normalized' does not exist")
-            repository.delete(current)
-            state.value = state.value.copy(scripts = state.value.scripts.filterNot { it.id == current.id }, error = null)
-            current
         }
     }
 
@@ -159,7 +158,7 @@ internal class ScriptLibrary(
     }
 
     private suspend fun awaitReady(): ScriptLibraryState = state.first { !it.loading }.also { ready ->
-        check(ready.error == null) { "Script library is unavailable: ${ready.error}" }
+        check(ready.initialized) { "Script library is unavailable: ${ready.error}" }
     }
 
     private suspend fun <T> operation(block: suspend () -> T): T = mutex.withLock {

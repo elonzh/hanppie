@@ -407,39 +407,44 @@ internal class ConsoleModel(
         tool(ListLabScriptsTool {
             ListLabScriptsTool.Result(scriptLibrary.savedScripts().map { script ->
                 ListLabScriptsTool.Script(
+                    id = script.id,
                     name = script.name,
                     sourceLength = script.source.length,
                     updatedAtEpochMillis = script.updatedAtEpochMillis,
                 )
             })
         })
-        tool(ReadLabScriptTool { name ->
-            val script = scriptLibrary.read(name)
+        tool(ReadLabScriptTool { scriptId ->
+            val script = scriptLibrary.read(scriptId)
+                ?: return@ReadLabScriptTool ReadLabScriptTool.Result(scriptId, status = ReadLabScriptTool.Status.NOT_FOUND)
             ReadLabScriptTool.Result(
+                id = script.id,
                 name = script.name,
                 source = script.source,
                 createdAtEpochMillis = script.createdAtEpochMillis,
                 updatedAtEpochMillis = script.updatedAtEpochMillis,
+                status = ReadLabScriptTool.Status.FOUND,
             )
         })
-        tool(SaveLabScriptTool { originalName, name, source ->
-            val script = scriptLibrary.save(originalName, name, source)
+        tool(SaveLabScriptTool { scriptId, name, source ->
+            val script = scriptLibrary.save(scriptId, name, source)
             SaveLabScriptTool.Result(
+                id = script.id,
                 name = script.name,
-                created = originalName == null,
+                created = scriptId == null,
                 sourceLength = script.source.length,
                 updatedAtEpochMillis = script.updatedAtEpochMillis,
             )
         })
-        tool(DeleteLabScriptTool { name ->
-            val script = scriptLibrary.deleteByName(name)
-            DeleteLabScriptTool.Result(script.name, DeleteLabScriptTool.Status.DELETED)
+        tool(DeleteLabScriptTool({ id -> requireNotNull(scriptLibrary.read(id)) { "A saved script with ID '$id' does not exist" }.name }) { scriptId ->
+            val script = scriptLibrary.delete(scriptId)
+            DeleteLabScriptTool.Result(script.id, script.name, DeleteLabScriptTool.Status.DELETED)
         })
-        tool(ExecuteLabPythonTool { source -> agentOperation {
+        tool(ExecuteLabPythonTool(scriptLibrary::executionSnapshot) { script -> agentOperation {
             check(!state.value.scriptRunPhase.mayBeExecuting) { tr(Res.string.stop_the_script_with_unknown_state_first) }
             haltRemote()
             session.load()?.exitRemote()
-            val scriptRunId = startScript(source, "Hanppie-Agent")
+            val scriptRunId = startScript(script.source, script.name, script.audioClips)
             ExecuteLabPythonTool.Result(ExecuteLabPythonTool.Status.START_COMMAND_SENT, scriptRunId)
         } })
         tool(StopLabTool { agentOperation {

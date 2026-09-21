@@ -145,10 +145,10 @@ class DesktopLiveTest {
                     def start():
                         log_ctrl.print_msg("HANPPIE_DESKTOP_LIVE")
                 """.trimIndent()
-                model.chat.send("请调用 execute_lab_python 执行以下无运动脚本，源码必须完全照抄：\n$source",model.modelSettings.value)
+                model.chat.send("请先保存以下无运动脚本，然后用返回的 id 调用 execute_lab_python 执行，源码必须完全照抄：\n$source",model.modelSettings.value)
                 rule.waitUntil(60000) { model.chat.state.value.approval != null || !model.chat.state.value.running }
                 assertNull(model.chat.state.value.error, "Model request failed")
-                assertEquals(source.trim(), model.chat.state.value.approval?.preview?.trim(),
+                assertTrue(model.chat.state.value.approval?.preview?.trim()?.endsWith(source.trim()) == true,
                     "Expected an execution proposal; replies=${model.chat.state.value.lines}")
                 model.chat.approve(true)
                 rule.waitUntil(60000) { !model.chat.state.value.running }

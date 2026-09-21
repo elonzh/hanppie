@@ -28,12 +28,13 @@ import kotlinx.serialization.json.*
 class ChatAgentTest {
     private val config = ModelSettings(apiKey = "test-not-a-secret")
     private class Fake(
+        private val onFrame: suspend (StreamFrame) -> Unit = {},
         private val respond: suspend (Prompt) -> List<StreamFrame>,
     ) : PromptExecutor() {
         val prompts = mutableListOf<Prompt>()
         override fun executeStreaming(prompt: Prompt, model: LLModel, tools: List<ToolDescriptor>) = flow {
             prompts += prompt
-            respond(prompt).forEach { emit(it) }
+            respond(prompt).forEach { emit(it); onFrame(it) }
         }
         // Only streaming is used now: no request exists for anything but the conversation itself.
         override suspend fun execute(prompt: Prompt, model: LLModel, tools: List<ToolDescriptor>): Message.Assistant =
@@ -51,13 +52,16 @@ class ChatAgentTest {
         readSkill: suspend (String, String) -> ReadSkillTool.Result = { _, path -> testReference(path) },
         listLabScripts: suspend () -> ListLabScriptsTool.Result = { ListLabScriptsTool.Result(emptyList()) },
         readLabScript: suspend (String) -> ReadLabScriptTool.Result = {
-            ReadLabScriptTool.Result(it, "script:$it", 1, 1)
+            ReadLabScriptTool.Result(it, "旧巡检", "script:$it", 1, 1, ReadLabScriptTool.Status.FOUND)
         },
         saveLabScript: suspend (String?, String, String) -> SaveLabScriptTool.Result = { original, name, source ->
-            SaveLabScriptTool.Result(name, original == null, source.length, 1)
+            SaveLabScriptTool.Result("script-1", name, original == null, source.length, 1)
         },
         deleteLabScript: suspend (String) -> DeleteLabScriptTool.Result = {
-            DeleteLabScriptTool.Result(it, DeleteLabScriptTool.Status.DELETED)
+            DeleteLabScriptTool.Result(it, "旧巡检", DeleteLabScriptTool.Status.DELETED)
+        },
+        loadScript: suspend (String) -> cn.elonzh.hanppie.ui.scripts.StoredScript = {
+            cn.elonzh.hanppie.ui.scripts.StoredScript(it, "测试脚本", "def start(): pass", 1, 1)
         },
         execute: suspend (String) -> ExecuteLabPythonTool.Result = {
             ExecuteLabPythonTool.Result(ExecuteLabPythonTool.Status.START_COMMAND_SENT, "run-1")
@@ -71,8 +75,8 @@ class ChatAgentTest {
         tool(ListLabScriptsTool(listLabScripts))
         tool(ReadLabScriptTool(readLabScript))
         tool(SaveLabScriptTool(saveLabScript))
-        tool(DeleteLabScriptTool(deleteLabScript))
-        tool(ExecuteLabPythonTool(execute))
+        tool(DeleteLabScriptTool({ "旧巡检" }, deleteLabScript))
+        tool(ExecuteLabPythonTool(loadScript) { execute(it.source) })
         tool(StopLabTool(stopRobot))
     }
 
@@ -83,9 +87,11 @@ class ChatAgentTest {
         executor: PromptExecutor,
         sessions: SessionHistory = TestSessionHistory(),
         operationTimeoutMillis: Long = 120_000,
+        scriptSource: String = "def start(): pass",
     ) = ChatAgent(
         toolRegistry = testTools(
             status = { testStatus(status()) },
+            loadScript = { cn.elonzh.hanppie.ui.scripts.StoredScript(it, "测试脚本", scriptSource, 1, 1) },
             execute = { ExecuteLabPythonTool.Result(ExecuteLabPythonTool.Status.START_COMMAND_SENT, execute(it)) },
             stopRobot = {
                 stopRobot()
@@ -104,6 +110,148 @@ class ChatAgentTest {
     )
 
     private fun testReference(path: String) = ReadSkillTool.Result("reference:$path")
+
+    @Test fun missingScriptReturnsAnExpectedOutcomeAndAllowsTheConversationToContinue() = runBlocking {
+        var requests = 0
+        val fake = Fake {
+            if (requests++ == 0) call(ReadLabScriptTool.NAME, """{"scriptId":"missing"}""")
+            else text("脚本不存在，请重新选择。")
+        }
+        ChatAgent(
+            toolRegistry = testTools(readLabScript = { id ->
+                ReadLabScriptTool.Result(id, status = ReadLabScriptTool.Status.NOT_FOUND)
+            }),
+            createHttpClient = { error("No HTTP expected") },
+            sessions = TestSessionHistory(), executorOverride = fake,
+        ).use { agent ->
+            agent.ready()
+            agent.send("读取脚本", config)
+            val completed = agent.finished()
+            assertNull(completed.error)
+            val result = completed.lines.mapNotNull { it.toolResult }.single()
+            assertFalse(result.isError)
+            val payload = Json.parseToJsonElement(result.output).jsonObject
+            assertEquals("NOT_FOUND", payload.getValue("status").jsonPrimitive.content)
+            assertEquals("missing", payload.getValue("id").jsonPrimitive.content)
+            assertTrue(completed.lines.any { it.role == ChatRole.ASSISTANT && it.text == "脚本不存在，请重新选择。" })
+            assertEquals(2, requests)
+        }
+    }
+
+    @Test fun reasoningStreamsWithoutDuplicationAndSurvivesReopening() = runBlocking {
+        val delivered = CompletableDeferred<Unit>()
+        val resume = CompletableDeferred<Unit>()
+        val fake = Fake(onFrame = { frame ->
+            if (frame is StreamFrame.ReasoningDelta && frame.text == "先检查") {
+                delivered.complete(Unit)
+                resume.await()
+            }
+        }) {
+            listOf(StreamFrame.ReasoningDelta(text = "先检查", index = 0),
+                StreamFrame.ReasoningDelta(text = "连接状态。", index = 0),
+                StreamFrame.ReasoningComplete(null, listOf("先检查连接状态。"), index = 0)) + text("检查完成")
+        }
+        val sessions = TestSessionHistory()
+        agent({ "未连接" }, { error("No execution") }, { error("No stop") }, fake, sessions).use { agent ->
+            agent.ready()
+            agent.send("检查一下", config)
+            withTimeout(5_000) { delivered.await() }
+            assertEquals("先检查", agent.state.value.streamingReasoning)
+            assertEquals("", agent.state.value.streaming)
+            resume.complete(Unit)
+            val completed = agent.finished()
+            assertEquals("", completed.streamingReasoning)
+            assertEquals(listOf("先检查连接状态。"), completed.lines.filter { it.role == ChatRole.REASONING }.map { it.text })
+            val id = checkNotNull(completed.sessionId)
+            agent.newSession()
+            agent.ready()
+            agent.openSession(id)
+            val reopened = agent.ready()
+            assertEquals(listOf("先检查连接状态。"), reopened.lines.filter { it.role == ChatRole.REASONING }.map { it.text })
+            assertEquals("检查完成", reopened.lines.last().text)
+        }
+    }
+
+    @Test fun reasoningSummaryIsReadableButEncryptedReasoningIsNotDisplayed() = runBlocking {
+        val fake = Fake { listOf(
+            StreamFrame.ReasoningComplete("summary", emptyList(), summary = listOf("检查", "前置", "条件"), encrypted = "opaque-secret"),
+            StreamFrame.ReasoningComplete("encrypted-only", emptyList(), encrypted = "opaque-only"),
+        ) + text("完成") }
+        agent({ "未连接" }, { error("No execution") }, { error("No stop") }, fake).use { agent ->
+            agent.ready()
+            agent.send("检查", config)
+            val completed = agent.finished()
+            assertNull(completed.error)
+            assertEquals(listOf("检查前置条件"), completed.lines.filter { it.role == ChatRole.REASONING }.map { it.text.trim() })
+            assertFalse(completed.lines.any { "opaque" in it.text })
+        }
+    }
+
+    @Test fun reasoningIsSeparatedAcrossToolRounds() = runBlocking {
+        var round = 0
+        val fake = Fake {
+            if (round++ == 0) listOf(
+                StreamFrame.ReasoningDelta(summary = "先读取状态", index = 0),
+                StreamFrame.ReasoningComplete(null, emptyList(), summary = listOf("先读取状态"), index = 0),
+            ) + call(RobotStatusTool.NAME)
+            else listOf(StreamFrame.ReasoningComplete(null, listOf("根据结果回答"), index = 0)) + text("未连接")
+        }
+        agent({ "未连接" }, { error("No execution") }, { error("No stop") }, fake).use { agent ->
+            agent.ready()
+            agent.send("读取状态", config)
+            val completed = agent.finished()
+            assertNull(completed.error)
+            assertEquals(listOf("先读取状态", "根据结果回答"),
+                completed.lines.filter { it.role == ChatRole.REASONING }.map { it.text })
+            assertEquals(listOf(ChatRole.USER, ChatRole.REASONING, ChatRole.TOOL, ChatRole.REASONING, ChatRole.ASSISTANT),
+                completed.lines.map { it.role })
+        }
+    }
+
+    @Test fun reasoningChunksPreserveOnlyProviderWhitespace() = runBlocking {
+        val delivered = CompletableDeferred<Unit>()
+        val resume = CompletableDeferred<Unit>()
+        val chunks = listOf("先", "检查", " ", "状态。\n", "再回答。")
+        val fake = Fake(onFrame = { frame ->
+            if (frame is StreamFrame.ReasoningDelta && frame.index == 4) {
+                delivered.complete(Unit)
+                resume.await()
+            }
+        }) {
+            chunks.mapIndexed { index, chunk -> StreamFrame.ReasoningDelta(text = chunk, index = index) } +
+                chunks.mapIndexed { index, chunk -> StreamFrame.ReasoningComplete(null, listOf(chunk), index = index) } + text("完成")
+        }
+        agent({ "未连接" }, { error("No execution") }, { error("No stop") }, fake).use { agent ->
+            agent.ready()
+            agent.send("检查", config)
+            withTimeout(5_000) { delivered.await() }
+            assertEquals("先检查 状态。\n再回答。", agent.state.value.streamingReasoning)
+            resume.complete(Unit)
+            val completed = agent.finished()
+            assertEquals("先检查 状态。\n再回答。", completed.lines.single { it.role == ChatRole.REASONING }.text)
+            agent.newSession()
+            agent.ready()
+            agent.openSession(checkNotNull(completed.sessionId))
+            assertEquals("先检查 状态。\n再回答。", agent.ready().lines.single { it.role == ChatRole.REASONING }.text)
+        }
+    }
+
+    @Test fun canceledReasoningDoesNotLeakIntoTheNextRun() = runBlocking {
+        val delivered = CompletableDeferred<Unit>()
+        val fake = Fake(onFrame = { frame ->
+            if (frame is StreamFrame.ReasoningDelta) { delivered.complete(Unit); awaitCancellation() }
+        }) { listOf(StreamFrame.ReasoningDelta(text = "未完成的思考")) }
+        agent({ "未连接" }, { error("No execution") }, { error("No stop") }, fake).use { agent ->
+            agent.ready()
+            agent.send("开始", config)
+            withTimeout(5_000) { delivered.await() }
+            assertEquals("未完成的思考", agent.state.value.streamingReasoning)
+            agent.cancelAndJoin()
+            assertEquals("", agent.state.value.streamingReasoning)
+            agent.newSession()
+            assertEquals("", agent.ready().streamingReasoning)
+        }
+    }
 
     @Test fun theConfiguredThinkingDepthReachesTheConversationRequest(): Unit = runBlocking {
         val fake = Fake { text("好") }
@@ -175,14 +323,14 @@ class ChatAgentTest {
         val history = TestSessionHistory()
         val fake = Fake {
             check(requests++ == 0) { "Side-effect result must not trigger another model request" }
-            call("execute_lab_python", buildJsonObject { put("source", source) }.toString())
+            call("execute_lab_python", "{\"scriptId\":\"script-1\"}")
         }
-        agent({ "已连接" }, { assertEquals(source, it); executions++; "启动命令已发送" }, { "停止命令已发送" }, fake, history).use { agent ->
+        agent({ "已连接" }, { assertEquals(source, it); executions++; "启动命令已发送" }, { "停止命令已发送" }, fake, history, scriptSource = source).use { agent ->
             agent.ready()
             agent.send("打印 test", config)
             withTimeout(5000) { agent.state.first { it.approval != null || !it.running } }
             assertNull(agent.state.value.error)
-            assertEquals(source, agent.state.value.approval?.preview); assertEquals(0, executions)
+            assertEquals("# 测试脚本\n$source", agent.state.value.approval?.preview); assertEquals(0, executions)
             agent.approve(true); agent.finished()
             assertEquals(1, executions)
             assertEquals(1, requests)
@@ -205,13 +353,65 @@ class ChatAgentTest {
         }
     }
 
+    @Test fun savedScriptAndAudioAreFrozenForTheApprovedCall() = runBlocking {
+        val packets = byteArrayOf(4, 0, 1, 2, 3, 4)
+        var saved = cn.elonzh.hanppie.ui.scripts.StoredScript("audio-script", "音乐脚本",
+            "def start():\n    media_ctrl.play_sound(rm_define.media_custom_audio_0)", 1, 1,
+            audioClips = listOf(cn.elonzh.hanppie.robot.lab.LabAudioClip(0, "音乐", 20, packets)))
+        val original = saved
+        var executed: cn.elonzh.hanppie.ui.scripts.StoredScript? = null
+        var loads = 0
+        val fake = Fake { call(ExecuteLabPythonTool.NAME, "{\"scriptId\":\"audio-script\"}") }
+        ChatAgent(toolRegistry = ToolRegistry {
+            tool(ExecuteLabPythonTool({ id ->
+                assertEquals("audio-script", id)
+                loads++
+                saved
+            }) {
+                executed = it
+                ExecuteLabPythonTool.Result(ExecuteLabPythonTool.Status.START_COMMAND_SENT, "audio-run")
+            })
+        }, createHttpClient = { error("No network") }, sessions = TestSessionHistory(), executorOverride = fake).use { agent ->
+            agent.ready()
+            agent.send("执行音乐脚本", config)
+            withTimeout(5_000) { agent.state.first { it.approval != null || !it.running } }
+            val preview = assertNotNull(agent.state.value.approval).preview
+            assertContains(preview, "音乐脚本")
+            assertContains(preview, "audio[0]: 音乐 (20 ms)")
+            assertContains(preview, original.source)
+            assertNull(executed)
+            saved = saved.copy(source = "def start(): pass", audioClips = emptyList())
+            packets[2] = 99 // Even mutable repository buffers cannot alter the approved payload.
+            agent.approve(true)
+            assertNull(agent.finished().error)
+            assertEquals(1, loads)
+            val uploaded = assertNotNull(executed)
+            assertEquals(original.id, uploaded.id)
+            assertEquals(original.source, uploaded.source)
+            assertContentEquals(byteArrayOf(4, 0, 1, 2, 3, 4), uploaded.audioClips.single().packets)
+        }
+    }
+
+    @Test fun missingScriptFailsBeforeApprovalOrExecution() = runBlocking {
+        val fake = Fake { call(ExecuteLabPythonTool.NAME, "{\"scriptId\":\"missing\"}") }
+        ChatAgent(toolRegistry = testTools(loadScript = { error("Saved script not found") },
+            execute = { error("Must not execute") }), createHttpClient = { error("No network") },
+            sessions = TestSessionHistory(), executorOverride = fake).use { agent ->
+            agent.ready()
+            agent.send("执行", config)
+            val result = agent.finished()
+            assertNull(result.approval)
+            assertContains(result.lastReply, "Saved script not found")
+        }
+    }
+
     @Test fun sideEffectCompletionImmediatelyAcceptsTheNextMessage() = runBlocking {
         var requests = 0
         val source = "def start(): pass"
         val history = TestSessionHistory()
         val fake = Fake {
             if (requests++ == 0) {
-                call("execute_lab_python", buildJsonObject { put("source", source) }.toString())
+                call("execute_lab_python", "{\"scriptId\":\"script-1\"}")
             } else {
                 text("可以继续")
             }
@@ -275,7 +475,7 @@ class ChatAgentTest {
     @Test fun cancellationNeverExecutesAndDoesNotReplayASyntheticAssistantMessage() = runBlocking {
         var requests = 0; var executions = 0
         val history = TestSessionHistory()
-        val fake = Fake { if (requests++ == 0) call("execute_lab_python", "{\"source\":\"def start(): pass\"}") else text("好的") }
+        val fake = Fake { if (requests++ == 0) call("execute_lab_python", "{\"scriptId\":\"script-1\"}") else text("好的") }
         agent({ "已连接" }, { executions++; "sent" }, { "stop" }, fake, history).use { agent ->
             agent.ready()
             agent.send("准备脚本", config)
@@ -294,7 +494,7 @@ class ChatAgentTest {
         val history = TestSessionHistory()
         val fake = Fake {
             check(requests++ == 0) { "Rejected side effect must not trigger another model request" }
-            call("execute_lab_python", "{\"source\":\"def start(): pass\"}")
+            call("execute_lab_python", "{\"scriptId\":\"script-1\"}")
         }
         agent({ "已连接" }, { error("Must not execute") }, { error("Must not stop") }, fake, history).use { agent ->
             agent.ready()
@@ -479,7 +679,7 @@ class ChatAgentTest {
                 readSkill = { name, path -> referenceQueries += name; testReference(path) },
                 saveLabScript = { original, name, savedSource ->
                     saved = Triple(original, name, savedSource)
-                    SaveLabScriptTool.Result(name, original == null, savedSource.length, 1)
+                    SaveLabScriptTool.Result("script-1", name, original == null, savedSource.length, 1)
                 },
                 execute = {
                     executions++
@@ -516,6 +716,7 @@ class ChatAgentTest {
             assertEquals("reference:SKILL.md", reference.getValue("content").jsonPrimitive.content)
             val save = Json.parseToJsonElement(toolResults.last().output).jsonObject
             assertEquals("状态脚本", save.getValue("name").jsonPrimitive.content)
+            assertEquals("script-1", save.getValue("id").jsonPrimitive.content)
             assertEquals(source.length, save.getValue("sourceLength").jsonPrimitive.int)
         }
 
@@ -540,7 +741,7 @@ class ChatAgentTest {
         val history = TestSessionHistory()
         val fake = Fake {
             if (requests++ == 0) {
-                call("delete_lab_script", "{\"name\":\"旧巡检\"}", "delete-call")
+                call("delete_lab_script", "{\"scriptId\":\"script-1\"}", "delete-call")
             } else {
                 text("已删除旧巡检。")
             }
@@ -550,7 +751,7 @@ class ChatAgentTest {
                 status = { testStatus("已连接") },
                 deleteLabScript = { name ->
                     deleted = name
-                    DeleteLabScriptTool.Result(name, DeleteLabScriptTool.Status.DELETED)
+                    DeleteLabScriptTool.Result(name, "旧巡检", DeleteLabScriptTool.Status.DELETED)
                 },
             ),
             createHttpClient = { error("unused") },
@@ -566,7 +767,7 @@ class ChatAgentTest {
             assertNull(deleted)
             agent.approve(true)
             assertNull(agent.finished().error)
-            assertEquals("旧巡检", deleted)
+            assertEquals("script-1", deleted)
             assertEquals("delete-call", history.events.filterIsInstance<ToolApprovalRequestedEvent>().single().toolCall.id)
             assertTrue(history.events.filterIsInstance<ToolApprovalResolvedEvent>().single().accepted)
         }
@@ -575,9 +776,9 @@ class ChatAgentTest {
     @Test fun generatedLabScriptsRejectImportsBeforeApproval(): Unit = runBlocking {
         var executions = 0
         val fake = Fake {
-            call("execute_lab_python", "{\"source\":\"import time\\ndef start(): pass\"}")
+            call("execute_lab_python", "{\"scriptId\":\"script-1\"}")
         }
-        agent({ "已连接" }, { executions++; "executed" }, { "stopped" }, fake).use { agent ->
+        agent({ "已连接" }, { executions++; "executed" }, { "stopped" }, fake, scriptSource = "import time\ndef start(): pass").use { agent ->
             agent.ready()
             agent.send("运行", config)
 
@@ -590,7 +791,7 @@ class ChatAgentTest {
 
     @Test fun approvalWaitDoesNotConsumeModelOrToolTimeout(): Unit = runBlocking {
         var executions = 0
-        val fake = Fake { call("execute_lab_python", "{\"source\":\"def start(): pass\"}") }
+        val fake = Fake { call("execute_lab_python", "{\"scriptId\":\"script-1\"}") }
         agent(
             status = { "已连接" },
             execute = { executions++; "启动命令已发送" },

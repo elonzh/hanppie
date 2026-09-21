@@ -1,5 +1,7 @@
 package cn.elonzh.hanppie.ui.scripts.editor
 
+import cn.elonzh.hanppie.ui.code.pythonTokens
+import cn.elonzh.hanppie.ui.code.PythonTokenKind
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 

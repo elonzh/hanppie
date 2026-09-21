@@ -48,6 +48,27 @@ class ScriptLibraryTest {
         }
     }
 
+    @Test fun executionLoadsCurrentAudioByIdFromTheSavedDirectory(): Unit = runBlocking {
+        val directory = Files.createTempDirectory("hanppie-execution-audio-")
+        try {
+            val repository = DirectoryScriptRepository(PlatformFile(directory.resolve("scripts").toString()),
+                PlatformFile(directory.resolve("presets").toString()), enablePresetSync = false)
+            val library = ScriptLibrary(repository)
+            library.load()
+            val script = library.create("有音频的脚本", "def start(): pass")
+            val packets = byteArrayOf(4, 0, 1, 2, 3, 4)
+            repository.replaceAllAudio(script.id, listOf(LabAudioClip(2, "提示音", 20, packets)))
+            library.rename(script.id, "重命名的脚本")
+            val snapshot = library.executionSnapshot(script.id)
+            assertEquals("重命名的脚本", snapshot.name)
+            assertEquals(script.source, snapshot.source)
+            assertEquals(2, snapshot.audioClips.single().id)
+            kotlin.test.assertContentEquals(packets, snapshot.audioClips.single().packets)
+            library.delete(script.id)
+            assertFailsWith<IllegalStateException> { library.executionSnapshot(script.id) }
+        } finally { directory.toFile().deleteRecursively() }
+    }
+
     @Test fun duplicateNamesAreRejectedWithoutChangingSavedState() = runBlocking {
         val store = MemoryScriptRepository()
         val library = ScriptLibrary(store)
@@ -58,26 +79,54 @@ class ScriptLibraryTest {
         assertEquals("Demo 2", library.uniqueName("Demo"))
     }
 
-    @Test fun agentFacingNameOperationsCreateReplaceRenameAndDeleteAtomically() = runBlocking {
+    @Test fun idOperationsSurviveRenameAndNameReuse() = runBlocking {
         val store = MemoryScriptRepository()
         val library = ScriptLibrary(store)
         library.load()
 
         val created = library.save(null, "巡检", "def start():\n    pass\n")
         assertEquals(listOf(created), library.savedScripts())
-        assertEquals(created, library.read("巡检"))
+        assertEquals(created, library.read(created.id))
 
-        val replaced = library.save("巡检", "夜间巡检", "def start():\n    log_ctrl.print_msg('night')\n")
+        val replaced = library.save(created.id, "夜间巡检", "def start():\n    log_ctrl.print_msg('night')\n")
         assertEquals(created.id, replaced.id)
         assertEquals("夜间巡检", replaced.name)
         assertEquals(listOf(replaced), library.savedScripts())
-        assertFailsWith<IllegalStateException> { library.read("巡检") }
+        assertEquals(replaced, library.read(created.id))
+        val reusedName = library.save(null, "巡检", "def start(): pass")
+        assertFailsWith<IllegalStateException> { library.save("missing-id", "巡检", "def start(): pass") }
+        assertFailsWith<IllegalStateException> { library.save("", "新脚本", "def start(): pass") }
+        kotlin.test.assertNull(library.read("夜间巡检"))
 
-        assertEquals("夜间巡检", library.deleteByName("夜间巡检").name)
-        assertTrue(library.savedScripts().isEmpty())
+        assertEquals("夜间巡检", library.delete(created.id).name)
+        assertEquals(listOf(reusedName), library.savedScripts())
+        assertFailsWith<IllegalStateException> { library.delete(created.id) }
+        assertEquals(reusedName, library.read(reusedName.id))
     }
 
-    @Test fun canceledLoadReleasesAgentScriptToolsWithoutWaitingForTimeout() = runBlocking {
+    @Test fun deleteApprovalShowsANameButKeepsItsTargetAfterRename() = runBlocking {
+        val library = ScriptLibrary(MemoryScriptRepository())
+        library.load()
+        val original = library.create("原名称", "def start(): pass")
+        val tool = cn.elonzh.hanppie.agent.tools.DeleteLabScriptTool({ requireNotNull(library.read(it)).name }) { id ->
+            val removed = library.delete(id)
+            cn.elonzh.hanppie.agent.tools.DeleteLabScriptTool.Result(removed.id, removed.name,
+                cn.elonzh.hanppie.agent.tools.DeleteLabScriptTool.Status.DELETED)
+        }
+        val args = cn.elonzh.hanppie.agent.tools.DeleteLabScriptTool.Args(original.id)
+        val preparation = tool.prepareApproval(args)
+        assertEquals("原名称", preparation.preview)
+        assertEquals("原名称", tool.rejectedResult(args, preparation).name)
+        assertEquals(original, library.read(original.id))
+        library.rename(original.id, "新名称")
+        val replacement = library.create("原名称", "def start(): pass")
+        val deleted = tool.execute(args)
+        assertEquals(original.id, deleted.id)
+        assertEquals("新名称", deleted.name)
+        assertEquals(listOf(replacement), library.savedScripts())
+    }
+
+    @Test fun canceledLoadReleasesAgentScriptToolsWithoutWaitingForTimeout(): Unit = runBlocking {
         val loadStarted = CompletableDeferred<Unit>()
         val library = ScriptLibrary(object : ScriptRepository {
             override suspend fun all(): List<StoredScript> {
@@ -105,12 +154,13 @@ class ScriptLibraryTest {
             withTimeout(1_000) {
                 ListLabScriptsTool {
                     ListLabScriptsTool.Result(library.savedScripts().map { script ->
-                        ListLabScriptsTool.Script(script.name, script.source.length, script.updatedAtEpochMillis)
+                        ListLabScriptsTool.Script(script.id, script.name, script.source.length, script.updatedAtEpochMillis)
                     })
                 }.execute(NoToolArgs)
             }
         }
         assertContains(failure.message.orEmpty(), "Script library load was interrupted")
+        assertFailsWith<IllegalStateException> { library.read("missing") }
     }
 
     @Test fun presetsHaveStableIdsAndPython36LabEntrypoints() = runBlocking {

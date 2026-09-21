@@ -60,7 +60,7 @@ private class NonClosingPromptExecutor(private val delegate: PromptExecutor) : P
     override fun close() = Unit
 }
 
-internal enum class ChatRole { USER, ASSISTANT, TOOL, SCRIPT, SYSTEM }
+internal enum class ChatRole { USER, ASSISTANT, REASONING, TOOL, SCRIPT, SYSTEM }
 internal data class ChatLine(
     val role: ChatRole,
     val text: String = "",
@@ -71,7 +71,7 @@ internal data class ToolApproval(val toolCall: MessagePart.Tool.Call, val previe
 internal enum class ChatPhase { INITIALIZING, IDLE, RUNNING, MANAGING, CLOSED }
 internal data class ChatState(
     val lines: List<ChatLine> = emptyList(), val phase: ChatPhase = ChatPhase.INITIALIZING,
-    val streaming: String = "", val approval: ToolApproval? = null, val error: String? = null,
+    val streaming: String = "", val streamingReasoning: String = "", val approval: ToolApproval? = null, val error: String? = null,
     val firstTokenMs: Long? = null, val elapsedMs: Long? = null,
     val replyRevision: Long = 0, val lastReply: String = "",
     val userMessageRevision: Long = 0,
@@ -263,8 +263,16 @@ internal class ChatAgent(
                 }
                 val terminalToolNames = toolRegistry.tools.filter { tool -> tool is TerminalTool }
                     .mapTo(mutableSetOf()) { tool -> tool.name }
+                val reasoning = ReasoningStream()
                 val strategy = hanppieAgentStrategy(
                     onStreamFrame = { frame ->
+                        if (frame is StreamFrame.ReasoningDelta || frame is StreamFrame.ReasoningComplete) {
+                            val text = reasoning.accept(frame)
+                            state.update { old -> old.copy(
+                                streamingReasoning = text,
+                                firstTokenMs = old.firstTokenMs ?: started.elapsedNow().inWholeMilliseconds,
+                            ) }
+                        }
                         if (frame is StreamFrame.TextDelta) state.update { old -> old.copy(
                             streaming = old.streaming + frame.text,
                             firstTokenMs = old.firstTokenMs ?: started.elapsedNow().inWholeMilliseconds,
@@ -274,6 +282,10 @@ internal class ChatAgent(
                         sessions.append(currentSessionId, MessageEvent(
                             eventId(), runId, timestamp(), executionInfo, message,
                         ))
+                        val reasoningText = message.reasoningText()
+                        if (reasoningText.isNotBlank()) append(ChatRole.REASONING, reasoningText)
+                        reasoning.clear()
+                        state.update { it.copy(streamingReasoning = "") }
                         val calls = message.parts.filterIsInstance<MessagePart.Tool.Call>()
                         if (calls.isNotEmpty()) {
                             if (state.value.streaming.isNotBlank()) append(ChatRole.ASSISTANT, state.value.streaming)
@@ -397,6 +409,7 @@ internal class ChatAgent(
                     phase = if (current.phase == ChatPhase.RUNNING) ChatPhase.IDLE else current.phase,
                     approval = null,
                     streaming = "",
+                    streamingReasoning = "",
                     elapsedMs = started.elapsedNow().inWholeMilliseconds,
                 ) }
             }
@@ -549,6 +562,7 @@ internal class ChatAgent(
         state.update { current -> current.copy(
             lines = lines,
             streaming = "",
+            streamingReasoning = "",
             approval = null,
             error = null,
             firstTokenMs = null,
@@ -571,6 +585,7 @@ internal class ChatAgent(
         state.update { current -> current.copy(
             lines = emptyList(),
             streaming = "",
+            streamingReasoning = "",
             approval = null,
             error = null,
             firstTokenMs = null,
@@ -590,6 +605,8 @@ internal class ChatAgent(
     private fun toChatLines(messages: List<Message>): List<ChatLine> {
         val lines = mutableListOf<ChatLine>()
         messages.forEach { message ->
+            val reasoning = message.reasoningText()
+            if (reasoning.isNotBlank()) lines += ChatLine(ChatRole.REASONING, reasoning)
             val text = message.parts.filterIsInstance<MessagePart.Text>()
                 .joinToString("") { part -> part.text }.trim().toDisplayedText()
             if (text.isNotBlank()) {
@@ -669,6 +686,7 @@ internal class ChatAgent(
                     phase = ChatPhase.RUNNING,
                     error = null,
                     streaming = "",
+                    streamingReasoning = "",
                     firstTokenMs = null,
                     elapsedMs = null,
                 ))) return true
@@ -706,6 +724,7 @@ internal class ChatAgent(
                     phase = ChatPhase.CLOSED,
                     approval = null,
                     streaming = "",
+                    streamingReasoning = "",
                 ))) return true
         }
     }
@@ -758,4 +777,32 @@ internal class ChatAgent(
             取消对话不能证明机内动作停止。工具失败后不得自动重试有副作用的操作。
         """.trimIndent()
     }
+}
+
+private fun Message.reasoningText(): String = parts.filterIsInstance<MessagePart.Reasoning>()
+    .map { it.content.joinToString("").ifEmpty { it.summary.orEmpty().joinToString("") } }
+    .joinToString("")
+
+/** Complete frames replace their deltas; opaque encrypted payloads are never display text. */
+private class ReasoningStream {
+    private val parts = linkedMapOf<String, Pair<String, String>>()
+
+    fun accept(frame: StreamFrame): String {
+        when (frame) {
+            is StreamFrame.ReasoningDelta -> {
+                val key = frame.index?.let { "index:$it" } ?: frame.id ?: "default"
+                val previous = parts[key] ?: ("" to "")
+                parts[key] = (previous.first + frame.text.orEmpty()) to (previous.second + frame.summary.orEmpty())
+            }
+            is StreamFrame.ReasoningComplete -> {
+                val key = frame.index?.let { "index:$it" } ?: frame.id ?: "default"
+                parts[key] = frame.content.joinToString("") to frame.summary.orEmpty().joinToString("")
+            }
+            else -> Unit
+        }
+        return parts.values.map { (text, summary) -> text.ifEmpty { summary } }
+            .joinToString("")
+    }
+
+    fun clear() = parts.clear()
 }

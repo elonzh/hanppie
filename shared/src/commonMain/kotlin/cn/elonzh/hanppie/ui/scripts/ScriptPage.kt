@@ -71,6 +71,7 @@ internal fun ScriptPage(
     onFileError: (String?) -> Unit,
     onConnectionDetails: () -> Unit = {},
     onImportAudio: () -> Unit = {},
+    onBackToOrigin: (() -> Unit)? = null,
 ) {
     val robotState by model.state.collectAsState()
     val libraryState by model.scriptLibrary.state.collectAsState()
@@ -178,7 +179,9 @@ internal fun ScriptPage(
         }
     }
 
-    val navigateBack = { replaceDocument { editorOpen = false } }
+    val navigateBack = { replaceDocument {
+        if (onBackToOrigin != null) onBackToOrigin() else editorOpen = false
+    } }
     PlatformBackHandler(
         enabled = editorOpen && pendingReplacement == null && nameOperation == null &&
             audioRename == null && audioDelete == null &&
@@ -421,6 +424,7 @@ internal fun ScriptPage(
             } else null,
             onConnectionDetails = onConnectionDetails,
             onBack = navigateBack.takeIf { editorOpen },
+            backLabel = tr(if (onBackToOrigin != null) Res.string.back_to_chat else Res.string.back_to_script_library),
         )
         fileError?.let {
             Text(it, Modifier.padding(vertical = 8.dp), color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
@@ -594,11 +598,12 @@ private fun ScriptTopBar(
     onRename: (() -> Unit)?,
     onConnectionDetails: () -> Unit,
     onBack: (() -> Unit)?,
+    backLabel: String,
 ) {
     Row(Modifier.fillMaxWidth().height(72.dp), verticalAlignment = Alignment.CenterVertically) {
         if (onBack != null) {
             WorkbenchIconButton(
-                label = tr(Res.string.back_to_script_library),
+                label = backLabel,
                 glyph = WorkbenchGlyph.BACK,
                 onClick = onBack,
                 tag = "script-back",

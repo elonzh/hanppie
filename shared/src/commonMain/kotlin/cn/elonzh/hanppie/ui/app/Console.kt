@@ -108,6 +108,30 @@ internal fun Console(
         while (backStack.size > 1) backStack.removeLastOrNull()
         backStack[0] = workbenchRoute(index)
     }
+    var chatScriptError by remember { mutableStateOf<String?>(null) }
+    var pendingChatScript by remember { mutableStateOf<String?>(null) }
+    fun openChatScript(scriptId: String) {
+        val script = model.scriptLibrary.state.value.scripts.firstOrNull { it.id == scriptId }
+        if (script == null) {
+            chatScriptError = tr(Res.string.chat_script_unavailable)
+        } else {
+            chatScriptError = null
+            document.value = EditorDocument.from(script)
+            focus.clearFocus()
+            keyboard?.hide()
+            if (backStack.lastOrNull() != ScriptRoute) backStack.add(ScriptRoute)
+        }
+    }
+    WorkbenchDialog(show = pendingChatScript != null, onDismissRequest = { pendingChatScript = null },
+        title = tr(Res.string.replace_unsaved_script), summary = tr(Res.string.your_changes_have_not_been_saved)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button({ pendingChatScript = null }, Modifier.weight(1f)) { Text(tr(Res.string.back)) }
+            Button({
+                pendingChatScript?.let(::openChatScript)
+                pendingChatScript = null
+            }, Modifier.weight(1f)) { Text(tr(Res.string.discard_changes)) }
+        }
+    }
     var connectionDetails by remember { mutableStateOf(false) }
     var manual by rememberSaveable { mutableStateOf(false) }
     var manualAttempted by rememberSaveable { mutableStateOf(false) }
@@ -250,14 +274,23 @@ internal fun Console(
                                         if (route == ScriptRoute) fileError?.let { Text(it, Modifier.padding(vertical = 8.dp),
                                             color = MiuixTheme.colorScheme.error, fontSize = 13.sp) }
                                     }
+                                    if (route == ChatRoute) chatScriptError?.let {
+                                        Text(it, Modifier.padding(vertical = 8.dp), color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
+                                    }
                                     when (route) {
-                                        ChatRoute -> ChatPage(model, Modifier.weight(1f), onVoiceInput) { navigate(4) }
+                                        ChatRoute -> ChatPage(model, Modifier.weight(1f), onVoiceInput,
+                                            onOpenScript = { scriptId ->
+                                                if (document.value.busy) return@ChatPage
+                                                if (document.value.dirty) pendingChatScript = scriptId else openChatScript(scriptId)
+                                            }, onSettings = { navigate(4) })
                                         SettingsRoute -> SettingsPage(model, Modifier.weight(1f), onSpeechSettings)
                                         RobotRoute -> DevicePage(model, state, compact, Modifier.weight(1f),
                                             onConnectionGuide = ::openConnectionGuide, onRemote = ::openCockpit)
                                         ScriptRoute -> ScriptPage(model, document, compact, onImport, onExport,
                                             fileError, onFileError, onConnectionDetails = { connectionDetails = true },
-                                            onImportAudio = onImportAudio)
+                                            onImportAudio = onImportAudio,
+                                            onBackToOrigin = if (backStack.size > 1 && backStack[backStack.lastIndex - 1] == ChatRoute)
+                                                ::goBack else null)
                                         DebugRoute -> DebugPage(model, state, diagnosticTab, { diagnosticTab = it }, compact,
                                             Modifier.weight(1f), onRobotFileUpload, onRobotFileDownload, onRobotFileOpen)
                                         CockpitRoute -> Unit

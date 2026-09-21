@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.scripts.editor
 
+import cn.elonzh.hanppie.ui.code.rememberPythonHighlight
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -10,8 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.luminance
-import cn.elonzh.hanppie.ui.design.HanppieDesignTokens
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.testTag
@@ -61,16 +60,7 @@ internal fun ScriptCodeEditor(
             ?.let { update(current.copy(selection = it, composition = null)) }
     }
     val colors = MiuixTheme.colorScheme
-    val highlight = remember(colors, value.selection) {
-        val dark = colors.surface.luminance() < .179f
-        PythonHighlight(
-            if (dark) HanppieDesignTokens.Dark.CodeKeyword else HanppieDesignTokens.Light.CodeKeyword,
-            if (dark) HanppieDesignTokens.Dark.CodeString else HanppieDesignTokens.Light.CodeString,
-            colors.onSurfaceVariantSummary,
-            if (dark) HanppieDesignTokens.Dark.CodeNumber else HanppieDesignTokens.Light.CodeNumber,
-            value.selection.end, colors.primary.copy(alpha = .22f),
-        )
-    }
+    val highlight = rememberPythonHighlight(value.selection.end)
     val style = TextStyle(color = colors.onSurface, fontFamily = FontFamily.Monospace,
         fontSize = 14.sp, lineHeight = 23.sp)
     Column(modifier) {

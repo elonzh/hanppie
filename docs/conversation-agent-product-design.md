@@ -71,17 +71,17 @@ flowchart LR
 
 ### 4.1 P0 工具集
 
-P0 保留粗粒度设备工具，同时提供通用技能读取和脚本库管理工具。八个工具都从 UI 内联注册移入 `agent/tools`，实现为具名 class-based Koog `Tool<TArgs, TResult>`。应用 composition root 构造工具实现并组合为一个 Koog `ToolRegistry`，`ChatAgent` 接收该 registry 和同一技能来源生成的提示，不再逐项声明工具函数或实现平行的 Environment 接口。审批、执行开始和超时作为 run-scoped Koog `AIAgentEnvironment` feature 统一包围工具分派。每个工具直接声明可序列化的 `Args` 和 `Result`，不使用把业务结果拼成自然语言的 `SimpleTool`。模型调用、审批、执行开始与 Koog `MessagePart.Tool.Result` 沿用同一个 `toolCallId`，不增加平行 ToolCall/ToolResult DTO。未完成机器人执行在取消或重启时生成 `isError=true` 的结果未知 Tool Result，不会自动重试。不为底盘、云台、灯光、音效和发射分别增加模型工具。
+P0 保留粗粒度设备工具，同时提供通用技能读取和脚本库管理工具。八个工具都从 UI 内联注册移入 `agent/tools`，实现为具名 class-based Koog 工具（`Tool` / `ToolBase`）。应用 composition root 构造工具实现并组合为一个 Koog `ToolRegistry`，`ChatAgent` 接收该 registry 和同一技能来源生成的提示，不再逐项声明工具函数或实现平行的 Environment 接口。审批、执行开始和超时作为 run-scoped Koog `AIAgentEnvironment` feature 统一包围工具分派。每个工具直接声明可序列化的 `Args` 和 `Result`，不使用把业务结果拼成自然语言的 `SimpleTool`。模型调用、审批、执行开始与 Koog `MessagePart.Tool.Result` 沿用同一个 `toolCallId`，不增加平行 ToolCall/ToolResult DTO。未完成机器人执行在取消或重启时生成 `isError=true` 的结果未知 Tool Result，不会自动重试。不为底盘、云台、灯光、音效和发射分别增加模型工具。
 
 | 工具 | 用途 | 自动执行 | 核心约束 |
 | --- | --- | --- | --- |
 | `robot_status` | 读取当前连接、能力、可信遥测、脚本状态及最近脚本消息 | 是 | 只读；不连接新设备；返回值必须标明未知或不可信字段 |
 | `read_skill` | 按技能名称和可选相对路径读取文档 | 是 | 目录自动注入提示，正文按需读取；只允许已注册技能 |
-| `list_lab_scripts` | 列出用户保存的脚本 | 是 | 只返回名称、更新时间和源码长度，不使用内部 ID |
-| `read_lab_script` | 按名称读取保存脚本 | 是 | 修改或替换已有脚本前调用；返回原始源码 |
+| `list_lab_scripts` | 列出用户保存的脚本 | 是 | 返回脚本 ID、名称、更新时间和源码长度 |
+| `read_lab_script` | 按 ID 读取保存脚本 | 是 | 修改或替换已有脚本前调用；返回脚本 ID 与原始源码 |
 | `save_lab_script` | 创建、替换或重命名用户脚本 | 用户明确要求时 | 原子更新；必须是无 import 的 Python 3.6 `def start()` 完整源码；只保存，不运行 |
-| `delete_lab_script` | 永久删除用户保存的脚本 | 否 | 用户明确要求后再显示界面确认；按名称删除，不暴露内部 ID |
-| `execute_lab_python` | 提交一个完整 RoboMaster Lab Python 3.6 程序，表达可组合动作 | 否 | 每次都审批；限制长度与语法；有限时长；异常路径停止；上传/启动不等于完成 |
+| `delete_lab_script` | 永久删除用户保存的脚本 | 否 | 用户明确要求后再显示界面确认；按 ID 删除，确认界面显示名称 |
+| `execute_lab_python` | 按脚本库 ID 执行已保存的 Lab 程序及关联音频 | 否 | 每次都审批；限制长度与语法；有限时长；异常路径停止；上传/启动不等于完成 |
 | `stop_lab` | 停止当前 Lab 程序 | 用户明确要求停止时可直接执行 | 不等待模型规划更复杂动作；返回“命令已发送”或明确 ACK，不伪造物理停止 |
 
 结构化契约由各 Tool 内部的 `@Serializable Args/Result` 唯一定义：
@@ -90,14 +90,14 @@ P0 保留粗粒度设备工具，同时提供通用技能读取和脚本库管�
 | --- | --- | --- |
 | `robot_status` | `{}` | `connected`、`address`、电量、信号，以及带运行标识、阶段、时间和最近消息的 `script` |
 | `read_skill` | `name`、`path`（默认 `SKILL.md`） | `content` |
-| `list_lab_scripts` | `{}` | `scripts[{name,sourceLength,updatedAtEpochMillis}]` |
-| `read_lab_script` | `name` | `name`、`source`、创建与更新时间 |
-| `save_lab_script` | `originalName`、`name`、`source` | 最终名称、是否新建、源码长度、更新时间 |
-| `delete_lab_script` | `name` | 最终名称与 `DELETED/USER_REJECTED` 状态 |
-| `execute_lab_python` | `source` | `START_COMMAND_SENT/USER_REJECTED` 状态及可选 `runId` |
+| `list_lab_scripts` | `{}` | `scripts[{id,name,sourceLength,updatedAtEpochMillis}]` |
+| `read_lab_script` | `scriptId` | `status: FOUND` 和脚本详情（`id`、`name`、`source`、创建与更新时间）；不存在时为 `status: NOT_FOUND` 和请求的 `id` |
+| `save_lab_script` | 可选 `scriptId`、`name`、`source` | 脚本 ID、最终名称、是否新建、源码长度、更新时间 |
+| `delete_lab_script` | `scriptId` | 脚本 ID、最终名称与 `DELETED/USER_REJECTED` 状态 |
+| `execute_lab_python` | `scriptId` | `START_COMMAND_SENT/USER_REJECTED` 状态及可选 `runId` |
 | `stop_lab` | `{}` | `STOP_COMMAND_SENT` 状态；仅证明停止命令已发送，不代表机内停止已确认 |
 
-所有工具参数和结果使用 Koog Tool 的类型化序列化，原始事件继续保存 `MessagePart.Tool.Call/Result`。其中 Call 的 `args` 与 Result 的 `output` 是供应商协议承载的 JSON 文本，不是应用业务模型；运行时和应用适配器直接使用工具类声明的 `Args`/`Result`，界面按 JSON 对象、数组和标量分层展示。脚本管理按用户可见名称工作；数据库 ID 不进入模型参数。技能机制与安全边界见 [架构说明](architecture.md)，具体脚本工作流与 API 由 [lab-python 技能](../shared/src/commonMain/composeResources/files/skills/lab-python/SKILL.md) 维护，系统提示自动提供技能元数据目录。Hanppie 只增加 Koog 没有的审批事实和产品 UI 状态。
+所有工具参数和结果使用 Koog Tool 的类型化序列化，原始事件继续保存 `MessagePart.Tool.Call/Result`。其中 Call 的 `args` 与 Result 的 `output` 是供应商协议承载的 JSON 文本，不是应用业务模型；运行时和应用适配器直接使用工具类声明的 `Args`/`Result`，界面按 JSON 对象、数组和标量分层展示。读取、更新、删除和执行统一使用工具结果返回的脚本 ID；名称用于展示和编辑。保存时不传 ID 创建，传入 ID 更新，未知 ID 直接失败。技能机制与安全边界见 [架构说明](architecture.md)，具体脚本工作流与 API 由 [lab-python 技能](../shared/src/commonMain/composeResources/files/skills/lab-python/SKILL.md) 维护，系统提示自动提供技能元数据目录。Hanppie 只增加 Koog 没有的审批事实和产品 UI 状态。
 
 Tool 抛出的异常不伪造成业务 `Result`：Koog 仍以 `MessagePart.Tool.Result(isError=true)` 记录失败，run 边界保存原始异常与 traceback。`USER_REJECTED` 属于已完成的审批决定，才进入对应的类型化结果。
 
@@ -231,8 +231,8 @@ sequenceDiagram
 | --- | --- |
 | “怎么让 S1 转弯？” | 作为知识问题回答，可给示例；不因出现动作词就执行 |
 | “写一个巡检脚本并保存” | 查询相关 API → 生成完整 Python 3.6 脚本 → 保存到脚本库 → 明确尚未运行 |
-| “修改我的巡检脚本” | 查询相关 API → 按名称读取现有源码 → 展示修改 → 原子替换，不丢失脚本 ID |
-| “删除巡检脚本” | 按名称定位 → 展示删除确认 → 同意后删除；拒绝时脚本库不变 |
+| “修改我的巡检脚本” | 查询相关 API → 从列表取得 ID → 按 ID 读取现有源码 → 展示修改 → 原子替换，不丢失脚本 ID |
+| “删除巡检脚本” | 从列表取得 ID → 以名称展示删除确认 → 同意后删除；拒绝时脚本库不变 |
 | “让它左转一秒” | 读取状态 → 生成有限脚本 → 展示审批 → 执行 → 汇报证据 |
 | “继续” | 只有上下文中存在唯一明确的待续意图时才继续；不能重跑结果未知的工具 |
 | “停下” | 本地快速停止，不等待模型；随后把结果写回对话 |
@@ -280,7 +280,7 @@ sequenceDiagram
 - 普通知识问答不调用机器人工具；设备事实问题不会凭历史猜测；
 - P0 八个工具直接使用 Koog Tool/MessagePart，全链路没有第二套 ToolCall/ToolResult；
 - 编写或修改脚本前能按相关分类查询受控 API 目录，目录外接口不会被当成已核对事实；
-- 脚本可以按名称列出、读取、原子保存/重命名和经确认后删除，保存不会触发上传或执行；
+- 脚本列表显示名称，读取、更新/重命名及经确认后的删除使用稳定 ID，保存不会触发上传或执行；
 - 动作请求在审批前不上传或启动脚本，拒绝后不会执行；
 - 一次审批只出现一次；命令发送后不会要求用户再次确认，缺少 `STARTED` 回报会在有限时间内转为结果未知；
 - 工具串行且有明确轮数上限，结果未知时立即停止自动循环；
