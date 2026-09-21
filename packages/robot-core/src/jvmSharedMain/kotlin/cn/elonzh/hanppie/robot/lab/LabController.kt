@@ -46,11 +46,12 @@ class LabController internal constructor(private val session: LabChannel,
         check(!startRequested) { "请先停止已启动的脚本，再上传新脚本" }
         require(source.isNotBlank()) { "脚本不能为空" }
         val random = SecureRandom()
-        val candidateRunId = ByteArray(8).also(random::nextBytes).hex()
+        val candidateGuid = ByteArray(16).also(random::nextBytes).hex()
+        val candidateSign = ByteArray(8).also(random::nextBytes).hex()
         val candidate = LabProgram(
-            LabRunProtocol.instrument(source, candidateRunId),
-            ByteArray(16).also(random::nextBytes).hex(),
-            candidateRunId,
+            source,
+            candidateGuid,
+            candidateSign,
             title,
         )
         val audioXml = labAudioListXml(audio) { slotId, md5 ->
@@ -63,7 +64,7 @@ class LabController internal constructor(private val session: LabChannel,
         require(bytes.size <= LabProgram.MAX_DSP_BYTES) {
             "Lab 程序与自定义音频合计 ${bytes.size} 字节，超过上传上限 ${LabProgram.MAX_DSP_BYTES / (1024 * 1024)} MB；请缩短音频或减少数量"
         }
-        log("Lab 上传开始；runId=$candidateRunId bytes=${bytes.size} audio=${audio.size}")
+        log("Lab 上传开始；guid=$candidateGuid bytes=${bytes.size} audio=${audio.size}")
         program = null; digest = null; runId = null
         if (!entered) {
             session.labMode()
@@ -88,15 +89,15 @@ class LabController internal constructor(private val session: LabChannel,
         delay(500)
         check(session.connected) { "上传期间机器人连接已断开" }
         val hash = MessageDigest.getInstance("MD5").digest(bytes)
-        program = candidate; digest = hash; runId = candidateRunId
+        program = candidate; digest = hash; runId = candidateGuid
         val activeSlots = mutableSetOf<Int>()
         audio.forEach { clip ->
             activeSlots.add(clip.id)
             uploadedAudioSlots[clip.id] = labAudioDigest(clip.packets)
         }
         uploadedAudioSlots.keys.retainAll(activeSlots)
-        log("Lab 上传已确认；runId=$candidateRunId bytes=${bytes.size} md5=${hash.hex()}")
-        LabUpload(hash.hex(), candidateRunId)
+        log("Lab 上传已确认；guid=$candidateGuid bytes=${bytes.size} md5=${hash.hex()}")
+        LabUpload(hash.hex(), candidateGuid)
     }
 
     suspend fun start(): String = mutex.withLock {

@@ -1184,7 +1184,7 @@ class ConsoleUiTest {
 
     @Test fun activeScriptAndLatestOutputRemainVisibleAcrossPages() {
         val model = testConsoleModel()
-        val runId = "0123456789abcdef"
+        val runId = "0123456789abcdef0123456789abcdef"
         val width = mutableStateOf(393.dp)
         val height = mutableStateOf(740.dp)
         try {
@@ -1196,12 +1196,11 @@ class ConsoleUiTest {
                 scriptStartedAtEpochMillis = System.currentTimeMillis(),
                 scriptMessage = uiText(Res.string.waiting_for_script_start),
             )
-            fun message(kind: String, text: String = ""): DussFrame {
-                val value = "__HANPPIE_RUN__|$runId|$kind|$text".encodeToByteArray()
-                return DussFrame(20, 9, 2, 2, 0, 0x3f, 0xa4,
-                    byteArrayOf(0, 0, value.size.toByte(), 0) + value, true)
+            fun status(status: Int, guid: String): DussFrame {
+                val payload = byteArrayOf(status.toByte()) + guid.encodeToByteArray() + ByteArray(26) { 0 }
+                return DussFrame(20, 9, 2, 2, 0, 0x3f, 0xa5, payload, true)
             }
-            model.receive(message("STARTED"))
+            model.receive(status(2, runId))
             val output = "Sentry scan 2/3: left".encodeToByteArray()
             model.receive(DussFrame(20, 9, 2, 3, 0, 0x3f, 0xa4,
                 byteArrayOf(0, 0, output.size.toByte(), 0) + output, true))

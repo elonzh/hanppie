@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.robot.telemetry
 
+import cn.elonzh.hanppie.robot.lab.LabScriptStatus
 import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.protocol.put16
 import cn.elonzh.hanppie.robot.protocol.u8
@@ -68,5 +69,25 @@ object Telemetry {
         if (length > payload.size - 4) return null
         return LabMessage(payload.u8(0), payload.u8(1),
             payload.copyOfRange(4, 4 + length).decodeToString())
+    }
+
+    /**
+     * DUSS 0x3F / 0xA5 (DUSS_MB_CMD_RM_SCRIPT_BLOCK_STATUS_PUSH):
+     * payload[0]: status (0: IDLE/STOPPED, 1: PREPARING, 2: RUNNING, 5: FAILED)
+     * payload[1..32]: 32-char ASCII GUID of the script (zeros when idle)
+     * payload[33..]: block data; when status == 5, payload[62..63] is u16 length of traceback string,
+     * followed by the UTF-8 traceback string.
+     */
+    fun labScriptStatus(frame: DussFrame): LabScriptStatus? {
+        if (!frame.valid || frame.set != 0x3f || frame.id != 0xa5 || frame.payload.size < 33) return null
+        val payload = frame.payload
+        val status = payload.u8(0)
+        val guid = payload.copyOfRange(1, 33).decodeToString()
+        val traceback = if (status == 5 && payload.size >= 64) {
+            val length = payload.u16(62)
+            val end = (64 + length).coerceAtMost(payload.size)
+            if (end > 64) payload.copyOfRange(64, end).decodeToString() else null
+        } else null
+        return LabScriptStatus(status, guid, traceback)
     }
 }

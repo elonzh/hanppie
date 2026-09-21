@@ -53,8 +53,8 @@ class RemoteFireUiTest {
         override val lab: RobotLabSession = object : RobotLabSession {
             override fun invalidateMode() {}
             override suspend fun upload(source: String, title: String, audio: List<LabAudioClip>): LabUpload =
-                LabUpload("hash", "0123456789abcdef")
-            override suspend fun start(): String = "0123456789abcdef"
+                LabUpload("hash", "0123456789abcdef0123456789abcdef")
+            override suspend fun start(): String = "0123456789abcdef0123456789abcdef"
             override suspend fun stop() { labStopCount.incrementAndGet() }
             override suspend fun complete(runId: String): Boolean = true
         }
@@ -127,7 +127,7 @@ class RemoteFireUiTest {
             )
             assertTrue(model.state.value.canStop)
             assertTrue(model.state.value.scriptMessages.any {
-                it.contains("runId=0123456789abcdef") && it.contains("0 个 Lab 消息帧")
+                it.contains("runId=0123456789abcdef0123456789abcdef") && it.contains("0 个 Lab 消息帧")
             })
         } finally {
             model.close()
@@ -354,9 +354,11 @@ class RemoteFireUiTest {
             val runId = model.state.value.scriptRunId!!
 
             val errorMsg = "AttributeError: 'RobotTools' object has no attribute 'time'"
-            val rawMsg = "__HANPPIE_RUN__|$runId|FAILED|$errorMsg".encodeToByteArray()
-            val payload = byteArrayOf(1, 2, (rawMsg.size and 0xFF).toByte(), ((rawMsg.size ushr 8) and 0xFF).toByte()) + rawMsg
-            val frame = DussFrame(20, 9, 2, 1, 0, 0x3f, 0xa4, payload, true)
+            val tbBytes = errorMsg.encodeToByteArray()
+            val prefix = ByteArray(29) { 0 }
+            val lenBytes = byteArrayOf((tbBytes.size and 0xFF).toByte(), ((tbBytes.size ushr 8) and 0xFF).toByte())
+            val payload = byteArrayOf(5) + runId.encodeToByteArray() + prefix + lenBytes + tbBytes
+            val frame = DussFrame(20, 9, 2, 1, 0, 0x3f, 0xa5, payload, true)
             frameHandler?.invoke(frame)
 
             withTimeout(5_000) {

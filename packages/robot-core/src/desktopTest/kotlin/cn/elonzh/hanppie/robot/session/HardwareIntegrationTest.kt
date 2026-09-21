@@ -1,9 +1,7 @@
 package cn.elonzh.hanppie.robot.session
 
 import cn.elonzh.hanppie.robot.lab.LabController
-import cn.elonzh.hanppie.robot.lab.LabRunEvent
-import cn.elonzh.hanppie.robot.lab.LabRunEventType
-import cn.elonzh.hanppie.robot.lab.LabRunProtocol
+import cn.elonzh.hanppie.robot.lab.LabScriptStatus
 import cn.elonzh.hanppie.robot.telemetry.Telemetry
 import cn.elonzh.hanppie.robot.product.RobotModel
 import kotlinx.coroutines.runBlocking
@@ -14,7 +12,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.Assume.assumeTrue
 
-/** Opt-in only. No target defaults, no motion, no firmware modification. */
 class HardwareIntegrationTest {
     @Test fun explicitTargetReportsProductTypeWithoutMotion() = runBlocking {
         val ip = System.getenv("HANPPIE_TEST_ROBOT_IP")
@@ -39,12 +36,11 @@ class HardwareIntegrationTest {
         assumeTrue("实机测试需要显式 IP、AppID 和 Lab 上传授权",
             !ip.isNullOrBlank() && !appId.isNullOrBlank() && System.getenv("HANPPIE_TEST_ALLOW_LAB") == "1")
         val target = RobotTarget(ip!!, appId!!)
-        val events = java.util.concurrent.CopyOnWriteArrayList<LabRunEvent>()
+        val statuses = java.util.concurrent.CopyOnWriteArrayList<LabScriptStatus>()
         val messages = java.util.concurrent.CopyOnWriteArrayList<String>()
         val session = AppSession(target, onFrame = { frame ->
-            Telemetry.labMessage(frame)?.let { message ->
-                LabRunProtocol.decode(message.text)?.let(events::add) ?: messages.add(message.text)
-            }
+            Telemetry.labScriptStatus(frame)?.let(statuses::add)
+            Telemetry.labMessage(frame)?.let { messages.add(it.text) }
         })
         var running = false
         var controller: LabController? = null
@@ -60,9 +56,12 @@ class HardwareIntegrationTest {
             assertEquals(upload.runId, current.start())
             running = true
             withTimeout(15_000) {
-                while (events.none { it.runId == upload.runId && it.type == LabRunEventType.COMPLETED }) delay(50)
+                while (statuses.none { it.guid.equals(upload.runId, ignoreCase = true) && it.isRunning }) delay(50)
+                val afterStartIndex = statuses.size
+                while (statuses.drop(afterStartIndex).none { it.isIdle }) delay(50)
+                while (messages.none { it.contains("Hanppie Kotlin integration: no motion") }) delay(50)
             }
-            assertTrue(events.any { it.runId == upload.runId && it.type == LabRunEventType.STARTED })
+            assertTrue(statuses.any { it.guid.equals(upload.runId, ignoreCase = true) && it.isRunning })
             assertTrue(messages.any { it.contains("Hanppie Kotlin integration: no motion") })
             assertTrue(current.complete(upload.runId))
             running = false

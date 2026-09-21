@@ -4,7 +4,6 @@ import cn.elonzh.hanppie.agent.tools.ListLabScriptsTool
 import cn.elonzh.hanppie.agent.tools.NoToolArgs
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.robot.lab.LabProgram
-import cn.elonzh.hanppie.robot.lab.LabRunProtocol
 import cn.elonzh.hanppie.ui.app.MemoryScriptRepository
 import io.github.vinceglb.filekit.PlatformFile
 import java.nio.file.Files
@@ -145,7 +144,7 @@ class ScriptLibraryTest {
         }
     }
 
-    @Test fun instrumentedPresetsParseAsPython36() = runBlocking {
+    @Test fun presetsParseAsPython36() = runBlocking {
         val tempDir = Files.createTempDirectory("hanppie-python-presets-test-")
         try {
             val repo = DirectoryScriptRepository(
@@ -163,7 +162,7 @@ class ScriptLibraryTest {
                     "import ast,sys; ast.parse(sys.stdin.read(), feature_version=(3,6))",
                 ).start()
                 process.outputStream.bufferedWriter(Charsets.UTF_8).use {
-                    it.write(LabRunProtocol.instrument(preset.source, "0123456789abcdef"))
+                    it.write(preset.source)
                 }
                 val stderr = process.errorStream.bufferedReader(Charsets.UTF_8).readText()
                 assertEquals(0, process.waitFor(), "${preset.id}: $stderr")

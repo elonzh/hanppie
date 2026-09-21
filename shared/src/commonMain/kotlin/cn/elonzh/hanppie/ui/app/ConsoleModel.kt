@@ -16,9 +16,7 @@ import cn.elonzh.hanppie.agent.tools.RobotStatusTool
 import cn.elonzh.hanppie.agent.tools.SaveLabScriptTool
 import cn.elonzh.hanppie.agent.tools.StopLabTool
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
-import cn.elonzh.hanppie.robot.lab.LabRunEvent
-import cn.elonzh.hanppie.robot.lab.LabRunEventType
-import cn.elonzh.hanppie.robot.lab.LabRunProtocol
+import cn.elonzh.hanppie.robot.lab.LabScriptStatus
 import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
@@ -747,72 +745,81 @@ internal class ConsoleModel(
                 it.raw.mapIndexed { index, value -> "raw[$index] / offset ${26 + index * 4}" to value.toString() }
         }
         val message = Telemetry.labMessage(frame)
-        val runEvent = message?.let { LabRunProtocol.decode(it.text) }
-        val eventRunId = runEvent?.runId
-        val eventType = runEvent?.type
-        val labMessageFrame = frame.valid && frame.set == 0x3f && frame.id == 0xa4
-        state.update { old -> old.copy(packets = old.packets + 1,
+        val scriptStatus = Telemetry.labScriptStatus(frame)
+        val labMessageFrame = frame.valid && frame.set == 0x3f && (frame.id == 0xa4 || frame.id == 0xa5)
+        val snapshot = state.value
+        val runId = snapshot.scriptRunId
+        val isMatchingRun = runId != null && scriptStatus != null &&
+            scriptStatus.guid.equals(runId, ignoreCase = true)
+        val isRunningTransition = isMatchingRun && scriptStatus.isRunning &&
+            snapshot.scriptRunPhase == ScriptRunPhase.STARTING
+        val isFailedTransition = isMatchingRun && scriptStatus.isFailed &&
+            snapshot.scriptRunPhase.mayBeExecuting
+        val isCompletedTransition = runId != null && scriptStatus != null && scriptStatus.isIdle &&
+            snapshot.scriptRunPhase == ScriptRunPhase.RUNNING
+
+        val newMessages = buildList {
+            if (message != null) add(message.text)
+            if (isRunningTransition) {
+                add(tr(Res.string.script_trace_lifecycle_value, "STARTED", runId))
+            }
+            if (isFailedTransition) {
+                add(tr(Res.string.script_trace_lifecycle_value, "FAILED", runId))
+                scriptStatus.traceback?.lines()?.filter { it.isNotBlank() }?.let(::addAll)
+            }
+            if (isCompletedTransition) {
+                add(tr(Res.string.script_trace_lifecycle_value, "COMPLETED", runId))
+            }
+        }
+
+        state.update { old -> old.copy(
+            packets = old.packets + 1,
             labMessagePackets = old.labMessagePackets + if (labMessageFrame) 1 else 0,
             frames = (old.frames + line).takeLast(250),
             robotProduct = RobotProductProtocol.updated(old.robotProduct, frame) ?: old.robotProduct,
             battery = if (motion == null) old.battery else motion.batteryPercent,
             signalQuality = signalQuality ?: old.signalQuality,
             gimbal = gimbal ?: old.gimbal,
-            scriptMessages = when {
-                runEvent != null && eventRunId == old.scriptRunId -> {
-                    val lifecycle = tr(
-                        Res.string.script_trace_lifecycle_value,
-                        requireNotNull(eventType).name,
-                        requireNotNull(eventRunId),
-                    )
-                    val errorLines = if (eventType == LabRunEventType.FAILED && runEvent.text.isNotBlank()) {
-                        runEvent.text.lines()
-                    } else {
-                        emptyList()
-                    }
-                    (old.scriptMessages + lifecycle + errorLines).takeLast(200)
-                }
-                runEvent == null && message != null -> (old.scriptMessages + message.text).takeLast(200)
-                else -> old.scriptMessages
-            },
-            scriptRunPhase = if (eventRunId == old.scriptRunId && eventType == LabRunEventType.STARTED)
-                ScriptRunPhase.RUNNING else old.scriptRunPhase,
-            scriptMessage = if (eventRunId == old.scriptRunId && eventType == LabRunEventType.STARTED)
-                uiText(Res.string.script_running) else old.scriptMessage,
-            values = values ?: old.values) }
-        runEvent?.let { event ->
-            if (event.runId == state.value.scriptRunId &&
-                (event.type == LabRunEventType.COMPLETED || event.type == LabRunEventType.FAILED)) {
-                finishReportedRun(event)
+            scriptMessages = if (newMessages.isEmpty()) old.scriptMessages else (old.scriptMessages + newMessages).takeLast(200),
+            scriptRunPhase = if (isRunningTransition) ScriptRunPhase.RUNNING else old.scriptRunPhase,
+            scriptMessage = if (isRunningTransition) uiText(Res.string.script_running) else old.scriptMessage,
+            values = values ?: old.values,
+        ) }
+
+        if (runId != null) {
+            if (isFailedTransition) {
+                finishReportedRun(runId, completed = false, errorText = scriptStatus.traceback ?: "")
+            } else if (isCompletedTransition) {
+                finishReportedRun(runId, completed = true)
             }
         }
     }
 
-    private fun finishReportedRun(event: LabRunEvent) {
+    private fun finishReportedRun(runId: String, completed: Boolean, errorText: String = "") {
         val snapshot = state.value
-        if (snapshot.scriptRunId != event.runId || snapshot.scriptRunPhase == ScriptRunPhase.COMPLETING ||
+        if (snapshot.scriptRunId != runId || snapshot.scriptRunPhase == ScriptRunPhase.COMPLETING ||
             !snapshot.scriptRunPhase.mayBeExecuting) return
         if (!state.compareAndSet(snapshot, snapshot.copy(scriptRunPhase = ScriptRunPhase.COMPLETING,
                 scriptMessage = uiText(Res.string.finishing_completed_script)))) return
         scope.launch {
             try {
-                val accepted = lab.load()?.complete(event.runId) == true
+                val accepted = lab.load()?.complete(runId) == true
                 if (!accepted) return@launch
-                val phase = if (event.type == LabRunEventType.COMPLETED) ScriptRunPhase.COMPLETED else ScriptRunPhase.FAILED
-                val message = if (phase == ScriptRunPhase.COMPLETED) uiText(Res.string.script_completed) else
-                    uiText(Res.string.script_failed_value, event.text.ifBlank { tr(Res.string.unknown_error) })
-                if (phase == ScriptRunPhase.FAILED) {
-                    log(tr(Res.string.script_failed_value, event.text.ifBlank { tr(Res.string.unknown_error) }))
+                val phase = if (completed) ScriptRunPhase.COMPLETED else ScriptRunPhase.FAILED
+                val message = if (completed) uiText(Res.string.script_completed) else
+                    uiText(Res.string.script_failed_value, errorText.ifBlank { tr(Res.string.unknown_error) })
+                if (!completed) {
+                    log(tr(Res.string.script_failed_value, errorText.ifBlank { tr(Res.string.unknown_error) }))
                 } else {
                     log(tr(Res.string.script_completed))
                 }
-                state.update { current -> if (current.scriptRunId == event.runId) current.copy(
+                state.update { current -> if (current.scriptRunId == runId) current.copy(
                     scriptRunPhase = phase, scriptMessage = message,
                     scriptFinishedAtEpochMillis = clock.now().toEpochMilliseconds()) else current }
             } catch (error: Exception) {
                 val message = error.message ?: error::class.simpleName ?: "Unknown error"
                 log(tr(Res.string.error_value, message))
-                state.update { current -> if (current.scriptRunId == event.runId) current.copy(
+                state.update { current -> if (current.scriptRunId == runId) current.copy(
                     scriptRunPhase = ScriptRunPhase.UNKNOWN,
                     scriptMessage = uiText(Res.string.completed_marker_received_but_cleanup_failed)) else current }
             }

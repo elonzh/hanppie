@@ -60,4 +60,34 @@ class ScriptExecutionLiveTest {
             model.close()
         }
     }
+
+    @Test fun spaceLaunchCompletesWithoutDestoryError() = runBlocking {
+        val ip = System.getenv("HANPPIE_TEST_ROBOT_IP")
+        val appId = System.getenv("HANPPIE_TEST_APPID")
+        assumeTrue("实机 Lab 测试需要显式目标与 Lab 授权", !ip.isNullOrBlank() && !appId.isNullOrBlank() &&
+            System.getenv("HANPPIE_TEST_ALLOW_LAB") == "1")
+        val model = testConsoleModel()
+        try {
+            model.connect(ip!!, appId!!)
+            withTimeout(25_000) { model.state.first { it.connected && !it.busy } }
+            model.scriptLibrary.load()
+            val preset = model.scriptLibrary.state.value.presets.single { it.id == "space-launch" }
+
+            model.runScript(preset.source, "太空发射中心")
+            withTimeout(45_000) { model.state.first {
+                it.scriptRunPhase in setOf(ScriptRunPhase.COMPLETED, ScriptRunPhase.FAILED, ScriptRunPhase.UNKNOWN)
+            } }
+            assertEquals(ScriptRunPhase.COMPLETED, model.state.value.scriptRunPhase,
+                "太空发射中心运行失败：${model.state.value.scriptMessage}；日志=${model.state.value.scriptMessages}")
+            assertTrue(model.state.value.scriptMessages.any { it.contains("进入轨道，太阳能板展开") })
+            assertTrue(model.state.value.scriptMessages.none { it.contains("destory") })
+            println("S1 confirmed space-launch completed successfully without destory error!")
+        } finally {
+            if (model.state.value.canStop) {
+                model.stop()
+                withTimeoutOrNull(5_000) { model.state.first { !it.scriptRunPhase.mayBeExecuting } }
+            }
+            model.close()
+        }
+    }
 }

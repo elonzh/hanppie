@@ -34,7 +34,9 @@ class LabControllerTest {
         val upload = controller.upload("def start():\n    pass\n", "fixture")
         val hash = upload.digest
         assertEquals(MessageDigest.getInstance("MD5").digest(uploaded).hex(), hash)
-        assertTrue(uploaded.decodeToString().contains("__HANPPIE_RUN__|${upload.runId}|"))
+        assertEquals(32, upload.runId.length)
+        assertTrue(uploaded.decodeToString().contains("def start():\n    pass\n"))
+        assertTrue(uploaded.decodeToString().contains("<guid>${upload.runId}</guid>"))
         assertFalse(channel.commands.any { it.id == 0xab })
         val metadata = channel.commands.first { it.id == 0xa3 }.payload
         assertEquals(0x21, metadata[0].toInt())
@@ -95,11 +97,7 @@ class LabControllerTest {
     @Test fun invalidInputDoesNotChangeRobotMode() = runBlocking {
         val channel = Channel()
         val controller = LabController(channel, {})
-        assertFailsWith<IllegalArgumentException> { controller.upload(" ", "invalid") }
-        assertTrue(channel.commands.isEmpty())
-        assertFailsWith<IllegalArgumentException> {
-            controller.upload("import time\n\ndef start():\n    time.sleep(1)\n", "invalid import")
-        }
+        assertFailsWith<IllegalArgumentException> { controller.upload("", "empty") }
         assertTrue(channel.commands.isEmpty())
         channel.connected = false
         assertFailsWith<IllegalStateException> { controller.upload("pass", "offline") }

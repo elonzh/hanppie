@@ -43,7 +43,8 @@ internal class DirectoryScriptRepository(
                     val targetFile = dir.resolve(fileRelPath)
                     val resourcePath = "files/presets/${preset.folderName}/$fileRelPath"
                     val bytes = Res.readBytes(resourcePath)
-                    if (!targetFile.isRegularFile() || targetFile.readBytes().size != bytes.size) {
+                    val currentBytes = if (targetFile.isRegularFile()) targetFile.readBytes() else null
+                    if (currentBytes == null || !currentBytes.contentEquals(bytes)) {
                         if (fileRelPath.contains('/')) {
                             val parentDirName = fileRelPath.substringBeforeLast('/')
                             dir.resolve(parentDirName).createDirectories()
