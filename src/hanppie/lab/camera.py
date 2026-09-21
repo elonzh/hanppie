@@ -6,6 +6,7 @@ import queue
 import threading
 import time
 
+from hanppie.lab import protocol
 from hanppie.lab.app import AppConnection
 from hanppie.lab.audio import OpusDecoder
 
@@ -51,7 +52,14 @@ class LabCamera:
             raise ValueError("resolution must be 720p or 1080p")
         self._clear(self._chunks)
         self._clear(self._frames)
-        self._connection.send_duss(0x02, 0x01, 0x40, 0x02, 0x18, resolution_payloads[key])
+        self._connection.send_duss(
+            protocol.HOST_MOBILE,
+            protocol.HOST_CAMERA,
+            protocol.ATTR_NEED_ACK,
+            protocol.CMDSET_CAMERA,
+            protocol.CMD_SET_VIDEO_FORMAT,
+            resolution_payloads[key],
+        )
         self._stream_control(1, 1, 0)
         self._stream_control(2, 1, 0)
         if self._thread is None or not self._thread.is_alive():
@@ -82,7 +90,14 @@ class LabCamera:
 
         self._clear(self._audio_packets)
         self._audio_streaming = True
-        self._connection.send_duss(0x02, 0x01, 0x40, 0x3F, 0x1E, b"\x01")
+        self._connection.send_duss(
+            protocol.HOST_MOBILE,
+            protocol.HOST_CAMERA,
+            protocol.ATTR_NEED_ACK,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_SET_AUDIO_STATUS,
+            b"\x01",
+        )
         return True
 
     def stop_audio_stream(self) -> bool:
@@ -130,11 +145,11 @@ class LabCamera:
 
     def _stream_control(self, control: int, state: int, resolution: int) -> None:
         self._connection.send_duss(
-            0x02,
-            0x01,
-            0x40,
-            0x3F,
-            0xD2,
+            protocol.HOST_MOBILE,
+            protocol.HOST_CAMERA,
+            protocol.ATTR_NEED_ACK,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_STREAM_CTRL,
             bytes((control & 0xFF, state & 0x0F, resolution & 0xFF)),
         )
 

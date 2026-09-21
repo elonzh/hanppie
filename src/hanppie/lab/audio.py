@@ -6,6 +6,7 @@ import hashlib
 import time
 from collections.abc import Iterable
 
+from hanppie.lab import protocol
 from hanppie.lab.app import AppConnection
 
 MICROPHONE_SAMPLE_RATE = 48_000
@@ -157,36 +158,43 @@ class LabAudio:
             for offset in range(0, len(encoded), AUDIO_TRANSFER_CHUNK_BYTES)
         )
         self._connection.send_duss(
-            0x02,
-            0x09,
-            0x40,
-            0x3F,
-            0x5F,
+            protocol.HOST_MOBILE,
+            protocol.HOST_HDVT_UAV,
+            protocol.ATTR_NEED_ACK,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_AUDIO_TRANSFER,
             build_audio_start_payload(len(chunks), len(encoded)),
         )
         time.sleep(AUDIO_START_DELAY_SECONDS)
         for index, chunk in enumerate(chunks):
             self._connection.send_duss(
-                0x02,
-                0x09,
-                0x00,
-                0x00,
-                0x09,
+                protocol.HOST_MOBILE,
+                protocol.HOST_HDVT_UAV,
+                protocol.ATTR_NO_ACK,
+                protocol.CMDSET_COMMON,
+                protocol.CMD_FW_TRANSMIT,
                 build_audio_block(chunk, index),
             )
             if index + 1 < len(chunks):
                 time.sleep(AUDIO_PACKET_INTERVAL_SECONDS)
         time.sleep(AUDIO_STOP_DELAY_SECONDS)
         self._connection.send_duss(
-            0x02,
-            0x09,
-            0x40,
-            0x3F,
-            0x5F,
+            protocol.HOST_MOBILE,
+            protocol.HOST_HDVT_UAV,
+            protocol.ATTR_NEED_ACK,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_AUDIO_TRANSFER,
             build_audio_stop_payload(encoded),
         )
         time.sleep(AUDIO_PLAY_DELAY_SECONDS)
-        self._connection.send_duss(0x02, 0x09, 0x40, 0x3F, 0xB3, AUDIO_PLAY_PAYLOAD)
+        self._connection.send_duss(
+            protocol.HOST_MOBILE,
+            protocol.HOST_HDVT_UAV,
+            protocol.ATTR_NEED_ACK,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_PLAY_SOUND_TASK,
+            AUDIO_PLAY_PAYLOAD,
+        )
         return len(chunks)
 
     def close(self) -> None:

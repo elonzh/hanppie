@@ -2,6 +2,7 @@ package cn.elonzh.hanppie.robot.telemetry
 
 import cn.elonzh.hanppie.robot.lab.LabScriptStatus
 import cn.elonzh.hanppie.robot.protocol.DussFrame
+import cn.elonzh.hanppie.robot.protocol.Protocol
 import cn.elonzh.hanppie.robot.protocol.put16
 import cn.elonzh.hanppie.robot.protocol.u8
 import cn.elonzh.hanppie.robot.protocol.u16
@@ -35,7 +36,7 @@ internal object GimbalSubscription {
 object Telemetry {
     /** RoboMaster App Wi-Fi quality push (cmdset 0x07, cmdid 0x09); the value is not dBm. */
     fun wifiSignalQuality(frame: DussFrame): Int? {
-        if (!frame.valid || frame.set != 0x07 || frame.id != 0x09 || frame.payload.isEmpty()) return null
+        if (!frame.valid || frame.set != Protocol.CMDSET_WIFI || frame.id != Protocol.CMD_WIFI_AP_PUSH_RSSI || frame.payload.isEmpty()) return null
         return frame.payload.u8(0)
     }
 
@@ -46,13 +47,13 @@ object Telemetry {
 
     fun gimbal(frame: DussFrame): GimbalTelemetry? {
         val p = frame.payload
-        if (!frame.valid || frame.set != 0x48 || frame.id != 8 || p.size != 11 ||
+        if (!frame.valid || frame.set != Protocol.CMDSET_VIRTUAL_BUS || frame.id != Protocol.CMD_VBUS_DATA_ANALYSIS || p.size != 11 ||
             p.u8(0) != 0 || p.u8(1) != GimbalSubscription.messageId) return null
         fun angle(offset: Int) = p.u16(offset).toShort().toDouble() / 10
         return GimbalTelemetry(angle(2), angle(4), angle(6), angle(8), p.u8(10))
     }
     fun motion(frame: DussFrame): MotionTelemetry? {
-        if (!frame.valid || frame.set != 0x48 || frame.id != 8 || frame.payload.size != 62) return null
+        if (!frame.valid || frame.set != Protocol.CMDSET_VIRTUAL_BUS || frame.id != Protocol.CMD_VBUS_DATA_ANALYSIS || frame.payload.size != 62) return null
         val payload = frame.payload
         fun float(offset: Int): Float = Float.fromBits(
             payload.u8(offset) or (payload.u8(offset + 1) shl 8) or
@@ -63,7 +64,7 @@ object Telemetry {
 
     /** rm_module.Mobile.custom_msg_send: type:u8, level:u8, length:u16, message bytes. */
     fun labMessage(frame: DussFrame): LabMessage? {
-        if (!frame.valid || frame.set != 0x3f || frame.id != 0xa4 || frame.payload.size < 4) return null
+        if (!frame.valid || frame.set != Protocol.CMDSET_RM || frame.id != Protocol.CMD_RM_SCRIPT_CUSTOM_INFO_PUSH || frame.payload.size < 4) return null
         val payload = frame.payload
         val length = payload.u16(2)
         if (length > payload.size - 4) return null
@@ -79,7 +80,7 @@ object Telemetry {
      * followed by the UTF-8 traceback string.
      */
     fun labScriptStatus(frame: DussFrame): LabScriptStatus? {
-        if (!frame.valid || frame.set != 0x3f || frame.id != 0xa5 || frame.payload.size < 33) return null
+        if (!frame.valid || frame.set != Protocol.CMDSET_RM || frame.id != Protocol.CMD_RM_SCRIPT_BLOCK_STATUS_PUSH || frame.payload.size < 33) return null
         val payload = frame.payload
         val status = payload.u8(0)
         val guid = payload.copyOfRange(1, 33).decodeToString()

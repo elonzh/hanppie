@@ -32,42 +32,182 @@ _GIMBAL_SUBSCRIPTION_ADD = struct.pack(
     _GIMBAL_SUBSCRIPTION_HZ,
 )
 
+LED_ARMOR_ALL_MASK = 0xFF
+LED_SUBCOMPONENT_ALL = 0x3F
+LED_SUBCOMPONENT_TOP = 0x30
+LED_SUBCOMPONENT_BOTTOM = 0x0F
+
 # Protocol facts recovered from Windows RoboMaster App traffic. These entries
 # continue after APP_CONNECTION_SETUP and deliberately regenerate the active
 # session, tick, DUSS sequence and CRC rather than replaying captured packets.
 _DIRECT_MODE_SETUP = (
-    ("direct", 0x02, 0x09, 0x00, 0x3F, 0x04, b"\x0b\x03\x00", b"\x00\x00"),
-    ("direct", 0x02, 0x09, 0x40, 0x3F, 0x77, b"\x01\x05\x00", b"\x00\x00"),
-    ("direct", 0x02, 0x03, 0x40, 0x3F, 0x19, b"\x00", b"\x00\x00"),
-    ("direct", 0x02, 0x28, 0x40, 0x00, 0x01, b"", b"\x40\x00"),
-    ("direct", 0x02, 0xC3, 0x40, 0x3F, 0x66, b"\x02\x00", b"\x60\x40"),
-    ("direct", 0x02, 0x09, 0x40, 0x3F, 0x66, b"\x02\x00", b"\x40\x00"),
-    ("direct", 0x02, 0xA9, 0x40, 0x3F, 0xA3, b"\xa9" + b"\x00" * 34, b"\x40\x00"),
-    ("direct", 0x02, 0xA9, 0x40, 0x3F, 0xA3, b"\x09" + b"\x00" * 34, b"\x00\x00"),
-    ("direct", 0x02, 0xA9, 0x40, 0x3F, 0xA3, b"\x51" + _PAIR_HASH_1, b"\x00\x00"),
-    ("direct", 0x02, 0xA9, 0x40, 0x3F, 0xA3, b"\x91" + _PAIR_HASH_2, b"\x00\x00"),
-    ("direct", 0x02, 0x09, 0x40, 0x48, 0x04, _GIMBAL_SUBSCRIPTION_REMOVE, b"\x00\x00"),
     (
         "direct",
-        0x02,
-        0x09,
-        0x40,
-        0x48,
-        0x03,
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NO_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SPECIAL_CONTROL,
+        bytes.fromhex(protocol.MODE_REMOTE),
+        b"\x00\x00",
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SAVE_PREF,
+        b"\x01\x05\x00",
+        b"\x00\x00",
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_CHASSIS_CAN,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_WORK_MODE_SET,
+        b"\x00",
+        b"\x00\x00",
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_SYSTEM,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_COMMON,
+        protocol.CMD_GET_DEVICE_VERSION,
+        b"",
+        b"\x40\x00",
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_CHASSIS,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_FC_RMC,
+        b"\x02\x00",
+        b"\x60\x40",
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_FC_RMC,
+        b"\x02\x00",
+        b"\x40\x00",
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_SCRATCH_SYS,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SCRIPT_CTRL,
+        b"\xa9" + b"\x00" * 34,
+        b"\x40\x00",
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_SCRATCH_SYS,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SCRIPT_CTRL,
+        b"\x09" + b"\x00" * 34,
+        b"\x00\x00",
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_SCRATCH_SYS,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SCRIPT_CTRL,
+        b"\x51" + _PAIR_HASH_1,
+        b"\x00\x00",
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_SCRATCH_SYS,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SCRIPT_CTRL,
+        b"\x91" + _PAIR_HASH_2,
+        b"\x00\x00",
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_VIRTUAL_BUS,
+        protocol.CMD_VBUS_DEL_MSG,
+        _GIMBAL_SUBSCRIPTION_REMOVE,
+        b"\x00\x00",
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_VIRTUAL_BUS,
+        protocol.CMD_VBUS_ADD_MSG,
         _GIMBAL_SUBSCRIPTION_ADD,
         b"\x00\x00",
     ),
     ("control", 0, 0, 0, 0, 0, protocol.NEUTRAL_CONTROL, b""),
-    ("direct", 0x02, 0xA9, 0x40, 0x3F, 0xA3, b"\x08" + _PAIR_HASH_1, b"\x60\x00"),
-    ("direct", 0x02, 0xA9, 0x40, 0x3F, 0xA3, b"\xa8" + _PAIR_HASH_2, b"\x00\x00"),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_SCRATCH_SYS,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SCRIPT_CTRL,
+        b"\x08" + _PAIR_HASH_1,
+        b"\x60\x00",
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_SCRATCH_SYS,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SCRIPT_CTRL,
+        b"\xa8" + _PAIR_HASH_2,
+        b"\x00\x00",
+    ),
     ("control", 0, 0, 0, 0, 0, protocol.NEUTRAL_CONTROL, b""),
     ("control", 0, 0, 0, 0, 0, protocol.NEUTRAL_CONTROL, b""),
-    ("direct", 0x02, 0x07, 0x40, 0x07, 0x39, b"", b"\x00\x00"),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_WIFI,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_WIFI,
+        protocol.CMD_WIFI_GET_WORK_MODE,
+        b"",
+        b"\x00\x00",
+    ),
     ("control", 0, 0, 0, 0, 0, protocol.NEUTRAL_CONTROL, b""),
     ("control", 0, 0, 0, 0, 0, protocol.NEUTRAL_CONTROL, b""),
     ("control", 0, 0, 0, 0, 0, protocol.NEUTRAL_CONTROL, b""),
     ("control", 0, 0, 0, 0, 0, protocol.NEUTRAL_CONTROL, b""),
-    ("direct", 0x02, 0x09, 0x00, 0x3F, 0x04, b"\x0b\x03\x00", b"\x00\x00"),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NO_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SPECIAL_CONTROL,
+        bytes.fromhex(protocol.MODE_REMOTE),
+        b"\x00\x00",
+    ),
 )
 
 _IR_GUN_CONFIG = bytes.fromhex(
@@ -82,36 +222,236 @@ _IR_GUN_CONFIG = bytes.fromhex(
 
 _DIRECT_MODE_EFFECT = (
     ("control", 0, 0, 0, 0, 0, protocol.NEUTRAL_CONTROL),
-    ("direct", 0x02, 0x09, 0x40, 0x3F, 0x77, bytes.fromhex("010301")),
-    ("direct", 0x02, 0x09, 0x40, 0x3F, 0x77, bytes.fromhex("010401")),
-    ("direct", 0x02, 0x09, 0x40, 0x3F, 0x77, bytes.fromhex("010201")),
-    ("direct", 0x02, 0x09, 0x40, 0x3F, 0xB3, bytes.fromhex("05049012516a00000000")),
-    ("direct", 0x02, 0x09, 0x40, 0x3F, 0x77, bytes.fromhex("010401")),
-    ("direct", 0x02, 0x09, 0x40, 0x3F, 0x77, bytes.fromhex("010201")),
-    ("direct", 0x02, 0x09, 0x40, 0x3F, 0x5B, b"\x01"),
-    ("direct", 0x02, 0x09, 0x40, 0x3F, 0x09, _IR_GUN_CONFIG),
-    ("direct", 0x02, 0x09, 0x00, 0x3F, 0x04, bytes.fromhex("010301")),
-    ("direct", 0x02, 0x07, 0x40, 0x07, 0x17, b""),
-    ("direct", 0x02, 0x09, 0x40, 0x3F, 0x59, b"\x02"),
-    ("direct", 0x02, 0x09, 0x40, 0x3F, 0x09, _IR_GUN_CONFIG),
-    ("direct", 0x02, 0x09, 0x00, 0x3F, 0x04, bytes.fromhex("010301")),
-    ("direct", 0x02, 0x09, 0x40, 0x3F, 0x0A, bytes.fromhex("0100")),
-    ("direct", 0x02, 0x01, 0x40, 0x02, 0x34, bytes.fromhex("0900006400")),
-    ("direct", 0x02, 0x09, 0x40, 0x3F, 0x59, b"\x02"),
-    ("direct", 0x02, 0xF1, 0x40, 0x0A, 0xA3, bytes.fromhex("0000")),
-    ("direct", 0x02, 0xF1, 0x40, 0x0A, 0xA3, bytes.fromhex("0000")),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SAVE_PREF,
+        bytes.fromhex("010301"),
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SAVE_PREF,
+        bytes.fromhex("010401"),
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SAVE_PREF,
+        bytes.fromhex("010201"),
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_PLAY_SOUND_TASK,
+        bytes.fromhex("05049012516a00000000"),
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SAVE_PREF,
+        bytes.fromhex("010401"),
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SAVE_PREF,
+        bytes.fromhex("010201"),
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SYSTEM_STATUS_CONFIG,
+        b"\x01",
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_GAME_STATE_SYNC,
+        _IR_GUN_CONFIG,
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NO_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SPECIAL_CONTROL,
+        bytes.fromhex("010301"),
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_WIFI,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_WIFI,
+        protocol.CMD_WIFI_AP_KEEPALIVE,
+        b"",
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SYSTEM_FUNCTION_CONFIG,
+        b"\x02",
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_GAME_STATE_SYNC,
+        _IR_GUN_CONFIG,
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NO_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SPECIAL_CONTROL,
+        bytes.fromhex("010301"),
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_GAMECTRL_CMD,
+        bytes.fromhex("0100"),
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_CAMERA,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_CAMERA,
+        protocol.CMD_SET_ZOOM_PARAM,
+        bytes.fromhex("0900006400"),
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SYSTEM_FUNCTION_CONFIG,
+        b"\x02",
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_VISION,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_VISION,
+        protocol.CMD_VISION_CUSTOM,
+        bytes.fromhex("0000"),
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_VISION,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_VISION,
+        protocol.CMD_VISION_CUSTOM,
+        bytes.fromhex("0000"),
+    ),
 )
 
 _DIRECT_MODE_EXIT = (
     ("control", 0, 0, 0, 0, 0, protocol.NEUTRAL_CONTROL),
-    ("direct", 0x02, 0x01, 0x40, 0x02, 0x34, bytes.fromhex("0900006400")),
-    ("direct", 0x02, 0x09, 0x40, 0x3F, 0x59, b"\x00"),
-    ("direct", 0x02, 0xF1, 0x40, 0x0A, 0xA3, bytes.fromhex("0000")),
-    ("direct", 0x02, 0x09, 0x40, 0x3F, 0xB3, bytes.fromhex("06040000000000000000")),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_CAMERA,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_CAMERA,
+        protocol.CMD_SET_ZOOM_PARAM,
+        bytes.fromhex("0900006400"),
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SYSTEM_FUNCTION_CONFIG,
+        b"\x00",
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_VISION,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_VISION,
+        protocol.CMD_VISION_CUSTOM,
+        bytes.fromhex("0000"),
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_PLAY_SOUND_TASK,
+        bytes.fromhex("06040000000000000000"),
+    ),
     ("control", 0, 0, 0, 0, 0, protocol.NEUTRAL_CONTROL),
-    ("direct", 0x02, 0x09, 0x00, 0x3F, 0x04, bytes.fromhex("000300")),
-    ("direct", 0x02, 0x09, 0x40, 0x3F, 0x77, bytes.fromhex("010300")),
-    ("direct", 0x02, 0xF1, 0x40, 0x0A, 0xA3, bytes.fromhex("0000")),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NO_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SPECIAL_CONTROL,
+        bytes.fromhex(protocol.MODE_NORMAL),
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_HDVT_UAV,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_RM,
+        protocol.CMD_RM_SAVE_PREF,
+        bytes.fromhex(protocol.MODE_EXIT_PREF),
+    ),
+    (
+        "direct",
+        protocol.HOST_MOBILE,
+        protocol.HOST_VISION,
+        protocol.ATTR_NEED_ACK,
+        protocol.CMDSET_VISION,
+        protocol.CMD_VISION_CUSTOM,
+        bytes.fromhex("0000"),
+    ),
 )
 
 _TRIGGER_CONTROL = bytes.fromhex("0000042000010840000230")
@@ -201,8 +541,8 @@ def decode_direct_odometry(frame: protocol.DussFrame) -> DirectOdometry | None:
 def decode_direct_gimbal(frame: protocol.DussFrame) -> DirectGimbalTelemetry | None:
     if (
         not frame.valid
-        or frame.cmdset != 0x48
-        or frame.cmdid != 0x08
+        or frame.cmdset != protocol.CMDSET_VIRTUAL_BUS
+        or frame.cmdid != protocol.CMD_VBUS_DATA_ANALYSIS
         or len(frame.payload) != 11
         or frame.payload[:2] != bytes((0, _GIMBAL_SUBSCRIPTION_ID))
     ):
@@ -264,7 +604,7 @@ def build_led_payload(
     return struct.pack(
         "<IHBBBBBHH",
         component & 0xFFFFFFFF,
-        0xFF,
+        LED_ARMOR_ALL_MASK,
         0x70 | mode,
         max(0, min(255, int(red))),
         max(0, min(255, int(green))),
@@ -307,7 +647,14 @@ class DirectChassis:
     ) -> DirectAck:
         self._robot._require_armed()
         values = tuple(max(-1000, min(1000, int(value))) for value in (w1, w2, w3, w4))
-        return self._robot.request(0x02, 0x03, 0x3F, 0x20, struct.pack("<hhhh", *values), timeout)
+        return self._robot.request(
+            protocol.HOST_MOBILE,
+            protocol.HOST_CHASSIS_CAN,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_WHEEL_SPEED_SET,
+            struct.pack("<hhhh", *values),
+            timeout,
+        )
 
 
 class DirectGimbal:
@@ -324,7 +671,14 @@ class DirectGimbal:
         self._robot._require_armed()
         self._robot.connection.set_periodic_duss(
             "gimbal-speed",
-            (0x02, 0x04, 0x00, 0x04, 0x69, build_gimbal_speed_payload(pitch_speed, yaw_speed)),
+            (
+                protocol.HOST_MOBILE,
+                protocol.HOST_GIMBAL,
+                protocol.ATTR_NO_ACK,
+                protocol.CMDSET_GIMBAL,
+                protocol.CMD_GIMBAL_ROTATE_SPEED,
+                build_gimbal_speed_payload(pitch_speed, yaw_speed),
+            ),
             lease_seconds=lease_seconds,
         )
 
@@ -332,11 +686,11 @@ class DirectGimbal:
         self._robot.connection.set_periodic_duss("gimbal-speed", None)
         if self._robot.connection.connected:
             self._robot.connection.send_duss(
-                0x02,
-                0x04,
-                0x00,
-                0x04,
-                0x69,
+                protocol.HOST_MOBILE,
+                protocol.HOST_GIMBAL,
+                protocol.ATTR_NO_ACK,
+                protocol.CMDSET_GIMBAL,
+                protocol.CMD_GIMBAL_ROTATE_SPEED,
                 build_gimbal_speed_payload(0, 0),
             )
 
@@ -419,7 +773,9 @@ class DirectRobot:
         if self._control_mode:
             return ()
         self.connection.set_control_payload(protocol.NEUTRAL_CONTROL)
-        self.connection.configure_mode_keepalive(bytes.fromhex("0b0300"), send_sdk_ready=False)
+        self.connection.configure_mode_keepalive(
+            bytes.fromhex(protocol.MODE_REMOTE), send_sdk_ready=False
+        )
         sequences = self._send_setup(_DIRECT_MODE_SETUP, include_flags=True)
         sequences.extend(self._send_setup(_DIRECT_MODE_EFFECT, include_flags=False))
         self._control_mode = True
@@ -431,7 +787,9 @@ class DirectRobot:
             return
         self.disarm()
         self._send_setup(_DIRECT_MODE_EXIT, include_flags=False)
-        self.connection.configure_mode_keepalive(bytes.fromhex("000300"), send_sdk_ready=True)
+        self.connection.configure_mode_keepalive(
+            bytes.fromhex(protocol.MODE_NORMAL), send_sdk_ready=True
+        )
         self._control_mode = False
 
     def arm(self) -> None:
@@ -466,7 +824,9 @@ class DirectRobot:
         payload: bytes = b"",
         timeout: float = 1.0,
     ) -> DirectAck:
-        sequence = self.connection.send_duss(sender, receiver, 0x40, cmdset, cmdid, payload)
+        sequence = self.connection.send_duss(
+            sender, receiver, protocol.ATTR_NEED_ACK, cmdset, cmdid, payload
+        )
         frame = self.connection.wait_for_duss(
             sequence,
             cmdset=cmdset,
@@ -498,7 +858,12 @@ class DirectRobot:
         effect: str = "on",
         timeout: float = 1.0,
     ) -> DirectAck:
-        components = {"all": 0x3F, "top": 0x30, "gimbal": 0x30, "bottom": 0x0F}
+        components = {
+            "all": LED_SUBCOMPONENT_ALL,
+            "top": LED_SUBCOMPONENT_TOP,
+            "gimbal": LED_SUBCOMPONENT_TOP,
+            "bottom": LED_SUBCOMPONENT_BOTTOM,
+        }
         try:
             component_id = components[component.lower()]
         except KeyError as exc:
@@ -510,7 +875,14 @@ class DirectRobot:
             blue=blue,
             effect=effect,
         )
-        return self.request(0x02, 0x09, 0x3F, 0x33, payload, timeout)
+        return self.request(
+            protocol.HOST_MOBILE,
+            protocol.HOST_HDVT_UAV,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_LED_COLOR_SET,
+            payload,
+            timeout,
+        )
 
     def set_muzzle_led(
         self,
@@ -523,7 +895,7 @@ class DirectRobot:
         payload = struct.pack(
             "<IHBBBBBHH",
             1 << 6,
-            0xFF,
+            LED_ARMOR_ALL_MASK,
             (mode << 4) | int(enabled),
             255,
             255,
@@ -532,15 +904,36 @@ class DirectRobot:
             1,
             1,
         )
-        return self.request(0x02, 0x09, 0x3F, 0x33, payload, timeout)
+        return self.request(
+            protocol.HOST_MOBILE,
+            protocol.HOST_HDVT_UAV,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_LED_COLOR_SET,
+            payload,
+            timeout,
+        )
 
     def play_sound(self, sound_id: int, *, timeout: float = 1.0) -> DirectAck:
         control = 2 if 0x107 <= int(sound_id) <= 0x12A else 1
         payload = struct.pack("<IBHB", int(sound_id), control, 5000, 1)
-        return self.request(0x02, 0x09, 0x3F, 0x1A, payload, timeout)
+        return self.request(
+            protocol.HOST_MOBILE,
+            protocol.HOST_HDVT_UAV,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_PLAY_SOUND,
+            payload,
+            timeout,
+        )
 
     def capture(self, *, timeout: float = 1.0) -> DirectAck:
-        return self.request(0x02, 0x01, 0x02, 0x01, b"\x01", timeout)
+        return self.request(
+            protocol.HOST_MOBILE,
+            protocol.HOST_CAMERA,
+            protocol.CMDSET_CAMERA,
+            protocol.CMD_CAPTURE,
+            b"\x01",
+            timeout,
+        )
 
     def fire_infrared(self, *, lease_seconds: float = 0.12) -> None:
         self._require_armed()

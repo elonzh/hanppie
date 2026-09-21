@@ -30,13 +30,19 @@ object RemoteControl {
             val bits=value.toFloat().toBits(); List(4) { (bits ushr (it*8)).toByte() }
         }.toByteArray()
     }
+    const val GIMBAL_ACCEL_CTRL_BYTE = 0xdc
+    const val ARMOR_ALL_MASK = 0x3f
+    const val SUBCOMPONENT_ALL_MASK = 0xff
+    const val LED_EFFECT_SOLID_ON = 0x71
+    const val LED_EFFECT_SOLID_OFF = 0x70
+
     /** S1-verified rm_module.Gimbal.set_accel_ctrl: yaw/roll/pitch in 0.1 deg/s. */
     fun gimbalVelocity(pitch: Double, yaw: Double): ByteArray {
         require(pitch.isFinite() && yaw.isFinite())
         return ByteArray(7).apply {
             put16(0,(yaw.coerceIn(-120.0,120.0)*10).roundToInt())
             put16(4,(pitch.coerceIn(-120.0,120.0)*10).roundToInt())
-            this[6]=0xdc.toByte()
+            this[6] = GIMBAL_ACCEL_CTRL_BYTE.toByte()
         }
     }
 
@@ -44,9 +50,9 @@ object RemoteControl {
     fun led(red: Int, green: Int, blue: Int, enabled: Boolean = true): ByteArray {
         require(red in 0..255 && green in 0..255 && blue in 0..255)
         return byteArrayOf(
-            0x3f, 0, 0, 0, // all armor LEDs
-            0xff.toByte(), 0, // all subcomponents
-            (if (enabled) 0x71 else 0x70).toByte(),
+            ARMOR_ALL_MASK.toByte(), 0, 0, 0, // all armor LEDs
+            SUBCOMPONENT_ALL_MASK.toByte(), 0, // all subcomponents
+            (if (enabled) LED_EFFECT_SOLID_ON else LED_EFFECT_SOLID_OFF).toByte(),
             red.toByte(), green.toByte(), blue.toByte(),
             0, // repeat count
             0xe8.toByte(), 0x03, // one-second on interval (unused for solid)

@@ -49,7 +49,7 @@ class AppSession(private val target: RobotTarget,
     private val active = AtomicBoolean(false)
     private var socket: DatagramSocket? = null
     private var receiver: Thread? = null
-    @Volatile private var mode = "000300"
+    @Volatile private var mode = Protocol.MODE_NORMAL
     @Volatile private var labRunning = false
     @Volatile private var remote = false
     @Volatile var product: RobotProduct = RobotProduct()
@@ -72,13 +72,13 @@ class AppSession(private val target: RobotTarget,
         modeMutex.withLock {
         check(!labRunning) { "请先停止 Lab 脚本" }
         if (!remote) {
-            mode = "0b0300"
+            mode = Protocol.MODE_REMOTE
             for (c in remoteSetup + remoteEffects) {
                 if (c.control) sendNeutral() else send(c.receiver, c.attr, c.set, c.id, c.payload.hexBytes(), flags = c.flags.hexBytes())
                 delay(10)
             }
-            send(0xc3, 0x40, 0x3f, 0x19, byteArrayOf(1))
-            send(0xc3, 0x40, 0x3f, 0x28, byteArrayOf(0))
+            send(Protocol.HOST_CHASSIS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_WORK_MODE_SET, byteArrayOf(1))
+            send(Protocol.HOST_CHASSIS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SPEED_MODE_SET, byteArrayOf(0))
             remote = true
             halt()
         }
@@ -126,19 +126,19 @@ class AppSession(private val target: RobotTarget,
         try {
             val fireSequence = synchronized(txLock) {
                 check(remote && active.get() && !labRunning) { "遥控未启用" }
-                send(9, 0x40, 0x3f, 0x33, RemoteControl.muzzleFireLed(true))
+                send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_LED_COLOR_SET, RemoteControl.muzzleFireLed(true))
                 fireLedEnabled = true
-                send(0x17, 0x40, 0x3f, 0x55, RemoteControl.blasterLed(true))
+                send(Protocol.HOST_GUN, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_GUN_LED_SET, RemoteControl.blasterLed(true))
                 blasterLedEnabled = true
-                send(9, 0x40, 0x3f, 0x51, byteArrayOf(1))
+                send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SHOOT_CMD, byteArrayOf(1))
             }
             delay(400)
             fireSequence
         } finally {
             if (fireLedEnabled || blasterLedEnabled) synchronized(txLock) {
                 if (active.get()) runCatching {
-                    if (blasterLedEnabled) send(0x17, 0x40, 0x3f, 0x55, RemoteControl.blasterLed(false))
-                    if (fireLedEnabled) send(9, 0x40, 0x3f, 0x33, RemoteControl.muzzleFireLed(false))
+                    if (blasterLedEnabled) send(Protocol.HOST_GUN, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_GUN_LED_SET, RemoteControl.blasterLed(false))
+                    if (fireLedEnabled) send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_LED_COLOR_SET, RemoteControl.muzzleFireLed(false))
                 }
             }
         }
@@ -151,17 +151,17 @@ class AppSession(private val target: RobotTarget,
         val chunks = encoded.asList().chunked(SpeakerAudio.chunkBytes).map { part -> part.toByteArray() }
         synchronized(txLock) {
             check(remote && active.get() && !labRunning) { "遥控未启用" }
-            send(9, 0x40, 0x3f, 0x5f, SpeakerAudio.start(chunks.size, encoded.size))
+            send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_AUDIO_TRANSFER, SpeakerAudio.start(chunks.size, encoded.size))
             Thread.sleep(55)
             chunks.forEachIndexed { index, chunk ->
-                send(9, 0x00, 0x00, 0x09, SpeakerAudio.block(chunk, index))
+                send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NO_ACK, Protocol.CMDSET_COMMON, Protocol.CMD_FW_TRANSMIT, SpeakerAudio.block(chunk, index))
                 if (index + 1 < chunks.size) Thread.sleep(6)
             }
             Thread.sleep(55)
-            send(9, 0x40, 0x3f, 0x5f,
+            send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_AUDIO_TRANSFER,
                 byteArrayOf(2) + MessageDigest.getInstance("MD5").digest(encoded))
             Thread.sleep(107)
-            send(9, 0x40, 0x3f, 0xb3, SpeakerAudio.playPayload)
+            send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_PLAY_SOUND_TASK, SpeakerAudio.playPayload)
         }
         chunks.size
     }
@@ -173,7 +173,7 @@ class AppSession(private val target: RobotTarget,
             if (c.control) sendNeutral() else send(c.receiver, c.attr, c.set, c.id, c.payload.hexBytes(), flags = c.flags.hexBytes())
             delay(10)
         }
-        if (connected) send(0xc3,0x40,0x3f,0x19,byteArrayOf(0))
+        if (connected) send(Protocol.HOST_CHASSIS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_WORK_MODE_SET, byteArrayOf(0))
         remote = false; normalMode()
         }
     }
@@ -183,13 +183,13 @@ class AppSession(private val target: RobotTarget,
     }
     fun setLed(red: Int, green: Int, blue: Int, enabled: Boolean = true) = synchronized(txLock) {
         check(active.get()) { "机器人未连接" }
-        send(9, 0x40, 0x3f, 0x33, RemoteControl.led(red, green, blue, enabled))
+        send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_LED_COLOR_SET, RemoteControl.led(red, green, blue, enabled))
     }
     fun media(start: Boolean, audio: Boolean = false) {
-        if (start) send(1, 0x40, 2, 0x18, "0403000000".hexBytes())
+        if (start) send(Protocol.HOST_CAMERA, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_CAMERA, Protocol.CMD_SET_VIDEO_FORMAT, "0403000000".hexBytes())
         for (control in if (start) listOf(1, 2) else listOf(2, 1))
-            send(1, 0x40, 0x3f, 0xd2, byteArrayOf(control.toByte(), if (start) 1 else 0, 0))
-        if (start && audio) send(1, 0x40, 0x3f, 0x1e, byteArrayOf(1))
+            send(Protocol.HOST_CAMERA, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_STREAM_CTRL, byteArrayOf(control.toByte(), if (start) 1 else 0, 0))
+        if (start && audio) send(Protocol.HOST_CAMERA, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SET_AUDIO_STATUS, byteArrayOf(1))
     }
     @Volatile var lastReceivedNanos: Long = 0; private set
     override val connected: Boolean get() = active.get()
@@ -202,7 +202,7 @@ class AppSession(private val target: RobotTarget,
                 network.datagram().use { socket ->
                     socket.reuseAddress = true
                     socket.broadcast = true
-                    socket.bind(InetSocketAddress(localIp, 45678))
+                    socket.bind(InetSocketAddress(localIp, Protocol.APP_PORT))
                     socket.soTimeout = 200
                     val deadline = System.nanoTime() + timeoutMillis * 1_000_000
                     while (System.nanoTime() < deadline) {
@@ -236,7 +236,7 @@ class AppSession(private val target: RobotTarget,
             network.datagram().use { socket ->
                 socket.reuseAddress = true
                 socket.broadcast = true
-                socket.bind(InetSocketAddress(localIp, 45678))
+                socket.bind(InetSocketAddress(localIp, Protocol.APP_PORT))
                 socket.soTimeout = 200
                 val deadline = System.nanoTime() + timeoutMillis * 1_000_000
                 while (System.nanoTime() < deadline) {
@@ -269,7 +269,7 @@ class AppSession(private val target: RobotTarget,
             network.datagram().use { socket ->
                 socket.reuseAddress = true
                 socket.broadcast = true
-                socket.bind(InetSocketAddress(localIp, 45678))
+                socket.bind(InetSocketAddress(localIp, Protocol.APP_PORT))
                 val destination = InetAddress.getByName(pairing.robot.ip)
                 socket.send(DatagramPacket(acknowledgement, acknowledgement.size, destination, pairing.sourcePort))
             }
@@ -313,7 +313,7 @@ class AppSession(private val target: RobotTarget,
             for (command in connectionSetup) {
                 coroutineContext.ensureActive()
                 check(connected) { "初始化期间连接中断" }
-                if (command.control) sendNeutral() else send(command.receiver, 0x40, command.set,
+                if (command.control) sendNeutral() else send(command.receiver, Protocol.ATTR_NEED_ACK, command.set,
                     command.id, command.payload.hexBytes(), flags = command.flags.hexBytes())
                 delay(if (command.control) 20 else 6)
             }
@@ -329,7 +329,7 @@ class AppSession(private val target: RobotTarget,
         network.datagram().use { udp ->
             udp.reuseAddress = true
             udp.broadcast = true
-            udp.bind(InetSocketAddress(target.localIp, 45678))
+            udp.bind(InetSocketAddress(target.localIp, Protocol.APP_PORT))
             udp.soTimeout = 200
             val claim = target.appId.lowercase().toByteArray(Charsets.US_ASCII)
             val deadline = System.nanoTime() + target.identityTimeoutMillis * 1_000_000
@@ -340,7 +340,7 @@ class AppSession(private val target: RobotTarget,
                 currentCoroutineContext().ensureActive()
                 if (System.nanoTime() >= nextSend) {
                     try {
-                        udp.send(DatagramPacket(claim, claim.size, destination, 56789))
+                        udp.send(DatagramPacket(claim, claim.size, destination, Protocol.ROBOT_APP_PORT))
                         claimSent = true
                         routeFailure = null
                         nextSend = System.nanoTime() + 1_000_000_000
@@ -383,7 +383,7 @@ class AppSession(private val target: RobotTarget,
         val fresh = remote && System.nanoTime() < inputDeadline
         val payload = if (remote && System.nanoTime() < triggerDeadline) "0000042000010840000230".hexBytes()
             else Protocol.neutral
-        sendPacket(envelope.control(Protocol.duss(2, 9, 0, 1, 4, payload, seq)))
+        sendPacket(envelope.control(Protocol.duss(Protocol.HOST_MOBILE, Protocol.HOST_HDVT_UAV, Protocol.ATTR_NO_ACK, Protocol.CMDSET_SPECIAL, Protocol.CMD_SPECIAL_RM_CONTROL, payload, seq)))
         if (remote || forceActuatorStop) {
             var velocity = if (fresh) controlPayload else RemoteControl.velocity(0.0,0.0,0.0)
             var gimbal = if(fresh) gimbalPayload else RemoteControl.gimbalVelocity(0.0,0.0)
@@ -398,9 +398,9 @@ class AppSession(private val target: RobotTarget,
             // S1 ChassisCtrl.stop uses wheel RPM zero, not body velocity zero.
             // Ignore the sign bit of each float so -0.0 also enters the stop path.
             if (velocity.indices.all { index -> velocity[index] == 0.toByte() || (index % 4 == 3 && velocity[index] == 0x80.toByte()) })
-                send(0xc3,0x40,0x3f,0x20,ByteArray(8))
-            else send(0xc3,0,0x3f,0x21,velocity)
-            send(4, 0, 4, 0x0c, gimbal)
+                send(Protocol.HOST_CHASSIS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_WHEEL_SPEED_SET, ByteArray(8))
+            else send(Protocol.HOST_CHASSIS, Protocol.ATTR_NO_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SPEED_SET, velocity)
+            send(Protocol.HOST_GIMBAL, Protocol.ATTR_NO_ACK, Protocol.CMDSET_GIMBAL, Protocol.CMD_GIMBAL_EXT_CTRL_ACCEL, gimbal)
         }
     }
 
@@ -409,8 +409,8 @@ class AppSession(private val target: RobotTarget,
         udp.send(DatagramPacket(data, data.size, destination, target.remotePort))
     }
 
-    override fun labMode(running: Boolean) { mode = "020302"; labRunning = running }
-    fun normalMode() { mode = "000300"; labRunning = false }
+    override fun labMode(running: Boolean) { mode = Protocol.MODE_LAB; labRunning = running }
+    fun normalMode() { mode = Protocol.MODE_NORMAL; labRunning = false }
 
     private fun receiveLoop() {
         var nextControl = 0L
@@ -432,7 +432,7 @@ class AppSession(private val target: RobotTarget,
                         Protocol.frames(data).filter { it.valid }.forEach { frame ->
                             Telemetry.gimbalYaw(frame)?.let { yaw -> yawSample = yaw to System.nanoTime() }
                             updateProduct(frame)
-                            if (frame.set == 0x3f && frame.id == 0x1d) onAudio?.invoke(frame.payload) else onFrame(frame)
+                            if (frame.set == Protocol.CMDSET_RM && frame.id == Protocol.CMD_RM_AUDIO_TO_APP) onAudio?.invoke(frame.payload) else onFrame(frame)
                         }
                         }
                     }
@@ -441,8 +441,8 @@ class AppSession(private val target: RobotTarget,
                 check(now - lastReceivedNanos < 5_000_000_000) { "5 秒未收到机器人数据，连接已失效" }
                 if (now >= nextControl) { sendNeutral(); nextControl = now + 20_000_000 }
                 if (now >= nextKeepalive && !labRunning) {
-                    send(9, 0, 0x3f, 4, mode.hexBytes())
-                    if (mode == "000300") send(7, 0x40, 7, 0x17)
+                    send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NO_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SPECIAL_CONTROL, mode.hexBytes())
+                    if (mode == Protocol.MODE_NORMAL) send(Protocol.HOST_WIFI, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_WIFI, Protocol.CMD_WIFI_AP_KEEPALIVE)
                     nextKeepalive = now + 800_000_000
                 }
             }
@@ -469,7 +469,7 @@ class AppSession(private val target: RobotTarget,
 
     override fun close() {
         if (active.get()) runCatching { safetyStop() }
-        if (active.get() && remote) runCatching { send(0xc3,0x40,0x3f,0x19,byteArrayOf(0)) }
+        if (active.get() && remote) runCatching { send(Protocol.HOST_CHASSIS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_WORK_MODE_SET, byteArrayOf(0)) }
         active.set(false)
         socket?.close()
         if (Thread.currentThread() !== receiver) receiver?.join(1500)

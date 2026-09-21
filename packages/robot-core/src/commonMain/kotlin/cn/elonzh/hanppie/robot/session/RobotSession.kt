@@ -6,15 +6,14 @@ import cn.elonzh.hanppie.robot.lab.LabUpload
 import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
 import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.product.RobotProduct
-
-const val ROBOT_DIRECT_IP = "192.168.2.1"
+import cn.elonzh.hanppie.robot.protocol.Protocol
 
 data class RobotTarget(
     val ip: String,
     val appId: String,
     val localIp: String = "0.0.0.0",
-    val localPort: Int = 10609,
-    val remotePort: Int = 10607,
+    val localPort: Int = Protocol.LOCAL_CONTROL_PORT,
+    val remotePort: Int = Protocol.ROBOT_CONTROL_PORT,
     val identityTimeoutMillis: Long = 4_000,
     val sessionTimeoutMillis: Long = 5_000,
 ) {

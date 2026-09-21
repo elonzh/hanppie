@@ -9,8 +9,15 @@ data class LabScriptStatus(
     val guid: String,
     val traceback: String? = null,
 ) {
-    val isIdle: Boolean get() = status == 0
-    val isPreparing: Boolean get() = status == 1
-    val isRunning: Boolean get() = status == 2
-    val isFailed: Boolean get() = status == 5
+    val isIdle: Boolean get() = status == STATUS_IDLE
+    val isPreparing: Boolean get() = status == STATUS_PREPARING
+    val isRunning: Boolean get() = status == STATUS_RUNNING
+    val isFailed: Boolean get() = status == STATUS_FAILED
+
+    companion object {
+        const val STATUS_IDLE = 0
+        const val STATUS_PREPARING = 1
+        const val STATUS_RUNNING = 2
+        const val STATUS_FAILED = 5
+    }
 }

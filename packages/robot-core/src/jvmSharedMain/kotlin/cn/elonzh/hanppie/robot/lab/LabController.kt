@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.robot.lab
 
+import cn.elonzh.hanppie.robot.protocol.Protocol
 import cn.elonzh.hanppie.robot.protocol.hex
 import cn.elonzh.hanppie.robot.protocol.hexBytes
 import cn.elonzh.hanppie.robot.session.AppSession
@@ -68,23 +69,22 @@ class LabController internal constructor(private val session: LabChannel,
         program = null; digest = null; runId = null
         if (!entered) {
             session.labMode()
-            session.send(9, 0, 0x3f, 4, "020302".hexBytes())
+            session.send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NO_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SPECIAL_CONTROL, Protocol.MODE_LAB.hexBytes())
             delay(1000)
-            session.send(9, 0x40, 0x3f, 9,
-                "05000000ea03000000000000ef0300000a000000f003000000000000f1030000b80b0000f2030000dc0500000000000000000000".hexBytes())
+            session.send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_GAME_STATE_SYNC, Protocol.GAME_STATE_SYNC_LAB_PARAMS.hexBytes())
             delay(1000)
-            session.send(9, 0x40, 0x3f, 0x57)
+            session.send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_GET_SIGHT_BEAD_POSITION)
             entered = true
         }
         // A previous client can leave the native single slot marked as running after its Python
         // start() has returned. Running a replacement explicitly ends that stale native run first.
-        session.send(0xc9, 0x80, 0x3f, 0xba, byteArrayOf(0), sender = 0x42); delay(52)
+        session.send(Protocol.HOST_SCRATCH_SCRIPT, Protocol.ATTR_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_CUSTOM_UI_ATTRIBUTE_SET, byteArrayOf(0), sender = Protocol.HOST_SCRATCH_CLIENT); delay(52)
         session.labMode()
-        session.send(9, 0x40, 0x3f, 0x4c, byteArrayOf(0)); delay(20)
-        session.send(0xa9, 0x40, 0x3f, 0xa3, candidate.metadata(0x21)); delay(20)
-        session.send(0xa9, 0x40, 0x3f, 0xa3, candidate.guidMetadata()); delay(20)
+        session.send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_EXIT_LOW_POWER_MODE, byteArrayOf(0)); delay(20)
+        session.send(Protocol.HOST_SCRATCH_SYS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SCRIPT_CTRL, candidate.metadata(Protocol.SCRIPT_CTRL_METADATA_FULL)); delay(20)
+        session.send(Protocol.HOST_SCRATCH_SYS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SCRIPT_CTRL, candidate.guidMetadata()); delay(20)
         val size = byteArrayOf(1, 0, 4, 0) + ByteArray(4) { (bytes.size ushr (8 * it)).toByte() }
-        session.send(0xa9, 0x40, 0x3f, 0xa1, size); delay(20)
+        session.send(Protocol.HOST_SCRATCH_SYS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SCRIPT_DOWNLOAD_DATA, size); delay(20)
         withContext(Dispatchers.IO) { uploadBytes(bytes) }
         delay(500)
         check(session.connected) { "上传期间机器人连接已断开" }
@@ -108,10 +108,10 @@ class LabController internal constructor(private val session: LabChannel,
         // Once registration begins a partial delivery is possible. Require stop before any retry.
         startRequested = true
         session.labMode(running = true)
-        session.send(0xa9, 0x40, 0x3f, 0xa2, byteArrayOf(1, 0) + hash); delay(20)
-        session.send(0xa9, 0x40, 0x3f, 0xa3, current.metadata(0x52)); delay(20)
-        session.send(0xc9, 0x80, 0x3f, 0xba, byteArrayOf(0), sender = 0x42); delay(20)
-        session.send(0xc9, 0x80, 0x3f, 0xab, byteArrayOf(1))
+        session.send(Protocol.HOST_SCRATCH_SYS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SCRIPT_DOWNLOAD_FINSH, byteArrayOf(1, 0) + hash); delay(20)
+        session.send(Protocol.HOST_SCRATCH_SYS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SCRIPT_CTRL, current.metadata(Protocol.SCRIPT_CTRL_START)); delay(20)
+        session.send(Protocol.HOST_SCRATCH_SCRIPT, Protocol.ATTR_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_CUSTOM_UI_ATTRIBUTE_SET, byteArrayOf(0), sender = Protocol.HOST_SCRATCH_CLIENT); delay(20)
+        session.send(Protocol.HOST_SCRATCH_SCRIPT, Protocol.ATTR_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SUB_MOBILE_INFO, byteArrayOf(1))
         val currentRunId = checkNotNull(runId)
         log("Lab 启动序列已发送；runId=$currentRunId 等待 STARTED")
         currentRunId
@@ -134,15 +134,15 @@ class LabController internal constructor(private val session: LabChannel,
 
     private suspend fun finishLocked() {
         program?.let {
-            session.send(0xa9, 0x40, 0x3f, 0xa3, it.metadata(0x55)); delay(52)
+            session.send(Protocol.HOST_SCRATCH_SYS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SCRIPT_CTRL, it.metadata(Protocol.SCRIPT_CTRL_STOP)); delay(52)
         }
-        session.send(0xc9, 0x80, 0x3f, 0xba, byteArrayOf(0), sender = 0x42)
+        session.send(Protocol.HOST_SCRATCH_SCRIPT, Protocol.ATTR_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_CUSTOM_UI_ATTRIBUTE_SET, byteArrayOf(0), sender = Protocol.HOST_SCRATCH_CLIENT)
         startRequested = false
         session.labMode()
     }
 
     companion object {
-        internal fun transfer(ip: String, bytes: ByteArray, port: Int = 21, network: RobotNetwork = RobotNetwork.Default) {
+        internal fun transfer(ip: String, bytes: ByteArray, port: Int = Protocol.ROBOT_FTP_PORT, network: RobotNetwork = RobotNetwork.Default) {
             val ftp = FTPClient()
             ftp.setSocketFactory(network.socketFactory)
             ftp.connectTimeout = 5000

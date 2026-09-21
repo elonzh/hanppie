@@ -67,7 +67,7 @@ class AppConnection:
         self._periodic_duss: dict[
             str, tuple[tuple[int, int, int, int, int, bytes], float | None]
         ] = {}
-        self._mode_keepalive = bytes.fromhex("000300")
+        self._mode_keepalive = bytes.fromhex(protocol.MODE_NORMAL)
         self._send_sdk_ready = True
         self._frame_condition = threading.Condition()
         self._recent_frames: deque[protocol.DussFrame] = deque(maxlen=256)
@@ -228,7 +228,15 @@ class AppConnection:
 
     def send_control(self, payload: bytes = protocol.NEUTRAL_CONTROL) -> int:
         sequence = self._next_sequence()
-        duss = protocol.build_duss(0x02, 0x09, 0x00, 0x01, 0x04, payload, sequence)
+        duss = protocol.build_duss(
+            protocol.HOST_MOBILE,
+            protocol.HOST_HDVT_UAV,
+            protocol.ATTR_NO_ACK,
+            protocol.CMDSET_SPECIAL,
+            protocol.CMD_SPECIAL_RM_CONTROL,
+            payload,
+            sequence,
+        )
         self._send(self.envelope.wrap_control(duss))
         return sequence
 
@@ -374,9 +382,22 @@ class AppConnection:
                 with self._state_lock:
                     mode_keepalive = self._mode_keepalive
                     send_sdk_ready = self._send_sdk_ready
-                self.send_duss(0x02, 0x09, 0x00, 0x3F, 0x04, mode_keepalive)
+                self.send_duss(
+                    protocol.HOST_MOBILE,
+                    protocol.HOST_HDVT_UAV,
+                    protocol.ATTR_NO_ACK,
+                    protocol.CMDSET_RM,
+                    protocol.CMD_RM_SPECIAL_CONTROL,
+                    mode_keepalive,
+                )
                 if send_sdk_ready:
-                    self.send_duss(0x02, 0x07, 0x40, 0x07, 0x17)
+                    self.send_duss(
+                        protocol.HOST_MOBILE,
+                        protocol.HOST_WIFI,
+                        protocol.ATTR_NEED_ACK,
+                        protocol.CMDSET_WIFI,
+                        protocol.CMD_WIFI_AP_KEEPALIVE,
+                    )
                 next_keepalive = now + 1.0
 
     def _handle_packet(self, data: bytes) -> None:
@@ -399,9 +420,13 @@ class AppConnection:
                 self.info = replace(self.info, product=product)
                 self._emit("product", product)
             self._emit("duss", frame)
-            if frame.cmdset == 0x48 and frame.cmdid == 0x08 and len(frame.payload) == 62:
+            if (
+                frame.cmdset == protocol.CMDSET_VIRTUAL_BUS
+                and frame.cmdid == protocol.CMD_VBUS_DATA_ANALYSIS
+                and len(frame.payload) == 62
+            ):
                 self._battery = frame.payload[10]
-            elif frame.cmdset == 0x3F and frame.cmdid == 0x1D:
+            elif frame.cmdset == protocol.CMDSET_RM and frame.cmdid == protocol.CMD_RM_AUDIO_TO_APP:
                 self._emit("audio", frame.payload)
 
     def get_battery(self) -> int | None:

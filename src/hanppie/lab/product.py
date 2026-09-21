@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from enum import Enum, IntEnum
 
+from hanppie.lab import protocol
 from hanppie.lab.protocol import DussFrame
 
 
@@ -91,8 +92,9 @@ class RobotProduct:
 def decode_model(frame: DussFrame) -> RobotModel | None:
     if (
         not frame.valid
-        or frame.attr != 0xC0
-        or (frame.cmdset, frame.cmdid) != (0x3F, 0xFE)
+        or frame.attr != protocol.ATTR_RESP_NEED_ACK
+        or (frame.cmdset, frame.cmdid)
+        != (protocol.CMDSET_RM, protocol.CMD_RM_PRODUCT_ATTRIBUTE_GET)
         or len(frame.payload) < 2
     ):
         return None
@@ -105,8 +107,8 @@ def decode_model(frame: DussFrame) -> RobotModel | None:
 def decode_capabilities(frame: DussFrame) -> RobotCapabilities | None:
     if (
         not frame.valid
-        or frame.attr != 0x00
-        or (frame.cmdset, frame.cmdid) != (0x3F, 0x12)
+        or frame.attr != protocol.ATTR_NO_ACK
+        or (frame.cmdset, frame.cmdid) != (protocol.CMDSET_RM, protocol.CMD_RM_MODULE_STATUS_PUSH)
         or not frame.payload
     ):
         return None

@@ -7,6 +7,7 @@ import threading
 import time
 from collections.abc import Callable
 
+from hanppie.lab import protocol
 from hanppie.lab.app import AppConnection
 from hanppie.lab.audio import LabAudio
 from hanppie.lab.bridge import LabBridge, LabTelemetry
@@ -202,22 +203,53 @@ class LabRobot:
             raise RuntimeError("App connection is not initialized")
         self._stop_keepalive()
         self.connection.suspend_idle_keepalive = True
-        self.connection.send_duss(0x02, 0x09, 0x00, 0x3F, 0x04, bytes.fromhex("020302"))
+        self.connection.send_duss(
+            protocol.HOST_MOBILE,
+            protocol.HOST_HDVT_UAV,
+            protocol.ATTR_NO_ACK,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_SPECIAL_CONTROL,
+            bytes.fromhex(protocol.MODE_LAB),
+        )
         self._start_keepalive()
         time.sleep(self.config.lab_mode_settle)
-        parameters = bytes.fromhex(
-            "05000000ea03000000000000ef0300000a000000f003000000000000"
-            "f1030000b80b0000f2030000dc0500000000000000000000"
+        parameters = bytes.fromhex(protocol.GAME_STATE_SYNC_LAB_PARAMS)
+        self.connection.send_duss(
+            protocol.HOST_MOBILE,
+            protocol.HOST_HDVT_UAV,
+            protocol.ATTR_NEED_ACK,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_GAME_STATE_SYNC,
+            parameters,
         )
-        self.connection.send_duss(0x02, 0x09, 0x40, 0x3F, 0x09, parameters)
         time.sleep(self.config.lab_mode_settle)
-        self.connection.send_duss(0x02, 0x09, 0x40, 0x3F, 0x57)
+        self.connection.send_duss(
+            protocol.HOST_MOBILE,
+            protocol.HOST_HDVT_UAV,
+            protocol.ATTR_NEED_ACK,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_GET_SIGHT_BEAD_POSITION,
+        )
         self._lab_entered = True
 
     def exit_lab(self) -> None:
         self._stop_keepalive()
-        self.connection.send_duss(0x02, 0x09, 0x00, 0x3F, 0x04, bytes.fromhex("000300"))
-        self.connection.send_duss(0x02, 0x09, 0x40, 0x3F, 0x77, bytes.fromhex("010300"))
+        self.connection.send_duss(
+            protocol.HOST_MOBILE,
+            protocol.HOST_HDVT_UAV,
+            protocol.ATTR_NO_ACK,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_SPECIAL_CONTROL,
+            bytes.fromhex(protocol.MODE_NORMAL),
+        )
+        self.connection.send_duss(
+            protocol.HOST_MOBILE,
+            protocol.HOST_HDVT_UAV,
+            protocol.ATTR_NEED_ACK,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_SAVE_PREF,
+            bytes.fromhex(protocol.MODE_EXIT_PREF),
+        )
         time.sleep(0.065)
         self.connection.send_control()
         self.connection.suspend_idle_keepalive = False
@@ -243,19 +275,47 @@ class LabRobot:
         while not self._keepalive_stop.wait(0.8):
             if not self.connected:
                 return
-            self.connection.send_duss(0x02, 0x09, 0x00, 0x3F, 0x04, bytes.fromhex("020302"))
+            self.connection.send_duss(
+                protocol.HOST_MOBILE,
+                protocol.HOST_HDVT_UAV,
+                protocol.ATTR_NO_ACK,
+                protocol.CMDSET_RM,
+                protocol.CMD_RM_SPECIAL_CONTROL,
+                bytes.fromhex(protocol.MODE_LAB),
+            )
 
     def send_lab_metadata(self, guid: str, sign: str, marker: int) -> None:
         payload = bytes((marker & 0xFF,)) + (guid + sign).encode("ascii")
-        self.connection.send_duss(0x02, 0xA9, 0x40, 0x3F, 0xA3, payload)
+        self.connection.send_duss(
+            protocol.HOST_MOBILE,
+            protocol.HOST_SCRATCH_SYS,
+            protocol.ATTR_NEED_ACK,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_SCRIPT_CTRL,
+            payload,
+        )
 
     def send_lab_guid_metadata(self, guid: str, marker: int) -> None:
         payload = bytes((marker & 0xFF,)) + guid.encode("ascii") + b"\x00\x00"
-        self.connection.send_duss(0x02, 0xA9, 0x40, 0x3F, 0xA3, payload)
+        self.connection.send_duss(
+            protocol.HOST_MOBILE,
+            protocol.HOST_SCRATCH_SYS,
+            protocol.ATTR_NEED_ACK,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_SCRIPT_CTRL,
+            payload,
+        )
 
     def send_lab_upload_size(self, byte_count: int) -> None:
         payload = b"\x01\x00\x04\x00" + int(byte_count).to_bytes(4, "little")
-        self.connection.send_duss(0x02, 0xA9, 0x40, 0x3F, 0xA1, payload)
+        self.connection.send_duss(
+            protocol.HOST_MOBILE,
+            protocol.HOST_SCRATCH_SYS,
+            protocol.ATTR_NEED_ACK,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_SCRIPT_DOWNLOAD_DATA,
+            payload,
+        )
 
     def upload_program(self, python_source: str | None = None) -> str:
         dsp, identity = build_lab_program(python_source, config=self.config)
@@ -266,7 +326,14 @@ class LabRobot:
             raise RuntimeError("enter_lab() must be called before uploading a program")
         self._program_identity = identity
         self._program_registered = False
-        self.connection.send_duss(0x02, 0x09, 0x40, 0x3F, 0x4C, b"\x00")
+        self.connection.send_duss(
+            protocol.HOST_MOBILE,
+            protocol.HOST_HDVT_UAV,
+            protocol.ATTR_NEED_ACK,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_EXIT_LOW_POWER_MODE,
+            b"\x00",
+        )
         time.sleep(0.02)
         self.send_lab_metadata(identity.guid, identity.sign, identity.full_marker)
         time.sleep(0.02)
@@ -300,32 +367,64 @@ class LabRobot:
             raise RuntimeError("Lab program identity is missing")
         self._stop_keepalive()
         if self._program_registered:
-            self.connection.send_duss(0x02, 0xC9, 0x80, 0x3F, 0xAB, b"\x01")
+            self.connection.send_duss(
+                protocol.HOST_MOBILE,
+                protocol.HOST_SCRATCH_SCRIPT,
+                protocol.ATTR_ACK,
+                protocol.CMDSET_RM,
+                protocol.CMD_RM_SUB_MOBILE_INFO,
+                b"\x01",
+            )
         else:
             self.connection.send_duss(
-                0x02,
-                0xA9,
-                0x40,
-                0x3F,
-                0xA2,
+                protocol.HOST_MOBILE,
+                protocol.HOST_SCRATCH_SYS,
+                protocol.ATTR_NEED_ACK,
+                protocol.CMDSET_RM,
+                protocol.CMD_RM_SCRIPT_DOWNLOAD_FINSH,
                 b"\x01\x00" + bytes.fromhex(self._program_digest),
             )
             time.sleep(0.02)
             assert self._program_identity is not None
-            self.send_lab_metadata(self._program_identity.guid, self._program_identity.sign, 0x52)
+            self.send_lab_metadata(
+                self._program_identity.guid, self._program_identity.sign, protocol.SCRIPT_CTRL_START
+            )
             time.sleep(0.02)
-            self.connection.send_duss(0x42, 0xC9, 0x80, 0x3F, 0xBA, b"\x00")
+            self.connection.send_duss(
+                protocol.HOST_SCRATCH_CLIENT,
+                protocol.HOST_SCRATCH_SCRIPT,
+                protocol.ATTR_ACK,
+                protocol.CMDSET_RM,
+                protocol.CMD_RM_CUSTOM_UI_ATTRIBUTE_SET,
+                b"\x00",
+            )
             time.sleep(0.02)
-            self.connection.send_duss(0x02, 0xC9, 0x80, 0x3F, 0xAB, b"\x01")
+            self.connection.send_duss(
+                protocol.HOST_MOBILE,
+                protocol.HOST_SCRATCH_SCRIPT,
+                protocol.ATTR_ACK,
+                protocol.CMDSET_RM,
+                protocol.CMD_RM_SUB_MOBILE_INFO,
+                b"\x01",
+            )
             self._program_registered = True
         self._program_started = True
         time.sleep(self.config.program_start_settle)
 
     def stop_lab_program(self) -> None:
         if self._program_identity is not None:
-            self.send_lab_metadata(self._program_identity.guid, self._program_identity.sign, 0x55)
+            self.send_lab_metadata(
+                self._program_identity.guid, self._program_identity.sign, protocol.SCRIPT_CTRL_STOP
+            )
             time.sleep(0.052)
-        self.connection.send_duss(0x42, 0xC9, 0x80, 0x3F, 0xBA, b"\x00")
+        self.connection.send_duss(
+            protocol.HOST_SCRATCH_CLIENT,
+            protocol.HOST_SCRATCH_SCRIPT,
+            protocol.ATTR_ACK,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_CUSTOM_UI_ATTRIBUTE_SET,
+            b"\x00",
+        )
         self._program_started = False
         self._program_registered = False
         if self._lab_entered:

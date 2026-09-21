@@ -10,6 +10,7 @@ from importlib.resources import files
 from io import BytesIO
 from xml.sax.saxutils import escape
 
+from hanppie.lab import protocol
 from hanppie.lab.config import DEFAULT_CONFIG, LabConfig
 
 DEFAULT_UPLOAD_NAME = "python_raw.dsp"
@@ -19,8 +20,8 @@ DEFAULT_UPLOAD_NAME = "python_raw.dsp"
 class LabProgramIdentity:
     guid: str
     sign: str
-    full_marker: int = 0x21
-    guid_marker: int = 0x2D
+    full_marker: int = protocol.SCRIPT_CTRL_METADATA_FULL
+    guid_marker: int = protocol.SCRIPT_CTRL_METADATA_GUID
 
 
 def _cdata(value: str) -> str:
@@ -77,7 +78,7 @@ def upload_lab_program(
     payload = dsp.encode("utf-8") if isinstance(dsp, str) else dsp
     digest = hashlib.md5(payload).hexdigest()
     with ftp_factory() as ftp:
-        ftp.connect(robot_ip, 21, timeout=timeout)
+        ftp.connect(robot_ip, protocol.ROBOT_FTP_PORT, timeout=timeout)
         ftp.login("anonymous", "")
         ftp.cwd("python")
         ftp.voidcmd("TYPE I")

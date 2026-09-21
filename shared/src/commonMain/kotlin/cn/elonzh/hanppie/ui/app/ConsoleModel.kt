@@ -23,11 +23,11 @@ import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
 import cn.elonzh.hanppie.robot.protocol.hex
 import cn.elonzh.hanppie.robot.product.RobotProduct
 import cn.elonzh.hanppie.robot.product.RobotProductProtocol
+import cn.elonzh.hanppie.robot.protocol.Protocol
 import cn.elonzh.hanppie.robot.session.RobotLabSession
 import cn.elonzh.hanppie.robot.session.RobotRuntime
 import cn.elonzh.hanppie.robot.session.RobotSession
 import cn.elonzh.hanppie.robot.session.RobotTarget
-import cn.elonzh.hanppie.robot.session.ROBOT_DIRECT_IP
 import cn.elonzh.hanppie.robot.telemetry.Telemetry
 import cn.elonzh.hanppie.ui.chat.ChatAgent
 import cn.elonzh.hanppie.ui.i18n.tr
@@ -531,7 +531,7 @@ internal class ConsoleModel(
             preferences.robots.firstOrNull()?.let { saved ->
                 add(ConnectionCandidate(RobotTarget(saved.ip, saved.appId), saved.mode))
             }
-            add(ConnectionCandidate(RobotTarget(ROBOT_DIRECT_IP, preferences.appId), ConnectionMode.DIRECT))
+            add(ConnectionCandidate(RobotTarget(Protocol.DEFAULT_ROBOT_IP, preferences.appId), ConnectionMode.DIRECT))
         }.distinctBy { it.target.ip }
 
         var lastFailure: Exception? = null

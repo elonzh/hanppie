@@ -1,6 +1,7 @@
 package cn.elonzh.hanppie.robot.product
 
 import cn.elonzh.hanppie.robot.protocol.DussFrame
+import cn.elonzh.hanppie.robot.protocol.Protocol
 
 /** Product type reported by RoboMaster's product-information command. */
 enum class RobotModel {
@@ -73,15 +74,9 @@ data class RobotProduct(
 
 /** Decodes the product and component messages used by DJI's RoboMaster product manager. */
 object RobotProductProtocol {
-    private const val PRODUCT_SET = 0x3f
-    private const val PRODUCT_TYPE_ID = 0xfe
-    private const val WORKING_DEVICES_ID = 0x12
-    private const val RESPONSE_ATTRIBUTE = 0xc0
-    private const val PUSH_ATTRIBUTE = 0x00
-
     fun model(frame: DussFrame): RobotModel? {
-        if (!frame.valid || frame.attr != RESPONSE_ATTRIBUTE || frame.set != PRODUCT_SET ||
-            frame.id != PRODUCT_TYPE_ID || frame.payload.size < 2) return null
+        if (!frame.valid || frame.attr != Protocol.ATTR_RESP_NEED_ACK || frame.set != Protocol.CMDSET_RM ||
+            frame.id != Protocol.CMD_RM_PRODUCT_ATTRIBUTE_GET || frame.payload.size < 2) return null
         return when (frame.payload[1].toInt() and 0xff) {
             1 -> RobotModel.ROBOMASTER_S1
             2 -> RobotModel.ROBOMASTER_EP
@@ -90,8 +85,8 @@ object RobotProductProtocol {
     }
 
     fun capabilities(frame: DussFrame): RobotCapabilities? {
-        if (!frame.valid || frame.attr != PUSH_ATTRIBUTE || frame.set != PRODUCT_SET ||
-            frame.id != WORKING_DEVICES_ID || frame.payload.isEmpty()) return null
+        if (!frame.valid || frame.attr != Protocol.ATTR_NO_ACK || frame.set != Protocol.CMDSET_RM ||
+            frame.id != Protocol.CMD_RM_MODULE_STATUS_PUSH || frame.payload.isEmpty()) return null
         val expectedDevices = frame.payload.u8(0)
         val devices = ArrayList<WorkingRobotDevice>(expectedDevices)
         var cursor = 1

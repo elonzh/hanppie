@@ -1,5 +1,7 @@
 package cn.elonzh.hanppie.robot.lab
 
+import cn.elonzh.hanppie.robot.protocol.Protocol
+
 data class LabProgram(val source: String, val guid: String, val sign: String, val title: String = "Hanppie-Lab") {
     init {
         require(Regex("[a-f0-9]{32}").matches(guid))
@@ -20,7 +22,7 @@ data class LabProgram(val source: String, val guid: String, val sign: String, va
     }
 
     fun metadata(marker: Int): ByteArray = byteArrayOf(marker.toByte()) + (guid + sign).encodeToByteArray()
-    fun guidMetadata(): ByteArray = byteArrayOf(0x2d) + guid.encodeToByteArray() + byteArrayOf(0, 0)
+    fun guidMetadata(): ByteArray = byteArrayOf(Protocol.SCRIPT_CTRL_METADATA_GUID.toByte()) + guid.encodeToByteArray() + byteArrayOf(0, 0)
 
     companion object {
         /**
