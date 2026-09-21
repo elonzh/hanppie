@@ -48,7 +48,7 @@ class ChatAgentTest {
     private suspend fun ChatAgent.ready() = withTimeout(5000) { state.first { it.ready } }
     private fun testTools(
         status: suspend () -> RobotStatusTool.Result = { testStatus("未连接") },
-        labApiReference: suspend (String) -> LabApiReferenceTool.Result = { testReference(it) },
+        readSkill: suspend (String, String) -> ReadSkillTool.Result = { _, path -> testReference(path) },
         listLabScripts: suspend () -> ListLabScriptsTool.Result = { ListLabScriptsTool.Result(emptyList()) },
         readLabScript: suspend (String) -> ReadLabScriptTool.Result = {
             ReadLabScriptTool.Result(it, "script:$it", 1, 1)
@@ -67,7 +67,7 @@ class ChatAgentTest {
         },
     ) = ToolRegistry {
         tool(RobotStatusTool(status))
-        tool(LabApiReferenceTool(labApiReference))
+        tool(ReadSkillTool(readSkill))
         tool(ListLabScriptsTool(listLabScripts))
         tool(ReadLabScriptTool(readLabScript))
         tool(SaveLabScriptTool(saveLabScript))
@@ -103,12 +103,7 @@ class ChatAgentTest {
         script = RobotStatusTool.ScriptRun(phase = ScriptRunPhase.IDLE, recentMessages = listOf(value)),
     )
 
-    private fun testReference(query: String, fact: String = "reference:$query") = LabApiReferenceTool.Result(
-        inCatalog = true,
-        availableCategories = listOf("test"),
-        sections = listOf(LabApiReferenceTool.Section("test", listOf(fact))),
-        guidance = "verified",
-    )
+    private fun testReference(path: String) = ReadSkillTool.Result("reference:$path")
 
     @Test fun theConfiguredThinkingDepthReachesTheConversationRequest(): Unit = runBlocking {
         val fake = Fake { text("好") }
@@ -449,7 +444,7 @@ class ChatAgentTest {
         }
     }
 
-    @Test fun multipleLabApiCategoriesCanBeReadBeforeAScriptIsSavedWithoutRunningIt(): Unit = runBlocking {
+    @Test fun discoveredSkillCanBeReadBeforeAScriptIsSavedWithoutRunningIt(): Unit = runBlocking {
         var requests = 0
         val referenceQueries = mutableListOf<String>()
         var saved: Triple<String?, String, String>? = null
@@ -458,9 +453,16 @@ class ChatAgentTest {
         val source = "def start():\n    log_ctrl.print_msg('ready')"
         val fake = Fake {
             when (requests++) {
-                0 -> call("lab_api_reference", "{\"query\":\"index\"}", "reference-index-call")
-                1 -> call("lab_api_reference", "{\"query\":\"runtime logging\"}", "reference-call")
-                2 -> call(
+                0 -> listOf(
+                    StreamFrame.ToolCallDelta("reference-index-call", "read_skill", "", index = 0),
+                    StreamFrame.ToolCallComplete("reference-index-call", "read_skill", "", index = 0),
+                    StreamFrame.ToolCallDelta(null, null, "{\"name\":", index = 0),
+                    StreamFrame.ToolCallComplete(null, "", "{\"name\":", index = 0),
+                    StreamFrame.ToolCallDelta(null, null, "\"lab-python\"}", index = 0),
+                    StreamFrame.ToolCallComplete(null, "", "\"lab-python\"}", index = 0),
+                    StreamFrame.End("tool_calls"),
+                )
+                1 -> call(
                     "save_lab_script",
                     buildJsonObject {
                         put("name", "状态脚本")
@@ -474,7 +476,7 @@ class ChatAgentTest {
         ChatAgent(
             toolRegistry = testTools(
                 status = { testStatus("已连接") },
-                labApiReference = { query -> referenceQueries += query; testReference(query) },
+                readSkill = { name, path -> referenceQueries += name; testReference(path) },
                 saveLabScript = { original, name, savedSource ->
                     saved = Triple(original, name, savedSource)
                     SaveLabScriptTool.Result(name, original == null, savedSource.length, 1)
@@ -487,24 +489,31 @@ class ChatAgentTest {
             createHttpClient = { error("unused") },
             sessions = history,
             executorOverride = fake,
+            skillsPrompt = { ai.koog.skills.prompt.generateSkillsPrompt(
+                listOf(ai.koog.skills.model.Skill("lab-python", "Lab Python", "unused")),
+                ai.koog.skills.prompt.SkillsPromptFormat.XML, includeLocation = false,
+            ) },
         ).use { agent ->
             agent.ready()
             agent.send("编写并保存状态脚本", config)
 
             assertNull(agent.finished().error)
-            assertEquals(listOf("index", "runtime logging"), referenceQueries)
+            val system = fake.prompts.first().messages.filterIsInstance<Message.System>().single().textContent()
+            assertTrue(system.contains("<available_skills>"))
+            assertTrue(system.contains("<name>lab-python</name>"))
+            assertFalse(system.contains("chassis_ctrl.move_with_time"))
+            assertEquals(listOf("lab-python"), referenceQueries)
             assertEquals(Triple(null, "状态脚本", source), saved)
             assertEquals(0, executions)
             assertEquals("已保存，尚未运行。", agent.state.value.lastReply)
-            assertEquals(3, agent.state.value.lines.count { it.role == ChatRole.TOOL })
-            assertFalse(agent.state.value.lines.any { it.text.contains("reference:runtime logging") })
+            assertEquals(2, agent.state.value.lines.count { it.role == ChatRole.TOOL })
+            assertFalse(agent.state.value.lines.any { it.text.contains("reference:SKILL.md") })
             val toolResults = history.events.filterIsInstance<MessageEvent>()
                 .flatMap { it.message.parts }.filterIsInstance<MessagePart.Tool.Result>()
-            assertEquals(3, toolResults.size)
+            assertEquals(2, toolResults.size)
             val reference = Json.parseToJsonElement(toolResults.first().output).jsonObject
-            assertTrue(reference.getValue("inCatalog").jsonPrimitive.boolean)
-            assertEquals("test", reference.getValue("sections").jsonArray.single().jsonObject
-                .getValue("category").jsonPrimitive.content)
+            assertEquals(setOf("content"), reference.keys)
+            assertEquals("reference:SKILL.md", reference.getValue("content").jsonPrimitive.content)
             val save = Json.parseToJsonElement(toolResults.last().output).jsonObject
             assertEquals("状态脚本", save.getValue("name").jsonPrimitive.content)
             assertEquals(source.length, save.getValue("sourceLength").jsonPrimitive.int)
@@ -519,9 +528,9 @@ class ChatAgentTest {
         ).use { reopened ->
             val lines = reopened.ready().lines
             val toolLines = lines.filter { it.role == ChatRole.TOOL }
-            assertEquals(3, toolLines.size)
+            assertEquals(2, toolLines.size)
             assertTrue(toolLines.all { it.toolCall != null && it.toolResult != null })
-            assertFalse(lines.any { it.text.contains("reference:runtime logging") })
+            assertFalse(lines.any { it.text.contains("reference:SKILL.md") })
         }
     }
 

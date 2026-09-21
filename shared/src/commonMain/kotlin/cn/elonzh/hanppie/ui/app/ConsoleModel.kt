@@ -3,51 +3,104 @@
 package cn.elonzh.hanppie.ui.app
 
 import ai.koog.agents.core.tools.ToolRegistry
-import cn.elonzh.hanppie.resources.*
-import cn.elonzh.hanppie.agent.lab.LabApiCatalog
 import cn.elonzh.hanppie.agent.provider.ModelConfigurationTester
 import cn.elonzh.hanppie.agent.runtime.SessionHistory
+import cn.elonzh.hanppie.agent.skills.SkillLibrary
 import cn.elonzh.hanppie.agent.tools.DeleteLabScriptTool
 import cn.elonzh.hanppie.agent.tools.ExecuteLabPythonTool
-import cn.elonzh.hanppie.agent.tools.LabApiReferenceTool
 import cn.elonzh.hanppie.agent.tools.ListLabScriptsTool
 import cn.elonzh.hanppie.agent.tools.ReadLabScriptTool
+import cn.elonzh.hanppie.agent.tools.ReadSkillTool
 import cn.elonzh.hanppie.agent.tools.RobotStatusTool
 import cn.elonzh.hanppie.agent.tools.SaveLabScriptTool
 import cn.elonzh.hanppie.agent.tools.StopLabTool
+import cn.elonzh.hanppie.resources.Res
+import cn.elonzh.hanppie.resources.another_operation_is_in_progress
+import cn.elonzh.hanppie.resources.automatic_connection_succeeded_value
+import cn.elonzh.hanppie.resources.automatically_finding_robot
+import cn.elonzh.hanppie.resources.cancel_the_current_chat_before_changing_connections_or_using
+import cn.elonzh.hanppie.resources.completed_marker_received_but_cleanup_failed
+import cn.elonzh.hanppie.resources.connected_to_value
+import cn.elonzh.hanppie.resources.connecting_to_value
+import cn.elonzh.hanppie.resources.connection_cancelled
+import cn.elonzh.hanppie.resources.connection_closed_robot_state_unknown
+import cn.elonzh.hanppie.resources.connection_closed_scripts_on_the_robot_may_still_be
+import cn.elonzh.hanppie.resources.connection_failed
+import cn.elonzh.hanppie.resources.connection_preferences_load_failed_value
+import cn.elonzh.hanppie.resources.connection_preferences_save_failed_value
+import cn.elonzh.hanppie.resources.disconnect_the_current_session_first
+import cn.elonzh.hanppie.resources.disconnected
+import cn.elonzh.hanppie.resources.error_value
+import cn.elonzh.hanppie.resources.finishing_completed_script
+import cn.elonzh.hanppie.resources.found_value_robots_connected_robots_may_not_broadcast_enter
+import cn.elonzh.hanppie.resources.gel_fire_command_sent_seq_value_physical_firing_unconfirmed
+import cn.elonzh.hanppie.resources.heading_like_uncalibrated
+import cn.elonzh.hanppie.resources.leaving_remote_control_value
+import cn.elonzh.hanppie.resources.led_request_failed_value
+import cn.elonzh.hanppie.resources.listening_for_robots_on_the_local_network
+import cn.elonzh.hanppie.resources.media_request_failed_value
+import cn.elonzh.hanppie.resources.media_request_queue_is_full
+import cn.elonzh.hanppie.resources.media_stop_queue_is_full
+import cn.elonzh.hanppie.resources.no_robot_found_automatic_connection_failed
+import cn.elonzh.hanppie.resources.push_to_talk_sent_packets_value
+import cn.elonzh.hanppie.resources.remote_stopped_connection_unresponsive
+import cn.elonzh.hanppie.resources.request_queue_is_closed
+import cn.elonzh.hanppie.resources.robot_disconnected_or_app_not_in_foreground
+import cn.elonzh.hanppie.resources.robot_is_not_connected
+import cn.elonzh.hanppie.resources.router_pairing_completed
+import cn.elonzh.hanppie.resources.script_completed
+import cn.elonzh.hanppie.resources.script_failed_value
+import cn.elonzh.hanppie.resources.script_running
+import cn.elonzh.hanppie.resources.script_start_confirmation_timed_out
+import cn.elonzh.hanppie.resources.script_start_state_unknown
+import cn.elonzh.hanppie.resources.script_stop_state_unknown
+import cn.elonzh.hanppie.resources.script_trace_lifecycle_value
+import cn.elonzh.hanppie.resources.script_trace_start_sent_value
+import cn.elonzh.hanppie.resources.script_trace_start_timeout_value
+import cn.elonzh.hanppie.resources.script_trace_uploaded_value
+import cn.elonzh.hanppie.resources.script_trace_uploading
+import cn.elonzh.hanppie.resources.session_ended_robot_state_unknown
+import cn.elonzh.hanppie.resources.stop_command_sent_robot_stop_is_unconfirmed
+import cn.elonzh.hanppie.resources.stop_the_lab_script_first
+import cn.elonzh.hanppie.resources.stop_the_script_with_unknown_state_first
+import cn.elonzh.hanppie.resources.stopping_script
+import cn.elonzh.hanppie.resources.unknown_error
+import cn.elonzh.hanppie.resources.upload_failed
+import cn.elonzh.hanppie.resources.uploading
+import cn.elonzh.hanppie.resources.waiting_for_robot_to_scan_qr
+import cn.elonzh.hanppie.resources.waiting_for_script_start
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
-import cn.elonzh.hanppie.robot.lab.LabScriptStatus
 import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
-import cn.elonzh.hanppie.robot.protocol.DussFrame
-import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
-import cn.elonzh.hanppie.robot.protocol.hex
 import cn.elonzh.hanppie.robot.product.RobotProduct
 import cn.elonzh.hanppie.robot.product.RobotProductProtocol
+import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
+import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.protocol.Protocol
+import cn.elonzh.hanppie.robot.protocol.hex
 import cn.elonzh.hanppie.robot.session.RobotLabSession
 import cn.elonzh.hanppie.robot.session.RobotRuntime
 import cn.elonzh.hanppie.robot.session.RobotSession
 import cn.elonzh.hanppie.robot.session.RobotTarget
 import cn.elonzh.hanppie.robot.telemetry.Telemetry
 import cn.elonzh.hanppie.ui.chat.ChatAgent
-import cn.elonzh.hanppie.ui.i18n.tr
-import cn.elonzh.hanppie.ui.i18n.uiText
 import cn.elonzh.hanppie.ui.i18n.DateTimeStyle
 import cn.elonzh.hanppie.ui.i18n.formatLocalDateTime
-import cn.elonzh.hanppie.ui.robot.files.RobotFilesController
-import cn.elonzh.hanppie.ui.robot.remote.DriveSpeed
+import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.ui.i18n.uiText
 import cn.elonzh.hanppie.ui.robot.audio.LabAudioImporter
 import cn.elonzh.hanppie.ui.robot.audio.LabAudioPlayer
 import cn.elonzh.hanppie.ui.robot.audio.NoLabAudioImporter
 import cn.elonzh.hanppie.ui.robot.audio.NoLabAudioPlayer
+import cn.elonzh.hanppie.ui.robot.files.RobotFilesController
+import cn.elonzh.hanppie.ui.robot.remote.DriveSpeed
 import cn.elonzh.hanppie.ui.robot.remote.NoSpeakerInput
 import cn.elonzh.hanppie.ui.robot.remote.SpeakerInput
 import cn.elonzh.hanppie.ui.scripts.ScriptAudioLibrary
 import cn.elonzh.hanppie.ui.scripts.ScriptLibrary
 import cn.elonzh.hanppie.ui.scripts.ScriptRepository
-import cn.elonzh.hanppie.ui.settings.ModelSettings
 import cn.elonzh.hanppie.ui.settings.ConnectionMode
 import cn.elonzh.hanppie.ui.settings.ConnectionPreferences
+import cn.elonzh.hanppie.ui.settings.ModelSettings
 import cn.elonzh.hanppie.ui.settings.RememberedRobot
 import cn.elonzh.hanppie.ui.settings.RobotLedColor
 import cn.elonzh.hanppie.ui.settings.SettingsController
@@ -56,15 +109,27 @@ import cn.elonzh.hanppie.ui.speech.NoSpeechInput
 import cn.elonzh.hanppie.ui.speech.SpeechInput
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.AtomicReference
 import kotlin.time.Clock
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 private val consoleLogger = KotlinLogging.logger {}
 
@@ -77,6 +142,7 @@ internal class ConsoleModel(
     private val audioImporter: LabAudioImporter = NoLabAudioImporter(),
     private val audioPlayer: LabAudioPlayer = NoLabAudioPlayer(),
     sessionHistory: SessionHistory,
+    skills: suspend () -> SkillLibrary,
     createAgentHttpClient: () -> HttpClient,
     private val runtimeDefaults: () -> ModelSettings = ::ModelSettings,
     private val applyModelOverrides: (ModelSettings) -> ModelSettings = { it },
@@ -337,7 +403,7 @@ internal class ConsoleModel(
                 ),
             )
         })
-        tool(LabApiReferenceTool(LabApiCatalog::query))
+        tool(ReadSkillTool { name, path -> skills().read(name, path) })
         tool(ListLabScriptsTool {
             ListLabScriptsTool.Result(scriptLibrary.savedScripts().map { script ->
                 ListLabScriptsTool.Script(
@@ -385,6 +451,7 @@ internal class ConsoleModel(
         toolRegistry = agentTools,
         createHttpClient = createAgentHttpClient,
         sessions = sessionHistory,
+        skillsPrompt = { skills().prompt() },
     )
 
     private suspend fun <T> agentOperation(block: suspend () -> T): T {

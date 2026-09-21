@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 /** Explicit LLM -> tools -> LLM graph used for every Hanppie agent run. */
 @OptIn(ExperimentalUuidApi::class)
@@ -23,6 +24,7 @@ internal fun hanppieAgentStrategy(
     onStreamFrame: suspend (StreamFrame) -> Unit,
     onMessage: suspend (Message) -> Unit,
     terminalToolNames: Set<String> = emptySet(),
+    toolsWithoutRequiredArguments: Set<String> = emptySet(),
     maxModelRequests: Int = 8,
     modelRequestTimeoutMillis: Long = 120_000,
 ): AIAgentGraphStrategy<String, String> {
@@ -42,7 +44,7 @@ internal fun hanppieAgentStrategy(
             check(frames.filterIsInstance<StreamFrame.End>().none { frame -> frame.finishReason.isTokenLimit() }) {
                 "Model output was truncated"
             }
-            val response = frames.withUsableToolCalls().toMessageResponse().withStableToolCallIds()
+            val response = frames.withUsableToolCalls(toolsWithoutRequiredArguments).toMessageResponse().withStableToolCallIds()
             check(response.hasToolCall() || response.visibleText().isNotBlank()) {
                 "Model returned neither visible text nor a tool call"
             }
@@ -128,69 +130,69 @@ private fun String?.isTokenLimit(): Boolean =
     this?.trim()?.lowercase()?.replace('-', '_')?.replace(' ', '_') in
         setOf("length", "max_tokens", "max_output_tokens")
 
-/**
- * Repairs tool calls whose frames arrive in shapes Koog cannot use as-is. The OpenAI-compatible clients
- * (DashScope among them) attach the tool name to the opening delta and send later deltas without it, while
- * Koog keys a call by its `index` and rarely repeats the `id`, so a complete frame can end up with neither a
- * name nor a parsable argument document. Every repair keeps the call instead of failing the turn:
- *
- * - the name is looked up by `index` first and falls back to the `id`, because those two fields are not sent
- *   consistently across deltas;
- * - argument content that is empty or not parsable JSON becomes `{}` rather than aborting materialization;
- * - a call that never named a tool anywhere is a phantom frame from the stream and is dropped with its
- *   deltas, so the turn keeps whatever text the model produced.
- */
-internal fun List<StreamFrame>.withUsableToolCalls(): List<StreamFrame> {
-    val namesByIndex = mutableMapOf<Int, String>()
-    val namesById = mutableMapOf<String, String>()
-    for (frame in this) {
-        if (frame is StreamFrame.ToolCallDelta && frame.name.orEmpty().isNotBlank()) {
-            val name = frame.name.orEmpty()
-            frame.index?.let { index -> namesByIndex.putIfAbsent(index, name) }
-            frame.id?.let { id -> namesById.putIfAbsent(id, name) }
-        }
-    }
-    fun nameOf(frame: StreamFrame.ToolCallComplete): String = frame.name.orEmpty().ifBlank {
-        frame.index?.let(namesByIndex::get) ?: frame.id?.let(namesById::get).orEmpty()
-    }
-    val phantoms = filterIsInstance<StreamFrame.ToolCallComplete>()
-        .filter { complete -> nameOf(complete).isBlank() }
-        .flatMap { complete -> listOfNotNull(complete.index, complete.id?.let { null }) }
-        .toSet()
-    val phantomIds = filterIsInstance<StreamFrame.ToolCallComplete>()
-        .filter { complete -> nameOf(complete).isBlank() }
-        .mapNotNull { complete -> complete.id }
-        .toSet()
-    return mapNotNull { frame ->
-        when {
-            frame is StreamFrame.ToolCallComplete -> {
-                val name = nameOf(frame)
-                if (name.isBlank()) {
-                    strategyLogger.warn {
-                        "Dropped a tool call frame that named no tool id=${frame.id ?: "none"} index=${frame.index ?: "none"}"
-                    }
-                    null
-                } else {
-                    if (name != frame.name.orEmpty()) {
-                        strategyLogger.info { "Restored tool name '$name' from an earlier delta id=${frame.id ?: "none"}" }
-                    }
-                    if (frame.content != frame.content.usableArguments()) {
-                        strategyLogger.info {
-                            "Replaced unparsable tool arguments with {} tool=$name id=${frame.id ?: "none"}"
-                        }
-                    }
-                    frame.copy(name = name, content = frame.content.usableArguments())
-                }
+/** Reassemble each logical call once: empty text deltas can prematurely flush Koog's pending call. */
+internal fun List<StreamFrame>.withUsableToolCalls(
+    toolsWithoutRequiredArguments: Set<String> = emptySet(),
+): List<StreamFrame> {
+    val indexesById = buildMap<String, Int> {
+        for (frame in this@withUsableToolCalls) {
+            val id = when (frame) {
+                is StreamFrame.ToolCallDelta -> frame.id
+                is StreamFrame.ToolCallComplete -> frame.id
+                else -> null
             }
-            frame is StreamFrame.ToolCallDelta &&
-                (frame.index in phantoms || frame.id in phantomIds) -> null
-            else -> frame
+            val index = when (frame) {
+                is StreamFrame.ToolCallDelta -> frame.index
+                is StreamFrame.ToolCallComplete -> frame.index
+                else -> null
+            }
+            if (!id.isNullOrBlank() && index != null) put(id, index)
         }
+    }
+    fun key(frame: StreamFrame, position: Int): String {
+        val (id, index) = when (frame) {
+            is StreamFrame.ToolCallDelta -> frame.id to frame.index
+            is StreamFrame.ToolCallComplete -> frame.id to frame.index
+            else -> error("Not a tool frame")
+        }
+        return (index ?: id?.let(indexesById::get))?.let { "index:$it" }
+            ?: id?.takeIf(String::isNotBlank)?.let { "id:$it" } ?: "anonymous:$position"
+    }
+    val groups = withIndex().filter { it.value is StreamFrame.ToolCallDelta || it.value is StreamFrame.ToolCallComplete }
+        .groupBy { key(it.value, it.index) }
+    val emitted = mutableSetOf<String>()
+    return mapIndexedNotNull { position, frame ->
+        if (frame !is StreamFrame.ToolCallDelta && frame !is StreamFrame.ToolCallComplete) return@mapIndexedNotNull frame
+        val key = key(frame, position)
+        if (!emitted.add(key)) return@mapIndexedNotNull null
+        val group = groups.getValue(key).map { it.value }
+        val deltas = group.filterIsInstance<StreamFrame.ToolCallDelta>()
+        val completions = group.filterIsInstance<StreamFrame.ToolCallComplete>()
+        val names = (deltas.map { it.name } + completions.map { it.name }).filterNotNull().filter(String::isNotBlank).distinct()
+        if (names.isEmpty()) {
+            strategyLogger.warn { "Dropped a tool call with no name" }
+            return@mapIndexedNotNull null
+        }
+        check(names.size == 1) { "Conflicting tool names in one streamed call" }
+        val name = names.single()
+        val fragments = deltas.joinToString("") { it.content.orEmpty() }
+        val completed = completions.singleOrNull()?.content.orEmpty()
+        val arguments = when {
+            fragments.isArgumentObject() -> fragments
+            completed.isArgumentObject() -> completed
+            fragments.isBlank() && completions.all { it.content.isBlank() } && name in toolsWithoutRequiredArguments -> "{}"
+            else -> error("Incomplete or invalid arguments for tool '$name'; tool was not executed")
+        }
+        StreamFrame.ToolCallComplete(
+            id = (deltas.map { it.id } + completions.map { it.id }).firstOrNull { !it.isNullOrBlank() },
+            name = name,
+            content = arguments,
+            index = deltas.firstOrNull { it.index != null }?.index ?: completions.firstOrNull { it.index != null }?.index,
+        )
     }
 }
 
-/** Argument content must be a JSON document, otherwise materializing the response aborts the whole run. */
-private fun String.usableArguments(): String =
-    if (isNotBlank() && runCatching { Json.parseToJsonElement(this) }.isSuccess) this else "{}"
+private fun String.isArgumentObject(): Boolean =
+    runCatching { Json.parseToJsonElement(this) is JsonObject }.getOrDefault(false)
 
 private val strategyLogger = KotlinLogging.logger {}

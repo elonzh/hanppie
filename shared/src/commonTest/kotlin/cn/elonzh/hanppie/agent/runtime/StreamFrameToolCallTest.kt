@@ -1,6 +1,9 @@
 package cn.elonzh.hanppie.agent.runtime
 
 import ai.koog.prompt.message.MessagePart
+import ai.koog.prompt.streaming.buildStreamFrameFlow
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.toList
 import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.streaming.toMessageResponse
 import kotlin.test.Test
@@ -27,7 +30,7 @@ class StreamFrameToolCallTest {
     }
 
     @Test fun blankArgumentsBecomeAnEmptyObject() {
-        val call = complete("get_robot_status", "").withUsableToolCalls().toMessageResponse()
+        val call = complete("get_robot_status", "").withUsableToolCalls(setOf("get_robot_status")).toMessageResponse()
             .parts.filterIsInstance<MessagePart.Tool.Call>().single()
         assertEquals("get_robot_status", call.tool)
         assertEquals("{}", call.argsJson.toString())
@@ -60,10 +63,43 @@ class StreamFrameToolCallTest {
         assertEquals("{}", call.argsJson.toString())
     }
 
-    @Test fun truncatedArgumentJsonFallsBackToAnEmptyObject() {
-        val call = complete("get_robot_status", """{"fast":""").withUsableToolCalls().toMessageResponse()
-            .parts.filterIsInstance<MessagePart.Tool.Call>().single()
-        assertEquals("{}", call.argsJson.toString())
+    @Test fun invalidArgumentsAreNeverReplacedWithAnEmptyObject() {
+        for (content in listOf("", "{\"name\":", "[]", "null")) {
+            assertFailsWith<IllegalStateException> { complete("read_skill", content).withUsableToolCalls() }
+        }
+        assertFailsWith<IllegalStateException> {
+            complete("get_robot_status", "{bad").withUsableToolCalls(setOf("get_robot_status"))
+        }
+    }
+
+    @Test fun skillArgumentsAreRestoredFromMatchingDeltasWithoutMixingCalls() {
+        val frames = listOf(
+            StreamFrame.ToolCallDelta("a", "read_skill", "{\"name\":", index = 0),
+            StreamFrame.ToolCallDelta("b", "read_skill", "{\"name\":\"other\"}", index = 1),
+            StreamFrame.ToolCallDelta(null, null, "\"lab-python\"}", index = 0),
+            StreamFrame.ToolCallComplete("a", "", "", index = 0),
+            StreamFrame.ToolCallComplete("b", "read_skill", "{\"name\":\"other\"}", index = 1),
+            StreamFrame.End("stop"),
+        )
+        val calls = frames.withUsableToolCalls().toMessageResponse().parts.filterIsInstance<MessagePart.Tool.Call>()
+        assertEquals("{\"name\":\"lab-python\"}", calls[0].argsJson.toString())
+        assertEquals("{\"name\":\"other\"}", calls[1].argsJson.toString())
+    }
+
+    @Test fun emptyTextBetweenArgumentChunksDoesNotCreateMultipleCalls(): Unit = runBlocking {
+        val frames = buildStreamFrameFlow {
+            emitToolCallDelta(id = "call-skill", name = "read_skill", args = "", index = 0)
+            emitTextDelta("")
+            emitToolCallDelta(args = "{\"name\":", index = 0)
+            emitTextDelta("")
+            emitToolCallDelta(args = "\"lab-python\"}", index = 0)
+            emitEnd("tool_calls")
+        }.toList()
+        assertTrue(frames.filterIsInstance<StreamFrame.ToolCallComplete>().size > 1)
+        val calls = frames.withUsableToolCalls().toMessageResponse().parts.filterIsInstance<MessagePart.Tool.Call>()
+        assertEquals(1, calls.size)
+        assertEquals("call-skill", calls.single().id)
+        assertEquals("{\"name\":\"lab-python\"}", calls.single().argsJson.toString())
     }
 
     @Test fun aToolCallThatNeverNamedAToolIsDroppedInsteadOfAbortingTheTurn() {

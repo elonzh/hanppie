@@ -59,7 +59,7 @@ flowchart LR
 
 1. 概念解释、使用帮助等不依赖实时设备的问题直接回答，不调用工具凑过程。
 2. 涉及当前设备事实时先调用 `robot_status`；模型不得用旧消息猜测连接、型号或脚本状态。
-3. 编写、修改、保存或执行 Lab 脚本前必须用 `lab_api_reference` 一次查询涉及的全部分类；不能从模型记忆或 PC SDK 猜测机内 API。
+3. 根据系统提示自动生成的 `available_skills` 选择技能，使用 `read_skill(name)` 读取入口，需要附属文档时传入相对 `path`；Lab 脚本相关任务读取完整的 lab-python 技能；具体工作流以技能为权威来源，不能从模型记忆或 PC SDK 猜测接口。
 4. 修改已有脚本前先用 `read_lab_script` 获取真实源码；`save_lab_script` 只保存，不上传、不运行，不能把保存结果表述为执行结果。
 5. 动作意图不清、目标不明、持续时间缺失或可能伤人/损物时先追问，不能擅自补齐关键参数。
 6. 除停止外，执行前必须生成完整有限程序并进入审批；拒绝仍形成 Koog `MessagePart.Tool.Result`，并与执行或停止结果一样直接结束当前 run。
@@ -71,12 +71,12 @@ flowchart LR
 
 ### 4.1 P0 工具集
 
-P0 保留粗粒度设备工具，同时增加 API 查询和脚本库管理工具。八个工具都从 UI 内联注册移入 `agent/tools`，实现为具名 class-based Koog `Tool<TArgs, TResult>`。应用 composition root 构造工具实现并组合为一个 Koog `ToolRegistry`，`ChatAgent` 只接收该 registry，不再逐项声明工具函数或实现平行的 Environment 接口。审批、执行开始和超时作为 run-scoped Koog `AIAgentEnvironment` feature 统一包围工具分派。每个工具直接声明可序列化的 `Args` 和 `Result`，不使用把业务结果拼成自然语言的 `SimpleTool`。模型调用、审批、执行开始与 Koog `MessagePart.Tool.Result` 沿用同一个 `toolCallId`，不增加平行 ToolCall/ToolResult DTO。未完成机器人执行在取消或重启时生成 `isError=true` 的结果未知 Tool Result，不会自动重试。不为底盘、云台、灯光、音效和发射分别增加模型工具。
+P0 保留粗粒度设备工具，同时提供通用技能读取和脚本库管理工具。八个工具都从 UI 内联注册移入 `agent/tools`，实现为具名 class-based Koog `Tool<TArgs, TResult>`。应用 composition root 构造工具实现并组合为一个 Koog `ToolRegistry`，`ChatAgent` 接收该 registry 和同一技能来源生成的提示，不再逐项声明工具函数或实现平行的 Environment 接口。审批、执行开始和超时作为 run-scoped Koog `AIAgentEnvironment` feature 统一包围工具分派。每个工具直接声明可序列化的 `Args` 和 `Result`，不使用把业务结果拼成自然语言的 `SimpleTool`。模型调用、审批、执行开始与 Koog `MessagePart.Tool.Result` 沿用同一个 `toolCallId`，不增加平行 ToolCall/ToolResult DTO。未完成机器人执行在取消或重启时生成 `isError=true` 的结果未知 Tool Result，不会自动重试。不为底盘、云台、灯光、音效和发射分别增加模型工具。
 
 | 工具 | 用途 | 自动执行 | 核心约束 |
 | --- | --- | --- | --- |
 | `robot_status` | 读取当前连接、能力、可信遥测、脚本状态及最近脚本消息 | 是 | 只读；不连接新设备；返回值必须标明未知或不可信字段 |
-| `lab_api_reference` | 查询已由机内运行时源码核对的 API、参数范围和行为 | 是 | 写脚本前调用；支持一次查询多个分类；目录外接口不得臆造 |
+| `read_skill` | 按技能名称和可选相对路径读取文档 | 是 | 目录自动注入提示，正文按需读取；只允许已注册技能 |
 | `list_lab_scripts` | 列出用户保存的脚本 | 是 | 只返回名称、更新时间和源码长度，不使用内部 ID |
 | `read_lab_script` | 按名称读取保存脚本 | 是 | 修改或替换已有脚本前调用；返回原始源码 |
 | `save_lab_script` | 创建、替换或重命名用户脚本 | 用户明确要求时 | 原子更新；必须是无 import 的 Python 3.6 `def start()` 完整源码；只保存，不运行 |
@@ -89,7 +89,7 @@ P0 保留粗粒度设备工具，同时增加 API 查询和脚本库管理工具
 | 工具 | Args | Result |
 | --- | --- | --- |
 | `robot_status` | `{}` | `connected`、`address`、电量、信号，以及带运行标识、阶段、时间和最近消息的 `script` |
-| `lab_api_reference` | `query` | `inCatalog`、`availableCategories`、`sections[{category,facts}]`、`guidance` |
+| `read_skill` | `name`、`path`（默认 `SKILL.md`） | `content` |
 | `list_lab_scripts` | `{}` | `scripts[{name,sourceLength,updatedAtEpochMillis}]` |
 | `read_lab_script` | `name` | `name`、`source`、创建与更新时间 |
 | `save_lab_script` | `originalName`、`name`、`source` | 最终名称、是否新建、源码长度、更新时间 |
@@ -97,7 +97,7 @@ P0 保留粗粒度设备工具，同时增加 API 查询和脚本库管理工具
 | `execute_lab_python` | `source` | `START_COMMAND_SENT/USER_REJECTED` 状态及可选 `runId` |
 | `stop_lab` | `{}` | `STOP_COMMAND_SENT` 状态；仅证明停止命令已发送，不代表机内停止已确认 |
 
-所有工具参数和结果使用 Koog Tool 的类型化序列化，原始事件继续保存 `MessagePart.Tool.Call/Result`。其中 Call 的 `args` 与 Result 的 `output` 是供应商协议承载的 JSON 文本，不是应用业务模型；运行时和应用适配器直接使用工具类声明的 `Args`/`Result`，界面按 JSON 对象、数组和标量分层展示。脚本管理按用户可见名称工作；数据库 ID 不进入模型参数。`lab_api_reference` 的目录条目来自已恢复的机内 `rm_ctrl.py`/`rm_define.py`，以分类和事实列表返回，只收录适合生成用户脚本且逐项核对过的入口，不把整个恢复源码或 PC SDK 文档塞入系统提示。Hanppie 只增加 Koog 没有的审批事实和产品 UI 状态。
+所有工具参数和结果使用 Koog Tool 的类型化序列化，原始事件继续保存 `MessagePart.Tool.Call/Result`。其中 Call 的 `args` 与 Result 的 `output` 是供应商协议承载的 JSON 文本，不是应用业务模型；运行时和应用适配器直接使用工具类声明的 `Args`/`Result`，界面按 JSON 对象、数组和标量分层展示。脚本管理按用户可见名称工作；数据库 ID 不进入模型参数。技能机制与安全边界见 [架构说明](architecture.md)，具体脚本工作流与 API 由 [lab-python 技能](../shared/src/commonMain/composeResources/files/skills/lab-python/SKILL.md) 维护，系统提示自动提供技能元数据目录。Hanppie 只增加 Koog 没有的审批事实和产品 UI 状态。
 
 Tool 抛出的异常不伪造成业务 `Result`：Koog 仍以 `MessagePart.Tool.Result(isError=true)` 记录失败，run 边界保存原始异常与 traceback。`USER_REJECTED` 属于已完成的审批决定，才进入对应的类型化结果。
 
@@ -186,7 +186,7 @@ sequenceDiagram
     UI->>R: send
     R->>R: 持久化 Message.User
     R->>A: 运行当前 Prompt 与 ToolRegistry
-    A->>T: lab_api_reference(runtime chassis)
+    A->>T: read_skill(name=lab-python)
     T-->>A: 已核对入口、签名与参数范围
     A->>T: robot_status
     T->>B: 读取当前会话与状态
@@ -211,12 +211,12 @@ sequenceDiagram
 sequenceDiagram
     actor U as 用户
     participant A as Koog AIAgent
-    participant C as LabApiCatalog
+    participant C as SkillLibrary
     participant L as 脚本库
     participant UI as 对话 UI
 
     U->>A: “把巡检脚本改为同时输出进度”
-    A->>C: lab_api_reference(runtime logging)
+    A->>C: read_skill(name=lab-python)
     C-->>A: 已核对签名与运行时约束
     A->>L: read_lab_script(巡检脚本)
     L-->>A: 原始源码
@@ -248,7 +248,7 @@ sequenceDiagram
 | --- | --- | --- |
 | 身份与回答风格 | 产品固定资源 | 随版本发布 |
 | 工具语义 | Koog `ToolDescriptor` | 与工具实现同源 |
-| Lab API 与运行时约束 | `agent/lab/LabApiCatalog` | 通过 `lab_api_reference` 按任务查询，不复制到无限增长的系统提示 |
+| Lab 脚本技能与 API | `composeResources/files/skills/lab-python/SKILL.md` | 通过 `read_skill` 按任务加载，不复制到系统提示 |
 | 机器人能力与安全规则 | `docs/architecture.md` 对应的代码能力模型 | 由当前会话动态生成，不复制静态能力列表 |
 | 当前设备上下文 | `robot_status` | 每次需要事实时读取 |
 | Session 历史 | `SessionHistory.messages(sessionId)` 返回的 Koog `Message` | 从 JSONL 事件投影，可由事实来源重建 |

@@ -417,7 +417,7 @@
     <string name="connected_to_value">Connected to %1$s</string>
     <string name="run_incomplete_value_check_network_model_settings_and_tool">Agent run incomplete (%1$s). Check network, model settings and tool history.</string>
     <string name="read_status">Read status</string>
-    <string name="inspect_lab_api">Inspect Lab API</string>
+    <string name="read_agent_skill">Read skill</string>
     <string name="list_lab_scripts">List Lab scripts</string>
     <string name="read_lab_script">Read Lab script</string>
     <string name="save_lab_script">Save Lab script</string>
@@ -433,7 +433,7 @@
     <string name="tool_details_collapsed">Tool details collapsed</string>
     <string name="tool_parameters">Parameters</string>
     <string name="tool_result">Result</string>
-    <string name="tool_query_summary">Query: %1$s</string>
+    <string name="tool_skill_path_summary">Resource: %1$s</string>
     <string name="tool_script_summary">Script: %1$s</string>
     <string name="tool_scripts_summary">%1$s scripts</string>
     <string name="tool_source_summary">%1$s source characters</string>

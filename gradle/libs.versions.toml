@@ -7,6 +7,7 @@ coroutines = "1.10.2"
 kotlinx-io = "0.9.0"
 agp = "9.4.0"
 koog = "1.2.0"
+koog-skills = "1.2.0-beta"
 ktor = "3.3.3"
 activity = "1.12.4"
 androidx-core = "1.16.0"
@@ -37,6 +38,7 @@ coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", ve
 kotlinx-io-core = { module = "org.jetbrains.kotlinx:kotlinx-io-core", version.ref = "kotlinx-io" }
 serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version = "1.8.1" }
 coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "coroutines" }
+koog-skills = { module = "ai.koog:skills", version.ref = "koog-skills" }
 koog-agents = { module = "ai.koog:agents-core", version.ref = "koog" }
 koog-openai = { module = "ai.koog:prompt-executor-openai-client", version.ref = "koog" }
 koog-ktor = { module = "ai.koog:http-client-ktor", version.ref = "koog" }

@@ -123,6 +123,7 @@ internal fun testConsoleModel(
     settingsStore = settingsStore,
     scriptRepository = scriptRepository,
     sessionHistory = sessionHistory,
+    skills = { cn.elonzh.hanppie.agent.skills.SkillLibrary(emptyList()) { _, _ -> error("No test skill") } },
     createAgentHttpClient = createAgentHttpClient,
     prepareNetwork = prepareNetwork,
     autoConnectOnStart = false,

@@ -56,6 +56,7 @@ private fun createDesktopWorkbenchViewModel(): WorkbenchViewModel {
             settingsStore = storage.settings,
             scriptRepository = storage.scripts,
             sessionHistory = storage.sessions,
+            skills = storage.skills::await,
             createAgentHttpClient = ::createAgentHttpClient,
             runtimeDefaults = { desktopModelOverrides(ModelSettings()) },
             applyModelOverrides = ::desktopModelOverrides,

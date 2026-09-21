@@ -31,8 +31,8 @@ class ChatAgentLiveTest {
                         script = RobotStatusTool.ScriptRun(phase = ScriptRunPhase.IDLE),
                     )
                 })
-                tool(LabApiReferenceTool {
-                    LabApiReferenceTool.Result(true, emptyList(), emptyList(), "test")
+                tool(ReadSkillTool { _, _ ->
+                    ReadSkillTool.Result("test")
                 })
                 tool(ListLabScriptsTool { ListLabScriptsTool.Result(emptyList()) })
                 tool(ReadLabScriptTool { ReadLabScriptTool.Result(it, "script:$it", 1, 1) })

@@ -48,7 +48,7 @@ import cn.elonzh.hanppie.agent.runtime.AgentSession
 import cn.elonzh.hanppie.agent.runtime.toolNameFromUnknownNotice
 import cn.elonzh.hanppie.agent.tools.DeleteLabScriptTool
 import cn.elonzh.hanppie.agent.tools.ExecuteLabPythonTool
-import cn.elonzh.hanppie.agent.tools.LabApiReferenceTool
+import cn.elonzh.hanppie.agent.tools.ReadSkillTool
 import cn.elonzh.hanppie.agent.tools.ListLabScriptsTool
 import cn.elonzh.hanppie.agent.tools.ReadLabScriptTool
 import cn.elonzh.hanppie.agent.tools.RobotStatusTool
@@ -649,7 +649,9 @@ private fun toolSummary(
                 "$connection · ${tr(Res.string.tool_battery_summary, battery)}"
             } ?: connection
         }
-        LabApiReferenceTool.NAME -> args.string("query")?.let { tr(Res.string.tool_query_summary, it) }
+        ReadSkillTool.NAME -> args.string("name")?.let { name ->
+            tr(Res.string.tool_skill_path_summary, "$name/${args.string("path") ?: "SKILL.md"}")
+        }
         ListLabScriptsTool.NAME -> (result?.get("scripts") as? JsonArray)?.size?.let {
             tr(Res.string.tool_scripts_summary, it)
         }
@@ -688,7 +690,7 @@ private fun JsonElement.isEmptyPayload(): Boolean =
 @Composable
 private fun toolLabel(tool: String): String = when (tool) {
     RobotStatusTool.NAME -> tr(Res.string.read_status)
-    LabApiReferenceTool.NAME -> tr(Res.string.inspect_lab_api)
+    ReadSkillTool.NAME -> tr(Res.string.read_agent_skill)
     ListLabScriptsTool.NAME -> tr(Res.string.list_lab_scripts)
     ReadLabScriptTool.NAME -> tr(Res.string.read_lab_script)
     SaveLabScriptTool.NAME -> tr(Res.string.save_lab_script)
@@ -700,7 +702,7 @@ private fun toolLabel(tool: String): String = when (tool) {
 
 private fun toolGlyph(tool: String): WorkbenchGlyph = when (tool) {
     RobotStatusTool.NAME -> WorkbenchGlyph.ACTIVITY
-    LabApiReferenceTool.NAME -> WorkbenchGlyph.SEARCH
+    ReadSkillTool.NAME -> WorkbenchGlyph.SEARCH
     ListLabScriptsTool.NAME -> WorkbenchGlyph.FOLDER
     ReadLabScriptTool.NAME -> WorkbenchGlyph.FILE_TEXT
     SaveLabScriptTool.NAME -> WorkbenchGlyph.SAVE

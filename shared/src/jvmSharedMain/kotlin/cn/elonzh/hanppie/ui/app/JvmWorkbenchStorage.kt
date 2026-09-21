@@ -1,5 +1,10 @@
 package cn.elonzh.hanppie.ui.app
 
+import cn.elonzh.hanppie.agent.skills.SkillFileSystem
+import java.nio.file.Files
+import cn.elonzh.hanppie.agent.skills.BuiltinSkills
+import cn.elonzh.hanppie.agent.skills.SkillLibrary
+import kotlinx.coroutines.async
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import cn.elonzh.hanppie.agent.runtime.AgentRuntimeStorage
 import cn.elonzh.hanppie.agent.runtime.openAgentRuntimeStorage
@@ -42,6 +47,15 @@ internal fun createJvmWorkbenchStorage(): WorkbenchStorage {
         return WorkbenchStorage(
             settings = DataStoreSettingsStore(dataStore),
             scripts = scriptRepository,
+            skills = scope.async {
+                val directory = File(PlatformFile(filesDirectory, "skills/builtin").path).toPath()
+                BuiltinSkills.install { path, bytes ->
+                    val target = directory.resolve(path)
+                    Files.createDirectories(target.parent)
+                    Files.write(target, bytes)
+                }
+                SkillLibrary.load(SkillFileSystem, directory) { it.toRealPath() }
+            },
             agentRuntime = agentRuntime,
             scope = scope,
         )

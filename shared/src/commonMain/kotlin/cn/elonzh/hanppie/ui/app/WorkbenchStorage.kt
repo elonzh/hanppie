@@ -1,5 +1,7 @@
 package cn.elonzh.hanppie.ui.app
 
+import cn.elonzh.hanppie.agent.skills.SkillLibrary
+import kotlinx.coroutines.Deferred
 import cn.elonzh.hanppie.agent.runtime.AgentRuntimeStorage
 import cn.elonzh.hanppie.agent.runtime.SessionHistory
 import cn.elonzh.hanppie.ui.scripts.ScriptRepository
@@ -13,6 +15,7 @@ private val storageLogger = KotlinLogging.logger {}
 internal class WorkbenchStorage(
     val settings: SettingsStore,
     val scripts: ScriptRepository,
+    val skills: Deferred<SkillLibrary>,
     private val agentRuntime: AgentRuntimeStorage,
     private val scope: CoroutineScope,
 ) : AutoCloseable {

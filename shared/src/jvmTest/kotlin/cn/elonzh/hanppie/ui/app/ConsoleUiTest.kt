@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.dp
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.agent.tools.DeleteLabScriptTool
 import cn.elonzh.hanppie.agent.tools.ExecuteLabPythonTool
-import cn.elonzh.hanppie.agent.tools.LabApiReferenceTool
+import cn.elonzh.hanppie.agent.tools.ReadSkillTool
 import cn.elonzh.hanppie.agent.tools.SaveLabScriptTool
 import cn.elonzh.hanppie.agent.tools.StopLabTool
 import cn.elonzh.hanppie.robot.protocol.DussFrame
@@ -684,11 +684,8 @@ class ConsoleUiTest {
         val model = testConsoleModel()
         val apiFact = "LAB_API_RESULT_SHOULD_BE_COLLAPSED"
         val saveName = "结构化脚本"
-        val apiDetails = Json.encodeToString(LabApiReferenceTool.Result(
-            inCatalog = true,
-            availableCategories = listOf("runtime", "logging"),
-            sections = listOf(LabApiReferenceTool.Section("runtime", listOf(apiFact))),
-            guidance = "只使用已核对的 API",
+        val apiDetails = Json.encodeToString(ReadSkillTool.Result(
+            content = apiFact,
         ))
         val saveDetails = Json.encodeToString(SaveLabScriptTool.Result(
             name = saveName,
@@ -705,8 +702,8 @@ class ConsoleUiTest {
                 model.chat.state.value = model.chat.state.value.copy(lines = listOf(
                     ChatLine(
                         ChatRole.TOOL,
-                        toolCall = MessagePart.Tool.Call("api-call", LabApiReferenceTool.NAME, "{\"query\":\"runtime\"}"),
-                        toolResult = MessagePart.Tool.Result("api-call", LabApiReferenceTool.NAME, apiDetails),
+                        toolCall = MessagePart.Tool.Call("api-call", ReadSkillTool.NAME, "{\"name\":\"lab-python\"}"),
+                        toolResult = MessagePart.Tool.Result("api-call", ReadSkillTool.NAME, apiDetails),
                     ),
                     ChatLine(
                         ChatRole.TOOL,
@@ -720,25 +717,24 @@ class ConsoleUiTest {
                 ))
             }
 
-            rule.onNodeWithTag("tool-message-${LabApiReferenceTool.NAME}").assertIsDisplayed()
+            rule.onNodeWithTag("tool-message-${ReadSkillTool.NAME}").assertIsDisplayed()
             rule.onNodeWithTag("tool-message-${SaveLabScriptTool.NAME}").assertIsDisplayed()
-            rule.onNodeWithText("查询 Lab API").assertIsDisplayed()
+            rule.onNodeWithText("读取技能").assertIsDisplayed()
             rule.onNodeWithText("保存 Lab 脚本").assertIsDisplayed()
-            rule.onNodeWithText("查询：runtime").assertIsDisplayed()
+            rule.onNodeWithText("资源：lab-python/SKILL.md").assertIsDisplayed()
             rule.onNodeWithText("脚本：$saveName").assertIsDisplayed()
             rule.onNodeWithText(apiFact).assertDoesNotExist()
             rule.onNodeWithText("created").assertDoesNotExist()
 
-            rule.onNodeWithTag("tool-message-header-${LabApiReferenceTool.NAME}").performClick()
+            rule.onNodeWithTag("tool-message-header-${ReadSkillTool.NAME}").performClick()
             rule.onNodeWithText("参数").assertIsDisplayed()
             rule.onNodeWithText("结果").assertIsDisplayed()
-            rule.onNodeWithText("query").assertIsDisplayed()
-            rule.onNodeWithText("inCatalog").assertIsDisplayed()
+            rule.onNodeWithText("content").assertIsDisplayed()
             rule.onNodeWithText(apiFact).assertIsDisplayed()
             rule.onNodeWithText("created").assertDoesNotExist()
             snapshot("desktop-chat-tool-activities")
 
-            rule.onNodeWithTag("tool-message-header-${LabApiReferenceTool.NAME}").performClick()
+            rule.onNodeWithTag("tool-message-header-${ReadSkillTool.NAME}").performClick()
             rule.onNodeWithText(apiFact).assertDoesNotExist()
             rule.onNodeWithTag("tool-message-header-${SaveLabScriptTool.NAME}").performClick()
             rule.onNodeWithText("source").assertIsDisplayed()

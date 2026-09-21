@@ -56,6 +56,7 @@ kotlin {
             implementation(libs.filekit.dialogs)
             implementation(libs.kotlin.logging)
             implementation(libs.koog.agents)
+            implementation(libs.koog.skills)
             implementation(libs.koog.openai)
             implementation(libs.koog.ktor)
             implementation(libs.ktor.core)

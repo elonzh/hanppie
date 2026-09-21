@@ -7,6 +7,12 @@ import kotlin.test.assertEquals
 import kotlinx.coroutines.runBlocking
 
 class HanppieToolsTest {
+    @Test fun skillNameIsRequiredAndPathIsOptionalInTheModelSchema() {
+        val descriptor = ReadSkillTool { _, _ -> error("Not executed") }.descriptor
+        assertEquals(listOf("name"), descriptor.requiredParameters.map { it.name })
+        assertEquals(listOf("path"), descriptor.optionalParameters.map { it.name })
+    }
+
     @Test
     fun registryContainsNamedClassBasedTools(): Unit = runBlocking {
         val statusResult = RobotStatusTool.Result(
@@ -14,12 +20,7 @@ class HanppieToolsTest {
             batteryPercent = 82,
             script = RobotStatusTool.ScriptRun(phase = ScriptRunPhase.IDLE),
         )
-        val referenceResult = LabApiReferenceTool.Result(
-            inCatalog = true,
-            availableCategories = listOf("chassis", "gimbal"),
-            sections = listOf(LabApiReferenceTool.Section("chassis", listOf("move"))),
-            guidance = "verified",
-        )
+        val referenceResult = ReadSkillTool.Result("skill content")
         val scriptsResult = ListLabScriptsTool.Result(
             listOf(ListLabScriptsTool.Script("巡检", 17, 1234)),
         )
@@ -30,7 +31,7 @@ class HanppieToolsTest {
         val stopResult = StopLabTool.Result(StopLabTool.Status.STOP_COMMAND_SENT)
         val registry = ToolRegistry {
             tool(RobotStatusTool { statusResult })
-            tool(LabApiReferenceTool { referenceResult })
+            tool(ReadSkillTool { _, _ -> referenceResult })
             tool(ListLabScriptsTool { scriptsResult })
             tool(ReadLabScriptTool { readResult })
             tool(SaveLabScriptTool { _, _, _ -> saveResult })
@@ -42,7 +43,7 @@ class HanppieToolsTest {
         assertEquals(
             setOf(
                 RobotStatusTool.NAME,
-                LabApiReferenceTool.NAME,
+                ReadSkillTool.NAME,
                 ListLabScriptsTool.NAME,
                 ReadLabScriptTool.NAME,
                 SaveLabScriptTool.NAME,
@@ -55,7 +56,7 @@ class HanppieToolsTest {
         assertEquals(statusResult, registry.getTool<RobotStatusTool>().execute(NoToolArgs))
         assertEquals(
             referenceResult,
-            registry.getTool<LabApiReferenceTool>().execute(LabApiReferenceTool.Args("chassis gimbal")),
+            registry.getTool<ReadSkillTool>().execute(ReadSkillTool.Args("lab-python")),
         )
         assertEquals(scriptsResult, registry.getTool<ListLabScriptsTool>().execute(NoToolArgs))
         assertEquals(

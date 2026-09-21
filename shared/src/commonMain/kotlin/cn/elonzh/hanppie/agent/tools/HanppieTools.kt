@@ -90,38 +90,29 @@ internal class ExecuteLabPythonTool(
     }
 }
 
-internal class LabApiReferenceTool(
-    private val reference: suspend (String) -> Result,
-) : Tool<LabApiReferenceTool.Args, LabApiReferenceTool.Result>(
+internal class ReadSkillTool(
+    private val read: suspend (String, String) -> Result,
+) : Tool<ReadSkillTool.Args, ReadSkillTool.Result>(
     argsType = typeToken<Args>(),
     resultType = typeToken<Result>(),
     name = NAME,
-    description = "查询经机内运行时源码核对的 RoboMaster Lab Python API、参数范围和行为。编写或修改脚本前必须按相关分类查询，不得猜测目录外接口。",
+    description = "按名称读取已发现技能的 Markdown 文档，path 默认 SKILL.md。仅返回正文；读取其他文档时使用技能正文中引用的相对路径。不执行文档或访问任意主机文件。",
 ) {
     @Serializable
     data class Args(
-        @property:LLMDescription("一个或多个分类/API 关键词，例如 runtime chassis gimbal；传 index 获取分类目录")
-        val query: String,
+        @property:LLMDescription("available_skills 中的技能名称")
+        val name: String,
+        @property:LLMDescription("技能目录内的相对文档路径，默认 SKILL.md；其他路径取自技能正文中的文档引用")
+        val path: String = "SKILL.md",
     )
 
     @Serializable
-    data class Result(
-        val inCatalog: Boolean,
-        val availableCategories: List<String>,
-        val sections: List<Section>,
-        val guidance: String,
-    )
+    data class Result(val content: String)
 
-    @Serializable
-    data class Section(
-        val category: String,
-        val facts: List<String>,
-    )
-
-    override suspend fun execute(args: Args): Result = reference(args.query)
+    override suspend fun execute(args: Args): Result = read(args.name, args.path)
 
     companion object {
-        const val NAME = "lab_api_reference"
+        const val NAME = "read_skill"
     }
 }
 

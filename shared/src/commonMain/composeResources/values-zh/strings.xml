@@ -417,7 +417,7 @@
     <string name="connected_to_value">已连接 %1$s</string>
     <string name="run_incomplete_value_check_network_model_settings_and_tool">本次智能体运行未完成（%1$s）。请检查网络、模型配置与工具记录。</string>
     <string name="read_status">读取状态</string>
-    <string name="inspect_lab_api">查询 Lab API</string>
+    <string name="read_agent_skill">读取技能</string>
     <string name="list_lab_scripts">列出 Lab 脚本</string>
     <string name="read_lab_script">读取 Lab 脚本</string>
     <string name="save_lab_script">保存 Lab 脚本</string>
@@ -433,7 +433,7 @@
     <string name="tool_details_collapsed">工具详情已折叠</string>
     <string name="tool_parameters">参数</string>
     <string name="tool_result">结果</string>
-    <string name="tool_query_summary">查询：%1$s</string>
+    <string name="tool_skill_path_summary">资源：%1$s</string>
     <string name="tool_script_summary">脚本：%1$s</string>
     <string name="tool_scripts_summary">%1$s 个脚本</string>
     <string name="tool_source_summary">源码 %1$s 字符</string>

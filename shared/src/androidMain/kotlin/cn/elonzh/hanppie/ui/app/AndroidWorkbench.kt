@@ -88,6 +88,7 @@ private fun createAndroidWorkbenchViewModel(
             settingsStore = storage.settings,
             scriptRepository = storage.scripts,
             sessionHistory = storage.sessions,
+            skills = storage.skills::await,
             createAgentHttpClient = ::createAgentHttpClient,
             prepareNetwork = network::prepare,
             autoConnectOnStart = autoConnectOnStart,
