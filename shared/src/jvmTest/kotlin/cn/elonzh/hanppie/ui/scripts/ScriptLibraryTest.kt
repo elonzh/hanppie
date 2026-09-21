@@ -197,19 +197,10 @@ class ScriptLibraryTest {
                 enablePresetSync = true,
             )
             val friday = repo.presets().first { it.id == "friday-disco" }
-            assertEquals(4, friday.audioClips.size)
+            assertEquals(1, friday.audioClips.size)
             assertEquals(0, friday.audioClips[0].id)
-            assertEquals("friday_ready", friday.audioClips[0].name)
-            assertTrue(friday.audioClips[0].durationMillis >= 14_000L)
-            assertEquals(1, friday.audioClips[1].id)
-            assertEquals("friday_verse", friday.audioClips[1].name)
-            assertTrue(friday.audioClips[1].durationMillis >= 25_000L)
-            assertEquals(2, friday.audioClips[2].id)
-            assertEquals("friday_chorus", friday.audioClips[2].name)
-            assertTrue(friday.audioClips[2].durationMillis >= 25_000L)
-            assertEquals(3, friday.audioClips[3].id)
-            assertEquals("friday_climax", friday.audioClips[3].name)
-            assertTrue(friday.audioClips[3].durationMillis >= 24_000L)
+            assertEquals("friday_night", friday.audioClips[0].name)
+            assertTrue(friday.audioClips[0].durationMillis >= 88_000L)
             assertTrue(LabAudioClip.totalEncodedBytes(friday.audioClips) + friday.source.length <= LabProgram.MAX_DSP_BYTES)
         } finally {
             tempDir.toFile().deleteRecursively()

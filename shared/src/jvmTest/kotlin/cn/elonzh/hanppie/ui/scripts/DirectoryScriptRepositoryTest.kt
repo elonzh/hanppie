@@ -162,7 +162,7 @@ class DirectoryScriptRepositoryTest {
             val clips = repo.audio("friday-disco")
             val ids = clips.map { it.id }
             assertEquals(ids.distinct(), ids, "Audio slots in synced preset must have no duplicates")
-            assertEquals(listOf(0, 1, 2, 3), ids)
+            assertEquals(listOf(0), ids)
         } finally {
             tempDir.toFile().deleteRecursively()
         }

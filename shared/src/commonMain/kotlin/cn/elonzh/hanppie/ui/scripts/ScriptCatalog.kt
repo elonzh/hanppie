@@ -45,10 +45,7 @@ internal val bundledPresets = listOf(
         files = listOf(
             "manifest.json",
             "script.py",
-            "audio/0_friday_ready.opus",
-            "audio/1_friday_verse.opus",
-            "audio/2_friday_chorus.opus",
-            "audio/3_friday_climax.opus",
+            "audio/0_friday_night.opus",
         ),
     ),
 )

@@ -136,14 +136,10 @@ UDP 会话只接受指定机器人地址，身份交换与持久 App 会话复�
 
 脚本自定义音频属于已保存的脚本目录（`audio/<slot>_<name>.opus`），随程序在运行前动态打包进临时 DSP 上传，不是机内媒体库。导入只接受主机文件，由平台能力解码（桌面 FFmpeg，Android `MediaExtractor`/`MediaCodec`），统一为 DSP 容器要求的 48 kHz 单声道 20 ms 帧，再编码成带双字节小端长度前缀的 Opus；时长直接通过 Opus 数据包帧数（`frameCount * 20 ms`）动态计算，杜绝元数据与实际音频的时长漂移。编号取 0..9 的首个空位，名称取文件名并截断到 64 字符，超过 50 MB 的原始输入在任何解码之前被拒绝。运行脚本时把 `<audio-list>` 渲染进 DSP：每个节点写 id、name、`type="opus"`、整数秒 duration、base64 正文的 MD5 前 8 位与 `modify` 标志，未缓存资源正文放在 base64 CDATA 中，已缓存资源省略正文以实现增量极速上传（详见下文）。上传前用 `LabProgram.MAX_DSP_BYTES`（已通过实机 16 MiB 阶梯测试验证并设为 16 MiB 主机安全上限）拒绝超额组合，校验发生在任何协议帧之前，超额时保留脚本与音频、只报错不静默截断。脚本中直接通过 `media_ctrl.play_sound(rm_define.media_custom_audio_N)` 语句播放对应槽位的自定义音频。自定义音频管理面板提供跨平台音频试听播放器（`LabAudioPlayer`）：桌面端基于 Java Sound (`SourceDataLine`) 与 FFmpeg 解码，Android 端基于系统原生 `MediaCodec` 与 `AudioTrack` 进行 48 kHz 单声道 PCM16 播放，支持播放、暂停、恢复与停止，并在 UI 上呈现微进度条与播放进度；音频切片支持通过左侧手柄进行指针垂直拖拽实时排序，重排后 0..9 槽位连续重新分配，通过 `DirectoryScriptRepository.replaceAllAudio` 实现音频切片文件与 manifest 的原子同步与持久化。**代码/离线测试/S1 实机**
 
-**音频时长突破方案（方案 A 与方案 B）：**
-此前客户端单脚本音频受旧上传边界限制（约 30 KiB），在 12 kbps Opus 编码与 Base64 膨胀（~2.1 KB/s）下单次只能容纳约 11～12 秒音频。针对真机原声音频长播放需求，本项目落地并试验了方案 A 与方案 B：
-1. **方案 A（放宽机内 DSP 上传大小限制）**：实机阶梯压力分析（验证了 256KB、512KB、1MB、2MB、4MB、8MB 与 16.6MB 上传与执行）表明，FTP 协议与 DUSS `0x3F/0xA1` 的 payload size 字段（32-bit unsigned int）以及 S1 Android 4.4 `/data` 分区在 16MB+ 级别下均顺畅运作，16.6MB 上传仅耗时约 7 秒且机内 Python 3.6 正常解析执行。旧的 31.5 KiB / 256 KiB 限制仅源于客户端早期过于保守的防御性配置而非协议硬上限。客户端已将 `LabProgram.MAX_DSP_BYTES` 放宽至 `16_777_216` 字节（16 MiB），并从面板移除了“上传预算剩余”的伪限制提示，允许充分利用全部 10 个音频槽位。
-2. **方案 B（多槽位分段拼接播放 / Multi-slot Chaining）**：利用机内支持的 10 个独立自定义音频槽位（`media_custom_audio_0` 至 `9`），将整首长音乐或台词切分进不同槽位，并在 Python 脚本中按节拍顺序执行 `media_ctrl.play_sound(rm_define.media_custom_audio_X)` 与 `time.sleep()` 拼接推进。预置节目《周五狂欢舞》（`friday-disco`）已采用方案 A 与方案 B 组合落地：槽位 0 加载 `0_friday_ready.opus`（14.04 秒，Ready 与前奏律动），槽位 1 加载 `1_friday_verse.opus`（25.04 秒，主歌段落与 "Everybody hands up!"），槽位 2 加载 `2_friday_chorus.opus`（25.04 秒，副歌高潮与 Nicole 尖叫 "Dry ice! Woo!!"），槽位 3 加载 `3_friday_climax.opus`（24.04 秒，Simon 回旋致敬与欢呼晋级）；脚本动作严格按分秒与 4 段音频精准卡点对齐（总计 88.16 秒），并在音乐终了瞬间完成动作归位停止，实现无缝声动同频完整复刻。
-3. **备选流式方案（主机 PCM 实时流）**：未来超长（数分钟以上）场景可进一步通过 Host PCM 链路（DUSS `0x3F/0x5F` + `0x00/0x09` + `0x3F/0xB3`）流式推流。纯主机播放方案因脱离机身发声物理效果已被明确排除。
+**自定义音频容量与秒级增量上传：**
+在 S1 采用的 12 kbps 单声道 Opus 编码下，Base64 膨胀后每秒音频仅占约 2.1 KB。实机阶梯压力分析（已验证 256KB、512KB、1MB、2MB、4MB、8MB 与 16.6MB 上传与执行）表明，FTP 传输、DUSS `0x3F/0xA1` 的 32 位载荷长度字段以及 S1 Android 4.4 `/data` 分区在 16 MiB 级别下均顺畅运作。`LabProgram.MAX_DSP_BYTES`（16 MiB）可容纳超过 130 分钟（2 小时以上）的音频总时长，远超机器人单次电池续航（约 20～35 分钟），单音频或全套音频在实际表演和任务中均完全不受播放时长约束。预置节目《周五狂欢舞》（`friday-disco`）在槽位 0 加载 88.16 秒完整原声长音轨 `0_friday_night.opus`（132.8 KB，4408 帧），开场单次触发 `media_ctrl.play_sound(rm_define.media_custom_audio_0)` 作为连续贯穿始终的 BGM，动作精准对齐 88.16 秒音乐时间轴与经典舞台梗点，无需分段切片拼接，彻底杜绝切音断帧与声画漂移风险；机内 10 个独立槽位回归其原生设计职责，用于承载不同状态的独立音效与交互台词。
 
-**仿原厂音频分离增量上传与秒级执行优化：**
-分析表明，Lab 脚本重复运行或编辑执行的耗时瓶颈完全源于 Base64 自定义音频的大体积传输（数百 KB 至数 MB），而纯 Python 源码本身仅 1～2 KB（FTP 传输耗时仅 20～30 ms）。为消除复杂且脆弱的整包指纹缓存与免上传绕行逻辑，Hanppie 采用仿原厂机制的**音频分离增量上传**：
+为消除大体积音频重复传输导致的执行延迟，Hanppie 采用仿原厂机制的**音频分离增量上传**：
 1. **槽位与摘要跟踪**：`LabController` 内部维护会话级已上传槽位映射 `uploadedAudioSlots: Map<Int, String>`（`slotId -> audioMd5`）。
 2. **增量 XML 打包**：打包 DSP 时，`labAudioListXml` 检查各音频切片的槽位与 MD5。若当前槽位已在机载生效，则输出 `<audio id="X" name="..." type="opus" duration="..." md5="..." modify="false"></audio>` 并**彻底省略 `<audio_data>` 正文**；若为首次上传、槽位内容变更或新增切片，则输出 `modify="true"` 并携带 Base64 正文。
 3. **秒级轻量上传**：当音频无变动时（即使 Python 代码发生修改或调试重跑），生成的 DSP 体积从数百 KB 骤降至约 700～1500 字节，FTP 传输在数十毫秒内完成。
@@ -151,7 +147,7 @@ UDP 会话只接受指定机器人地址，身份交换与持久 App 会话复�
 
 ```mermaid
 flowchart TD
-    Start(["用户点击运行脚本 (source, audio)"]) --> GenId["生成全新随机 runId<br/>对源码进行生命周期插桩"]
+    Start(["用户点击运行脚本 (source, audio)"]) --> GenId["生成全新随机 runId<br/>准备待运行源码与环境"]
     GenId --> CheckClips{"检查 audio 中每个切片 (slotId, md5)"}
     CheckClips -- "slotId 已上传且 md5 匹配" --> NodeCached["标记 modify='false'<br/>省略 audio_data 正文"]
     CheckClips -- "新槽位或内容已修改" --> NodeFull["标记 modify='true'<br/>携带 Base64 audio_data"]
