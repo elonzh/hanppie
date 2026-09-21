@@ -34,7 +34,6 @@ internal val bundledPresets = listOf(
     BundledPreset("lucky-cat"),
     BundledPreset("moonlight-waltz"),
     BundledPreset("station-train"),
-    BundledPreset("battery-mood-show"),
     BundledPreset("street-chef"),
     BundledPreset("penalty-keeper"),
     BundledPreset("traffic-officer"),

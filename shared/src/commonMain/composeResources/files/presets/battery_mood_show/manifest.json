@@ -1,7 +1,0 @@
-{
-  "id": "battery-mood-show",
-  "name": "机器人的起床气",
-  "summary": "从昏暗哈欠到电量决定的心情，再奏响出门小调；低电量则打个哈欠继续休息，不移动。",
-  "createdAtEpochMillis": 1726838400000,
-  "updatedAtEpochMillis": 1726838400000
-}
