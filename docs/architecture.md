@@ -200,7 +200,43 @@ Android 和桌面通过同一 App UDP 会话接收 H.264（外层类型 2）和 
 
 供应商预设为 DashScope、OpenAI、DeepSeek 和 MiMo；设置直接映射成 Koog `LLMProvider` / `LLModel`，支持预设模型与手动 ID。已维护模型包含上下文、最大输出和 `LLMCapability` 快照；未知 ID 使用工具/Chat Completions 的保守基线并把 token 上限显示为未知，不从名称猜测。配置测试不写入用户对话，也不调用机器人：先校验 HTTPS、模型与 key，再按供应商目录协议验证所选 ID，随后分别发起短流式文本请求和强制的无副作用工具调用；只有收到完整 End frame 和合法 `hanppie_configuration_probe` 工具调用才显示四阶段全部通过。DashScope 读取 `/api/v1/models` 的 `output.models`，其余预设读取 `/v1/models` 的 `data`。真实测试可能产生少量费用，UI 明确提示。平台组合根注入 Ktor `HttpClient` 工厂，Android 与桌面分别显式创建 OkHttp 引擎；没有模型 fallback 或整轮自动重试。配置由 Preferences DataStore 保存，桌面环境变量可覆盖后续 run；Android 暂未接入 Codex OAuth。
 
-**产品智能体：** 工具集合位于 `agent/tools`，当前暴露八个具名 class-based Koog 工具（`Tool` / `ToolBase`）：`RobotStatusTool`、`ReadSkillTool`、`ListLabScriptsTool`、`ReadLabScriptTool`、`SaveLabScriptTool`、`DeleteLabScriptTool`、`ExecuteLabPythonTool`、`StopLabTool`；参数与结果继续使用 Koog 的类型化序列化和 `MessagePart.Tool.Call/Result`，不按自然语言动作逐个硬编码，也不另建工具 DTO。状态结果包含连接、遥测与脚本运行字段；技能读取结果仅包含 Markdown 正文；脚本工具返回脚本元数据或源码；执行、停止和删除返回明确状态枚举及必要关联标识。应用存储初始化时，在 IO 协程中将 `BuiltinSkills` 显式列出的内置资源写入应用数据目录 `skills/builtin`，启动时刷新这些文件；不触碰目录外的用户文件。释放完成后，使用实际文件系统上的 Koog `discoverSkills` 从真实目录解析技能，再由 `generateSkillsPrompt` 生成名称和描述目录，不维护自定义 frontmatter 解析、虚拟文件系统或构建索引。当前 Koog Android 包未提供 JVM 文件系统实现，Android/桌面共用基于 NIO 的 `SkillFileSystem`；平台层只提供文件系统、数据目录与真实路径解析，释放、发现和读取规则位于共享代码。`WorkbenchStorage` 持有初始化任务；对话提示和读取工具等待同一个任务，初始化失败沿调用链报告，不回退到资源读取。读取工具 `read_skill(name, path = "SKILL.md")` 按名称定位技能，以文件系统读取正文，结果只有 `content`；附属文档由正文引用提供。拒绝绝对路径、路径穿越及解析符号链接后越出技能目录的路径。元数据在启动时加载一次，正文按需读取；读取不会执行文档或改变工具审批权限。新增内置技能需要添加资源并更新 `BuiltinSkills` 文件列表。当前 [lab-python 技能](../shared/src/commonMain/composeResources/files/skills/lab-python/SKILL.md) 在一个文件中维护机内 API、脚本库管理和审批执行工作流；API 事实来源于恢复的机内 `rm_ctrl.py` 与 `rm_define.py`，未收录接口不得臆造，源码核对不代表当前设备实机验证。实现依据见 [Koog Skills](https://docs.koog.ai/skills/)。脚本列表返回 ID 和用户可见名称，读取、更新、删除、执行及编辑跳转统一以 ID 定位；名称只用于展示和重命名。读取不存在的脚本返回 `NOT_FOUND`，不产生工具错误；存储初始化和读取故障仍沿错误路径报告。保存不传 `scriptId` 时创建，传入时原子更新对应脚本，无效 ID 直接失败，保存只写本地脚本目录（`manifest.json` 与 `script.py`），不会上传或运行；永久删除必须由用户明确提出并在界面再次确认。执行 Python 的位置是机器人 Lab 解释器而非手机/电脑，源码为标准 Python 3.6 `def start()` 程序。执行工具只接收脚本库 `scriptId`，列表、读取和保存结果均返回 `id`。新代码先保存再运行；执行准备从脚本库按 ID 读取源码及该脚本目录下的音频，不依赖当前编辑器音频状态。审批前复制源码与音频字节快照，呈现完整源码及音频清单，批准后的同一快照通过 Koog `ToolCallMetadata` 交给执行工具并上传；不重新读取可能已修改的文件，也不把音频字节暴露为模型参数。准备读取和实际执行分别有操作超时，用户等待审批不占用超时；只有用户确认后才记录批准、上传及启动；审批可以等待用户，不会因 agent 总时限在确认瞬间被取消。工具等待共享 `LabController` 的真实调用返回，机器人副作用结果持久化后结束本次 run；后续 `STARTED`、完成、失败或 10 秒未确认转为未知由全局脚本状态持续展示，模型不在同一 run 内轮询或自行重试。对话期间禁止手动切换目标、上传和启动，设备操作用原子 busy 状态互斥；手动停止会先取消对话。取消 LLM 不等于停止机内脚本，失联/部分启动仍报告未知结果。智能体没有视觉工具，不能回答实时观察环境的问题；不继承 Python 智能体的相机或媒体能力。产品交互、风险与未来工具边界见[对话产品智能体设计](./conversation-agent-product-design.md)，持久化与演进原则见[智能体运行时技术方案](./agent-runtime-plan.md)，对话页功能范围见[对话体验产品需求](./conversation-product-requirements.md)。
+**产品智能体：** 工具集合位于 `agent/tools`，当前暴露八个具名 class-based Koog 工具（`Tool` /
+`ToolBase`）：`RobotStatusTool`、`ReadSkillTool`、`ListLabScriptsTool`、`ReadLabScriptTool`、
+`SaveLabScriptTool`、`DeleteLabScriptTool`、`ExecuteLabPythonTool`、`StopLabTool`；参数与结果继续使用
+Koog 的类型化序列化和 `MessagePart.Tool.Call/Result`，不按自然语言动作逐个硬编码，也不另建工具
+DTO。状态结果包含连接、遥测与脚本运行字段；技能读取结果仅包含 Markdown
+正文；脚本工具返回脚本元数据或源码；执行、停止和删除返回明确状态枚举及必要关联标识。应用存储初始化时，在
+IO 协程中将 `BuiltinSkills` 显式列出的内置资源写入应用数据目录 `skills/builtin`
+，启动时刷新这些文件；不触碰目录外的用户文件。释放完成后，使用实际文件系统上的 Koog `discoverSkills`
+从真实目录解析技能，再由 `generateSkillsPrompt` 生成名称和描述目录，不维护自定义 frontmatter
+解析、虚拟文件系统或构建索引。当前 Koog Android 包未提供 JVM 文件系统实现，Android/桌面共用基于 NIO 的
+`SkillFileSystem`；平台层只提供文件系统、数据目录与真实路径解析，释放、发现和读取规则位于共享代码。
+`WorkbenchStorage` 持有初始化任务；对话提示和读取工具等待同一个任务，初始化失败沿调用链报告，不回退到资源读取。读取工具
+`read_skill(name, path = "SKILL.md")` 按名称定位技能，以文件系统读取正文，结果只有 `content`
+；附属文档由正文引用提供。拒绝绝对路径、路径穿越及解析符号链接后越出技能目录的路径。元数据在启动时加载一次，正文按需读取；读取不会执行文档或改变工具审批权限。新增内置技能需要添加资源并更新
+`BuiltinSkills`
+文件列表。当前 [lab-python 技能](../shared/src/commonMain/composeResources/files/skills/lab-python/SKILL.md)
+在主入口文档中维护核心执行器 API、脚本库管理和审批执行工作流，并通过附属参考文档模块化支持感知算法（
+`references/sensors-and-vision.md`）与 EP 专有扩展硬件（`references/ep-extensions.md`）；API 事实来源于恢复的机内
+`rm_ctrl.py` 与 `rm_define.py`
+，未收录接口不得臆造，源码核对不代表当前设备实机验证。实现依据见 [Koog Skills](https://docs.koog.ai/skills/)
+。脚本列表返回 ID 和用户可见名称，读取、更新、删除、执行及编辑跳转统一以 ID 定位；名称只用于展示和重命名。读取不存在的脚本返回
+`NOT_FOUND`，不产生工具错误；存储初始化和读取故障仍沿错误路径报告。保存不传 `scriptId`
+时创建，传入时原子更新对应脚本，无效 ID 直接失败，保存只写本地脚本目录（`manifest.json` 与 `script.py`
+），不会上传或运行；永久删除必须由用户明确提出并在界面再次确认。执行 Python 的位置是机器人 Lab
+解释器而非手机/电脑，源码为标准 Python 3.6 `def start()` 程序。执行工具只接收脚本库 `scriptId`
+，列表、读取和保存结果均返回 `id`。新代码先保存再运行；执行准备从脚本库按 ID
+读取源码及该脚本目录下的音频，不依赖当前编辑器音频状态。审批前复制源码与音频字节快照，呈现完整源码及音频清单，批准后的同一快照通过
+Koog `ToolCallMetadata`
+交给执行工具并上传；不重新读取可能已修改的文件，也不把音频字节暴露为模型参数。准备读取和实际执行分别有操作超时，用户等待审批不占用超时；只有用户确认后才记录批准、上传及启动；审批可以等待用户，不会因
+agent 总时限在确认瞬间被取消。工具等待共享 `LabController` 的真实调用返回，机器人副作用结果持久化后结束本次
+run；后续 `STARTED`、完成、失败或 10 秒未确认转为未知由全局脚本状态持续展示，模型不在同一 run
+内轮询或自行重试。对话期间禁止手动切换目标、上传和启动，设备操作用原子 busy 状态互斥；手动停止会先取消对话。取消
+LLM 不等于停止机内脚本，失联/部分启动仍报告未知结果。智能体没有视觉工具，不能回答实时观察环境的问题；不继承
+Python
+智能体的相机或媒体能力。产品交互、风险与未来工具边界见[对话产品智能体设计](./conversation-agent-product-design.md)
+，持久化与演进原则见[智能体运行时技术方案](./agent-runtime-plan.md)
+，对话页功能范围见[对话体验产品需求](./conversation-product-requirements.md)。
 
 **验证边界：** 固定抓包向量、CRC/截断、DSP、遥测、回环 UDP、FTP、Lab 生命周期和桌面组件测试已通过；回环测试覆盖网络工厂用于身份/会话 UDP 以及 FTP 控制/数据连接，内部文件回环另覆盖目录列表、ASCII 名称转换、同名安全上传、流式下载、重命名、新建和非递归删除。共享页面有 393 dp 手机尺寸编辑、导航、对话、设置与内部文件截图检查，macOS 宽屏设备页、脚本页与内部文件页已实际渲染检查。新增运行时持久化测试覆盖 Agent 运行时 Room 数据库（`agent-runtime.db`）独立生命周期、JSONL 未提交尾部隔离、已提交坏行拒绝、末事件游标冲突、事件 ID 幂等与冲突、SQLite 清空后重建、Session 管理、重启后 agent run 失败、待审批安全拒绝和未完成工具的 Koog 错误 Result；基于目录树的脚本存取测试覆盖新建、重命名、保存、加载、音频切片增删、预置脚本首次同步与不可直接覆盖等契约；Koog 离线测试覆盖多轮上下文、实时 `StreamFrame` 不进入耐久事件、工具结果、同一工具 ID 的审批与执行生命周期、拒绝、取消、截断、关闭等待终态、每 Session 草稿隔离、审批等待不消耗操作超时、副作用后终止、多分类只读查询、无界只读循环失败、完成/失败后立即继续发送、忙状态拒绝可追踪以及 key 不进入日志、原始异常传播和 traceback 持久化。四个供应商的目录路径、响应形状与预设能力由本机模拟协议测试覆盖。对话历史已按 393 dp 弹层和 1040 dp 侧栏渲染检查，桌面快捷键由 Compose UI 测试覆盖。Android APK、测试包与 lint 构建结果以本次交付记录为准。小米 13 / HyperOS 3（Android 16、1080×2400、440 dpi）已有四页面导航及脚本编辑测试；此前新对话页通过显式 shell 启动 Activity 的 instrumentation 测试，但本轮新增的持久历史、模型目录和快捷键尚未在物理手机上复验。真实兼容模型调用、界面确认、Lab 上传启动、机内自定义标记回传及停止/断开此前通过端到端测试；四个供应商的新版分阶段配置测试本轮没有真实 key，不能据离线测试声称云端通过。当前 S1 已实测发现、FTP 根目录列举、临时目录创建、ASCII/非 ASCII 上传、下载、重命名、新建和非递归删除；名称与内容边界按上一段记录，所有临时目录均确认清除。短时云台触摸和红外触发通过 UI 命令路径测试，但不能替代运动角度/红外命中的物理验收；底盘行驶、水弹实射、音频主观听感、Windows/Linux 桌面实机和机器人热点与蜂窝并行联网尚未完成验证。KMP 回复 TTS 已移除，因此不再保留或声称其平台播放验收。CI 包含 Android APK/lint 和三平台桌面测试/打包配置，本次未运行远程 CI。
 

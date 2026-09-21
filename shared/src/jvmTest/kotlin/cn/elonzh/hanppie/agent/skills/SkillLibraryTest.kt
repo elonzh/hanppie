@@ -1,6 +1,7 @@
 package cn.elonzh.hanppie.agent.skills
 
 import cn.elonzh.hanppie.agent.tools.ReadSkillTool
+import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
@@ -12,7 +13,6 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
-import kotlinx.coroutines.runBlocking
 
 class SkillLibraryTest {
     private suspend fun load(root: Path) = SkillLibrary.load(SkillFileSystem, root) { it.toRealPath() }
@@ -44,6 +44,20 @@ class SkillLibraryTest {
             assertFalse(library.prompt().contains(root.toString()))
             assertFalse(library.prompt().contains("chassis_ctrl.move_with_time"))
             assertEquals(packaged, ReadSkillTool(library::read).execute(ReadSkillTool.Args("lab-python")).content)
+            val sensorsDoc = ReadSkillTool(library::read).execute(
+                ReadSkillTool.Args(
+                    "lab-python",
+                    "references/sensors-and-vision.md"
+                )
+            ).content
+            assertContains(sensorsDoc, "armor_ctrl")
+            val epDoc = ReadSkillTool(library::read).execute(
+                ReadSkillTool.Args(
+                    "lab-python",
+                    "references/ep-extensions.md"
+                )
+            ).content
+            assertContains(epDoc, "robotic_arm_ctrl")
         } finally {
             data.toFile().deleteRecursively()
         }
