@@ -8,7 +8,7 @@ internal data class HanppieBuildInfo(
     val frameworkVersion: String = "Kotlin 2.4.10 · Compose 1.12.0",
     val protocols: String = "RoboMaster SDK & Lab API",
     val repositoryUrl: String = "https://github.com/elonzh/hanppie",
-    val license: String = "MIT License",
+    val license: String = "Apache-2.0",
     val copyright: String = "© 2020-2026 elonzh",
 ) {
     fun formatDiagnosticReport(): String = buildString {

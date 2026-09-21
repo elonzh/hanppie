@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/elonzh/hanppie/actions/workflows/ci.yml/badge.svg)](https://github.com/elonzh/hanppie/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.10-blue)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 
 Hanppie is an open preservation and computer-programming toolkit for DJI RoboMaster robots. Its goal is to restore auditable and reversible connectivity, programming, telemetry, and remote control without depending on the mobile app. All current physical-device evidence comes from S1; this is not a closed model allowlist, and models such as EP are not claimed as supported until each capability is verified.
 
@@ -214,4 +214,4 @@ Repository constraints live in [`AGENTS.md`](./AGENTS.md). When architecture, pr
 
 ## License
 
-Hanppie's own code uses the [MIT License](./LICENSE). DJI-derived code under `src/robomaster` uses the directory's [Apache License 2.0](./src/robomaster/LICENSE.txt); see [`UPSTREAM.md`](./src/robomaster/UPSTREAM.md) for provenance.
+Hanppie's own code uses the [Apache License 2.0](./LICENSE). DJI-derived code under `src/robomaster` uses the directory's [Apache License 2.0](./src/robomaster/LICENSE.txt); see [`UPSTREAM.md`](./src/robomaster/UPSTREAM.md) for provenance.

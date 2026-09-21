@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/elonzh/hanppie/actions/workflows/ci.yml/badge.svg)](https://github.com/elonzh/hanppie/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.10-blue)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 
 Hanppie 是一个面向 DJI RoboMaster 系列机器人的开源保存与电脑编程工具箱。项目目标是在不依赖手机 App 的前提下，恢复可审计、可回滚的连接、编程、遥测和远程控制能力。当前实机验证均来自 S1；这不是封闭的支持型号列表，EP 等型号在完成逐项验证前也不宣称受支持。
 
@@ -261,4 +261,4 @@ task prek       # 对全部文件执行 hooks
 
 ## 许可证
 
-Hanppie 自有代码使用 [MIT License](./LICENSE)。`src/robomaster` 中的 DJI 派生代码使用其目录内的 [Apache License 2.0](./src/robomaster/LICENSE.txt)，来源见 [`UPSTREAM.md`](./src/robomaster/UPSTREAM.md)。
+Hanppie 自有代码使用 [Apache License 2.0](./LICENSE)。`src/robomaster` 中的 DJI 派生代码使用其目录内的 [Apache License 2.0](./src/robomaster/LICENSE.txt)，来源见 [`UPSTREAM.md`](./src/robomaster/UPSTREAM.md)。
