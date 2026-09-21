@@ -1,0 +1,13 @@
+{
+  "product": "RoboMaster S1",
+  "product_id": "xw607",
+  "product_version": "00.06.0521",
+  "release_date": "2023-02-27",
+  "release_note_zh": "修复部分问题。",
+  "archive_file": "00.06.0521.tar",
+  "archive_size_bytes": 146831360,
+  "archive_sha256": "0c4daba819aaeb88e605ea584f8a3b6aa174727e9cf7ef23e43e82047b8be3e2",
+  "modules_count": 27,
+  "source_api": "https://mydjiflight.dji.com",
+  "download_time": "2026-09-21"
+}

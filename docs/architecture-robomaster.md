@@ -514,6 +514,91 @@ S1 的红外能力至少包含三层，不能把其中任意一层统称为“�
 且帧内容必须落在装甲受理的集合内（见上表位映射）；已实测两种位图都来自真实 S1 发射
 （`0000 1000` 与 `0000 1001`），均可作为重放样本。
 
+### 5.6 固件查询、升级协议与云端分发机制
+
+#### 5.6.1 固件升级整体架构
+
+S1 的固件不是单一的大单片机固件，而是覆盖智能控制器（Android 4.4 / SoC 镜像）、运动控制器（STM32 飞控/运控）、云台、4 路麦轮电调、6 块装甲板和发射模块的分布式固件集合。固件的检查与获取分为“设备端版本查询”与“云端接口查询及下载”两部分。**客户端静态分析/云端 API 实测/S1 实机**
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Robot as S1 机器人
+    participant App as 官方 App
+    participant Cloud as DJI 固件云端 (mydjiflight.dji.com)
+
+    Note over Robot,App: 1. 设备端固件查询 (本地 UDP 会话)
+    App->>Robot: 发送固件配置查询 (DUSS 消息)
+    Robot-->>App: 回传当前各模块版本 XML 字符串 (DJIFirmwareUpgradeFirmwareCfgString)
+
+    Note over App,Cloud: 2. 云端固件查询与获取 (HTTPS REST API)
+    App->>Cloud: POST /loadconfig/geturl (获取动态 API 路由字典)
+    Cloud-->>App: 返回 allfile, config, firm 等端点 URL
+    App->>Cloud: POST /getfile/getallfile?need_upgrade_app=1 (查询全量版本列表)
+    Cloud-->>App: 返回全量固件列表、发布时间与更新日志
+    App->>Cloud: POST /getfile/download (获取指定版本 cfg.sig)
+    Cloud-->>App: 返回带签名的 XML 描述清单 (含 27 个子模块 MD5 与尺寸)
+    App->>Cloud: POST /getfile/firmware (逐个请求各子模块 .pro.fw.sig)
+    Cloud-->>App: 返回二进制固件分块 (校验 MD5)
+
+    Note over App,Robot: 3. 打包与机内刷写
+    App->>App: 将 cfg.sig 与全部模块打包为 <version>.tar
+    App->>Robot: 推送 TAR 包至机内 /data/ftp/upgrade/ 并触发 DUSS 刷写
+```
+
+#### 5.6.2 云端分发 REST API 与签名算法
+
+官方 App（`Module.FirmwareUpgrade.System.SystemFirmwareUpgrade`）通过 `mydjiflight.dji.com` 云端获取更新，采用表单 POST 请求并对参数进行 MD5 校验签名：
+
+| 常量/字段 | 说明 | 证据 |
+| --- | --- | --- |
+| 产品 ID | `sProductid = "xw607"`（S1 硬件工程代号） | **客户端静态分析/云端 API 实测** |
+| 服务端密钥 | `sServerKey = "AaUt0ElehIMvfBuFczYCg2OH0A7kznMC"`（硬编码于客户端） | **客户端静态分析/云端 API 实测** |
+| 签名算法 | 将指定顺序参数值与 `sServerKey` 拼接后计算 MD5 小写：`md5(params + sServerKey).lower()` | **客户端静态分析/云端 API 实测** |
+| 账户边界 | `token` 与 `account` 字段传入空字符串 `""`（游客身份）时接口完全开放，无需登录 | **客户端静态分析/云端 API 实测** |
+
+云端交互共分为 4 个主要端点：
+
+1. **动态路由查询** (`POST https://mydjiflight.dji.com/loadconfig/geturl`)：
+   * 载荷：`time`（毫秒时间戳）、`os`（`android`）、`version`（客户端版本如 `1.1.5`）、`signature = md5(time + os + version + server_key)`。
+   * 返回：`allfile`, `config`, `firm`, `down`, `soft`, `test` 等 API 实际 URL 字典。
+2. **全量版本列表查询** (`POST https://mydjiflight.dji.com/getfile/getallfile?need_upgrade_app=1`)：
+   * 载荷：`product_id=xw607`、`token=""`、`account=""`、`lan="zh_cn"`、`signature = md5(server_key + product_id + token)`。
+   * 返回：JSON 格式的全量版本数组。S1 自出厂至停产共发布 11 个版本：
+     * `00.05.0015` (2019-05-31)、`00.05.0020` (2019-06-24)、`00.05.0038` (2019-09-19)、`00.05.0100` (2020-03-19)
+     * `00.06.0100` (2020-05-18)、`00.06.0300` (2020-06-30)、`00.06.0500` (2020-09-16)、`00.06.0515` (2021-11-19)
+     * `00.06.0518` (2022-02-14)、`00.06.0520` (2023-01-05)、`00.06.0521` (2023-02-27，最终版本)。
+3. **版本元数据清单获取** (`POST https://mydjiflight.dji.com/getfile/download`)：
+   * 载荷：`product_id=xw607`、`product_version`（如 `00.06.0521`）、`token=""`、`account=""`、`signature = md5(server_key + product_id + version + token)`。
+   * 返回：前置 519 字节二进制数字签名头，后接 XML 正文（`<version>.cfg.sig`），列出该版本全部模块 ID、版本、硬件批次、文件大小及 MD5。
+4. **子模块固件分块下载** (`POST https://mydjiflight.dji.com/getfile/firmware`)：
+   * 载荷：`product_id`、`product_version`、`module_id`、`module_version`、`filename`、`token=""`、`account=""`、`signature = md5(server_key + product_id + version + module_id + module_version + token)`。
+   * 返回：二进制 `.pro.fw.sig` 固件，其 MD5 严格对应清单 `md5` 属性。
+
+#### 5.6.3 00.06.0521 固件模块全量清单
+
+固件版本 `00.06.0521` 共包含 27 个子模块固件，总计 146,766,848 字节（约 139.97 MB）。各模块拆解如下：
+
+| 模块 ID | 对应物理部件 | 固件版本 | 硬件批次 | 大小 (字节) | 模块 MD5 |
+| --- | --- | --- | --- | --- | --- |
+| `0801` | 智能中控 Android 4.4 系统镜像 | `00.11.15.04` | 通用 | 141,910,848 | `b9ac1ee876387aaeddfdd95af3f1694e` |
+| `0805` | 智能中控视觉/算法外设 | `01.01.02.01` | 通用 | 2,796,000 | `6371cd47318c290beea23f553830b20f` |
+| `0306` | 运动控制器（底盘/电源/总线） | `01.03.32.00` | `hw02` | 518,176 | `2f2db795f7bedf65188597610a187523` |
+| `0400` | 两轴云台驱动控制 | `00.01.12.69` | 通用 | 381,216 | `038b18487a53ca8e1baeb83a3a95c5cd` |
+| `0400` | 两轴云台驱动控制 | `00.02.20.65` | `hw01` | 453,408 | `00fd6bee122f0142d549212bc2ace98a` |
+| `0401` | 云台姿态传感与角度解算 | `17.33.00.24` | `hw01` | 30,752 | `8ea54bc96d3149ebf319d05693d6498c` |
+| `1200`~`1203` | 4 路 M3508I 麦轮电机无刷电调 | `01.02.01.17` | `hw02` | 各 32,032 | 独立签名对应 4 路电调 |
+| `2401`~`2406` | 6 块全向装甲板控制器 | `00.05.12.00` | `hw02` | 各 19,488 | 覆盖前期出厂批次装甲板 |
+| `2401`~`2406` | 6 块全向装甲板控制器 | `00.06.06.00` | `hw03` | 各 41,504 | 覆盖后期改进批次装甲板 |
+| `2300` | 红外接收/水弹发射控制模块 | `00.01.04.48` | `hw03` | 21,024 | `465877807a6ce38d394fdda529f12d35` |
+| `2300` | 红外接收/水弹发射控制模块 | `01.01.04.51` | `hw04` | 26,144 | `ff5c13e63ad829105464c9267c746e41` |
+| `0902` | 系统管理/外设控制 | `00.18.11.29` / `01.00.00.02` | 通用 / `hw01` | 16,256 / 28,736 | 兼容不同硬件 revision |
+| `1100` | 电源与电池通信管理 | `03.74.06.02` | 通用 | 90,208 | `710d761a9c675cf6422d57ee38f49618` |
+
+#### 5.6.4 机内打包与刷写链路
+
+官方 App 下载完全部模块后，通过标准 POSIX TAR 打包为 `<version>.tar`（如 `00.06.0521.tar`，包含 27 个 `.sig` 文件及 `<version>.cfg.sig`，总归档大小 140.03 MB）。安装包通过匿名 FTP `21` 或 DUSS 流式传输推入 S1 持久存储的 `/data/ftp/upgrade/` 目录，随后向 DUSS 发送升级触发命令；设备端校验签名后进入升级模式，分别对各模块 MCU 进行 Flash 擦写与校验。**客户端静态分析/代码**
+
 ## 6. 外部扩展机制与生态
 
 本章中的技术可能连接或适配 S1，但它们不是 Hanppie 的发明，也不应视为 S1 机内软件的一部分。
