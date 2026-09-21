@@ -13,11 +13,11 @@
 | Hanppie 代码结构、实现机制、能力矩阵和安全边界 | 本文 |
 | S1 原生硬件、固件服务、协议、App/Lab 机制和外部生态 | [`architecture-robomaster.md`](./architecture-robomaster.md) |
 | 视觉、交互、断点和组件规范 | [`DESIGN.md`](../DESIGN.md) |
-| 安装、CLI 参数和开发命令 | 中英文 README、`hanppie --help` 和 `pyproject.toml` |
-| 单次实机命令、原始输出、故障和测量值 | 日期化联调记录或 `diag` 自动报告 |
+| 安装、CLI 参数和开发命令 | 中英文 README、`pyproject.toml` 和 `Taskfile.yml` |
+| 单次实机命令、原始输出、故障和测量值 | 日期化联调记录 |
 | 内置 SDK fork 来源 | [`src/robomaster/UPSTREAM.md`](../src/robomaster/UPSTREAM.md) |
 
-自动生成的 `.hanppie/diagnosis/<timestamp>/`、`.hanppie/mcp/sessions/<session-id>/` 和 `.hanppie/agent/` 记录默认不进入 Git。真机结果改变能力结论时，只更新本文的能力矩阵并引用对应证据。
+本地运行时生成的临时记录与缓存默认不进入 Git。真机结果改变能力结论时，只更新本文的能力矩阵并引用对应证据。
 
 ## 证据标记
 
@@ -52,22 +52,19 @@ Hanppie 不替换整套 S1 固件，而是在保留原机控制器、相机、�
 
 设备兼容性按协议入口和能力组合建模，不维护以当前实机型号为唯一成员的封闭支持列表。通用客户端、会话、发现结果和 Host API 只表达 RoboMaster 机器人及其可用能力；型号专属的报文、服务和安全差异留在具体后端并标记证据来源。当前全部实机结论来自 S1 `00.06.0521`，因此只能声明 S1 验证范围；EP 与 S1 的底层模块复用关系见[原生架构 4.5 节](./architecture-robomaster.md#45-s1-与-ep-的产品边界)，但 Hanppie 尚未对 EP 完成发现、会话、执行器、媒体和安全回归，不据此声明 EP 已受支持，也不在通用代码中排除它。
 
-客户端把网络发现、产品型号和组件能力作为三个不同阶段处理。UDP `45678` 广播只产生 IP、MAC、AppID 与配对状态，不猜测型号；App 数据会话建立时，既有初始化序列会发送 DUSS `0x3F/0xFE`、payload `00` 的只读产品查询，Kotlin `RobotProductProtocol` 与 Python `lab.product` 只接受 `attr=0xC0` 有效响应中的显式产品码：`1` 为 S1、`2` 为 EP，其余保持 `UNKNOWN`，查询缺失或报文不完整时同样保持未知，不使用固件版本、上次选择或 S1 默认值兜底。DUSS `attr=0x00`、`0x3F/0x12` 的 working-devices push 独立更新 `RobotCapabilities`：保存每个 16 位设备 ID 及其未解释的附加值，已确认 ID 映射为组件，未知 ID 和附加值原样保留，不能由型号代替组件存在性判断。Kotlin 设备页只在当前会话收到明确型号后显示 `RoboMaster S1` 或 `RoboMaster EP`，断开、失联和新连接开始时恢复通用 `RoboMaster`；Python `AppConnection.product` 对每次会话执行相同的重置和更新。原厂机制与消息证据见[原生架构 5.3 节](./architecture-robomaster.md#53-robomaster-app-与-lab-程序机制)。**代码/S1 实机**
+客户端把网络发现、产品型号和组件能力作为三个不同阶段处理。UDP `45678` 广播只产生 IP、MAC、AppID 与配对状态，不猜测型号；App 数据会话建立时，既有初始化序列会发送 DUSS `0x3F/0xFE`、payload `00` 的只读产品查询，Kotlin `RobotProductProtocol` 与 Python `product.py` 只接受 `attr=0xC0` 有效响应中的显式产品码：`1` 为 S1、`2` 为 EP，其余保持 `UNKNOWN`，查询缺失或报文不完整时同样保持未知，不使用固件版本、上次选择或 S1 默认值兜底。DUSS `attr=0x00`、`0x3F/0x12` 的 working-devices push 独立更新 `RobotCapabilities`：保存每个 16 位设备 ID 及其未解释的附加值，已确认 ID 映射为组件，未知 ID 和附加值原样保留，不能由型号代替组件存在性判断。Kotlin 设备页只在当前会话收到明确型号后显示 `RoboMaster S1` 或 `RoboMaster EP`，断开、失联和新连接开始时恢复通用 `RoboMaster`；Python `AppConnection.product` 对每次会话执行相同的重置和更新。原厂机制与消息证据见[原生架构 5.3 节](./architecture-robomaster.md#53-robomaster-app-与-lab-程序机制)。**代码/S1 实机**
 
 ### 1.2 相对原机的改动清单
 
 | 项目增量 | 发生位置 | 对原机做了什么 | 持久性/恢复方式                            |
 | --- | --- | --- |-------------------------------------|
-| 内置 S1 直连与 Lab 主机后端 | Git 仓库与电脑 | `src/hanppie/lab` 实现 UDP `45678/56789` 身份交换、UDP `10609/10607` 会话、DUSS/control 直控、Lab 生命周期、Bridge、视频和双向音频 | 随 Hanppie 安装；不修改固件                  |
-| Typer/Rich CLI 与实机诊断 | Git 仓库与电脑 | 通过唯一 `diag` 命令执行完整诊断，生成完整 JSONL 日志和 Markdown 证据报告 | 只写本地 `.hanppie/diagnosis`；默认不进入 Git |
+| 内置 S1 直连与 Lab 主机后端 | Git 仓库与电脑 | `src/hanppie` 实现 UDP `45678/56789` 身份交换、UDP `10609/10607` 会话、DUSS/control 直控、Lab 部署、视频和双向音频 | 随 Hanppie 安装；不修改固件                  |
 | `src/robomaster` SDK fork | Git 仓库与电脑 | 内置官方 `0.1.1.68`/`ff6646e` 的纯 Python 源码，保持 `robomaster` 导入路径；不是当前实机后端 | 随 Hanppie 安装；不修改 S1；Apache-2.0      |
-| Hanppie Lab Bridge DSP | `/data/ftp/python/python_raw.dsp` | 上传白名单 JSON 控制与遥测程序 | 文件写入 `/data`；可停止或覆盖，不等于开机自启         |
-| ADB 启动载荷 | Lab 用户程序 | 调用原机 `adb_en.sh` 并重启 `adbd` | 运行态变化；重启后关闭                         |
 | PyAV 媒体兼容层 | 电脑 | 替代官方 SDK 缺失的 macOS `libmedia_codec` 扩展 | 不修改 S1，也不能改变 S1 命令支持情况              |
 | `assets/s1-system/` 原机参考系统 | Git 仓库（`assets/s1-system/`） | 按系统原始绝对路径保存恢复的原机运行库、启动脚本与配置供研究/测试；已剥离出 `src/hanppie`，不随包打包分发 | 只影响仓库；不是部署到 S1 的新运行时                |
 | 官方基准固件归档 | `assets/firmware/` | 归档官方最终完整固件 `00.06.0521.tar`（Git LFS）与清单，提供整机恢复基底 | Git LFS 存储；不修改实机；原厂二进制              |
 
-Hanppie 不修改 `/init.rc`、原厂启动脚本或 `/system` 持久文件。Lab DSP 会写入 `/data`，但不等于开机自动运行；TCP 5555 ADB 只在诊断采集阶段临时启用，并由清理阶段重启设备关闭。
+Hanppie 不修改 `/init.rc`、原厂启动脚本或 `/system` 持久文件。Lab DSP 会写入 `/data`，但不等于开机自动运行。
 
 ### 1.3 当前实现架构
 #### 1.3.0 单体仓库与 Kotlin 多平台客户端
@@ -80,7 +77,7 @@ Hanppie 不修改 `/init.rc`、原厂启动脚本或 `/system` 持久文件。La
 | `desktopApp` | 独立 Kotlin/JVM 应用入口、FileKit 初始化、Compose application 生命周期及原生桌面打包；只依赖 `shared` |
 | `shared` | KMP 共享 UI 库，无应用 `main` 或打包任务。`commonMain` 保存 Navigation 3 路由、全部页面、`WorkbenchViewModel`、`ConsoleModel`、DataStore/Room/文件存储容器、FileKit 文件流程、设置/脚本/机器人文件控制器、主题、Compose Resources、模型配置和 Koog 对话智能体；`jvmSharedMain` 只保存 Android/JVM 共同需要的 Java 文件路径、区域化资源和本地日期格式桥接；`androidMain` 与 `jvmMain` 保留窗口或 Activity 接入、媒体、语音、网络绑定、存储/区域 actual 和各自的 Ktor 客户端初始化 |
 | `packages/robot-core` | 独立 KMP 协议模块，以 `cn.elonzh.hanppie.robot` 为根包并按 `protocol`、`product`、`session`、`lab`、`remote`、`media`、`telemetry`、`files` 分责；`commonMain` 实现 DUSS CRC、App 封包、广播解析、产品与组件能力解析、Lab 运行前临时 DSP 打包、遥控/媒体载荷与遥测，并声明机器人会话、Lab、文件服务、文件路径和流式 `Source`/`Sink` 契约；`jvmSharedMain` 以 `JvmRobotRuntime` 组合 UDP、Apache Commons Net FTP 和 Lab JVM 实现供 Android/JVM 共用 |
-| `src/hanppie`、`src/robomaster`、`tests` | 现有 Python 工具、SDK fork 和回归测试，不受客户端拆分影响 |
+| `src/hanppie`、`src/robomaster`、`tests` | 精简后的 Python 核心通信与直控/Lab 库、SDK fork 及核心回归测试 |
 
 模块边界遵循 [KMP 官方推荐结构](https://kotlinlang.org/docs/multiplatform/multiplatform-project-recommended-structure.html)：平台应用入口依赖共享库，共享库不反向依赖应用。共享 UI 以 `cn.elonzh.hanppie.ui` 为根包，按职责分为 `app`、`design`、`i18n`、`settings`、`scripts`、`chat`、`speech` 及 `robot.device`、`robot.diagnostics`、`robot.files`、`robot.remote`；测试 source set 镜像生产包，平台 `actual` 与对应 `expect` 位于同一能力包。共享库只向入口暴露 `app` 中的工作台和平台初始化函数，内部状态与控制器不因分包而公开，也不保留旧根包转发类型。一级页面与全屏驾驶舱使用 JetBrains Compose Multiplatform 发布的 Navigation 3 `NavKey`、可序列化 `NavBackStack` 和 `NavDisplay`；Android 配置变化与桌面重组共享同一路由实现，返回驾驶舱会弹出目的地而不是修改独立布尔状态。跨 Android/JVM 的中间源集显式命名为 `jvmSharedMain`，其中每个实现都实际依赖 Java/JVM；不再用中间源集承载可编译为 Kotlin common 的代码。纯逻辑测试在 `commonTest`，JVM/UI 测试在共享库 `jvmTest`，Android instrumentation 在 `androidApp`；桌面启动及打包由 `desktopApp` 负责。当前仅配置 Android/JVM 目标，尚无 iOS target、Xcode 工程或 iOS 平台适配，因此不声明支持 iOS；共享协调器只依赖 `RobotRuntime`，具体 UDP/FTP、Lab 上传、媒体、语音和文件路径仍由目标平台实现。
 
@@ -191,7 +188,7 @@ Android 和桌面通过同一 App UDP 会话接收 H.264（外层类型 2）和 
 
 设备连接成功后显示“开始操控”，断开或失联时返回设备页。遥控界面独立于主导航，Android 进入时请求传感器横屏，离开恢复先前方向；系统返回先回设备页。平台忽略方向请求的大屏/多窗口仍按可用区域布局。视频铺满背景，左下为底盘摇杆、五档，右下为弹药、直接发射和云台摇杆；中下区域保持无遮挡。顶部中间的深色 HUD 显示一处点阵状态、电量、Wi-Fi 质量和底盘/云台水平关系，左上只有返回及可能存在的脚本停止，右上是视频、监听、拍照、录像四个固定 48 dp 图标按钮。界面没有急停、停控、遥控启用或发射启用开关。快捷键提示只在实际 KeyDown 后以窄条显示，触摸隐藏，不依据屏幕宽度。释放手势、取消、失焦和离开遥控继续沿用归零逻辑；重新取得焦点时可以重建直控通道，但按键和摇杆均从全零状态开始。竖向窗口显示横屏提示并保持待机，方向请求被忽略时也不开放竖屏触摸控制。
 
-已知 `48:08` 的 62 字节载荷提供电量及未标定浮点字段；电量大于 100 视为未知。诊断页不将未标定字段展示为可信位置/速度。云台角度以独立的类型化快照显示四个协议角度和原始状态字节，标记为“最近接收”，不与底盘原始字段互相覆盖；断开、失联或暂停连接时清除。Python Direct 保留原始值并提供角度属性，`diag` 的 direct 结果同时输出角度与状态字节。新增角度解析不改变遥控所用 yaw 的 ±360° 范围检查或 500 ms 过期归零。RoboMaster macOS 客户端的 `OnWiFiSignalQualityPush` 从 Wi-Fi `07:09` 推送载荷首字节生成 `DJIAirLinkSignalQuality`；GUI 因此只在收到合法帧时显示该无符号原生质量值和分级图标，不把它标成 dBm 或百分比，断线时清除。当前 S1 App 实机会话已持续收到该推送，独立协议测试的连续样本为 65，桌面驾驶舱样本为 61；数值仍不解释为 dBm 或百分比。Lab 自定义 `3f:a4` 消息是显式消息通道，并非任意脚本 stdout；GUI 的运行事件与日志约定以本节脚本生命周期说明为准。遥测 UI 采样为 10 Hz，与网络周期独立。诊断日志和报文仅保存在有界内存列表，启动不创建工作目录日志。
+已知 `48:08` 的 62 字节载荷提供电量及未标定浮点字段；电量大于 100 视为未知。诊断页不将未标定字段展示为可信位置/速度。云台角度以独立的类型化快照显示四个协议角度和原始状态字节，标记为“最近接收”，不与底盘原始字段互相覆盖；断开、失联或暂停连接时清除。Python `Robot` 保留原始值并提供角度属性，实测遥测结果同时输出角度与状态字节。新增角度解析不改变遥控所用 yaw 的 ±360° 范围检查或 500 ms 过期归零。RoboMaster macOS 客户端的 `OnWiFiSignalQualityPush` 从 Wi-Fi `07:09` 推送载荷首字节生成 `DJIAirLinkSignalQuality`；GUI 因此只在收到合法帧时显示该无符号原生质量值和分级图标，不把它标成 dBm 或百分比，断线时清除。当前 S1 App 实机会话已持续收到该推送，独立协议测试的连续样本为 65，桌面驾驶舱样本为 61；数值仍不解释为 dBm 或百分比。Lab 自定义 `3f:a4` 消息是显式消息通道，并非任意脚本 stdout；GUI 的运行事件与日志约定以本节脚本生命周期说明为准。遥测 UI 采样为 10 Hz，与网络周期独立。诊断日志和报文仅保存在有界内存列表，启动不创建工作目录日志。
 
 **智能体运行时：** 聚合根称为 Agent Session，不称 Conversation；产品界面仍可显示“对话记录”。Session 包含多次 Koog agent run、完整 `Message`、工具活动、审批、状态以及未来制品，不假定运行时只处理聊天。`commonMain` 中当前 `ChatAgent` 是应用适配器，运行 Koog graph-based `AIAgent`；`HanppieAgentStrategy` 用显式节点和边表达“首次模型调用 → 串行工具执行 → 记录 Tool Result → 继续推理或终止”，而不是在 UI 中维护函数式工具循环。每次 run 最多 8 次模型请求，单次模型请求和单次工具操作各自受 120 秒超时约束，人工审批等待不计入执行超时；输出最多 4096 token，同一客户端实例只允许一个活动 run。模型请求关闭并行工具调用；`execute_lab_python` 与 `stop_lab` 返回后直接结束当前 run，只读工具可以按任务需要多次查询，达到模型请求上限则以失败终态停止，不能把最后一次 Tool Result 当作成功答复。运行路径、耐久事件和对话工具活动直接使用 Koog `LLModel`、`Message`、`MessagePart.Tool.Call/Result` 与 `AgentExecutionInfo`，不定义平行的消息、工具或执行 DTO；八个 class-based 工具使用 `Tool<TArgs, TResult>` 声明可序列化输入输出，应用适配器也直接返回对应 `Result`，不再拼接面向模型的自然语言字符串。JSONL 仍原样记录 Koog Call/Result，其中供应商协议字段承载结构化 JSON。工具活动行把同一 `toolCallId` 的 Call/Result 合并，按对象字段、数组项和标量渲染，默认折叠完整详情，机器人终止工具结果不再复制为 assistant 消息。`StreamFrame` 只驱动实时反馈，不进入耐久事件。`AgentStartingEvent` 在一次 fsync 中保存用户 `Message.User` 与 run 上下文，写入成功后才清空该 Session 草稿；完整助手消息或工具结果通过 `MessageEvent` 保存。模型工具调用缺失 ID 时在完整 Koog assistant `Message` 入库前补本地 UUID，后续审批、执行开始与结果沿用该 `toolCallId`。审批决定和 `ToolCallStartingEvent` 在副作用前落盘，工具结果和 agent 终态随后可靠追加。取消、超时和异常不会自动重试工具；原始异常向 run 边界传播并记录完整 traceback，工具异常不会转写为成功 Tool Result。
 
@@ -215,91 +212,60 @@ macOS 桌面实机测试覆盖 H.264 连续帧显示、Opus 解码与 Java Sound
 
 #### 1.3.1 Python 主路径
 
-当前主路径是 **UDP `45678/56789` 身份交换 + UDP `10609/10607` App 数据会话 + `DirectRobot` 直接发送 DUSS/control**。底盘、云台速度、装甲灯、枪口灯、内置音效、红外触发、视频、麦克风和 Host PCM 都不上传 Lab 程序。Lab Bridge 保留为独立后端，用于验证原生 Lab 生命周期、运行机内 Python，以及承载尚未完成直连映射的空仓水弹测试。正常连接不经过 USB，也不调用内置的 `robomaster` SDK fork。**代码/实测**
+当前主路径是 **UDP `45678/56789` 身份交换 + UDP `10609/10607` App 数据会话 + `Robot` 直接发送 DUSS/control**。底盘、云台速度、装甲灯、枪口灯、内置音效、红外触发、视频、麦克风和 Host PCM 都不需要上传 Lab 程序。过渡期的 UDP/JSON Lab Bridge 已彻底消融并移除，原生直连控制是唯一的通信与控制通道；机载 Lab 环境收敛为纯粹的机内 Python DSP 打包与部署（`lab.py`）。正常连接不经过 USB，也不调用内置的 `robomaster` SDK fork。**代码/实测**
 
 ```mermaid
 flowchart LR
     subgraph HOST["电脑"]
-        ENTRY["Hanppie API / diag / MCP / agent"]
+        ENTRY["Hanppie Python API<br/>Robot"]
+        ROBOTHOST["Robot<br/>DUSS / control 直控"]
         APPHOST["AppConnection / AppEnvelope<br/>身份与数据会话"]
-        DIRECTHOST["DirectRobot<br/>DUSS / control 直控"]
-        BRIDGEHOST["LabRobot / LabBridge<br/>可选机内 Python 后端"]
         MEDIAHOST["Camera / Audio<br/>H.264 与 Opus"]
+        LABHOST["lab.py<br/>机内 DSP 打包与 FTP"]
     end
 
     subgraph NETWORK["Wi-Fi / 可达 IP 网络"]
         IDNET["UDP 45678 → 56789<br/>AppID 身份交换"]
         DATANET["UDP 10609 ↔ 10607<br/>DUSS / control / 媒体"]
-        FTP["匿名 FTP 21"]
-        BRIDGENET["Hanppie JSON/UDP<br/>40923 / 40924"]
+        FTP["匿名 FTP 21<br/>上传 python_raw.dsp"]
     end
 
     subgraph ROBOT["S1"]
         HDVT["dji_hdvt_uav 与 Wi-Fi 路由<br/>10607 target=mobile"]
-        DSP["Hanppie Lab Bridge DSP"]
         SCRATCH["dji_scratch<br/>Lab 程序管理器"]
-        LABOBJ["Lab Python 控制对象<br/>chassis_ctrl 等"]
-        DUSS["机内 DUSS 路由<br/>与下级模块"]
+        DUSS["机内 DUSS 路由<br/>底盘 / 云台 / 发射 / 灯光"]
         MEDIA["相机 / 麦克风 / 扬声器"]
     end
 
-    ENTRY --> DIRECTHOST --> APPHOST --> IDNET
+    ENTRY --> ROBOTHOST --> APPHOST --> IDNET
     APPHOST --> DATANET --> HDVT
-    DIRECTHOST -->|"DUSS / control"| APPHOST
-    ENTRY --> BRIDGEHOST --> APPHOST
-    BRIDGEHOST --> FTP --> DSP
-    HDVT -->|"Lab 生命周期 DUSS"| SCRATCH -->|"启动"| DSP
+    ROBOTHOST -->|"DUSS / control"| APPHOST
+    ENTRY --> LABHOST --> FTP --> SCRATCH
     HDVT -->|"DUSS / control"| DUSS
-    BRIDGEHOST --> BRIDGENET --> DSP
-    DSP -->|"白名单调用"| LABOBJ -->|"rm_module / EventClient"| DUSS
-    DSP -->|"遥测与执行结果"| BRIDGENET --> BRIDGEHOST
     MEDIA -->|"H.264 / Opus"| HDVT --> DATANET --> MEDIAHOST --> ENTRY
 ```
 
 各条通道的职责不同：
 
-| 功能 | 实际路径 | 是否经过 Lab Bridge |
+| 功能 | 实际路径 | 说明 |
 | --- | --- | --- |
-| 发现、AppID 身份交换 | Host UDP `45678` → S1 UDP `56789` | 否 |
-| 数据会话和电量 | Host UDP `10609` ↔ S1 UDP `10607`；`AppConnection`/`AppEnvelope` | 否 |
-| 原生控制模式和 DUSS 遥测 | UDP `10607` 外层封包中的 DUSS/control → 机内路由 | 否 |
-| 进入 Lab、程序注册、启动和停止 | UDP `10607` 外层封包中的 DUSS → `dji_scratch` | 否 |
-| 上传 Lab DSP | FTP `21` | 否 |
-| 底盘速度 | `DirectRobot` → App control channel，50 Hz 续发 | 否 |
-| 云台速度 | `DirectRobot` → DUSS `0x04/0x69`，50 Hz 续发 | 否 |
-| 装甲灯、枪口灯、内置音效 | `DirectRobot` → DUSS 请求，同序号 ACK | 否 |
-| 红外触发 | App control channel；枪口灯和射击声分别使用 DUSS 请求 | 否 |
-| 空仓水弹触发 | Host UDP `40923` JSON → Bridge DSP → Lab Python 控制对象 → DUSS | 是 |
-| 姿态、位置、云台角度和命令结果 | Lab Python 控制对象 → Bridge DSP → Host UDP `40924` JSON | 是 |
-| 视频、机身麦克风和 Host PCM 播放 | UDP `10609/10607` 中的 H.264、Opus 或媒体 DUSS | 否 |
-| 诊断期间的系统信息 | Lab 一次性载荷开启 Wi-Fi TCP ADB `5555` | 否；细节见第 1.7 节 |
+| 发现、AppID 身份交换 | Host UDP `45678` → S1 UDP `56789` | 确认连接认领 |
+| 数据会话和电量 | Host UDP `10609` ↔ S1 UDP `10607`；`AppConnection`/`AppEnvelope` | 双向报文通道 |
+| 原生控制模式和 DUSS 遥测 | UDP `10607` 外层封包中的 DUSS/control → 机内路由 | 10 Hz 遥测推送 |
+| 底盘速度 | `Robot` → App control channel，50 Hz 续发 | 显式 arm 与短租约 |
+| 云台速度 | `Robot` → DUSS `0x04/0x69`，50 Hz 续发 | 显式 arm 与短租约 |
+| 装甲灯、枪口灯、内置音效 | `Robot` → DUSS 请求，同序号 ACK | 确定性双向应答 |
+| 红外触发 | App control channel；枪口灯和射击声分别使用 DUSS 请求 | 50 Hz 帧触发 |
+| 视频、机身麦克风和 Host PCM 播放 | UDP `10609/10607` 中的 H.264、Opus 或媒体 DUSS | PyAV 软解/编码 |
+| 机内 Lab 程序打包与部署 | `build_lab_program` / `upload_lab_program` → FTP `21` | 离线机载 Python 容器 |
 
-#### 1.3.2 Lab Bridge 的作用
+#### 1.3.2 原生直连与机载 Lab 程序的职责边界
 
-UDP `10607` 入口的网络边界见 [RoboMaster 架构文档 5.1 节](./architecture-robomaster.md#51-duss-二进制消息)。访问 DUSS 或发送 control channel 本身不要求先上传 Bridge；`DirectRobot` 已通过该入口完成原生控制模式、连续遥测、底盘与云台速度、灯光、声音、红外触发和媒体能力。**代码/实测**
+UDP `10607` 入口的网络边界见 [RoboMaster 架构文档 5.1 节](./architecture-robomaster.md#51-duss-二进制消息)。访问 DUSS 或发送 control channel 本身完全不需要预先上传任何常驻脚本；`Robot` 直接通过该入口完成原生控制模式、连续遥测、底盘与云台速度、灯光、声音、红外触发和媒体能力。**代码/实测**
 
-`AppConnection` 维护 AppID、session、tick、DUSS 序号和 50 Hz 发送循环。`DirectRobot.enter_control_mode()` 发送根据 App 报文恢复的模式初始化与订阅序列；需要响应的 DUSS 请求按发送序号等待 ACK，并检查返回码。底盘速度放入 control channel，云台速度作为周期 DUSS 发送；两类命令都要求主机显式 `arm()`，并由本地租约到期自动替换为 neutral/zero。`disarm()`、模式退出和连接关闭都会先归零。S1 固件 `00.06.0521` 上，两次在 5 秒租约仍有效时强制终止主机子进程、等待 1.5 秒再恢复会话，失联后的推定平面位移最大为 `0.014 m`；该结果支持原生会话失联停车，但不能给出精确制动时延，也未覆盖丢包、Wi-Fi 断开和 session 抢占。**代码/实测**
+`AppConnection` 维护 AppID、session、tick、DUSS 序号和 50 Hz 发送循环。`Robot.enter_control_mode()` 发送根据 App 报文恢复的模式初始化与订阅序列；需要响应的 DUSS 请求按发送序号等待 ACK，并检查返回码。底盘速度放入 control channel，云台速度作为周期 DUSS 发送；两类命令都要求主机显式 `arm()`，并由本地租约到期自动替换为 neutral/zero。`disarm()`、模式退出和连接关闭都会先归零。S1 固件 `00.06.0521` 上，两次在 5 秒租约仍有效时强制终止主机子进程、等待 1.5 秒再恢复会话，失联后的推定平面位移最大为 `0.014 m`；该结果支持原生会话失联停车，但不能给出精确制动时延，也未覆盖丢包、Wi-Fi 断开和 session 抢占。**代码/实测**
 
-Lab Bridge 是另一条可选路径。它通过 RoboMaster Lab 生命周期启动一段机内 Python 程序，由它作为电脑和 Lab Python 控制对象之间的适配层：
-
-Lab Bridge 具体负责：
-
-1. 把电脑发来的白名单 JSON 控制意图转换为 `chassis_ctrl`、`gimbal_ctrl`、`led_ctrl`、`media_ctrl` 等 Lab Python 控制对象调用；
-2. 通过这些对象使用 `rm_ctrl`、`rm_module` 和 `EventClient` 的机内 DUSS 执行链路，而不要求电脑完整重建每个模块的地址、命令、ACK 和订阅行为；
-3. 维护随机 session、单调命令序号、显式 arm/disarm、速度上限和 `300 ms` 失联归零；
-4. 回传遥测、最后执行命令、Lab Python 控制对象的返回结果和错误，使主机能区分“UDP 已发送”与“机内对象已调用”。
-
-Bridge 的实际代价是一跳 Host JSON/UDP、机内 JSON 解析和 Python 调度，以及 DSP 上传、注册、启动和停止生命周期；它不是高频底层总线，也不是零开销抽象。当前实现以 `100 ms` 续发运动状态、以 `50 ms` 回传遥测，已经完成现有诊断序列，但尚未做端到端延迟和吞吐量基准，不能据此断言额外开销可以忽略，也没有必要把它当作长期访问 DUSS 的前置条件。
-
-| 维度 | Host 直接使用 UDP `10607` DUSS/control | 当前 Lab Bridge |
-| --- | --- | --- |
-| 数据路径 | Host DUSS/control → `AppEnvelope` → UDP `10607` → 机内路由 | Host JSON → UDP `40923` → 机内 Python → Lab Python 控制对象 → DUSS |
-| 部署与开销 | 不上传 DSP；少一层 JSON 和 Python 调度 | 需要 DSP 生命周期；多一次协议转换 |
-| 能力来源 | 需要逐项恢复地址、命令、payload、ACK、订阅和控制状态 | 复用机内 `rm_ctrl.py` 高层对象 |
-| 安全状态 | 主机显式 arm、速度限制、每条运动命令的短租约；进程异常退出已有位移上界证据 | 显式 arm、限速、序号和机内 `300 ms` 失联归零 |
-| Hanppie 证据 | 底盘、云台、灯光、声音、红外和遥测已实测；部分字段语义及物理效果仍需外部测量 | 执行器、高层遥测、水弹空仓触发和机内 watchdog 已实测 |
-
-所以 Bridge 不是 UDP `10607` 外层封包的重复实现，也不是通用 DUSS 透传器；它是机内高层 API 适配与独立安全层。当前已映射能力优先使用 `DirectRobot`，需要运行任意 Lab Python、高层角度/回中能力或尚未直连的水弹控制时仍使用 Bridge。两套后端不能同时占用同一 App 控制会话，`DeviceSession` 在切换前会归零并关闭上一后端。第 1.6 节只维护 Bridge 生命周期。
+**Lab 的真实含义**：RoboMaster S1 的机载 Python 运行环境称为 "Lab"，它支持用户通过 DSP XML 容器向机器人内部部署并运行纯 Python 3.6 离线算法（如视觉巡线、标记识别、传感器动作联动等）。Hanppie 早期曾借用 Lab 部署临时 JSON/UDP 脚本作为调试脚手架（旧称 Lab Bridge），但在原生 App 协议完全逆向并稳定直控后，该过渡方案已完成历史使命并被彻底删除。现在的 `src/hanppie/lab.py` 专注于清晰的 DSP 容器构建与 FTP 部署（`build_lab_program`、`upload_lab_program`），不再承担在线控制角色。
 
 #### 1.3.3 为什么官方 SDK 不是当前控制后端
 
@@ -307,13 +273,13 @@ Bridge 的实际代价是一跳 Host JSON/UDP、机内 JSON 解析和 Python 调
 
 | 层次 | 官方 SDK 路径 | Hanppie 当前实机路径 |
 | --- | --- | --- |
-| 机器人端入口 | EP SDK proxy UDP `30030` | S1 UDP `56789` / `10607`；可选 Lab 使用 FTP `21` 和 Bridge UDP `40923/40924` |
-| 会话模型 | SDK route、SDK mode、heartbeat | AppID、`AppEnvelope` session/tick、Lab mode/keepalive |
-| 执行器控制 | 主机 SDK DUSS → EP SDK 路由 | 主机 DUSS/control → App 外层封包 → S1 原厂移动端路由；未映射能力可经 Bridge |
-| 机器人原厂可用性 | 原厂 S1 不开放所需 proxy | 直连所需入口是 S1 原厂功能；Bridge 是临时 Lab 程序 |
-| 项目状态 | fork 可导入、可构建、可离线测试；不参与实机诊断 | 当前实机后端 |
+| 机器人端入口 | EP SDK proxy UDP `30030` | S1 UDP `56789` / `10607`；机载 Lab 使用 FTP `21` |
+| 会话模型 | SDK route、SDK mode、heartbeat | AppID、`AppEnvelope` session/tick、App control mode |
+| 执行器控制 | 主机 SDK DUSS → EP SDK 路由 | 主机 DUSS/control → App 外层封包 → S1 原厂移动端路由 |
+| 机器人原厂可用性 | 原厂 S1 不开放所需 proxy | 原生 App 控制入口是 S1 原厂出厂即具备的核心功能 |
+| 项目状态 | fork 可导入、可构建、可离线测试；不参与实机诊断 | 当前实机后端（`Robot`） |
 
-`src/robomaster` 保留官方 API 和协议实现供独立维护和分析，但“仓库内有 SDK 包”不表示当前控制链路使用 SDK。端口号本身也不决定协议：Hanppie Bridge 在 `40923/40924` 上传输的是项目自定义 JSON/UDP，不是官方明文 SDK 或 Python SDK 的二进制会话。
+`src/robomaster` 保留官方 API 和协议实现供独立维护和分析，但“仓库内有 SDK 包”不表示当前控制链路使用 SDK。
 
 UDP `10607` 直连与官方 SDK 是两件事：前者自行实现 `AppEnvelope`、DUSS/control 和会话状态；后者使用 EP SDK proxy 的路由协议。不能因为两条路径内部都承载 DUSS，就称前者为“使用官方 SDK”。
 
@@ -323,86 +289,25 @@ UDP `10607` 直连与官方 SDK 是两件事：前者自行实现 `AppEnvelope`�
 
 | 场景 | 是否需要 USB | 说明 |
 | --- | --- | --- |
-| UDP `56789/10607` 会话、Lab 上传/启动、Bridge 控制、视频和双向音频 | 不需要 | 全部经 Wi-Fi/IP |
-| `diag` 的系统信息采集 | 不需要 | 先经 Lab 一次性载荷开启 TCP ADB，再连接 `<robot-ip>:5555` |
-| USB 线已插入 | 不会被当前后端使用 | 当前 `src/hanppie/lab` 没有 USB/RNDIS 控制传输 |
+| UDP `56789/10607` 会话、Lab 上传/启动、视频和双向音频 | 不需要 | 全部经 Wi-Fi/IP |
+| USB 线已插入 | 不会被当前后端使用 | 当前 `src/hanppie` 没有 USB/RNDIS 控制传输 |
 | Wi-Fi、UDP `10607` 或 Lab 功能不可用时的 root 维护或恢复 | 可能需要 | 只有固件当时已开放 USB ADB/RNDIS 时才能使用；插线本身不保证 ADB 可见 |
 | 固件取证、镜像备份或底层救援 | 通常需要专用维护通道 | 不属于日常控制链路 |
 
 官方 SDK 虽然定义了 `conn_type="rndis"`，它在 USB/RNDIS 上仍需要机器人端 SDK proxy `30030`；所以插入 USB 不能单独让 S1 兼容官方 SDK。**代码**
 
-因此，无 USB 的局域网遥控在传输层已成立。**代码/实测** 跨互联网遥控不能直接暴露 UDP `56789/10607`、FTP、Bridge 或 ADB；实现状态和网络边界见第 1.12 节。
-
-#### 1.3.5 Codex MCP 与持久 Host Python Worker
-
-Hanppie 通过 `hanppie mcp serve` 提供本机 STDIO MCP 服务。服务公开 `get_python_context`、`get_connection_status`、`connect_robot`、`execute_python` 和 `disconnect_robot` 五个工具；连续对话状态仍由 Codex 维护，MCP 生命周期上下文持有一个 `PythonExecutor`，后者只创建一个长期运行的隔离 worker。`execute_python` 的 `robot_access` 默认为 `auto`，负责按需发现、连接并注入 `robot`；`reuse` 只复用现有连接，未连接时注入 `None`，不会发现或连接；`none` 始终注入 `None`，用于明确的 Host-only Python。兼容参数 `connect_robot=false` 映射为 `reuse`，不再同时承担“不要连接”和“不要提供现有 robot”两种语义。worker 在第一次 `connect_robot` 或 `robot_access=auto` 的调用中建立 App 会话，并在后续工具调用中复用当前 Direct 或 Lab 后端。**代码/离线测试**
-
-未配置目标时，首次连接会被动收集 App 广播，过滤不可用的 `00000000` AppID；只有一个候选时自动选择，多于一个候选时拒绝猜测，没有候选时返回网络与显式目标提示。不连接机器人的 Host Python 调用不会触发发现。MCP 安装和启动参数不包含动作、红外或水弹权限门；显式 IP 与 AppID 只用于目标选择。发现和连接本身不执行机械动作。**代码/离线测试**
-
-`execute_python` 在 worker 的电脑 Python 3.10 中为每次调用创建新的源码命名空间，注入 Direct/Lab 路由外观 `robot`、`time`、`sleep`、`output_dir`、`save_frame` 和 `checkpoint`；调用之间不保存 Python 变量，但保存 worker 和当前 App 连接。代码把最终值写入 `result`，MCP 返回标准输出、错误、结构化结果、阶段事件和制品路径。`checkpoint(name, **data)` 立即追加本次调用的 `events.jsonl`，所以后续源码失败时，已经完成的动作阶段仍会出现在错误响应和制品中。`get_python_context` 的 schema 版本为 2，返回 Hanppie/Python 版本、访问模式、当前受支持的 facade 签名和能力边界；其中底盘、云台速度加时长只表示开环速度命令，不宣称已实现精确角度或距离控制。MCP 工具结果中 `ok=false` 会转换为协议层工具错误，客户端收到 `isError=true`，完整执行结果仍先写入调用记录。**代码/离线测试**
-
-底盘、云台、声音、红外、枪口灯和媒体等 Direct-only 能力按需使用 `DirectRobot`；`robot.fire_gel()` 与 `robot.fire("gel")` 会关闭 Direct 会话，完成 `LabRobot` 进入 Lab、上传并启动固定 Bridge 的生命周期，然后等待 arm 与 `blaster.fire_gel` 命令结果。Direct → Lab 完整生命周期失败时会清理本次未完成的 Lab 实例并最多执行两次，第二次前等待 `250 ms`；仍失败则尝试恢复调用前的 Direct 后端。连接状态中的 `transition.last` 保存来源、目标、尝试次数、耗时、错误和回滚结果。任意用户源码不会上传为机内 Lab 程序。**代码/离线测试，水弹能力本身已有实测**
-
-同一后端在连续调用中复用：连续水弹调用不会重复上传 Bridge；共享的 `set_led` 保留当前后端，`robot.stop()`、`robot.chassis.stop()` 和 `robot.gimbal.stop()` 只停止当前后端，不会为了清理而打开或切换连接；只有调用当前后端不支持的能力时才切换。每次正常或异常返回都会归零并 disarm，但健康连接不会关闭；Direct 动作仍遵循 `DirectRobot` 自身的显式 `arm()` 和租约语义，Lab 水弹调用由路由层完成当前 session 的 arm 与命令确认。清理失败时 worker 主动断开。调用超时会强制结束整个 worker，App 连接随进程释放，下一次调用创建新 worker；显式 `disconnect_robot` 和 MCP 服务退出则执行 disarm、close。**代码/离线测试**
-
-`MCPRecorder` 只计算默认路径，不在 MCP 进程启动时写文件；直到第一个 Hanppie 工具实际被调用，才创建 `.hanppie/mcp/sessions/<session-id>/`。因此客户端初始化、MCP 握手、列出工具以及从未调用工具便退出都不会在当前工作目录生成 `.hanppie`。激活后，`server.log` 记录服务、worker 生命周期和工具调用摘要，worker 的 stdout/stderr 也重定向到该文件，避免污染 STDIO MCP 协议；`calls.jsonl` 为每次工具调用写入同一 `call_id` 的 `started` 和 `completed` 两类结构化事件：前者立即保存工具名和完整参数，后者保存耗时、结果或异常。进程在调用中断时至少保留 `started`，不会让正在执行的调用从记录中消失。`calls/<run-id>/` 是 `execute_python` 的工作目录和制品目录，其中 `events.jsonl` 保存用户显式写入的阶段检查点。记录在校验参数前开始，因此被拒绝的调用也会留下异常；worker 超时结果会标为 error。每个已激活服务使用独立会话目录，避免多个 Codex 客户端共享同一日志文件。`get_python_context` 本身是一次工具调用，所以会激活记录并返回这些绝对路径；`--artifact-dir` 只改变整棵 MCP 数据根目录，默认值仍是 Git 忽略的 `.hanppie/mcp`。调用参数会原样保存 Python 源码，结果会保存 stdout、stderr 和结构化返回，因此这些文件属于可信本地执行记录，不做内容脱敏。**代码/离线测试**
-
-`hanppie mcp install` 幂等写入 Codex 的 `mcp_servers.hanppie` 表，其他配置和 MCP 服务保持不变；已有不同配置时必须显式 `--replace`。user 范围优先使用显式 `--codex-home`，再使用 `CODEX_HOME`，否则使用跨平台用户主目录下的 `.codex/config.toml`；project 范围向上寻找 Git 或 Python 项目根并写入 `.codex/config.toml`。配置以当前 Python 解释器绝对路径和 `-m hanppie mcp serve` 参数启动，不依赖 shell 引号或 `codex` 可执行文件是否在 PATH，因此同一实现适用于 Windows、macOS、Linux 和 WSL 的本机 Codex。**代码/离线测试**
-
-这是面向可信本地用户的任意 Python 代码执行入口，不是安全沙箱。Host Python 保留运行 MCP 服务的本机账户权限，可以导入模块、访问绝对路径或故意绕过预注入对象。MCP 只提供 STDIO，不监听网络，但仍不能交给不可信调用方。当前没有跨进程控制源仲裁；运行实机控制时不得同时运行 `diag`、另一个 Hanppie MCP、RoboMaster App 或其他控制程序。**代码边界**
-
-#### 1.3.6 唤醒词、连续对话与 LangGraph 智能体
-
-`hanppie agent run --prompt TEXT`（简写 `-p`）直接调用同一 LangGraph 与 Python 执行器，不经过唤醒门控，不初始化麦克风、转写模型或语音播放。重复 `--prompt` 按顺序共享内存会话和持久机器人连接；跨进程不保存上下文。每轮等待模型与工具完成，任一工具报错或达到工具轮数上限即停止后续 prompt 并返回退出码 1，正常完成返回 0，中断返回 130；退出时关闭连接。文本在实际执行时以 `user.prompt` 写入 `.hanppie/agent/sessions`，回复包含工具结果和阶段耗时。文本模式忽略音频选项，包括 `--tts`。**代码/离线测试**
-
-延迟链路当前为串行的「断句 → 转写 → 模型规划 → 工具执行 → 模型续接 → 完整回复播报」。断句静音默认 `480 ms`，本地 Whisper 使用 `beam_size=1`；中文识别准确率与速度仍需现场测量。模型生成的瞬时状态设置不应添加演示性等待；`disarm` 是解除运动使能，不是关闭灯光或撤销用户要求的最终状态。工具执行完成立即输出终端回执，不等待模型总结，但回执不代表整个复合任务完成。当前仍收齐 SSE 完整响应后才执行代码或播报，未实现流式首句播报、播报打断、执行期间监听或并行转写。**代码/文本实机测试，语音端到端未验证**
-
-`latency` 保存 `transcription`、`speech_playback`、`input_to_reply_ready`、`input_to_delivery_complete`。文本起点是接受 prompt；麦克风起点是最后一个达到能量阈值的音频块回调时间，包含其后断句、转写和回复，不包含此前说话时长；它是 VAD 估计，不是声学首声测量。`assistant.reply.timings` 分开记录模型规划、工具、模型续接；观察工具只计本地取图并返回 `capture_ms`。Codex 模型 metrics 记录首 SSE 事件、首个文本/工具参数 delta（后端有发才记录）、首个完整工具项、输入/输出 token 数。`execution.progress` 的 `tool_dispatch`/`tool_complete` 使用从 LangGraph 调用开始的相对时间；派发不等于真实电机启动，不得据此宣称首动作延迟。当前没有传感器级首动作时间戳、声学首声指标或 P95 保证。**代码/离线计时测试/文本实测**
-
-Codex 请求默认显式使用 `--reasoning-effort low`；不支持的强度由后端报错，不静默降级。`--model-timeout` 默认 30 秒，是 SDK 网络操作超时，不是整轮硬截止时间。完成事件后停止读取并关闭 SSE 资源；网络错误不自动重试，避免隐藏尾延迟。`--codex-model` 控制规划及普通续接，`--codex-vision-model` 控制带图片的续接，默认跟随规划模型；因此文本模型必须搭配支持图像的视觉模型才能观察。默认规划模型仍为 Sol；Spark 可以显式选择，但短基准的速度优势不等于复杂机器人任务质量已达标。**代码/模型与灯光实测**
-
-`hanppie agent run` 是一个常驻电脑进程。它从电脑系统麦克风读取 16 kHz 单声道 PCM，以本地能量 VAD 保留短前滚并把连续音频切成最长受限的单句 WAV；单句随后交给所选授权模式的转写器。`WakeWordGate` 在转写文本中匹配“小憨批”或配置的别名：休眠时忽略没有唤醒词的结果，命中后进入有期限的活动窗口，窗口内后续句子不必重复唤醒词；只有唤醒词时回复“我在”，模型调用 `sleep_session` 或活动窗口超时后重新等待唤醒。这里的唤醒不是声学关键词模型。TTS 播放期间不同时采集下一句，减少自身回复造成的回声触发。**代码/离线测试**
-
-`--auth` 有 `auto`、`codex` 和 `api-key` 三种取值。`auto` 在存在显式 OpenAI client 或 `OPENAI_API_KEY` 时选择 `api-key`，否则选择 `codex`。`hanppie agent login` 自己执行 ChatGPT Codex device-code OAuth：向 `auth.openai.com` 申请用户码、轮询授权码并交换 access/refresh token；它不安装、启动或调用 Codex CLI/App Server，也不导入 `~/.codex/auth.json`。凭据原子写入 `HANPPIE_HOME/auth.json` 或默认的 `~/.hanppie/auth.json`，POSIX 文件权限为 `0600`；刷新时接受服务端轮换后的 refresh token，`agent logout` 只删除 Hanppie 自己的凭据。**代码/离线协议测试**
-
-Codex 模式用 access token 直接请求 `https://chatgpt.com/backend-api/codex/responses`，携带当前 JWT 中的 ChatGPT account id 和 consumer Codex 请求头。该端点要求 `input` 列表与 SSE 流式响应；Hanppie 从 `response.output_text.delta` 和 `response.output_item.done` 重建结果，遇到 HTTP 401 时强制刷新 token 后只重试一次。每次请求明确传 `store=false`，默认模型为 `gpt-5.6-sol`，`--codex-model` 可以覆盖。这里使用的是当前 ChatGPT Codex 消费者后端协议，不是 OpenAI Platform 的公共 Responses API；它不需要 Platform API key，但兼容性依赖当前 consumer endpoint。**代码/离线协议测试/真实无工具与工具回合验证**
-
-Codex 模式用 CPU `faster-whisper` 的 int8 模型在本机转写，每句使用临时 WAV 并在完成后删除；首次按模型名使用时由 faster-whisper 下载模型到其用户缓存。休眠期 VAD 人声不离开本机，只有接受唤醒后的指令文本进入 Codex。回复通过 macOS `say`、Linux `spd-say`/`espeak` 或 Windows PowerShell `System.Speech` 的可用系统实现播报，找不到系统 TTS 时启动失败并提示使用 `--no-tts`。API key 模式保留 OpenAI transcription、Responses/vision 和 TTS；该模式的 VAD 人声在唤醒匹配前先发送到转写 API。**代码/离线测试**
-
-连续对话由 LangGraph `StateGraph`、内存 checkpointer 和同一 `thread_id` 维护；API key 模式用 OpenAI Responses 的 `previous_response_id` 串联模型上下文。Codex 模式不保存或恢复远端 response/thread，而是在 Hanppie 内存中按会话记录用户输入、模型 output item 和工具结果，每次直连请求都重放当前会话的完整 Responses input。每个新唤醒会话使用新 thread，会话状态不在程序重启后恢复。模型可以直接回答普通问题，也只能选择三个稳定工具：`execute_robot_python` 负责所有可组合的机器人动作、`observe_surroundings` 负责相机画面与视觉理解、`sleep_session` 结束当前活动会话。这一边界避免为“前进、转圈、灯光、拍照”等动作分别增加模型工具；新增且已进入 `RobotFacade` 的能力会通过同一个 Python 上下文供模型组合。工具循环限制最大轮数并关闭并行工具调用，连续执行仍复用 `PythonExecutor` 的单 worker 和当前 App 连接。**代码/离线测试/真实工具回合验证**
-
-语音模型产生的 Python 与可信 MCP 源码使用同一 Host worker，但调用前多一层 AST 策略：拒绝 import、动态执行和文件内置函数、私有/dunder 属性、函数或类定义以及未注入的全局名字，要求源码实际使用 `robot`。它允许局部变量、循环、分支、`robot` facade、`time`、`sleep` 和 `checkpoint`，所以一个工具调用可以表达完整动作序列。这个策略只缩小模型误用面，不是抵抗恶意源码的强沙箱；语音智能体不能作为不可信远程代码入口。动作代码仍必须显式 `robot.arm()`，并在 `finally` 中 stop/disarm；活动会话中的“停止、停下、别动”由本地快速路径直接对已有连接执行 stop/disarm，不等待大模型。**代码/离线测试**
-
-“观察附近”先通过确定的 Host Python 程序启动 S1 视频，收到首帧后预热 1.2 秒，再读取 newest 帧、保存 JPEG 并保证停流，再将该图像交给所选模式的视觉模型。首帧可能仅部分刷新且 `is_corrupt=false`，因此不直接用于观察；预热后仍无帧或标记损坏时返回错误，不上传。固定预热不是所有网络条件下的图像完整性保证。返回语义严格限定为当前前向相机画面，不把单帧描述成完整 360 度环境；环顾需要模型显式组合底盘或云台动作与多次观察。Codex 或 OpenAI 的对话规划与图像理解仍依赖网络；电脑和 S1 之间的控制链路仍是局域网 App/Lab 会话。Codex 模式在电脑扬声器使用系统 TTS，API key 模式播放 24 kHz signed 16-bit PCM 的 AI 合成语音；当前都不使用 S1 扬声器播报。**文本 CLI 状态/灯光/运动及单图模型往返已实测；语音端到端未验证，预热后的图片未再次上传模型**
-
-观察工具只返回本地图片，不单独请求模型；gateway 在工具续接中附加该图片并选择视觉模型，单次普通观察为「规划 → 拍照 → 视觉回答」两次模型请求。Codex 图片只加入这一次续接请求，不留在文本模型的重放历史中；后续追问依据视觉回答文本，重新检查图像细节需要再次观察。API key 模式的历史仍由 `previous_response_id` 串联。两请求路由及图片不重放由离线测试覆盖，当前未再次上传私人照片做新路径实测。**代码/离线测试**
-
-`AgentRecorder` 只在首次接受唤醒词或执行文本 prompt 后创建 `.hanppie/agent/sessions/<session-id>/events.jsonl`，保存接受的文本、最终回复和工具结果；休眠背景转写不保存。本智能体内部的 PythonExecutor 制品位于 `.hanppie/agent/runtime/`，同样保持首次实际调用才创建目录。仅启动、等待和退出不会污染项目目录。记录可能包含用户语音转写、模型生成源码、相机图像和机器人返回，应作为本机敏感运行记录管理。**代码/离线测试**
+因此，无 USB 的局域网遥控在传输层已成立。**代码/实测** 跨互联网遥控不能直接暴露 UDP `56789/10607` 或 FTP；实现状态和网络边界见第 1.11 节。
 
 ### 1.4 包边界
 
 | 路径 | 项目职责 |
 | --- | --- |
-| `cli.py` | 静态声明 `diag`、`mcp` 与 `agent` 子命令，负责诊断交互、服务参数和 Codex 配置安装 |
-| `agent/audio.py`、`agent/service.py` | 电脑麦克风 VAD、OpenAI/本地转写、OpenAI/系统语音、授权路由、唤醒词活动窗口、连续监听和惰性会话记录 |
-| `agent/graph.py`、`agent/gateway.py`、`agent/codex.py`、`agent/codex_auth.py` | LangGraph 会话状态、OpenAI Platform/Codex consumer Responses 工具循环、device-code OAuth、内存会话历史、相机图像理解和机器人规划提示 |
-| `agent/policy.py`、`agent/tools.py` | 模型生成 Python 的 AST 边界、持久执行器适配、确定性相机采集和本地停止快速路径 |
-| `diagnosis/model.py` | 诊断目录、配置、结果模型和风险门 |
-| `diagnosis/discovery.py` | 被动发现并解析 S1 App 广播 |
-| `diagnosis/session.py` | App 直连、Lab、临时 ADB 的互斥连接依赖和最终清理 |
-| `diagnosis/failsafe.py` | 在独立进程中建立长租约运动，强制结束进程并测量失联后的位移上界 |
-| `diagnosis/checks.py` | 灯光、麦克风、扬声器、视频、底盘、云台、发射和系统检查实现 |
-| `diagnosis/recorder.py` | 完整 JSONL 事件和单次 Markdown 报告 |
-| `diagnosis/runner.py` | 按依赖执行检查、汇总状态和保证清理 |
-| `lab/app.py`、`lab/protocol.py` | 项目自有 AppID、`AppEnvelope`、DUSS/control 收发、ACK 等待与短租约发送循环 |
-| `lab/direct.py` | 不上传 DSP 的 `DirectRobot`，维护原生控制模式及当前直连能力映射 |
-| `lab/robot.py`、`lab/bridge.py` | Lab 程序生命周期和可选 UDP/JSON Bridge 后端 |
-| `lab/camera.py`、`lab/audio.py` | UDP `10607` 会话中的视频、麦克风和 Host PCM 媒体实现，两套机器人后端共用 |
-| `media_codec.py` | 官方 SDK 的 PyAV 媒体兼容层 |
-| `mcp/server.py`、`mcp/executor.py`、`mcp/worker.py`、`mcp/runtime.py` | STDIO 工具、生命周期、持久隔离 worker、连接复用、Host Python 上下文和清理 |
-| `mcp/install.py` | 保留现有 TOML 内容并跨平台安装 user 或 project 范围的 Codex MCP 配置 |
-| `mcp/recorder.py` | 为每个 MCP 服务会话保存运行日志、完整工具调用 JSONL 和 Python 调用制品目录 |
-| `payloads/` | 临时上传到 S1 的最小机内载荷 |
+| `src/hanppie/protocol.py` | 自有 DUSS 协议编解码、CRC8/16 查表、报文格式与命令集常量 |
+| `src/hanppie/connection.py` | AppConnection UDP 连接管理、身份握手与 50Hz 周期控制通道 |
+| `src/hanppie/product.py` | RobotModel, RobotCapabilities, 设备探测与能力解析 |
+| `src/hanppie/robot.py` | Robot 主控外观、Chassis/Gimbal 控制、LED/发射、原生遥测订阅与租约 |
+| `src/hanppie/lab.py` | 机载 Lab 程序 DSP 容器打包与 FTP 上传部署 (`build_lab_program` / `upload_lab_program`) |
+| `src/hanppie/media/` | 多媒体子域（Camera 720p 视频流解码、Audio 扬声器/麦克风 Opus 传输、codec PyAV 软解适配） |
 | `assets/s1-system/` | 按机内系统原始绝对路径保存的原机运行库、启动脚本与配置参考副本；不随 `hanppie` 打包 |
 | `src/robomaster/` | 从 DJI SDK 固定提交导入的纯 Python fork；保留官方 API，由 Hanppie 针对 S1 维护 |
 
@@ -414,202 +319,120 @@ Hanppie 的单个 wheel 同时包含 `hanppie` 和 `robomaster` 两个顶层包�
 from robomaster import robot
 ```
 
-`uv sync` 同时安装 `src/hanppie/lab`。该包是 Hanppie 自行维护的 UDP `45678/56789`、UDP `10609/10607`、`DirectRobot` 和 RoboMaster Lab 主机实现，仓库不包含外部 S1 Wi-Fi/LAB-SDK 源码或运行时依赖；参考列表中的社区实现只用于核对报文字段和互操作行为。
+`uv sync` 安装 `hanppie` 核心库。该包是 Hanppie 自行维护的 UDP `45678/56789`、UDP `10609/10607`、原生直控 `Robot` 和 RoboMaster Lab 脚本构建上传实现，仓库不包含外部 S1 Wi-Fi/LAB-SDK 源码或运行时依赖；参考列表中的社区实现只用于核对报文字段和互操作行为。
 
 | 运行位置 | 当前约束 | 原因 |
 | --- | --- | --- |
 | S1 机内 Lab 程序 | Python 3.6.6 和固件内 DJI 模块 | 固件环境不可随主机升级；项目载荷同时做 3.6 语法与真机执行测试 |
 | 电脑上的 Hanppie 与内置 SDK fork | Python 3.10 | 开发、CI 和发布验证基线 |
-| MCP Host 持久 worker | Python 3.10 | 使用当前 Hanppie 环境；连接跨调用复用，每次调用使用新命名空间，不保存解释器变量 |
-| 语音智能体 Host 进程 | Python 3.10 | 电脑麦克风/扬声器、本地 VAD、LangGraph 内存状态；可选 Codex OAuth + 本地 ASR/系统 TTS 或 OpenAI API；机器人调用复用 MCP 的持久 worker 实现 |
 | 非 Python 客户端 | 无 Python 约束 | 需要自行实现 UDP `10607` 外层封包、SDK proxy 或机内 DUSS 客户端及生命周期 |
 
 所以不是“只有 Lab Python 才有兼容性要求”，而是每个 Python 实现分别受其运行环境约束；这些约束都不属于 DUSS 协议本身。
 
-### 1.6 Lab Bridge 与项目生命周期
+### 1.6 原生直连与 Robot 状态生命周期
 
-Hanppie 在 S1 原生 Lab 生命周期之上上传一个项目自定义 DSP。该程序自行打开 Host → S1 UDP `40923` 和 S1 → Host UDP `40924`，以白名单 JSON method 接收控制意图并回传遥测。它再调用 `chassis_ctrl`、`gimbal_ctrl` 等 Lab Python 控制对象，由 `rm_ctrl`、`rm_module` 和 `EventClient` 生成并发送 DUSS；这组 UDP/JSON 语义是 Hanppie Lab Bridge 协议，不是 DJI 所有 Lab 程序天然具备的协议。
-
-`lab/protocol.py` 中的 `AppEnvelope` 实现 UDP `10607` 外层封包：每次连接生成 session 和 tick，分别维护 direct/control 序列，并根据机器人回包更新发送窗口。`lab/robot.py` 在这条原生生命周期上增加 Bridge 就绪和机械归零状态：
+Hanppie 采用原生 App UDP 50 Hz 控制协议作为唯一的核心通信与控制通道。`protocol.py` 中的 `AppEnvelope` 实现 UDP `10607` 外层封包：每次连接生成 session 和 tick，分别维护 direct/control 序列，并根据机器人回包更新发送窗口。`robot.py` 驱动完整的 `Robot` 状态机，严格管理连接、控制模式、租约续发、机械使能（arm/disarm）以及退出归零：
 
 ```mermaid
 stateDiagram-v2
     [*] --> Disconnected
-    Disconnected --> Connected: UDP 45678/56789 身份交换 + UDP 10607 会话
-    Connected --> LabMode: enter_lab / Lab keepalive
-    LabMode --> Uploaded: metadata + size + FTP DSP
-    Uploaded --> ProgramRunning: MD5 register + runtime notify + start
-    ProgramRunning --> Ready: Host Bridge telemetry + arm + neutral
-    Ready --> ProgramRunning: stop_lab_bridge
-    ProgramRunning --> Uploaded: stop_lab_program
-    Uploaded --> Connected: exit_lab
-    Connected --> Disconnected: close
+    Disconnected --> Connected: initialize() / UDP 45678 握手 + UDP 10607 会话
+    Connected --> ControlMode: enter_control_mode() / 模式初始化与遥测订阅
+    ControlMode --> Armed: arm() / 允许机械动作
+    Armed --> Moving: 50Hz 续发速度与租约驱动 (chassis / gimbal)
+    Moving --> Armed: 租约到期自动归零或 stop()
+    Armed --> ControlMode: disarm()
+    ControlMode --> Connected: exit_control_mode()
+    Connected --> Disconnected: close()
 ```
 
 | 项目操作 | 机内/主机发生的事情 | 重要边界 |
 | --- | --- | --- |
-| `initialize()` | UDP `45678/56789` 身份交换、UDP `10609/10607` session/tick、接收循环 | 不进入 Lab，不上传程序 |
-| `enter_lab()` | 归零控制状态，发送 Lab mode DUSS，每 `0.8 s` 续发 keepalive，再发送 Lab 参数与状态查询 | keepalive 是会话状态的一部分 |
-| `upload_lab_bridge()` | 生成 DSP，发送 metadata/GUID/size，经 FTP 上传，保存 MD5 | 新上传会使主机侧“已注册”状态失效 |
-| `start_lab_program()` | 初次以 MD5 注册，发送 metadata/runtime notify/start；同一对象中已注册时只发 start | 只启动机内程序，尚未证明 Bridge 可用 |
-| `start_lab_bridge()` | 主机启动 UDP TX/RX，在超时窗口内重复 stop/session probe，收到当前 session telemetry 后重复 arm + neutral，直到遥测确认命令序号和 `armed=true` | Lab 启动 ACK 早于用户程序 UDP socket 就绪；单发 UDP probe 不可靠 |
-| `stop_lab_bridge()` | 发送 disarm/stop，再结束主机 UDP 收发线程并重建干净 Bridge 对象 | **不会停止机内 Python 程序** |
-| `stop_lab_program()` | 发送停止用 metadata 和 runtime notify，恢复 Lab keepalive | **不会自动关闭 Host Bridge** |
-| `exit_lab()` | 停止 Lab keepalive，发送普通模式与 neutral control | 不删除已上传 DSP，也不关闭基础 socket |
-| `close()` | 依次停 Bridge、尽力停止已启动程序、退出 Lab，再关闭 App socket/thread | 用于异常清理；显式生命周期仍更容易定位失败步骤 |
+| `initialize()` | UDP `45678/56789` 身份交换、UDP `10609/10607` session/tick、接收循环 | 建立双向报文通道 |
+| `enter_control_mode()` | 发送模式配置，订阅 10 Hz 原生底盘/云台遥测，启动 50 Hz 心跳控制 | 必须在执行机械控制前调用 |
+| `arm()` | 允许底盘与云台驱动，重置机械状态为零 | 机械安全边界；未 arm 拒绝速度命令 |
+| `chassis.drive_speed()` | 向 50 Hz control channel 写入带租约的平移与转向速度 | 租约到期（默认 250 ms）自动归零 |
+| `gimbal.drive_speed()` | 向 50 Hz 周期队列写入带租约的 DUSS `0x04/0x69` 云台速度 | 租约到期自动归零 |
+| `disarm()` | 清除 arm 标记，立即下发 neutral control 与云台停止帧 | 软件急停首选 |
+| `exit_control_mode()` | 退出 App 控制模式，停止订阅与周期续发 | 恢复到空闲连接态 |
+| `close()` | 关闭音频、视频流并断开 UDP 连接 | 会话结束与资源清理 |
 
-安全退出必须显式按“机械归零 → `stop_lab_bridge()` → `stop_lab_program()` → `exit_lab()` → `close()`”执行，并放在 `finally` 中。新连接按完整上传/注册流程处理，不假定旧注册状态可复用。
+### 1.7 内置 SDK fork 的边界
 
-主机 Bridge 为每次实例生成随机 session ID，并为命令维护单调序号；机内程序拒绝零 session、旧序号和未 arm 的机械命令。底盘或云台速度命令会由主机每 `100 ms` 续租，机内在默认 `300 ms` 没有收到新命令时归零；换 session 和 disarm 也会立即停止机械运动。LED、遥测选择和非机械媒体操作不要求 arm，底盘、云台、模式切换和发射器均要求 arm。遥测还回传 chassis/gimbal active、最后处理的命令、结果和错误，区分“UDP 已发送”和“机内 Lab Python 控制对象调用成功”。
+SDK 与当前实机后端的连接边界只在第 1.3.3 节维护。本节只定义代码关系：`src/robomaster` 保存官方 Python API 形态，通过导入、构建和离线测试；`Robot` 不继承、不包装、也不委托 `robomaster.robot.Robot`。
 
-机内载荷必须分别通过 Python 3.6 语法检查和固件真机执行测试；前者不能替代后者。当前载荷在关键控制分支中使用显式循环和普通比较，并由底盘、云台与失联归零回归验证实际执行。具体故障定位过程保存在[真机回归记录](./s1-live-regression-2026-08-30.md)。
-
-这些措施只解决误包、旧包和主机失联，不构成密码学认证。UDP `45678/56789`、UDP `10609/10607`、匿名 FTP 和 Bridge UDP 都是未加密链路；能进入同一可信网段的第三方仍可能监听、伪造或抢占 session。项目只支持可信隔离局域网，不应通过公网、端口转发或 VPN Overlay 暴露这些端口。
-
-### 1.7 临时开启 ADB
-
-诊断会话复用 UDP `45678/56789` 身份交换、UDP `10609/10607` 数据会话和 RoboMaster Lab 生命周期，上传仓库内置的最小程序：
-
-1. 取得 Lab 会话并进入 Lab 模式；
-2. 上传 [`enable_adb_standalone.py.txt`](../src/hanppie/payloads/enable_adb_standalone.py.txt)；
-3. 机内程序调用原机已有的 `adb_en.sh`，设置 TCP 5555 并重启 `adbd`；
-4. 主机轮询到 ADB 进入 `device` 状态后才采集系统信息；
-5. 最终清理重启 S1、断开主机 ADB，并确认 TCP 5555 已关闭。
-
-项目没有向固件增加 `adbd`；它只利用原机已有但正常启动后未开放的组件。Lab Python 在测试设备上以 root 身份运行；`os.system()` 在该环境失败，而模块顶层的 `subprocess.Popen` 可执行系统命令。**实测**
-
-在固件 `00.06.0521` 上，主机侧 `adb reboot` 的返回和 TCP transport 关闭都不能证明系统已经完成重启。清理流程通过 root shell 恢复 `service.adb.tcp.port=-1`，再从设备端执行 `reboot`；App 广播重新出现且真实目标地址的 TCP 5555 持续关闭后，才判定清理成功。**实测**
-
-### 1.8 内置 SDK fork 的边界
-
-SDK 与当前实机后端的连接边界只在第 1.3.3 节维护。本节只定义代码关系：`src/robomaster` 保存官方 Python API 形态，通过导入、构建和离线测试；`DirectRobot` 与 `LabRobot` 都不继承、不包装、也不委托 `robomaster.robot.Robot`。
-
-### 1.9 媒体兼容与混合后端
+### 1.8 媒体兼容与编解码
 
 内置 SDK fork 的相机启动请求在数据传输前被 S1 拒绝，因此不能用“电脑端缺少解码库”解释该失败。当前媒体后端使用 UDP `10607` 数据会话取得已验证的 720p 视频。**实测**
 
-[`media_codec.py`](../src/hanppie/media_codec.py) 用 PyAV 提供官方 SDK 所期望的 `libmedia_codec` 接口，解决 macOS 上缺少 DJI 原生扩展的问题；它只解决主机解码兼容性，不会让机器人接受不支持的相机命令。**代码/实测**
+[`src/hanppie/media/codec.py`](../src/hanppie/media/codec.py) 用 PyAV 提供官方 SDK 所期望的 `libmedia_codec` 接口，解决 macOS 上缺少 DJI 原生扩展的问题；它只解决主机解码兼容性，不会让机器人接受不支持的相机命令。**代码/实测**
 
 机身麦克风不经过官方 EP SDK proxy。Hanppie 在已经建立的 UDP `10609/10607` session 中发送 DUSS `cmdset=0x3F, cmdid=0x1E, payload=01` 请求音频，随后从 `cmdset=0x3F, cmdid=0x1D` 回包取得 Opus payload，再由 PyAV 解码并重采样为 48 kHz、单声道、signed 16-bit PCM。固件 `00.06.0521` 已连续返回可解码的 20 ms 音频帧；当前只确认了开始请求，未确认独立的停止请求，因此 `stop_audio_stream()` 只停止主机接收，关闭 UDP `10607` session 才终止设备侧流。**实测/代码**
 
-扬声器有两条已经分开验证的直连路径。固件内置音效通过 DUSS `0x3F/0x1A` 请求播放，诊断依次调用音阶 `0x107` 和射击声 `0x102`；两项均取得同序号、返回码为零的 ACK，机身麦克风测得的最大 RMS 相对基线提高约 `14.95` 倍。Host 音频路径接收 12 kHz、单声道、signed 16-bit PCM，按 20 ms 帧编码为带双字节小端长度前缀的 Opus 数据；随后用 DUSS `0x3F/0x5F` 声明传输 ID、分块数和总长度，以 `0x00/0x09` 上传不超过 960 字节的分块，再用 `0x3F/0x5F` 提交编码数据 MD5，最后通过 `0x3F/0xB3` 触发播放。诊断在独立 UDP `10607` session 中播放 1 秒低音量 440 Hz 合成音，播放后才重新请求麦克风流；本次实测中，目标频率幅度相对独立基线提高 `8.27` 倍。`LabAudio.play_pcm()` 只是沿用既有类名，实际只依赖 `AppConnection`，`DirectRobot` 与 `LabRobot` 均可使用。`agent` 已采集电脑系统麦克风用于外部 ASR，并由电脑扬声器播放 TTS；`diag` 仍未把电脑麦克风接入 S1 的 Host PCM 远程对讲，也未处理 DSP 自定义音频资源；KMP 客户端已实现该资源的导入与随程序上传，见第 1.3.0 节与第 1.11 节。**实测/代码**
+扬声器有两条已经分开验证的直连路径。固件内置音效通过 DUSS `0x3F/0x1A` 请求播放，依次调用音阶 `0x107` 和射击声 `0x102`；两项均取得同序号、返回码为零的 ACK，机身麦克风测得的最大 RMS 相对基线提高约 `14.95` 倍。Host 音频路径接收 12 kHz、单声道、signed 16-bit PCM，按 20 ms 帧编码为带双字节小端长度前缀的 Opus 数据；随后用 DUSS `0x3F/0x5F` 声明传输 ID、分块数和总长度，以 `0x00/0x09` 上传不超过 960 字节的分块，再用 `0x3F/0x5F` 提交编码数据 MD5，最后通过 `0x3F/0xB3` 触发播放。测试在独立 UDP `10607` session 中播放 1 秒低音量 440 Hz 合成音，播放后才重新请求麦克风流；实测中，目标频率幅度相对独立基线提高 `8.27` 倍。`Audio.play_pcm()` 直接基于 `AppConnection` 运行。Host PCM 尚未接入电脑系统麦克风远程对讲，也未在 Python 端处理 DSP 自定义音频资源；KMP 客户端已实现该资源的导入与随程序上传，见第 1.3.0 节与第 1.10 节。**实测/代码**
 
-### 1.10 CLI、完整诊断与质量边界
+### 1.9 质量保证与测试边界
 
-`hanppie diag` 是实机验证与调试入口。Typer 静态声明命令和类型化参数，Rich 负责项目选择、风险确认、进度和结果表。
+Hanppie 采用静态检查、离线单元测试、覆盖率门禁和跨平台构建保证交付质量：
 
-诊断项目按依赖顺序执行：广播发现 → App 会话与电量 → 原生直控模式与 DUSS 遥测 → 视频 → 机身麦克风 → Host PCM 与内置音效 → Lab/Bridge → 红绿蓝白装甲灯循环 → 枪口常亮/开火灯效 → 底盘六方向 → 失联停止 → 云台四方向 → 红外/水弹 → 临时 ADB → 机内信息 → 清理。麦克风流没有已验证的独立停止命令，因此扬声器检查会先采集基线，再关闭并重开 App 会话；新会话先上传和触发 Host 音频，随后才重新请求麦克风流采集测试音尾段，避免双向音频状态互相干扰。Lab 检查需要切换到 `LabRobot`；随后的直连检查会先完整停止 Lab 程序并重新建立 `DirectRobot` 会话。只选择后置项目时，会话层建立必要的前置连接，但报告只把用户选择的项目列为诊断结果。机内信息包含 Android 构建属性、Python 版本、关键进程、init service 状态、TCP/UDP 与 Unix socket、相关挂载、关键文件元数据和已知固件哈希分类。
+1. **代码规范与类型质量**：由 Ruff（`ruff check` 与 `ruff format`）和 `prek` hooks 进行全量格式与静态分析；所有 Python 源码和测试遵循严格相对导入和静态 `__all__` 导出规范；
+2. **离线测试套件与覆盖率**：由 pytest 运行 35 项自包含单元与集成测试（覆盖 DUSS/App 协议封包、CRC8/16 查表、产品能力解析、Robot 直连控制、Lab DSP 构建与媒体编解码），代码覆盖率严格保持在 70% 门限之上（当前达 80.2%）；
+3. **打包分发**：构建使用 uv 依据 `uv.lock` 生成包含 `hanppie` 与 `robomaster` 两个顶层包的 sdist 与 wheel；机载参考目录 `assets/s1-system/` 与固件归档不随包分发；
+4. **客户端质量门禁**：Kotlin 模块由 `./gradlew :packages:robot-core:desktopTest :shared:jvmTest` 执行协议与跨平台测试，Android 端通过 `assembleDebug` 与 `lintDebug` 验证。
 
-```mermaid
-flowchart LR
-    SELECT["交互选择或 --check / --all"]
-    GATES["独立风险门<br/>motion / infrared / gel"]
-    RUNNER["DiagnosisRunner<br/>显式检查表"]
-    APP["App / DirectRobot / 媒体 / Lab Bridge<br/>灯光 / 声音 / 执行机构"]
-    ROOT["临时 root ADB / 系统采集"]
-    CLEAN["stop / disarm / close / reboot"]
-    EVENTS["完整 events.jsonl"]
-    REPORT["单次 report.md"]
-    ARCH["architecture.md<br/>唯一长期结论"]
-
-    SELECT --> GATES --> RUNNER
-    RUNNER --> APP
-    RUNNER --> ROOT
-    APP --> CLEAN
-    ROOT --> CLEAN
-    RUNNER --> EVENTS --> REPORT
-    REPORT -. 证据支持 .-> ARCH
-```
-
-无选项的非交互运行采用标准非机械集合：发现、App、原生直控遥测、视频、机身麦克风、扬声器、Lab、装甲灯循环、枪口灯、ADB 和系统信息。它会临时改变 ADB 运行态并在末尾重启关闭；底盘、失联停止和云台共用 `--allow-motion`，红外和水弹分别要求 `--allow-infrared` 和 `--allow-gel`。交互模式逐类确认，拒绝任一确认就不会开始运行。诊断不提供保留 root ADB 或跳过最终安全清理的选项。
-
-每项检查把主机发送、DUSS ACK、Lab Python 控制对象结果、遥测变化和外部物理效果分开记录。麦克风检查只记录 PCM 格式、帧长、peak 和 RMS，不保存原始语音；扬声器检查用机身麦克风记录声学回环，并额外计算 440 Hz 测试信号相对基线的频率分量，而不只依赖容易受环境瞬态影响的整体音量。装甲灯、枪口灯和内置音效要求相同 DUSS 序号的成功 ACK。底盘依次以 `±0.15 m/s`、`±15°/s` 测试 `x/y/z` 六方向；云台以 `±15°/s` 测试 pitch/yaw 四方向。每个直连运动命令持有 `250 ms` 主机租约，`AppConnection` 以 50 Hz 续发，到期自动改发 neutral 或移除云台周期命令，检查结束再显式 `disarm()`。
-
-失联停止检查在独立子进程中建立 5 秒底盘租约，确认位置已变化后由父进程发送 `SIGTERM`，不允许子进程执行 Python 清理；父进程被动监听旧会话 1.5 秒，再建立恢复会话读取同一开机周期的位置。该检查只证明失联后累计位移没有超过设定上界，不宣称已测得具体停车时延。红外触发使用原生 control channel，射击声与枪口闪光分别要求 DUSS ACK；空仓水弹仍由 Bridge 组合执行并回传三个 Lab Python 控制对象结果。两者都不能代替外部红外接收或有弹丸物理发射证据。无论检查成功或异常，最终清理都会停止机械运动、关闭装甲灯和两种枪口灯、disarm、停止 Lab 并关闭 UDP `10607` session；只有 Lab 路径具备已验证的云台回中命令。临时 ADB 开启时，清理先把 TCP port property 恢复为 `-1`，再从设备 shell 发起重启；只有重新收到 RoboMaster App 身份广播并连续确认真实机器人目标的 TCP 5555 保持关闭，清理才通过。
-
-报告器原样保存本次运行中的 IP、AppID、MAC、ADB target、临时 DSP 摘要、命令输出和检查证据，不包含任何替换或过滤逻辑。唯一存储边界是输出目录 `.hanppie/diagnosis` 默认由 Git 忽略；报告标题明确其“单次证据”性质，能力是否从接口存在提升为命令通过、遥测通过或物理通过，仍只在第 1.11 节维护。
-
-Hanppie 自行维护的主机代码由 Ruff、pytest、coverage 和 prek 检查。恢复的 `assets/s1-system` 机载分析副本与从 Apache-2.0 上游导入的 `src/robomaster` 保留接近来源的结构，不做无关格式化；构建使用 uv 的锁文件生成同时包含两个顶层包（`hanppie` 与 `robomaster`）的 sdist 和 wheel，机载参考副本不随包分发。
-
-### 1.11 当前能力矩阵
+### 1.10 当前能力矩阵
 
 下表记录的是 **Hanppie 当前验证结果**，不是 S1 出厂能力表或封闭的支持型号列表；其中全部实机证据仍来自 S1。
 
-`src/hanppie/lab` 是项目独立维护的 S1 App 直连与 Lab 实现，已通过固定报文向量、模拟生命周期、Python 3.6 载荷语法、wheel 安装和固件 `00.06.0521` 真机回归。
+`src/hanppie` 是项目独立维护的 S1 App 直连与 Lab 工具实现，已通过固定报文向量、模拟生命周期、wheel 安装和固件 `00.06.0521` 真机回归。
 
-| 能力 | 后端 | 状态 | 说明 |
+| 能力 | 模块 | 状态 | 说明 |
 | --- | --- | --- | --- |
-| S1 App 数据会话 | Direct + Lab 共用 | **实测通过** | 无需 root；UDP `45678/56789` 身份交换、UDP `10609/10607` session/tick 和动态窗口均由项目实现 |
-| 原生控制模式 | Direct | **实测通过** | 不上传 Lab 程序；模式初始化后持续收到 DUSS `0x48/0x08` 底盘与云台遥测 |
-| 机内 Lab Python | 内置 Lab | **实测通过** | 生成、FTP 上传、注册、启动、停止和重复清理通过 |
-| 姿态回传 | 内置 Lab | **实测通过** | 当前 Bridge 连续返回位置、姿态和云台角度 |
-| 原生 `0x48/0x08` 遥测 | Direct | **报文与变化实测通过，部分字段语义待确认** | 已分离 62 字节底盘报文和 11 字节云台报文；电量、两项推定平面位置和四项云台 raw 值可重复变化，其他 float 不命名为速度或姿态 |
-| 720p 视频 | Direct + Lab 共用 | **实测通过** | `1280×720 yuv420p`，可正常停流 |
+| S1 App 数据会话 | `AppConnection` | **实测通过** | 无需 root；UDP `45678/56789` 身份交换、UDP `10609/10607` session/tick 和动态窗口均由项目实现 |
+| 原生控制模式 | `Robot` | **实测通过** | 不上传 Lab 程序；模式初始化后持续收到 DUSS `0x48/0x08` 底盘与云台遥测 |
+| 机内 Lab Python 容器 | `hanppie.lab` | **实测通过** | 生成合法 DSP XML 容器并通过匿名 FTP `21` 上传至机载系统 |
+| 原生 `0x48/0x08` 遥测 | `Robot` | **报文与变化实测通过，部分字段语义待确认** | 已分离 62 字节底盘报文和 11 字节云台报文；电量、两项推定平面位置和四项云台 raw 值可重复变化，其他 float 不命名为速度或姿态 |
+| 720p 视频 | `Camera` | **实测通过** | `1280×720 yuv420p`，可正常停流 |
 | GUI 本地照片与录像 | App 客户端 | **桌面含音频离线测试通过；Android 与 S1 实流待验证** | 已显示画面可保存 JPEG；Android 将 H.264 与机器人麦克风 AAC 封装为 MP4，桌面通过 FFmpeg 编码画面并复用机器人麦克风音频 |
-| 机身麦克风 | Direct + Lab 共用 | **实测通过** | UDP `10607` 外层封包中请求并接收 Opus，连续解码为 48 kHz 单声道 signed 16-bit PCM |
-| Lab Bridge 安全状态 | 内置 Lab | **实测通过** | session/序号、arm 确认、命令结果、续租和 300 ms 失联归零 |
-| Lab Bridge 底盘 | 内置 Lab | **完整低速序列实测通过** | `±0.15 m/s` 前后左右与 `±15°/s` 双向旋转均获 `chassis_ctrl` 返回成功，遥测增量方向对应，每步 watchdog 停车 |
-| Lab Bridge 云台 | 内置 Lab | **完整低速序列实测通过** | pitch/yaw `±15°/s` 四方向均获确认，遥测变化约 `4.3～4.6°`，watchdog 停止并回中至 `0°` |
-| Direct 底盘速度 | Direct control | **六方向低速序列实测通过** | `±0.15 m/s` 前后左右与 `±15°/s` 旋转均已在实机执行，250 ms 租约后归零并取得位置变化；control channel 没有逐帧 ACK，物理方向与速度仍需外部测量 |
-| Direct 云台速度 | Direct DUSS | **四方向低速序列实测通过** | DUSS `0x04/0x69` 以 50 Hz 续发，250 ms 租约后发送零速；四项原生 raw 遥测发生方向相关变化，角度含义和回中命令尚未映射 |
-| Direct 进程失联停止 | Direct control | **位移上界两次实测通过** | 5 秒租约中强制终止主机，1.5 秒后恢复会话；两次失联后推定平面位移最大 `0.014 m`，小于诊断上界 `0.05 m`；未得到精确时延，其他断网场景待验证 |
-| App 电量 | Direct + Lab 共用 | **可解析但稳定性不足** | 同一设备的诊断曾返回 `26`、`0` 和 `87`；`1～100` 可作为当次有效候选，`0` 必须明确标记为不可信 |
-| root ADB | Lab + payload | **实测通过** | 临时 TCP root ADB；设备端 shell 重启、App 广播恢复后确认 5555 保持关闭 |
-| 内置 `robomaster` fork | Python 包 | **离线可用，未纳入当前诊断** | 保持官方导入接口；原厂 S1 不直接开放其所需的 EP SDK proxy |
-| Codex MCP Python 执行 | Host Direct + Lab | **STDIO、持久 worker、安装与离线生命周期测试通过，未做对话实机回归** | 目标发现、Direct/Lab 按能力切换、跨调用后端复用、新命名空间、结果/制品、超时重启和逐调用 disarm 已有离线测试；经 Codex 对话发起的实机动作仍需单独验证 |
-| 唤醒词连续对话智能体 | Host LangGraph + Direct/Lab | **实现、离线工具循环与 Codex OAuth 真实直连回合通过，未做端到端实机回归** | 电脑 VAD、转写后唤醒、活动窗口连续对话、Codex OAuth consumer Responses 或 OpenAI Platform Responses、生成代码策略、停止快速路径、两类 TTS 和惰性记录已接入；麦克风权限、相机视觉、S1 动作与多轮语音组合仍需实机验证 |
-| LED | Direct DUSS | **完整 ACK 序列通过** | `0x3F/0x33` 红、绿、蓝、白和关闭均取得成功 ACK；尚未记录外部视觉确认 |
-| 扬声器内置音效 | Direct DUSS | **DUSS ACK 与物理声学回环通过** | `0x3F/0x1A` 的音阶和射击声均取得成功 ACK；协议和声学证据见第 1.9 节 |
-| Host PCM 到扬声器 | Direct + Lab 共用 | **物理声学回环实测通过** | 编码、传输、会话隔离和声学证据见第 1.9 节 |
-| 电脑系统麦克风采集 | Host sounddevice | **实现与离线分段测试通过，未做本机权限回归** | 16 kHz 单声道 PCM、本地能量 VAD、前滚、静音结束和最长句限制已接入；不同系统的设备选择、麦克风授权和环境阈值需现场调节 |
-| DSP 自定义音频资源 | KMP 客户端 + Lab DSP | **客户端实现与离线测试通过，机内播放未实测** | 按脚本存储的自定义音频随 DSP `<audio-list>` 上传，编号 0..9 对应 `rm_define.media_custom_audio_N` 与机内 `0x10010+N`；导入、重命名、删除、插入常量、上传预算守卫和持久化见第 1.3.0 节，节点形状与未验证边界见 [RoboMaster 架构文档 5.3.1 节](./architecture-robomaster.md#531-dsp-程序容器) |
-| 脚本页控制台与运行监控 | KMP 客户端 + App 会话媒体 | **实现与离线 UI 测试通过，Lab 期间取流未实测** | 运行不切换页面：运行/停止在编辑区操作栏右端，控制台内联于编辑器下方/右侧；监控面板画面在上、状态条在下且不含报文计数，复用驾驶舱 `RobotVideo`，画面未内联时才提供“监控”入口；Lab 运行期间同时取视频流尚无实机验收 |
-| 大模型配置连通性校验 | Host 外部模型 | **实现与离线测试通过，真实供应商回归未做** | 只做两步：本地校验与目录请求，即验证密钥可鉴权且接口正常响应；不探测流式文本、不发起聊天补全、不强制工具调用，也不注入思考相关参数，避免为测试改写模型请求行为（配置测试器有离线测试） |
-| 枪口灯 | Direct DUSS | **完整 ACK 与外部视觉观察通过** | `0x3F/0x33` 常亮与开火灯效的点亮/关闭均取得成功 ACK；完整回归时由现场操作者确认枪口灯产生可见反应 |
-| 装甲/红外事件 | 未接入当前后端 | **待验证** | 上游 SDK 和机内 `rm_ctrl.py` 存在相关定义；UDP `10607` 或 Bridge 事件链路尚未接入 |
-| 视觉理解 | Host 外部视觉模型 + S1 相机 | **实现与离线适配测试通过，未做端到端实机回归** | 确定性读取当前 newest 视频帧并送视觉模型，返回范围限定为当前前向画面；不使用 S1 原生目标识别，也未实现建图或自动环境扫描 |
-| 红外发射 | Direct control + DUSS | **原生触发与枪口可见效果已执行** | control channel 发出 120 ms 触发；枪口闪光和射击声取得成功 ACK，现场操作者确认枪口灯产生可见反应；光学编码与外部红外接收仍未验证，见 [RoboMaster 架构文档 5.5 节](./architecture-robomaster.md#55-红外发射与命中链路) |
-| 水弹发射 | 内置 Lab | **空仓控制与机械击发动作通过，已接入 MCP** | 枪口闪光、射击声和空仓单次发射三个结果均成功，现场操作者确认出现水弹击发机械动作；MCP 已通过固定 Lab/Bridge 生命周期接入并有离线切换测试，尚未做 MCP 对话实机回归 |
+| 机身麦克风 | `Camera` | **实测通过** | UDP `10607` 外层封包中请求并接收 Opus，连续解码为 48 kHz 单声道 signed 16-bit PCM |
+| 底盘速度 | `Chassis` (control) | **六方向低速序列实测通过** | `±0.15 m/s` 前后左右与 `±15°/s` 旋转均已在实机执行，250 ms 租约后归零并取得位置变化；control channel 没有逐帧 ACK，物理方向与速度仍需外部测量 |
+| 云台速度 | `Gimbal` (DUSS) | **四方向低速序列实测通过** | DUSS `0x04/0x69` 以 50 Hz 续发，250 ms 租约后发送零速；四项原生 raw 遥测发生方向相关变化，角度含义和回中命令尚未映射 |
+| 进程失联停止 | `Robot` | **位移上界两次实测通过** | 5 秒租约中强制终止主机，1.5 秒后恢复会话；两次失联后推定平面位移最大 `0.014 m`，小于设定上界 `0.05 m`；未得到精确时延，其他断网场景待验证 |
+| App 电量 | `AppConnection` | **可解析但稳定性不足** | 同一设备曾返回 `26`、`0` 和 `87`；`1～100` 可作为当次有效候选，`0` 必须明确标记为不可信 |
+| 内置 `robomaster` fork | Python 包 | **离线可用，未纳入实机测试** | 保持官方导入接口；原厂 S1 不直接开放其所需的 EP SDK proxy |
+| LED | `Robot` | **完整 ACK 序列通过** | `0x3F/0x33` 红、绿、蓝、白和关闭均取得成功 ACK；尚未记录外部视觉确认 |
+| 扬声器内置音效 | `Robot` | **DUSS ACK 与物理声学回环通过** | `0x3F/0x1A` 的音阶和射击声均取得成功 ACK；协议和声学证据见第 1.8 节 |
+| Host PCM 到扬声器 | `Audio` | **物理声学回环实测通过** | 编码、传输、会话隔离和声学证据见第 1.8 节 |
+| 枪口灯 | `Robot` | **完整 ACK 与外部视觉观察通过** | `0x3F/0x33` 常亮与开火灯效的点亮/关闭均取得成功 ACK；完整回归时由现场操作者确认枪口灯产生可见反应 |
+| 红外发射 | `Robot` | **原生触发与枪口可见效果已执行** | control channel 发出 120 ms 触发；枪口闪光和射击声取得成功 ACK，现场操作者确认枪口灯产生可见反应；光学编码与外部红外接收仍未验证 |
 
-### 1.12 远程控制当前边界
+### 1.11 远程控制当前边界
 
-当前已验证的部署要求电脑和机器人位于同一可信、可双向访问的 IP 网络。主直控路径只使用 UDP `45678/56789` 完成身份交换，并通过 UDP `10609/10607` 传输数据、媒体、DUSS 和 control；它不要求 USB、FTP 或 Lab Bridge。可选 Lab 路径额外使用 FTP `21` 和 Bridge UDP `40923/40924`。这些端口与行为来自 S1 实测，不能直接外推到尚未验证的型号。**代码/实测**
+当前已验证的部署要求电脑和机器人位于同一可信、可双向访问的 IP 网络。主直控路径只使用 UDP `45678/56789` 完成身份交换，并通过 UDP `10609/10607` 传输数据、媒体、DUSS 和 control；它不要求 USB 或 FTP。可选机载 Lab 路径额外使用 FTP `21`。这些端口与行为来自 S1 实测，不能直接外推到尚未验证的型号。**代码/实测**
 
-语音智能体的 Codex 模式在本机转写和播报，只在唤醒后通过互联网把文本、工具结果及观察帧发送给 Codex；模型文件首次下载仍需要网络。API key 模式还会把 VAD 切分的有声 WAV 发送给转写模型，并可把回复发送给语音合成模型。该出站模型调用不是机器人的远程控制入口，但属于音频、文本、图像和设备结果的数据出境边界。部署者必须自行选择合适的授权模式和数据策略；两种模式的对话/视觉都依赖外部模型服务，所以当前不提供完全离线的智能体。**代码边界**
+当前局域网程序控制具备 `Robot` API，但持续连接不提供持续运动租约，也不等于完整遥控器。项目当前没有远程网关、公网身份验证、加密会话、Web UI、手柄输入、跨进程控制源仲裁或公网传输实现，因此项目当前不具备跨互联网远程控制能力。上述设备端口均不得直接暴露到公网、路由器端口转发或 VPN Overlay。
 
-当前增加了只在本机工作的 STDIO MCP Python 入口、局域网广播自动发现和 MCP 生命周期内的 App 连接复用，但仍没有远程网关、身份验证、加密会话、Web UI、手柄输入、跨进程控制源仲裁或公网传输实现，因此项目当前不具备跨互联网远程控制能力。上述设备端口和 Bridge 端口均不得直接暴露到公网、路由器端口转发或 VPN Overlay。
+### 1.12 安全与恢复模型
 
-局域网程序控制已经具备 `DirectRobot` API 和 MCP 生命周期内的持续连接，但持续连接不提供持续运动租约，也不等于完整遥控器。MCP 不能协调另一个进程或 App；接入手柄、键盘、Web 或 ROS 2 时，输入仍必须经过跨输入源的单一控制仲裁层，维护当前控制源、显式 arm、速度限制、短租约、断连 neutral 和紧急停止。当前 250 ms 主机租约、MCP worker 超时终止与一次进程异常退出位移测试只能作为底层证据，不能替代远程网关的认证、加密、心跳、速率限制和多控制源抢占策略。
+#### 1.12.1 网络安全
 
-### 1.13 安全与恢复模型
-
-#### 1.13.1 网络安全
-
-- TCP 5555 是无认证 root ADB，只能在隔离网络短时开放；
-- 不通过公网、VPN Overlay 或路由器端口转发暴露 ADB；
+- 不通过公网、VPN Overlay 或路由器端口转发暴露机器人 UDP 或 FTP 端口；
 - 不把真实凭据、个人文件或设备备份放入 S1；
-- `diag` 最终清理必须重启设备、断开主机 ADB 并确认 5555 拒绝连接。
-- MCP 只使用本机 STDIO，不提供网络监听；不得把代码执行入口转接给不可信或公网调用方。
-- Codex 授权模式由 Hanppie 独立保存 OAuth token 并直连 ChatGPT consumer Responses 后端，不调用 Codex CLI/App Server；其休眠阶段语音在本机转写，唤醒后的文本、工具结果和观察图像会发给该后端。API key 模式还会把休眠阶段的 VAD 有声片段发给 OpenAI Platform 转写 API；使用前应确认环境中的隐私和数据策略。
+- 机器人会话在异常或退出时执行 disarm、停止与 close。
 
-#### 1.13.2 文件安全
+#### 1.12.2 文件安全
 
-- 诊断只读取关键文件元数据和哈希，不通过 ADB 修改 `/system`；
-- Lab Bridge 与 ADB 启动载荷只使用仓库内置资源，不接受任意外部载荷路径；
-- MCP Host Python 是用户明确要求的可信代码执行入口，不是文件系统沙箱；相对输出统一进入 `.hanppie/mcp`，但绝对路径仍具有本机账户权限；
-- 模型生成的语音智能体 Python 有额外 AST 策略但不是强沙箱；会话文本、工具结果和相机图片统一进入 `.hanppie/agent`，不得把智能体暴露给不可信远程输入；
 - 临时设备备份、未审计厂商二进制和序列号日志不进入 Git（`assets/firmware/` 下由 Git LFS 跟踪的官方基准固件除外）。
 
-#### 1.13.3 机械安全
+#### 1.12.3 机械安全
 
-- 自动化测试默认不执行机械动作；实机诊断只有在显式选择且打开对应风险门后才执行；
+- 自动化测试默认不执行机械动作；
 - 底盘测试必须悬空车轮，或放在已清空且无跌落风险的水平地面；云台只做低速小角度；
 - 取出水弹并保持物理电源开关可触达；
-- Direct 机械调用必须先进入控制模式并显式 `arm()`；运动命令必须带短租约，停止、异常和后端切换都先发送 neutral/zero；
-- 失联停止检查使用独立进程和低速横移，只有确认动作前已有位置变化才允许判定结果；
+- Direct 机械调用必须先进入控制模式并显式 `arm()`；运动命令必须带短租约，停止、异常和退出都先发送 neutral/zero；
 - 不能以 API 返回成功代替物理方向、速度和停车验证。
 
-#### 1.13.4 固件归档与基底恢复
+#### 1.12.4 固件归档与基底恢复
 
 - 仓库通过 Git LFS 在 `assets/firmware/` 归档已校验的官方最终完整固件包 `00.06.0521.tar` 与 `00.06.0521_manifest.json`；
 - 固件协议分析、各模块构成与云端分发机制统一见 [RoboMaster 架构文档 5.6 节](./architecture-robomaster.md#56-固件查询升级协议与云端分发机制)；
@@ -621,7 +444,7 @@ Hanppie 自行维护的主机代码由 Ruff、pytest、coverage 和 prek 检查�
 | --- | --- | --- |
 | Direct 底盘速度与位置标定 | 用外部距离和方向测量与 `0x48/0x08` 推定位置交叉验证 | 六方向速度、坐标轴、比例和主动停车都达到可量化误差界限 |
 | Direct 云台角度、动作和回中 | 恢复角度任务与回中命令，并用外部角度或 Lab 高层角度交叉验证 raw 字段 | 任务 ACK、目标角度、物理角度和回中一致 |
-| Direct 能否在更多失联场景替代 Bridge | 分别丢弃网络报文、抢占 App session、断开 Wi-Fi 并测量真实停车时延 | 所有场景在规定时间内物理停车，重连后先归零且不存在旧控制状态 |
+| 直连控制在多断网/抢占场景的可靠性 | 分别丢弃网络报文、抢占 App session、断开 Wi-Fi 并测量真实停车时延 | 所有场景在规定时间内物理停车，重连后先归零且不存在旧控制状态 |
 | Direct 能力覆盖 | 继续验证水弹、装甲事件、视觉订阅、定距动作与模式切换 | 每项都有固定报文、响应或事件、固件版本和实机结果 |
 | Android 与 S1 实流录制 | 在目标 Android 版本和真实 S1 音视频流上录制、停止、切后台并回放 | MP4 音视频时间戳连续，可解码，权限拒绝和中断均可恢复 |
 | 系统麦克风与对讲生命周期 | 在 Android 和桌面分别验证授权、设备切换、采集失败、背压和断连 | 每种失败路径都释放采集资源并允许再次按住对讲 |
@@ -632,7 +455,7 @@ Hanppie 自行维护的主机代码由 Ruff、pytest、coverage 和 prek 检查�
 以下变化必须更新本文：
 
 - Kotlin 模块边界、共享源集、平台适配或应用生命周期变化；
-- Hanppie 后端、协议适配、媒体、智能体、MCP 或诊断流程变化；
+- Hanppie 后端、协议适配、媒体、客户端智能体或测试流程变化；
 - 能力矩阵中的实现或验证状态变化；
 - 安全默认值、控制租约、文件边界或恢复策略变化。
 

@@ -28,7 +28,7 @@ import time
 try:
     import libmedia_codec
 except ModuleNotFoundError:
-    from hanppie import media_codec as libmedia_codec
+    from hanppie.media import codec as libmedia_codec
 
 
 class LiveView(object):

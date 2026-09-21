@@ -56,9 +56,9 @@ On Android, the microphone icon beside Send records through the phone's system s
 Desktop configuration also accepts `HANPPIE_LLM_PROVIDER`, `HANPPIE_LLM_ENDPOINT`, `HANPPIE_LLM_MODEL` and `HANPPIE_LLM_API_KEY` environment variables. Keyboard help is kept in **Settings → Keyboard shortcuts** instead of being repeated in the chat view. Never commit real credentials. With `HANPPIE_LLM_LIVE_TEST=1`, the opt-in `ChatAgentTest.liveCompatibleConversationWithoutRobot` test uses the configured cloud API with a simulated status tool and never connects to a robot.
 The [Chinese usage guide](./README.md#桌面程序) also documents opt-in, no-motion hardware integration tests.
 
-### Python tools
-
 On Android and desktop, entering the full-screen cockpit establishes the direct-control channel; with no input it sends only zero values. Use the left chassis stick and right gimbal stick. Touch controls provide direct gear `1–5` at the lower left, plus ammunition selection and direct fire at the lower right. On a keyboard, use WASD to move, Q/E to rotate in place, `1–5` to select a gear, arrow keys to aim, G to switch ammunition, Space to fire, and Esc to return to the console. Outward aiming beyond the follow threshold engages software chassis turning; release stops it. Physical follow behavior is not yet validated; see [architecture boundaries](./docs/architecture.md). Infrared is selected by default; switching never fires. Gel beads use a direct single-shot command, not a Lab script. Leaving the cockpit or losing desktop window focus zeros input and exits the current direct-control channel. Returning to the foreground cockpit restores the channel with cleared keys and sticks. Robot audio/video supports downstream playback plus push-to-talk clips that record while held and send on release; it is not full-duplex calling.
+
+### Python tools
 
 Python 3.10 is the development and test baseline. [uv](https://docs.astral.sh/uv/) manages the environment, while [Task](https://taskfile.dev/) is the optional unified task runner.
 
@@ -66,10 +66,9 @@ Python 3.10 is the development and test baseline. [uv](https://docs.astral.sh/uv
 git clone https://github.com/elonzh/hanppie.git
 cd hanppie
 uv sync
-uv run hanppie --help
 ```
 
-`uv sync` installs Hanppie, its App/Lab backend, and the repository's `robomaster` SDK fork. The fork preserves the primary DJI imports:
+`uv sync` installs Hanppie's core library (including direct and Lab backends) and the repository's `robomaster` SDK fork. The fork preserves the primary DJI imports:
 
 ```python
 from robomaster import robot
@@ -77,47 +76,24 @@ from robomaster import robot
 s1 = robot.Robot()
 ```
 
-Only Python 3.10 is tested. [`pyproject.toml`](./pyproject.toml) and [`uv.lock`](./uv.lock) are authoritative for dependency constraints.
+Direct connection or Lab sessions from Hanppie can also be imported directly:
 
-## One-command physical-device diagnosis
-
-`diag` is the project's only physical-device validation and debugging entry point, and it currently targets the verified S1 only. It supports interactive and non-interactive execution through Typer and Rich, and every run creates a Markdown report and JSONL event log:
-
-```bash
-# Show every check and its risk class
-uv run hanppie diag --list
-
-# Select checks interactively and confirm motion, infrared, and gel firing separately
-uv run hanppie diag --interactive
-
-# Standard non-mechanical diagnosis: discovery, App, native direct telemetry, media, Lab, lights, ADB, system
-uv run hanppie diag --no-interactive
-
-# Complete non-interactive regression; each hazardous class requires an explicit gate
-uv run hanppie diag \
-  --no-interactive \
-  --all \
-  --robot-ip "$S1_IP" \
-  --appid "$S1_APPID" \
-  --allow-motion \
-  --allow-infrared \
-  --allow-gel
+```python
+from hanppie import Robot
 ```
 
-The complete check order, evidence levels, and cleanup mechanism are maintained only in the [architecture diagnosis section](./docs/architecture.md#110-cli完整诊断与质量边界). Motion, infrared, and gel firing require three independent explicit gates.
-
-Output defaults to `.hanppie/diagnosis/<timestamp>/report.md` and `events.jsonl`. The directory is ignored by Git, and its files are evidence for that run only. Architecture conclusions remain in the architecture document. Selecting `adb` or `system` temporarily exposes root ADB; cleanup always reboots the robot and confirms that TCP 5555 has closed. There is no compatibility option to skip this cleanup.
+Only Python 3.10 is tested. [`pyproject.toml`](./pyproject.toml) and [`uv.lock`](./uv.lock) are authoritative for dependency constraints.
 
 ## Direct Python control
 
-`DirectRobot` uses the RoboMaster App data session directly; this path is currently verified on S1 only. It neither uploads a Lab program nor calls the bundled official SDK fork. Mechanical commands require explicit control mode, arming, and a short lease:
+`Robot` uses the RoboMaster App data session directly; this path is currently verified on S1 only. It neither uploads a Lab program nor calls the bundled official SDK fork. Mechanical commands require explicit control mode, arming, and a short lease:
 
 ```python
 import time
 
-from hanppie.lab import DirectRobot
+from hanppie import Robot
 
-robot = DirectRobot(robot_ip="192.168.1.100", appid="0123abcd")
+robot = Robot(robot_ip="192.168.1.100", appid="0123abcd")
 try:
     robot.initialize()
     robot.enter_control_mode()
@@ -132,70 +108,7 @@ finally:
     robot.close()
 ```
 
-The current API, capabilities, and open gaps are maintained only in the [technical architecture](./docs/architecture.md#111-当前能力矩阵). Gamepad, Web, and ROS 2 input layers are not implemented yet and must eventually feed a control arbiter rather than drive actuators directly.
-
-## Codex MCP conversation control
-
-Hanppie provides a local STDIO MCP server. The default installer safely adds it to the user-scoped Codex configuration shared by the ChatGPT desktop app, Codex CLI, and IDE extension on the same computer. Windows, macOS, Linux, and WSL all launch the current Python interpreter by absolute path, without requiring the `codex` command on `PATH`.
-
-```bash
-# Discover and connect the only usable robot on the LAN automatically
-uv run hanppie mcp install
-
-# Or write only the current project's .codex/config.toml
-uv run hanppie mcp install --scope project
-
-# Pin the target when more than one robot may be present
-uv run hanppie mcp install \
-  --replace \
-  --robot-ip "$ROBOT_IP" \
-  --appid "$ROBOT_APPID"
-
-# Run the server directly when debugging client configuration
-uv run hanppie mcp serve
-```
-
-Restart the relevant Codex client after installation, then use `/mcp` to confirm that `hanppie` is connected. `install` preserves every other Codex setting and MCP server. Repeating the same configuration is a no-op; changing an existing Hanppie entry requires `--replace`. User scope resolves `--codex-home`, then `CODEX_HOME`, then `~/.codex/config.toml`; project scope writes `.codex/config.toml` at the project root. Local MCP configuration is not available to ChatGPT Web; see the [Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp).
-
-The server exposes connection, status, Python-context, Python-execution, and disconnect tools. The first connection may automatically select the only usable robot on the LAN. The same MCP server then reuses the active App connection across a continuous conversation and multiple tool calls instead of initializing it for every instruction. `execute_python` defaults to `robot_access=auto`; `reuse` exposes only an existing connection, while `none` explicitly runs host-only Python. Each call gets a fresh namespace with `robot`, `time`, `sleep`, `output_dir`, `save_frame`, and `checkpoint`, and returns `result`, streams, progress events, errors, and artifacts. Arbitrary source runs only in the PC-side Python 3.10 worker.
-
-Installation and startup have no motion, infrared, or gel permission switches. Chassis, gimbal, and infrared use the normal `DirectRobot` `robot.arm()` and lease API. Gel firing is available as `result = robot.fire_gel()` or `robot.fire("gel")`; MCP switches to the verified Lab/Bridge path and waits for its execution result. A failed Lab transition is retried and attempts to restore the previous Direct connection; shared LED and stop operations do not cause unnecessary backend switches. Every successful or failed call still neutralizes and disarms without closing a healthy connection. A timeout kills the worker and the next call creates a new connection. Velocity multiplied by duration is not proof of an exact angle or distance; multi-stage code can call `checkpoint("stage", ...)` after each completed stage. Execution failures are returned as MCP tool errors so Codex does not mistake them for successful completion.
-
-This is arbitrary Python execution for a trusted local user, not a security sandbox. Starting MCP, completing its handshake, and listing tools do not write files. The first actual Hanppie tool call activates `.hanppie/mcp/sessions/<session-id>/`: `server.log` contains server and worker events, `calls.jsonl` stores paired `started` and `completed` events under one `call_id`, and `calls/<run-id>/` contains files, images, and checkpoints produced by that Python call. `get_python_context` is itself a tool call, so it activates recording and reports the version, actual facade signatures, capability boundaries, and active paths; `--artifact-dir` changes the whole root. Call records contain submitted Python source and returned content and should be managed as local execution records. The [technical architecture](./docs/architecture.md#135-codex-mcp-与持久-host-python-worker) is authoritative for execution, cleanup, and concurrency boundaries.
-
-## Xiaohanpi voice agent
-
-Authorize Hanppie directly with the ChatGPT Codex device flow and grant the terminal access to the system microphone. The agent then listens continuously for “小憨批”, keeps a conversational window after wake-up, composes robot behavior, and understands the current camera frame. This mode does not require Codex to be installed or running:
-
-```bash
-uv run hanppie agent login
-
-# With no OPENAI_API_KEY, auto uses the Codex OAuth stored by Hanppie
-uv run hanppie agent run
-
-# Execute text without audio or a wake word; repeated -p shares context and connection
-uv run hanppie agent run --auth codex \
-  -p "Describe what is nearby." -p "What stands out in that image?"
-
-# Optional low-latency planner with a separate vision model
-uv run hanppie agent run --auth codex \
-  --codex-model gpt-5.3-codex-spark --codex-vision-model gpt-5.6-sol \
-  --reasoning-effort low --model-timeout 30 -p "Set the armor lights to solid blue."
-
-# Pin the target when multiple robots are present
-uv run hanppie agent run \
-  --auth codex \
-  --robot-ip "$ROBOT_IP" \
-  --appid "$ROBOT_APPID"
-```
-
-Hanppie performs the device-code OAuth flow and token refresh itself, then sends the Bearer token directly to ChatGPT's streaming Codex Responses backend. No Codex CLI, `codex exec`, or App Server subprocess participates. Credentials are atomically stored in `~/.hanppie/auth.json` with mode `0600` on POSIX; `HANPPIE_HOME` changes the directory, and `hanppie agent logout` deletes only this local credential. Requests use `store=false`, Hanppie replays the conversation from memory, and the default model is `gpt-5.6-sol`, overridable with `--codex-model`. This consumer backend is not the public OpenAI Platform API, so compatibility follows the current Codex OAuth protocol.
-
-Local `faster-whisper` performs transcription (the default `small` model is downloaded on first use), and the operating system performs speech synthesis. When `OPENAI_API_KEY` is set, `auto` preserves the OpenAI transcription, Responses, and TTS path. Use `--auth api-key` or `--auth codex` to choose explicitly.
-
-For example, say “小憨批，观察一下附近有些什么东西？” to capture and describe the robot's current forward camera view. Follow-ups do not need the wake phrase during the default 45-second active window. “退下” returns to sleep; “停止”, “停下”, and “别动” use a local stop path against an existing connection without waiting for the model. Repeat `--wake-phrase` for aliases, use `--active-timeout` to change the conversation window, select the microphone with `--audio-device`, select a local Whisper model with `--local-transcription-model`, or disable speech playback with `--no-tts`.
-
-`--prompt` bypasses wake-word matching and disables audio input and playback. Execution failures return a nonzero exit code and stop subsequent prompts. Conversation and tool records are written to `.hanppie/agent/` only after a wake-up or prompt execution. See the [technical architecture](./docs/architecture.md#136-唤醒词连续对话与-langgraph-智能体) for data boundaries, LangGraph state, generated-code policy, and verification limits.
+The current API, capabilities, and open gaps are maintained only in the [technical architecture](./docs/architecture.md#110-当前能力矩阵). Gamepad, Web, and ROS 2 input layers are not implemented yet and must eventually feed a control arbiter rather than drive actuators directly.
 
 ## Development toolchain
 

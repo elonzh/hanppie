@@ -1,0 +1,206 @@
+"""RoboMaster App video and microphone stream control."""
+
+from __future__ import annotations
+
+import queue
+import threading
+import time
+
+from .. import protocol
+from ..connection import AppConnection
+from .audio import OpusDecoder
+
+__all__ = ["Camera"]
+
+
+class Camera:
+    def __init__(self, connection: AppConnection) -> None:
+        self._connection = connection
+        self._chunks: queue.Queue[bytes] = queue.Queue(maxsize=120)
+        self._frames: queue.Queue[object] = queue.Queue(maxsize=1)
+        self._audio_packets: queue.Queue[bytes] = queue.Queue(maxsize=32)
+        self._audio_decoder = OpusDecoder()
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._streaming = False
+        self._audio_streaming = False
+        self._connection.on("video", self._accept_chunk)
+        self._connection.on("audio", self._accept_audio)
+
+    def _accept_chunk(self, payload: object) -> None:
+        if not isinstance(payload, bytes):
+            return
+        try:
+            self._chunks.put_nowait(payload)
+        except queue.Full:
+            self._clear(self._chunks)
+            self._chunks.put_nowait(payload)
+
+    def _accept_audio(self, payload: object) -> None:
+        if not self._audio_streaming or not isinstance(payload, bytes):
+            return
+        self._put_latest(self._audio_packets, payload)
+
+    def start_video_stream(self, *, display: bool = False, resolution: str = "720p") -> bool:
+        del display
+        resolution_payloads = {
+            "720p": bytes.fromhex("0403000000"),
+            "720": bytes.fromhex("0403000000"),
+            "1080p": bytes.fromhex("0a03000000"),
+            "1080": bytes.fromhex("0a03000000"),
+        }
+        key = resolution.lower()
+        if key not in resolution_payloads:
+            raise ValueError("resolution must be 720p or 1080p")
+        self._clear(self._chunks)
+        self._clear(self._frames)
+        self._connection.send_duss(
+            protocol.HOST_MOBILE,
+            protocol.HOST_CAMERA,
+            protocol.ATTR_NEED_ACK,
+            protocol.CMDSET_CAMERA,
+            protocol.CMD_SET_VIDEO_FORMAT,
+            resolution_payloads[key],
+        )
+        self._stream_control(1, 1, 0)
+        self._stream_control(2, 1, 0)
+        if self._thread is None or not self._thread.is_alive():
+            self._stop.clear()
+            self._thread = threading.Thread(
+                target=self._decode_loop, name="hanppie-h264", daemon=True
+            )
+            self._thread.start()
+        self._streaming = True
+        return True
+
+    def stop_video_stream(self) -> bool:
+        try:
+            if self._streaming:
+                self._stream_control(2, 0, 0)
+                self._stream_control(1, 0, 0)
+        finally:
+            self._streaming = False
+            self._stop.set()
+            thread = self._thread
+            self._thread = None
+            if thread is not None:
+                thread.join(timeout=1.0)
+        return True
+
+    def start_audio_stream(self) -> bool:
+        """Request the robot microphone's Opus stream over the App session."""
+
+        self._clear(self._audio_packets)
+        self._audio_streaming = True
+        self._connection.send_duss(
+            protocol.HOST_MOBILE,
+            protocol.HOST_CAMERA,
+            protocol.ATTR_NEED_ACK,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_SET_AUDIO_STATUS,
+            b"\x01",
+        )
+        return True
+
+    def stop_audio_stream(self) -> bool:
+        """Stop accepting microphone packets locally.
+
+        The observed App protocol has a start request but no independently
+        verified receive-stop command. Closing the App session stops the
+        device stream.
+        """
+
+        self._audio_streaming = False
+        self._clear(self._audio_packets)
+        return True
+
+    def read_audio_opus(self, *, timeout: float = 1.0) -> bytes | None:
+        try:
+            return self._audio_packets.get(timeout=max(0.0, timeout))
+        except queue.Empty:
+            return None
+
+    def decode_audio_opus(self, packet: bytes) -> bytes | None:
+        return self._audio_decoder.decode(packet)
+
+    def read_audio_frame(self, *, timeout: float = 1.0) -> bytes | None:
+        """Return decoded 48 kHz mono signed 16-bit PCM."""
+
+        deadline = time.monotonic() + max(0.0, timeout)
+        while True:
+            remaining = deadline - time.monotonic()
+            packet = self.read_audio_opus(timeout=max(0.0, remaining))
+            if packet is None:
+                return None
+            pcm = self.decode_audio_opus(packet)
+            if pcm:
+                return pcm
+            if remaining <= 0:
+                return None
+
+    def close(self) -> None:
+        try:
+            self.stop_video_stream()
+        except (OSError, RuntimeError):
+            pass
+        self.stop_audio_stream()
+
+    def _stream_control(self, control: int, state: int, resolution: int) -> None:
+        self._connection.send_duss(
+            protocol.HOST_MOBILE,
+            protocol.HOST_CAMERA,
+            protocol.ATTR_NEED_ACK,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_STREAM_CTRL,
+            bytes((control & 0xFF, state & 0x0F, resolution & 0xFF)),
+        )
+
+    def read_video_frame(self, *, timeout: float = 3.0, strategy: str = "pipeline"):
+        if strategy not in {"pipeline", "newest"}:
+            raise ValueError("strategy must be pipeline or newest")
+        try:
+            frame = self._frames.get(timeout=max(0.0, timeout))
+        except queue.Empty:
+            return None
+        if strategy == "newest":
+            while True:
+                try:
+                    frame = self._frames.get_nowait()
+                except queue.Empty:
+                    break
+        return frame
+
+    def _decode_loop(self) -> None:
+        import av
+
+        decoder = av.CodecContext.create("h264", "r")
+        while not self._stop.is_set():
+            try:
+                chunk = self._chunks.get(timeout=0.1)
+            except queue.Empty:
+                continue
+            try:
+                for packet in decoder.parse(chunk):
+                    for frame in decoder.decode(packet):
+                        self._put_latest(self._frames, frame)
+            except Exception:
+                decoder = av.CodecContext.create("h264", "r")
+
+    @staticmethod
+    def _put_latest(target: queue.Queue[object], value: object) -> None:
+        try:
+            target.put_nowait(value)
+        except queue.Full:
+            try:
+                target.get_nowait()
+            except queue.Empty:
+                pass
+            target.put_nowait(value)
+
+    @staticmethod
+    def _clear(target: queue.Queue[object]) -> None:
+        while True:
+            try:
+                target.get_nowait()
+            except queue.Empty:
+                return

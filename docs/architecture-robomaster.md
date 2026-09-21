@@ -12,8 +12,8 @@
 | --- | --- |
 | S1 原生硬件、固件服务、DUSS、App/Lab 机制、媒体链路和外部生态 | 本文 |
 | Hanppie 代码结构、实现机制、能力矩阵和安全边界 | [`architecture.md`](./architecture.md) |
-| 安装、CLI 参数和开发命令 | 中英文 README、`hanppie --help` 和 `pyproject.toml` |
-| 单次实机命令、原始输出、故障和测量值 | 日期化联调记录或 `diag` 自动报告 |
+| 安装、CLI 参数和开发命令 | 中英文 README、`pyproject.toml` 和 `Taskfile.yml` |
+| 单次实机命令、原始输出、故障和测量值 | 日期化联调记录 |
 | 内置 SDK fork 来源 | [`src/robomaster/UPSTREAM.md`](../src/robomaster/UPSTREAM.md) |
 
 ## 证据标记
@@ -30,7 +30,7 @@
 | **外部生态** | S.BUS 接收机、SocketCAN/vcan、ROS 2、DJI EP SDK 等可与 S1 相关但不属于 Hanppie 的技术 | 第 6 章 |
 | **Hanppie 项目** | 本仓库增加、恢复、组合或规划的主机代码、机内载荷、临时补丁和安全策略 | [Hanppie 技术架构](./architecture.md) |
 
-“仓库中保存了原机文件”不表示该文件由 Hanppie 创建；`runtime/` 和 `resources/` 中的恢复内容是分析 S1 的证据。Lab Bridge、ADB 启动载荷和 PyAV 兼容层均为项目增量，不能写成 S1 出厂能力。
+“仓库中保存了原机文件”不表示该文件由 Hanppie 创建；`assets/s1-system/` 中的恢复内容是分析 S1 的证据。原机参考文件已按系统原始绝对路径归档；初期探索阶段的 Lab Bridge 与 ADB 载荷已随原生直控协议的完备而彻底移除。PyAV 媒体兼容层为项目增量，不能写成 S1 出厂能力。
 
 ### 1.1 术语来源与实际对象
 
@@ -40,10 +40,10 @@
 | --- | --- | --- |
 | RoboMaster App | DJI 产品名称 | 手机/macOS 应用；与 S1 的身份交换使用 Host UDP `45678` 和 S1 UDP `56789`，后续数据会话通常使用 Host UDP `10609` 和 S1 UDP `10607` |
 | RoboMaster Lab | DJI App 中的功能名称 | 创建和运行 `.dsp` 程序；机内由 `/data/dji_scratch/bin/dji_scratch.py` 管理，文件经 FTP `21` 上传，生命周期命令通过 DUSS 发送 |
-| `AppEnvelope` | Hanppie 代码名称，不是 DJI 官方术语 | [`lab/protocol.py`](../src/hanppie/lab/protocol.py) 对 UDP `10607` 报文中、位于 DUSS 或媒体数据之外的 session、tick、direct/control channel 等字段的封装；字段来自固定 App 抓包并经实机互操作验证 |
+| `AppEnvelope` | Hanppie 代码名称，不是 DJI 官方术语 | [`protocol.py`](../src/hanppie/protocol.py) 对 UDP `10607` 报文中、位于 DUSS 或媒体数据之外的 session、tick、direct/control channel 等字段的封装；字段来自固定 App 抓包并经实机互操作验证 |
 | DUSS | 原厂代码和协议常量中的名称 | 具有 sender、receiver、sequence、command set、command id、payload 和 CRC 的消息；机内由 Unix Datagram Socket 路由，并可经 UART 或 UDP `10607` 外层封包承载 |
 | Lab Python 控制对象 | 本文对机内对象的统称，不是独立协议名称 | Lab 程序上下文中的 `robot_ctrl`、`chassis_ctrl`、`gimbal_ctrl`、`led_ctrl`、`media_ctrl` 等对象；对应恢复的 `rm_ctrl.py` 高层类 |
-| Hanppie Lab Bridge | Hanppie 项目名称 | 上传到 `/data/ftp/python/python_raw.dsp` 的项目程序；Host → S1 UDP `40923` 接收 JSON，S1 → Host UDP `40924` 回传 JSON |
+| Hanppie Lab Bridge（已废弃） | Hanppie 早期项目名称 | 早期探索时上传到 `/data/ftp/python/python_raw.dsp` 的过渡程序；现已彻底移除，由原生 App UDP 直控取代 |
 | DJI 官方 Python SDK | DJI 发布的软件包 | 电脑上的 `robomaster` 包；`Robot.initialize()` 依赖机器人端 EP SDK 服务，详细边界见第 6.3 节 |
 
 `App/Lab` 和 `App UDP` 都不代表一套协议或一个进程。本文描述具体链路时直接写 RoboMaster App、Lab 功能、机内程序、传输协议和端口；“外层封包”只表示 `AppEnvelope` 对应的 UDP `10607` 报文结构。

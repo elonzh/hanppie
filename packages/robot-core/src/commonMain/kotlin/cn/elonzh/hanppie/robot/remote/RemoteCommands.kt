@@ -4,7 +4,7 @@ import cn.elonzh.hanppie.robot.protocol.Protocol
 import cn.elonzh.hanppie.robot.protocol.hex
 import cn.elonzh.hanppie.robot.telemetry.GimbalSubscription
 
-/** Ported verbatim from packet-tested src/hanppie/lab/direct.py. */
+/** Ported verbatim from packet-tested src/hanppie/robot.py. */
 internal data class RemoteCommand(val receiver: Int, val attr: Int, val set: Int, val id: Int, val payload: String, val flags: String, val control: Boolean)
 
 private fun controlCommand(flags: String = "") =
