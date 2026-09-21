@@ -246,6 +246,7 @@
     <string name="script_running">Running</string>
     <string name="finishing_completed_script">Completion received; finishing the Lab run…</string>
     <string name="script_completed">Run completed</string>
+    <string name="script_failed">Run failed</string>
     <string name="script_failed_value">Run failed: %1$s</string>
     <string name="script_start_state_unknown">Start delivery was interrupted; onboard state is unknown</string>
     <string name="script_start_confirmation_timed_out">No onboard STARTED report was received; run state is unknown. Inspect or stop the script before retrying.</string>
@@ -254,11 +255,13 @@
     <string name="script_stop_state_unknown">Stop delivery failed; onboard state is unknown</string>
     <string name="completed_marker_received_but_cleanup_failed">The script reported completion, but Lab cleanup failed</string>
     <string name="script_run_id_value">Run ID: %1$s</string>
-    <string name="script_trace_uploading">[Hanppie] Preparing and uploading script</string>
-    <string name="script_trace_uploaded_value">[Hanppie] Upload confirmed; runId=%1$s, DSP MD5=%2$s</string>
-    <string name="script_trace_start_sent_value">[Hanppie] Start sequence sent; waiting for STARTED, runId=%1$s</string>
-    <string name="script_trace_start_timeout_value">[Hanppie] Start confirmation timed out; runId=%1$s, received %2$s data frames and %3$s Lab message frames</string>
-    <string name="script_trace_lifecycle_value">[Hanppie] Received %1$s; runId=%2$s</string>
+    <string name="script_trace_uploading">Preparing and uploading script</string>
+    <string name="script_trace_uploaded">Upload confirmed</string>
+    <string name="script_trace_start_sent">Start command sent; waiting for response</string>
+    <string name="script_trace_start_timeout">Start confirmation timed out</string>
+    <string name="script_trace_started">Script started</string>
+    <string name="script_trace_failed">Script run failed</string>
+    <string name="script_trace_completed">Script run completed</string>
     <string name="unknown_error">Unknown error</string>
     <string name="robot_disconnected_or_app_not_in_foreground">Robot disconnected or app not in foreground</string>
     <string name="another_operation_is_in_progress">Another operation is in progress</string>

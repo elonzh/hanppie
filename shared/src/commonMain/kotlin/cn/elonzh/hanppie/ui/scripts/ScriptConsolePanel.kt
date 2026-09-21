@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -34,7 +34,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.resources.Res
+import cn.elonzh.hanppie.resources.run_log
+import cn.elonzh.hanppie.resources.waiting_for_script_output
 import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import cn.elonzh.hanppie.ui.app.ConsoleState
 import cn.elonzh.hanppie.ui.design.DesktopListScrollbar
@@ -47,7 +49,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * The script console: run phase, elapsed time, run id and the onboard output of the current run.
+ * The script console: run phase, elapsed time, and the onboard output of the current run.
  *
  * It is the same panel on every screen size; wide layouts place it beside the editor and phones put it
  * below, so a run never replaces the editor with a separate log page.
@@ -90,7 +92,7 @@ private fun ScriptRunStatusRow(state: ConsoleState, tight: Boolean) {
                     fontSize = if (tight) 13.sp else 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = color,
-                    maxLines = if (tight || state.scriptRunPhase != ScriptRunPhase.FAILED) 1 else 4,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -103,13 +105,6 @@ private fun ScriptRunStatusRow(state: ConsoleState, tight: Boolean) {
         state.scriptTitle?.let {
             Text(it, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        state.scriptRunId?.let { runId ->
-            SelectionContainer {
-                Text(tr(Res.string.script_run_id_value, runId), fontSize = 10.sp, fontFamily = FontFamily.Monospace,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis)
-            }
         }
     }
 }
@@ -137,15 +132,18 @@ private fun ScriptRunLog(
             Box(Modifier.weight(1f)) {
                 SelectionContainer(Modifier.fillMaxSize().padding(end = 12.dp)) {
                     LazyColumn(Modifier.fillMaxSize(), state = listState,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        itemsIndexed(lines) { index, line ->
-                            Row(Modifier.fillMaxWidth()) {
-                                Text((index + 1).toString().padStart(2, '0'), Modifier.width(30.dp), fontSize = 11.sp,
-                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                    fontFamily = FontFamily.Monospace)
-                                Text(line, Modifier.weight(1f), fontSize = 12.sp, lineHeight = 18.sp,
-                                    fontFamily = FontFamily.Monospace)
-                            }
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(lines) { line ->
+                            val isError = isTracebackOrErrorLine(line)
+                            Text(
+                                text = line,
+                                modifier = Modifier.fillMaxWidth(),
+                                fontSize = 12.sp,
+                                lineHeight = 18.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = if (isError) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.onSurface,
+                            )
                         }
                     }
                 }
@@ -153,6 +151,21 @@ private fun ScriptRunLog(
             }
         }
     }
+}
+
+internal fun isTracebackOrErrorLine(line: String): Boolean {
+    val trimmed = line.trim()
+    return line.startsWith("Traceback") ||
+            line.startsWith("  File ") ||
+            trimmed.startsWith("File \"") ||
+            trimmed.startsWith("File '<") ||
+            trimmed.contains("Exception:") ||
+            trimmed.contains("Error:") ||
+            trimmed.endsWith("Error") ||
+            trimmed.endsWith("Exception") ||
+            trimmed == "FAILED" ||
+            trimmed == "脚本运行失败" ||
+            trimmed == "Script run failed"
 }
 
 /** Ticking elapsed run time, shared by the console panel and the global run bar. */

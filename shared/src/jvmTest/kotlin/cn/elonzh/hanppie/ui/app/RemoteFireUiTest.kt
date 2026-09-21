@@ -1,22 +1,28 @@
 package cn.elonzh.hanppie.ui.app
 
-import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.test.*
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.unit.dp
 import cn.elonzh.hanppie.robot.files.RobotFileEntry
 import cn.elonzh.hanppie.robot.files.RobotFileKind
 import cn.elonzh.hanppie.robot.files.RobotFileService
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.robot.lab.LabUpload
+import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import cn.elonzh.hanppie.robot.product.RobotModel
 import cn.elonzh.hanppie.robot.product.RobotProduct
-import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
+import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.session.RobotLabSession
 import cn.elonzh.hanppie.robot.session.RobotRuntime
 import cn.elonzh.hanppie.robot.session.RobotSession
@@ -26,15 +32,19 @@ import cn.elonzh.hanppie.ui.design.WorkbenchGlyph
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
 import cn.elonzh.hanppie.ui.robot.remote.RemotePage
-import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.Sink
 import kotlinx.io.Source
 import org.junit.Rule
 import org.junit.Test
-import kotlin.test.*
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class RemoteFireUiTest {
     @get:Rule val rule = createComposeRule()
@@ -292,10 +302,95 @@ class RemoteFireUiTest {
             val fireButton = rule.onNodeWithContentDescription("红外开火")
             fireButton.assertIsDisplayed()
 
+            val crosshair = rule.onNodeWithTag("remote-crosshair")
+            crosshair.assertIsDisplayed()
+
             assertEquals(0, session.infraredCount.get())
             fireButton.performClick()
             rule.waitUntil(5_000) { session.infraredCount.get() == 1 }
             assertEquals(1, session.infraredCount.get())
+        } finally {
+            model.close()
+        }
+    }
+
+    @Test
+    fun singleFireEmitsCorrespondingFireEvents() = runBlocking {
+        val session = FakeRobotSession()
+        val runtime = FakeRobotRuntime(session)
+        val model = testConsoleModel(robotRuntime = runtime)
+        try {
+            model.connect("127.0.0.1", "12345678")
+            withTimeout(5_000) {
+                while (!model.state.value.connected || model.state.value.busy) delay(10)
+            }
+            model.enableRemote()
+            withTimeout(5_000) {
+                while (!model.remoteEnabled.value || model.state.value.busy) delay(10)
+            }
+
+            val events = mutableListOf<AmmoType>()
+            val job = launch {
+                model.fireEvents.collect { events.add(it) }
+            }
+            delay(50)
+
+            model.fire()
+            withTimeout(2_000) {
+                while (events.isEmpty()) delay(10)
+            }
+            assertEquals(listOf(AmmoType.INFRARED), events)
+
+            model.switchAmmo()
+            assertTrue(model.gelSelected.value)
+            model.fireGel()
+            withTimeout(2_000) {
+                while (events.size < 2) delay(10)
+            }
+            assertEquals(listOf(AmmoType.INFRARED, AmmoType.GEL), events)
+
+            job.cancel()
+        } finally {
+            model.close()
+        }
+    }
+
+    @Test
+    fun startFiringEmitsEventsAndUpdatesFiringState() = runBlocking {
+        val session = FakeRobotSession()
+        val runtime = FakeRobotRuntime(session)
+        val model = testConsoleModel(robotRuntime = runtime)
+        try {
+            model.connect("127.0.0.1", "12345678")
+            withTimeout(5_000) {
+                while (!model.state.value.connected || model.state.value.busy) delay(10)
+            }
+            model.enableRemote()
+            withTimeout(5_000) {
+                while (!model.remoteEnabled.value || model.state.value.busy) delay(10)
+            }
+
+            assertFalse(model.firing.value)
+            val events = mutableListOf<AmmoType>()
+            val job = launch {
+                model.fireEvents.collect { events.add(it) }
+            }
+            delay(50)
+
+            model.startFiring()
+            withTimeout(2_000) {
+                while (!model.firing.value || events.isEmpty()) delay(10)
+            }
+            assertTrue(model.firing.value)
+            assertTrue(events.all { it == AmmoType.INFRARED })
+
+            model.stopFiring()
+            withTimeout(2_000) {
+                while (model.firing.value) delay(10)
+            }
+            assertFalse(model.firing.value)
+
+            job.cancel()
         } finally {
             model.close()
         }

@@ -1,19 +1,26 @@
 package cn.elonzh.hanppie.ui.app
 
-import cn.elonzh.hanppie.robot.lab.LabAudioClip
-import cn.elonzh.hanppie.ui.chat.ChatAgent
 import cn.elonzh.hanppie.agent.provider.ModelCatalogState
 import cn.elonzh.hanppie.agent.provider.ModelTestState
+import cn.elonzh.hanppie.robot.lab.LabAudioClip
+import cn.elonzh.hanppie.ui.chat.ChatAgent
 import cn.elonzh.hanppie.ui.i18n.UiText
 import cn.elonzh.hanppie.ui.robot.files.RobotFilesController
 import cn.elonzh.hanppie.ui.scripts.ScriptAudioLibrary
 import cn.elonzh.hanppie.ui.scripts.ScriptLibrary
-import cn.elonzh.hanppie.ui.settings.ControlSettings
 import cn.elonzh.hanppie.ui.settings.ConnectionPreferences
+import cn.elonzh.hanppie.ui.settings.ControlSettings
 import cn.elonzh.hanppie.ui.settings.ModelSettings
 import cn.elonzh.hanppie.ui.settings.RobotLedColor
 import cn.elonzh.hanppie.ui.speech.SpeechInput
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+
+internal enum class AmmoType {
+    INFRARED,
+    GEL,
+}
 
 /** Common UI boundary; platform composition roots provide the concrete robot transport. */
 internal interface ConsoleController : AutoCloseable {
@@ -37,6 +44,8 @@ internal interface ConsoleController : AutoCloseable {
     val remoteInput: MutableStateFlow<List<Double>>
     val cameraYaw: MutableStateFlow<Double?>
     val gelSelected: MutableStateFlow<Boolean>
+    val firing: StateFlow<Boolean>
+    val fireEvents: SharedFlow<AmmoType>
     val driveGear: MutableStateFlow<Int>
     val talking: MutableStateFlow<Boolean>
     val microphoneReady: MutableStateFlow<Boolean>

@@ -1,31 +1,81 @@
 package cn.elonzh.hanppie.ui.robot.remote
 
-import androidx.compose.foundation.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.*
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.*
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.resources.Res
+import cn.elonzh.hanppie.resources.back_to_console
+import cn.elonzh.hanppie.resources.chassis
+import cn.elonzh.hanppie.resources.control_hint_actions_value
+import cn.elonzh.hanppie.resources.control_hint_motion_value
+import cn.elonzh.hanppie.resources.fire_infrared
+import cn.elonzh.hanppie.resources.fire_one_gel_bead
+import cn.elonzh.hanppie.resources.gear_value
+import cn.elonzh.hanppie.resources.gel
+import cn.elonzh.hanppie.resources.gimbal
+import cn.elonzh.hanppie.resources.ir
+import cn.elonzh.hanppie.resources.microphone_preparing
+import cn.elonzh.hanppie.resources.not_connected
+import cn.elonzh.hanppie.resources.rotate_for_remote
+import cn.elonzh.hanppie.resources.sending_talk
+import cn.elonzh.hanppie.resources.signal_strength_unknown
+import cn.elonzh.hanppie.resources.signal_strength_value
+import cn.elonzh.hanppie.resources.stop_script
+import cn.elonzh.hanppie.resources.switch_ammo
+import cn.elonzh.hanppie.resources.talking
+import cn.elonzh.hanppie.resources.value_joystick
 import cn.elonzh.hanppie.ui.app.ConsoleController
 import cn.elonzh.hanppie.ui.design.HanppieBrandAssets
 import cn.elonzh.hanppie.ui.design.HanppieDesignTokens
@@ -40,7 +90,12 @@ import cn.elonzh.hanppie.ui.settings.supports
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import org.jetbrains.compose.resources.painterResource
-import top.yukonga.miuix.kmp.basic.*
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable internal expect fun RemoteOrientation(onBack: (() -> Unit)?)
@@ -181,20 +236,7 @@ internal fun RemotePage(
             }
         }
         RobotVideo(model, mediaControls, Modifier.fillMaxSize())
-        Canvas(Modifier.align(Alignment.Center).size(24.dp)) {
-            // Open center preserves the target; a dark halo remains visible over bright video.
-            val gap = 5.dp.toPx()
-            val edge = 10.dp.toPx()
-            val segments = listOf(
-                Offset(center.x - edge, center.y) to Offset(center.x - gap, center.y),
-                Offset(center.x + gap, center.y) to Offset(center.x + edge, center.y),
-                Offset(center.x, center.y - edge) to Offset(center.x, center.y - gap),
-                Offset(center.x, center.y + gap) to Offset(center.x, center.y + edge))
-            segments.forEach { (a, b) ->
-                drawLine(Color.Black.copy(alpha = .55f), a, b, 3.dp.toPx(), StrokeCap.Round)
-                drawLine(Color.White.copy(alpha = .85f), a, b, 1.dp.toPx(), StrokeCap.Round)
-            }
-        }
+        RemoteCrosshair(model, Modifier.align(Alignment.Center))
         Row(Modifier.align(Alignment.TopStart).padding(HanppieDesignTokens.RemoteEdgePadding),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             onBack?.let { back -> HudIconButton(tr(Res.string.back_to_console), WorkbenchGlyph.BACK, action = back) }

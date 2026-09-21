@@ -49,22 +49,23 @@ import cn.elonzh.hanppie.resources.robot_disconnected_or_app_not_in_foreground
 import cn.elonzh.hanppie.resources.robot_is_not_connected
 import cn.elonzh.hanppie.resources.router_pairing_completed
 import cn.elonzh.hanppie.resources.script_completed
-import cn.elonzh.hanppie.resources.script_failed_value
+import cn.elonzh.hanppie.resources.script_failed
 import cn.elonzh.hanppie.resources.script_running
 import cn.elonzh.hanppie.resources.script_start_confirmation_timed_out
 import cn.elonzh.hanppie.resources.script_start_state_unknown
 import cn.elonzh.hanppie.resources.script_stop_state_unknown
-import cn.elonzh.hanppie.resources.script_trace_lifecycle_value
-import cn.elonzh.hanppie.resources.script_trace_start_sent_value
-import cn.elonzh.hanppie.resources.script_trace_start_timeout_value
-import cn.elonzh.hanppie.resources.script_trace_uploaded_value
+import cn.elonzh.hanppie.resources.script_trace_completed
+import cn.elonzh.hanppie.resources.script_trace_failed
+import cn.elonzh.hanppie.resources.script_trace_start_sent
+import cn.elonzh.hanppie.resources.script_trace_start_timeout
+import cn.elonzh.hanppie.resources.script_trace_started
+import cn.elonzh.hanppie.resources.script_trace_uploaded
 import cn.elonzh.hanppie.resources.script_trace_uploading
 import cn.elonzh.hanppie.resources.session_ended_robot_state_unknown
 import cn.elonzh.hanppie.resources.stop_command_sent_robot_stop_is_unconfirmed
 import cn.elonzh.hanppie.resources.stop_the_lab_script_first
 import cn.elonzh.hanppie.resources.stop_the_script_with_unknown_state_first
 import cn.elonzh.hanppie.resources.stopping_script
-import cn.elonzh.hanppie.resources.unknown_error
 import cn.elonzh.hanppie.resources.upload_failed
 import cn.elonzh.hanppie.resources.uploading
 import cn.elonzh.hanppie.resources.waiting_for_robot_to_scan_qr
@@ -120,7 +121,10 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -212,7 +216,10 @@ internal class ConsoleModel(
     override val remoteInput = MutableStateFlow(List(5) { 0.0 })
     override val cameraYaw = MutableStateFlow<Double?>(null)
     override val gelSelected = MutableStateFlow(false)
-    private val firing = AtomicBoolean(false)
+    private val firingInternal = AtomicBoolean(false)
+    override val firing = MutableStateFlow(false)
+    private val _fireEvents = MutableSharedFlow<AmmoType>(extraBufferCapacity = 16)
+    override val fireEvents: SharedFlow<AmmoType> = _fireEvents.asSharedFlow()
     private var firingJob: Job? = null
     private val gelFireMutex = Mutex()
     override val driveGear = MutableStateFlow(3)
@@ -279,41 +286,57 @@ internal class ConsoleModel(
     }
     override fun startFiring() {
         if (!remoteEnabled.value || !acceptingWork.load() || chat.state.value.running || state.value.busy) return
-        firing.store(true)
+        firingInternal.store(true)
+        firing.value = true
         if (firingJob?.isActive == true) return
         firingJob = scope.launch {
             try {
-                while (firing.load() && remoteEnabled.value && acceptingWork.load() && !chat.state.value.running && !state.value.busy) {
+                while (firingInternal.load() && remoteEnabled.value && acceptingWork.load() && !chat.state.value.running && !state.value.busy) {
                     val s = session.load() ?: break
                     if (gelSelected.value) {
                         val seq = gelFireMutex.withLock {
-                            if (!firing.load() || !remoteEnabled.value) return@withLock null
+                            if (!firingInternal.load() || !remoteEnabled.value) return@withLock null
                             runCatching { s.fireGelOnce() }.getOrNull()
                         }
                         if (seq != null) {
+                            _fireEvents.tryEmit(AmmoType.GEL)
                             log(tr(Res.string.gel_fire_command_sent_seq_value_physical_firing_unconfirmed, seq))
                         } else {
                             break
                         }
                     } else {
-                        runCatching { s.fireInfrared() }.onFailure { break }
+                        val ok = runCatching { s.fireInfrared() }.isSuccess
+                        if (ok) {
+                            _fireEvents.tryEmit(AmmoType.INFRARED)
+                        } else {
+                            break
+                        }
                         delay(200)
                     }
                 }
             } finally {
-                firing.store(false)
+                firingInternal.store(false)
+                firing.value = false
             }
         }
     }
     override fun stopFiring() {
-        firing.store(false)
+        firingInternal.store(false)
+        firing.value = false
         if (!gelSelected.value) {
             firingJob?.cancel()
         }
     }
     override fun fire() {
-        if (remoteEnabled.value && acceptingWork.load() && !chat.state.value.running && !state.value.busy)
-            runCatching { session.load()?.fireInfrared() }.onFailure { state.update { s -> s.copy(error = it.message) } }
+        if (remoteEnabled.value && acceptingWork.load() && !chat.state.value.running && !state.value.busy) {
+            val s = session.load() ?: return
+            val ok = runCatching { s.fireInfrared() }.onFailure {
+                state.update { current ->
+                    current.copy(error = it.message)
+                }
+            }.isSuccess
+            if (ok) _fireEvents.tryEmit(AmmoType.INFRARED)
+        }
     }
     override fun fireGel() {
         if (!remoteEnabled.value || !acceptingWork.load() || chat.state.value.running || state.value.busy) return
@@ -323,6 +346,7 @@ internal class ConsoleModel(
                 runCatching {
                     val sequence = s.fireGelOnce()
                     log(tr(Res.string.gel_fire_command_sent_seq_value_physical_firing_unconfirmed, sequence))
+                    _fireEvents.tryEmit(AmmoType.GEL)
                 }.onFailure { error ->
                     val message = error.message ?: error::class.simpleName ?: "Unknown error"
                     log(tr(Res.string.error_value, message))
@@ -745,9 +769,9 @@ internal class ConsoleModel(
         }
         state.update { it.copy(scriptRunId = upload.runId, scriptRunPhase = ScriptRunPhase.STARTING,
             scriptMessage = uiText(Res.string.waiting_for_script_start),
-            scriptMessages = (it.scriptMessages + tr(
-                Res.string.script_trace_uploaded_value, upload.runId, upload.digest,
-            )).takeLast(200)) }
+            scriptMessages = (it.scriptMessages + tr(Res.string.script_trace_uploaded)).takeLast(200)
+        )
+        }
         val packetBaseline = state.value.packets
         val labMessageBaseline = state.value.labMessagePackets
         try {
@@ -759,9 +783,9 @@ internal class ConsoleModel(
         }
         state.update { current -> if (current.scriptRunId == upload.runId &&
             current.scriptRunPhase == ScriptRunPhase.STARTING) current.copy(
-            scriptMessages = (current.scriptMessages + tr(
-                Res.string.script_trace_start_sent_value, upload.runId,
-            )).takeLast(200),
+            scriptMessages = (current.scriptMessages + tr(Res.string.script_trace_start_sent)).takeLast(
+                200
+            ),
         ) else current }
         scope.launch {
             delay(scriptStartConfirmationTimeoutMillis)
@@ -770,12 +794,9 @@ internal class ConsoleModel(
                     current.copy(
                         scriptRunPhase = ScriptRunPhase.UNKNOWN,
                         scriptMessage = uiText(Res.string.script_start_confirmation_timed_out),
-                        scriptMessages = (current.scriptMessages + tr(
-                            Res.string.script_trace_start_timeout_value,
-                            upload.runId,
-                            current.packets - packetBaseline,
-                            current.labMessagePackets - labMessageBaseline,
-                        )).takeLast(200),
+                        scriptMessages = (current.scriptMessages + tr(Res.string.script_trace_start_timeout)).takeLast(
+                            200
+                        ),
                     )
                 } else {
                     current
@@ -833,14 +854,14 @@ internal class ConsoleModel(
         val newMessages = buildList {
             if (message != null) add(message.text)
             if (isRunningTransition) {
-                add(tr(Res.string.script_trace_lifecycle_value, "STARTED", runId))
+                add(tr(Res.string.script_trace_started))
             }
             if (isFailedTransition) {
-                add(tr(Res.string.script_trace_lifecycle_value, "FAILED", runId))
+                add(tr(Res.string.script_trace_failed))
                 scriptStatus.traceback?.lines()?.filter { it.isNotBlank() }?.let(::addAll)
             }
             if (isCompletedTransition) {
-                add(tr(Res.string.script_trace_lifecycle_value, "COMPLETED", runId))
+                add(tr(Res.string.script_trace_completed))
             }
         }
 
@@ -878,10 +899,10 @@ internal class ConsoleModel(
                 val accepted = lab.load()?.complete(runId) == true
                 if (!accepted) return@launch
                 val phase = if (completed) ScriptRunPhase.COMPLETED else ScriptRunPhase.FAILED
-                val message = if (completed) uiText(Res.string.script_completed) else
-                    uiText(Res.string.script_failed_value, errorText.ifBlank { tr(Res.string.unknown_error) })
+                val message =
+                    if (completed) uiText(Res.string.script_completed) else uiText(Res.string.script_failed)
                 if (!completed) {
-                    log(tr(Res.string.script_failed_value, errorText.ifBlank { tr(Res.string.unknown_error) }))
+                    log(tr(Res.string.script_failed))
                 } else {
                     log(tr(Res.string.script_completed))
                 }

@@ -2,16 +2,17 @@ package cn.elonzh.hanppie.ui.app
 
 import cn.elonzh.hanppie.agent.runtime.SessionHistory
 import cn.elonzh.hanppie.agent.runtime.TestSessionHistory
+import cn.elonzh.hanppie.robot.lab.LabAudioClip
+import cn.elonzh.hanppie.robot.session.JvmRobotRuntime
 import cn.elonzh.hanppie.robot.session.RobotNetwork
 import cn.elonzh.hanppie.robot.session.RobotRuntime
-import cn.elonzh.hanppie.robot.session.JvmRobotRuntime
-import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.ui.robot.audio.LabAudioImporter
 import cn.elonzh.hanppie.ui.robot.audio.NoLabAudioImporter
 import cn.elonzh.hanppie.ui.robot.remote.NoSpeakerInput
 import cn.elonzh.hanppie.ui.robot.remote.SpeakerInput
 import cn.elonzh.hanppie.ui.scripts.ScriptRepository
 import cn.elonzh.hanppie.ui.scripts.StoredScript
+import cn.elonzh.hanppie.ui.scripts.loadAllBundledPresets
 import cn.elonzh.hanppie.ui.settings.AppearanceSettings
 import cn.elonzh.hanppie.ui.settings.ConnectionPreferences
 import cn.elonzh.hanppie.ui.settings.SavedSettings
@@ -31,7 +32,11 @@ internal class MemoryScriptRepository(
     override suspend fun all(): List<StoredScript> = saved.toList()
     override suspend fun presets(): List<StoredScript> {
         if (presetList == null) {
-            presetList = try { cn.elonzh.hanppie.ui.scripts.loadAllBundledPresets() } catch (_: Exception) { emptyList() }
+            presetList = try {
+                loadAllBundledPresets()
+            } catch (_: Exception) {
+                emptyList()
+            }
         }
         return presetList.orEmpty()
     }

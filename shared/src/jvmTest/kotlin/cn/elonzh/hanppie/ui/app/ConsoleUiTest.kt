@@ -1,5 +1,8 @@
 package cn.elonzh.hanppie.ui.app
 
+import ai.koog.agents.core.agent.execution.AgentExecutionInfo
+import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.message.MessagePart
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
@@ -10,32 +13,70 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.test.*
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertHeightIsEqualTo
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onChild
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.swipe
+import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.dp
-import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.agent.runtime.MessageEvent
+import cn.elonzh.hanppie.agent.runtime.TestSessionHistory
 import cn.elonzh.hanppie.agent.tools.DeleteLabScriptTool
 import cn.elonzh.hanppie.agent.tools.ExecuteLabPythonTool
 import cn.elonzh.hanppie.agent.tools.ReadSkillTool
 import cn.elonzh.hanppie.agent.tools.SaveLabScriptTool
 import cn.elonzh.hanppie.agent.tools.StopLabTool
-import cn.elonzh.hanppie.robot.protocol.DussFrame
+import cn.elonzh.hanppie.resources.Res
+import cn.elonzh.hanppie.resources.automatically_finding_robot
+import cn.elonzh.hanppie.resources.stop_command_sent_robot_stop_is_unconfirmed
+import cn.elonzh.hanppie.resources.waiting_for_script_start
 import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import cn.elonzh.hanppie.robot.product.RobotComponent
 import cn.elonzh.hanppie.robot.product.RobotModel
 import cn.elonzh.hanppie.robot.product.RobotProduct
+import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.ui.chat.ChatLine
 import cn.elonzh.hanppie.ui.chat.ChatMarkdown
 import cn.elonzh.hanppie.ui.chat.ChatPage
 import cn.elonzh.hanppie.ui.chat.ChatPhase
 import cn.elonzh.hanppie.ui.chat.ChatRole
-import cn.elonzh.hanppie.ui.chat.ChatState
 import cn.elonzh.hanppie.ui.chat.ToolApproval
-import ai.koog.agents.core.agent.execution.AgentExecutionInfo
-import cn.elonzh.hanppie.agent.runtime.MessageEvent
-import cn.elonzh.hanppie.agent.runtime.TestSessionHistory
-import ai.koog.prompt.dsl.prompt
-import ai.koog.prompt.message.MessagePart
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
 import cn.elonzh.hanppie.ui.i18n.uiText
@@ -46,23 +87,22 @@ import cn.elonzh.hanppie.ui.settings.AppearanceSettings
 import cn.elonzh.hanppie.ui.settings.ControlAction
 import cn.elonzh.hanppie.ui.settings.ControlKey
 import cn.elonzh.hanppie.ui.settings.KeyBinding
-import cn.elonzh.hanppie.ui.settings.NightMode
 import cn.elonzh.hanppie.ui.settings.ModelProviderPreset
 import cn.elonzh.hanppie.ui.settings.ModelSettings
+import cn.elonzh.hanppie.ui.settings.NightMode
 import cn.elonzh.hanppie.ui.settings.SettingsDropdown
 import cn.elonzh.hanppie.ui.settings.SettingsPage
 import cn.elonzh.hanppie.ui.speech.SpeechInput
 import cn.elonzh.hanppie.ui.speech.SpeechInputState
+import kotlinx.serialization.json.Json
+import org.junit.Rule
+import org.junit.Test
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import org.junit.Rule
-import org.junit.Test
 
 class ConsoleUiTest {
     @get:Rule val rule = createComposeRule()
@@ -1497,7 +1537,7 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.onNodeWithTag("script-console").assertIsDisplayed()
             rule.onNodeWithTag("script-run-log").assertIsDisplayed()
             rule.onNodeWithText("运行日志").assertIsDisplayed()
-            rule.onNodeWithText("运行标识：$runId").assertIsDisplayed()
+            rule.onNodeWithText("运行标识：$runId").assertDoesNotExist()
             // The console is inline, so the library the user was on is still there.
             rule.onNodeWithText("我的脚本").assertIsDisplayed()
             snapshot("active-script-run-phone")
@@ -1519,6 +1559,66 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.onNodeWithText("Sentry scan 2/3: left").assertIsDisplayed()
             snapshot("active-script-run-landscape")
         } finally { model.close() }
+    }
+
+    @Test
+    fun completedScriptDoesNotShowConsoleInScriptLibrary() {
+        Localization.initialize("zh", null)
+        val model = testConsoleModel()
+        try {
+            model.state.value = model.state.value.copy(
+                connected = true,
+                scriptTitle = "好奇哨兵",
+                scriptRunPhase = ScriptRunPhase.COMPLETED,
+                scriptFinishedAtEpochMillis = System.currentTimeMillis(),
+                scriptMessages = listOf("done"),
+            )
+            rule.setContent {
+                WorkbenchTheme {
+                    Box(Modifier.requiredSize(1040.dp, 760.dp)) {
+                        Console(
+                            model,
+                            mutableStateOf(EditorDocument())
+                        )
+                    }
+                }
+            }
+            rule.onNodeWithContentDescription("脚本").performClick()
+            rule.onNodeWithText("我的脚本").assertIsDisplayed()
+            rule.onNodeWithTag("script-console").assertDoesNotExist()
+        } finally {
+            model.close()
+        }
+    }
+
+    @Test
+    fun completedScriptRetainsConsoleInEditorAndHidesItOnReturningToLibrary() {
+        Localization.initialize("zh", null)
+        val model = testConsoleModel()
+        val document =
+            mutableStateOf(EditorDocument(source = "def start():\n    pass\n", title = "测试脚本"))
+        try {
+            model.state.value = model.state.value.copy(
+                connected = true,
+                scriptTitle = "测试脚本",
+                scriptRunPhase = ScriptRunPhase.COMPLETED,
+                scriptFinishedAtEpochMillis = System.currentTimeMillis(),
+                scriptMessages = listOf("done"),
+            )
+            rule.setContent {
+                WorkbenchTheme {
+                    Box(Modifier.requiredSize(1040.dp, 760.dp)) { Console(model, document) }
+                }
+            }
+            rule.onNodeWithContentDescription("脚本").performClick()
+            rule.onNodeWithTag("script-editor").assertIsDisplayed()
+            rule.onNodeWithTag("script-console").assertIsDisplayed()
+            rule.onNodeWithTag("script-back").performClick()
+            rule.onNodeWithText("我的脚本").assertIsDisplayed()
+            rule.onNodeWithTag("script-console").assertDoesNotExist()
+        } finally {
+            model.close()
+        }
     }
 
     @Test fun presetCanBeSavedRenamedAndDeletedFromScriptLibrary() {

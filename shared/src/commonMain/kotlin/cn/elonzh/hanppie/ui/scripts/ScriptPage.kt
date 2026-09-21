@@ -1,16 +1,26 @@
 package cn.elonzh.hanppie.ui.scripts
 
-import cn.elonzh.hanppie.ui.scripts.editor.CodeHistory
-import cn.elonzh.hanppie.ui.scripts.editor.ScriptCodeEditor
-import androidx.compose.foundation.combinedClickable
-import cn.elonzh.hanppie.ui.design.WorkbenchActionRow
-import cn.elonzh.hanppie.ui.design.WorkbenchSmallIconButton
-import cn.elonzh.hanppie.ui.design.secondaryClick
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,21 +42,58 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.resources.Res
+import cn.elonzh.hanppie.resources.back
+import cn.elonzh.hanppie.resources.back_to_chat
+import cn.elonzh.hanppie.resources.back_to_script_library
+import cn.elonzh.hanppie.resources.cancel
+import cn.elonzh.hanppie.resources.close
+import cn.elonzh.hanppie.resources.delete
+import cn.elonzh.hanppie.resources.delete_script
+import cn.elonzh.hanppie.resources.discard_changes
+import cn.elonzh.hanppie.resources.export_py
+import cn.elonzh.hanppie.resources.import_py
+import cn.elonzh.hanppie.resources.more_actions
+import cn.elonzh.hanppie.resources.my_scripts
+import cn.elonzh.hanppie.resources.new_program
+import cn.elonzh.hanppie.resources.new_script
+import cn.elonzh.hanppie.resources.no_saved_scripts
+import cn.elonzh.hanppie.resources.preset_scripts
+import cn.elonzh.hanppie.resources.rename_script
+import cn.elonzh.hanppie.resources.replace_unsaved_script
+import cn.elonzh.hanppie.resources.run_script
+import cn.elonzh.hanppie.resources.save
+import cn.elonzh.hanppie.resources.save_to_library
+import cn.elonzh.hanppie.resources.save_to_script_library
+import cn.elonzh.hanppie.resources.script
+import cn.elonzh.hanppie.resources.script_audio_delete_question
+import cn.elonzh.hanppie.resources.script_audio_delete_summary
+import cn.elonzh.hanppie.resources.script_audio_manage
+import cn.elonzh.hanppie.resources.script_audio_rename
+import cn.elonzh.hanppie.resources.script_monitor
+import cn.elonzh.hanppie.resources.script_name
+import cn.elonzh.hanppie.resources.script_name_unavailable
+import cn.elonzh.hanppie.resources.stop_script
+import cn.elonzh.hanppie.resources.unsaved
+import cn.elonzh.hanppie.resources.your_changes_have_not_been_saved
+import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.ui.app.ConsoleController
 import cn.elonzh.hanppie.ui.app.ConsoleState
 import cn.elonzh.hanppie.ui.app.PlatformBackHandler
-import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.ui.design.HanppieDesignTokens
+import cn.elonzh.hanppie.ui.design.WorkbenchActionRow
 import cn.elonzh.hanppie.ui.design.WorkbenchDialog
 import cn.elonzh.hanppie.ui.design.WorkbenchGlyph
 import cn.elonzh.hanppie.ui.design.WorkbenchIcon
 import cn.elonzh.hanppie.ui.design.WorkbenchIconButton
-import cn.elonzh.hanppie.ui.i18n.Localization
+import cn.elonzh.hanppie.ui.design.WorkbenchSmallIconButton
+import cn.elonzh.hanppie.ui.design.secondaryClick
 import cn.elonzh.hanppie.ui.i18n.DateTimeStyle
 import cn.elonzh.hanppie.ui.i18n.formatLocalDateTime
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.robot.device.ConnectionStatusChip
+import cn.elonzh.hanppie.ui.scripts.editor.CodeHistory
+import cn.elonzh.hanppie.ui.scripts.editor.ScriptCodeEditor
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -464,7 +511,7 @@ internal fun ScriptPage(
             // A run must never replace the page: the console and the monitor sit around the editor on
             // phones (below) and on wide layouts (right), and the library keeps the same console while a
             // run is in flight so the global run bar always leads somewhere that shows the run.
-            val monitoring = editorOpen || robotState.scriptRunPhase.visible
+            val monitoring = editorOpen || robotState.scriptRunPhase.active
             val library: @Composable (Modifier) -> Unit = { libraryModifier ->
                 ScriptLibraryView(
                     state = libraryState,

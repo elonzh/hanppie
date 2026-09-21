@@ -246,6 +246,7 @@
     <string name="script_running">运行中</string>
     <string name="finishing_completed_script">已收到结束回报，正在收尾…</string>
     <string name="script_completed">运行完成</string>
+    <string name="script_failed">运行失败</string>
     <string name="script_failed_value">运行失败：%1$s</string>
     <string name="script_start_state_unknown">启动发送中断，机内状态未知</string>
     <string name="script_start_confirmation_timed_out">未收到机内 STARTED 回报，运行状态未知；请检查或停止脚本后再重试</string>
@@ -254,11 +255,13 @@
     <string name="script_stop_state_unknown">停止发送失败，机内状态未知</string>
     <string name="completed_marker_received_but_cleanup_failed">脚本已报告结束，但 Lab 运行收尾失败</string>
     <string name="script_run_id_value">运行标识：%1$s</string>
-    <string name="script_trace_uploading">[Hanppie] 正在准备并上传脚本</string>
-    <string name="script_trace_uploaded_value">[Hanppie] 上传已确认；runId=%1$s，DSP MD5=%2$s</string>
-    <string name="script_trace_start_sent_value">[Hanppie] 启动序列已发送；等待 STARTED，runId=%1$s</string>
-    <string name="script_trace_start_timeout_value">[Hanppie] 启动确认超时；runId=%1$s，期间收到 %2$s 个数据帧、%3$s 个 Lab 消息帧</string>
-    <string name="script_trace_lifecycle_value">[Hanppie] 收到 %1$s；runId=%2$s</string>
+    <string name="script_trace_uploading">正在准备并上传脚本</string>
+    <string name="script_trace_uploaded">上传已确认</string>
+    <string name="script_trace_start_sent">启动指令已发送，等待机内响应</string>
+    <string name="script_trace_start_timeout">启动确认超时</string>
+    <string name="script_trace_started">脚本已启动</string>
+    <string name="script_trace_failed">脚本运行失败</string>
+    <string name="script_trace_completed">脚本运行完成</string>
     <string name="unknown_error">未知错误</string>
     <string name="robot_disconnected_or_app_not_in_foreground">机器人未连接或应用不在前台</string>
     <string name="another_operation_is_in_progress">设备正在执行其他操作</string>
