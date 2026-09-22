@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.app
 
+import cn.elonzh.hanppie.ui.robot.telemetry.signalQualityLabel
 import androidx.compose.foundation.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
@@ -163,18 +164,18 @@ internal fun Console(
                 Image(painterResource(HanppieBrandAssets.avatar), null, Modifier.size(64.dp))
                 Column(Modifier.weight(1f)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("RoboMaster", Modifier.weight(1f), fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
-                        WorkbenchIconButton(tr(Res.string.debug), WorkbenchGlyph.OPEN,
+                        Text(state.productName, Modifier.weight(1f), fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
+                        WorkbenchIconButton(tr(Res.string.debug), WorkbenchGlyph.ACTIVITY,
                             onClick = { connectionDetails = false; navigate(2) }, tag = "connection-diagnostics")
                     }
-                    Text(state.status, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 13.sp)
+                    Text(if (state.connected) tr(Res.string.connected) else state.status, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 13.sp)
                 }
             }
             Card(Modifier.fillMaxWidth(), insideMargin = PaddingValues(16.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     ConnectionDetail(tr(Res.string.robot_ipv4), state.connectedAddress ?: "—")
                     ConnectionDetail(tr(Res.string.battery), state.battery?.let { "$it%" } ?: "—")
-                    ConnectionDetail(tr(Res.string.signal), state.signalQuality?.toString() ?: "—")
+                    ConnectionDetail(tr(Res.string.signal), signalQualityLabel(state.signalQuality))
                     ConnectionDetail(tr(Res.string.script), state.scriptStatus)
                 }
             }

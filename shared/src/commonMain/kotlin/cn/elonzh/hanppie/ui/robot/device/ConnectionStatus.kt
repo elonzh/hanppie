@@ -47,12 +47,7 @@ internal fun ConnectionStatusChip(state: ConsoleState, contentColor: Color = Miu
                 ConnectionMode.UNKNOWN -> Res.drawable.official_connection_generic
             }), tr(Res.string.connected), Modifier.size(22.dp), colorFilter = ColorFilter.tint(contentColor))
             state.battery?.let { battery ->
-                Image(painterResource(when {
-                    battery > 65 -> Res.drawable.official_battery_full
-                    battery > 30 -> Res.drawable.official_battery_mid
-                    battery > 0 -> Res.drawable.official_battery_low
-                    else -> Res.drawable.official_battery_empty
-                }), null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(contentColor))
+                BatteryIcon(battery, contentColor)
             }
         } else Box(Modifier.size(6.dp).background(indicator, RoundedCornerShape(50)))
         Text(label,
@@ -68,4 +63,15 @@ internal fun ConnectionDetail(label: String, value: String) {
         Text(label, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
         Text(value, Modifier.weight(1f), fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.End)
     }
+}
+
+/** Shared official battery artwork for the homepage and cockpit. */
+@Composable
+internal fun BatteryIcon(battery: Int?, color: Color, modifier: Modifier = Modifier.size(22.dp)) {
+    Image(painterResource(when {
+        battery == null || battery <= 0 -> Res.drawable.official_battery_empty
+        battery > 65 -> Res.drawable.official_battery_full
+        battery > 30 -> Res.drawable.official_battery_mid
+        else -> Res.drawable.official_battery_low
+    }), null, modifier, colorFilter = ColorFilter.tint(color))
 }

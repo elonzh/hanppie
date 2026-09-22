@@ -63,7 +63,8 @@ interface RobotSession : AutoCloseable {
     fun drive(x: Double, y: Double, z: Double, pitch: Double, yaw: Double, cameraRelative: Boolean)
     fun halt()
     fun fireInfrared()
-    suspend fun fireGelOnce(): Int
+    /** Reports the command send before the firing light cycle ends; not physical hit confirmation. */
+    suspend fun fireGelOnce(onSent: (Int) -> Unit = {}): Int
     suspend fun playSpeaker(encoded: ByteArray): Int
     fun setLed(red: Int, green: Int, blue: Int, enabled: Boolean)
     fun setSpeakerVolume(volume: Int)

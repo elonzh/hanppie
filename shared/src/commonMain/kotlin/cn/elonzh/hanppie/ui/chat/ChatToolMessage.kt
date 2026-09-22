@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.chat
 
+import cn.elonzh.hanppie.ui.robot.telemetry.signalQualityLabel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -371,7 +372,7 @@ private fun RobotStatusResult(result: JsonObject) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)) {
         result.string("address")?.let { ToolField(tr(Res.string.robot_ipv4), it) }
-        result.string("signalQualityPercent")?.let { ToolField(tr(Res.string.signal), "$it%") }
+        ToolField(tr(Res.string.signal), signalQualityLabel(result.string("signalQualityRaw")?.toIntOrNull()))
         val script = result["script"] as? JsonObject
         script.string("title")?.let { ToolField(tr(Res.string.script), it) }
         script.string("phase")?.let { phase ->

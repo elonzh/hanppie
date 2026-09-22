@@ -95,6 +95,8 @@ internal class MemorySettingsStore : SettingsStore {
         ui = ui.copy(appearance = appearance)
     }
 
+    override suspend fun saveWindowPosition(position: cn.elonzh.hanppie.ui.settings.SavedWindowPosition) { ui = ui.copy(windowPosition = position) }
+
     override suspend fun saveSpeechService(service: String) {
         ui = ui.copy(speechService = service)
     }

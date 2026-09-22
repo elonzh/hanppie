@@ -31,6 +31,8 @@ UnityPy OBJ 已翻转 X 坐标和面序，Transform 仍使用 Unity 坐标；转
 | official_battery_mid | resources_1963_ic-common-battery-mid |
 | official_battery_low | resources_1790_ic-common-battery-low |
 | official_battery_empty | resources_1653_ic-common-battery-empty |
+| official_ammo_infrared | resources_853_ic-FPV-virtualattack_standard |
+| official_ammo_gel | resources_2064_ic-FPV-shooting-standard |
 
 连接方式按当前地址匹配已记录的连接方式，未知方式使用通用连接图标，不根据 IP 猜测。
 电量图标采用官方档位，精确数值仍显示遥测百分比。

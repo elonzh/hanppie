@@ -18,7 +18,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.elonzh.hanppie.resources.*
-import cn.elonzh.hanppie.robot.product.RobotModel
 import cn.elonzh.hanppie.ui.app.ConsoleController
 import cn.elonzh.hanppie.ui.app.ConsoleState
 import cn.elonzh.hanppie.ui.design.WorkbenchGlyph
@@ -34,7 +33,7 @@ import top.yukonga.miuix.kmp.basic.Text
 @Composable
 internal fun DevicePage(model: ConsoleController, state: ConsoleState, compact: Boolean, modifier: Modifier,
     onRemote: () -> Unit, onConnectionDetails: () -> Unit = {},
-    showScene: Boolean = true, preparing: Boolean = false, preparationFailed: Boolean = false,
+    showScene: Boolean = true, preparing: Boolean = false,
     onNavigate: (Int) -> Unit = {}) {
     val preferences by model.connectionPreferences.collectAsState()
     val connectionMode = preferences.robots.firstOrNull { it.ip == state.connectedAddress }?.mode ?: cn.elonzh.hanppie.ui.settings.ConnectionMode.UNKNOWN
@@ -52,11 +51,7 @@ internal fun DevicePage(model: ConsoleController, state: ConsoleState, compact: 
             verticalAlignment = Alignment.CenterVertically) {
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text("HANPPIE", fontSize = 10.sp, letterSpacing = 3.sp, color = Color.White.copy(alpha = .65f))
-                Text(when (state.robotProduct.model) {
-                    RobotModel.UNKNOWN -> "RoboMaster"
-                    RobotModel.ROBOMASTER_S1 -> "RoboMaster S1"
-                    RobotModel.ROBOMASTER_EP -> "RoboMaster EP"
-                }, fontSize = if (dense) 18.sp else 22.sp, fontWeight = FontWeight.Medium, color = Color.White)
+                Text(state.productName, fontSize = if (dense) 18.sp else 22.sp, fontWeight = FontWeight.Medium, color = Color.White)
             }
             Spacer(Modifier.weight(1f))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -66,11 +61,10 @@ internal fun DevicePage(model: ConsoleController, state: ConsoleState, compact: 
         }
         Column(Modifier.align(Alignment.BottomCenter).padding(bottom = if (dense) 16.dp else 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (preparationFailed) Text(tr(Res.string.scene_video_retry), fontSize = 12.sp, color = Color.White.copy(alpha = .8f))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (dense) 8.dp else 20.dp)) {
                 HomeLink(tr(Res.string.script), WorkbenchGlyph.CODE) { onNavigate(1) }
                 HomeAction(
-                    label = when { preparing -> tr(Res.string.scene_video_preparing); state.connected -> tr(Res.string.fullscreen_cockpit)
+                    label = when { state.connected -> tr(Res.string.fullscreen_cockpit)
                         state.connecting -> tr(Res.string.connecting); else -> tr(Res.string.automatic_connection) },
                     symbol = if (state.connected) WorkbenchGlyph.CROSSHAIR else WorkbenchGlyph.CONNECT,
                     tag = if (state.connected) "enter-remote" else "auto-connect",
@@ -97,7 +91,7 @@ private fun HomeLink(label: String, symbol: WorkbenchGlyph, modifier: Modifier =
 @Composable
 private fun HomeAction(label: String, symbol: WorkbenchGlyph, tag: String, enabled: Boolean, onClick: () -> Unit) {
     Row(Modifier.widthIn(min = 184.dp).heightIn(min = 48.dp).testTag(tag).clip(RoundedCornerShape(22.dp))
-        .background(Color(0xffe97635).copy(alpha = if (enabled) .95f else .7f))
+        .background(Color(0xffe97635).copy(alpha = .95f))
         .clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(horizontal = 24.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally)) {
         WorkbenchIcon(symbol, Color(0xff201a16), Modifier.size(18.dp))

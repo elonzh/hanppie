@@ -5,6 +5,9 @@ import cn.elonzh.hanppie.ui.settings.RobotLedColor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 
+internal val LocalVideoStreamEnabled = androidx.compose.runtime.staticCompositionLocalOf { true }
+internal val LocalVideoInputEnabled = androidx.compose.runtime.staticCompositionLocalOf { true }
+
 internal val LocalVideoPreview = androidx.compose.runtime.staticCompositionLocalOf { false }
 
 internal val LocalVideoHudAlpha = androidx.compose.runtime.staticCompositionLocalOf { 1f }
@@ -24,7 +27,8 @@ internal class RemoteMediaController {
     fun takePhoto() = requests.update { it.copy(photo = it.photo + 1) }
     fun toggleRecording() = requests.update { it.copy(recording = it.recording + 1) }
     fun toggleRobotMicrophone() = requests.update { it.copy(robotMicrophone = it.robotMicrophone + 1) }
-    fun videoReady(ready: Boolean) = state.update { it.copy(videoReady = ready, videoFrameAtEpochMillis = if (ready) kotlin.time.Clock.System.now().toEpochMilliseconds() else 0) }
+    fun videoReady(ready: Boolean) = state.update { it.copy(videoReady = ready, videoFrameAtEpochMillis = if (ready) kotlin.time.Clock.System.now().toEpochMilliseconds() else it.videoFrameAtEpochMillis) }
+    fun discardPreview() = state.update { it.copy(videoReady = false, videoFrameAtEpochMillis = 0) }
     fun recording(active: Boolean) = state.update { it.copy(recording = active) }
 }
 

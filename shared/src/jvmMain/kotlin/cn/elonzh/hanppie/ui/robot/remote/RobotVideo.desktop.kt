@@ -24,10 +24,12 @@ import top.yukonga.miuix.kmp.basic.*
 
 @Composable internal actual fun RobotVideo(model: ConsoleController, controls: RemoteMediaController, modifier: Modifier) {
     val preview = LocalVideoPreview.current
+    val streamEnabled = LocalVideoStreamEnabled.current
+    val foreground by model.foregroundState.collectAsState()
+    val inputEnabled = LocalVideoInputEnabled.current && foreground
     val hudAlpha = LocalVideoHudAlpha.current
     var playing by remember { mutableStateOf(true) }
     var sound by remember { mutableStateOf(false) }
-    var frame by remember { mutableStateOf<ImageBitmap?>(null) }
     var status by remember { mutableStateOf(tr(Res.string.video_off)) }
     var audioStatus by remember { mutableStateOf("") }
     var captureStatus by remember { mutableStateOf("") }
@@ -36,6 +38,7 @@ import top.yukonga.miuix.kmp.basic.*
     val recorder = remember { AtomicReference<DesktopVideoRecorder?>(null) }
     val uiScope = rememberCoroutineScope()
     val state by model.state.collectAsState()
+    val frame = model.videoFrames.image(state.connectedAddress)
     val mediaSettings by model.mediaSettings.collectAsState()
     val resolution = mediaSettings.videoResolution
     val requests by controls.requests.collectAsState()
@@ -93,15 +96,16 @@ import top.yukonga.miuix.kmp.basic.*
             recorder.getAndSet(null)?.let { active -> thread(name = "hanppie-recorder-finish", isDaemon = true) { runCatching { active.finish() } } }
         }
     }
-    DisposableEffect(playing, state.connected, resolution) {
+    DisposableEffect(playing, streamEnabled, state.connected, resolution) {
         controls.videoReady(false)
-        if (!playing) { frame = null; latestFrame.set(null) }
-        status = if (!state.connected) "" else if (playing) tr(Res.string.waiting_for_video) else tr(Res.string.video_off)
-        var decodedFrames = 0
+        if (!playing) { latestFrame.set(null); controls.discardPreview() }
+        status = if (!state.connected || playing) "" else tr(Res.string.video_off)
         val decoderActive = java.util.concurrent.atomic.AtomicBoolean(true)
         var media: DesktopMedia? = null
-        if (playing && state.connected) try {
-            media = DesktopMedia(false, onVideo = { bytes ->
+        val lifecycleLock = Any()
+        if (playing && streamEnabled && state.connected) thread(name = "hanppie-video-start", isDaemon = true) {
+          try {
+            val started = DesktopMedia(false, onVideo = { bytes ->
                 if (!decoderActive.get()) return@DesktopMedia
                 latestFrame.set(bytes)
                 recorder.get()?.let { active -> runCatching { active.frame(bytes) }.onFailure { error ->
@@ -116,21 +120,38 @@ import top.yukonga.miuix.kmp.basic.*
                 } }
                 uiScope.launch {
                     if (!decoderActive.get()) return@launch
-                    frame = org.jetbrains.skia.Image.makeRaster(
+                    model.videoFrames.publish(state.connectedAddress, org.jetbrains.skia.Image.makeRaster(
                         org.jetbrains.skia.ImageInfo(resolution.width, resolution.height, org.jetbrains.skia.ColorType.BGRA_8888, org.jetbrains.skia.ColorAlphaType.OPAQUE),
-                        bytes, resolution.width * 4).toComposeImageBitmap()
-                    if (++decodedFrames >= 8) controls.videoReady(true)
+                        bytes, resolution.width * 4).toComposeImageBitmap())
+                    controls.videoReady(true)
                 }
             }, onStatus = { message -> uiScope.launch { status = message } }, resolution = resolution)
-            model.videoSink = media::video
-            model.startMedia(false)
-        } catch (e: Exception) { status = e.message ?: tr(Res.string.could_not_start_media) }
-        onDispose { decoderActive.set(false); controls.videoReady(false); if (media != null) { model.stopMedia(); media.close() } }
+            val installed = synchronized(lifecycleLock) {
+                if (decoderActive.get()) {
+                    media = started
+                    model.videoSink = started::video
+                    model.startMedia(false)
+                    true
+                } else false
+            }
+            if (!installed) started.close()
+          } catch (e: Exception) {
+              uiScope.launch { if (decoderActive.get()) status = e.message ?: tr(Res.string.could_not_start_media) }
+          }
+        }
+        onDispose {
+            val closing = synchronized(lifecycleLock) {
+                decoderActive.set(false)
+                controls.videoReady(false)
+                media?.also { model.stopMedia() }
+            }
+            if (closing != null) thread(name = "hanppie-video-close", isDaemon = true) { closing.close() }
+        }
     }
-    DisposableEffect(playing, sound, state.connected) {
+    DisposableEffect(playing, sound, streamEnabled, state.connected) {
         audioStatus = ""
         var audio: DesktopMedia? = null
-        if (playing && sound && state.connected) try {
+        if (playing && streamEnabled && sound && state.connected) try {
             audio = DesktopMedia(true, {}, { message -> uiScope.launch { audioStatus = message } },
                 pcmSink = { bytes, size -> recorder.get()?.audio(bytes, size) }, playAudio = true, videoEnabled = false)
             model.audioSink = audio::audio
@@ -140,19 +161,19 @@ import top.yukonga.miuix.kmp.basic.*
     }
     Box(modifier.background(Color.Black)) {
         Box(Modifier.fillMaxSize()) {
-            frame?.let { Image(it,tr(Res.string.robot_live_video),Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
+            frame?.let { Image(it,tr(Res.string.robot_live_video),Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
         }
         if (!preview) Column(Modifier.align(Alignment.TopEnd).graphicsLayer { alpha = hudAlpha }.padding(end = HanppieDesignTokens.RemoteEdgePadding,
             top = HanppieDesignTokens.RemoteEdgePadding), horizontalAlignment = Alignment.End) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HudIconButton(if(playing) tr(Res.string.stop_video) else tr(Res.string.start_video), if(playing) WorkbenchGlyph.VIDEO else WorkbenchGlyph.VIDEO_OFF, state.connected) { playing = !playing }
+                HudIconButton(if(playing) tr(Res.string.stop_video) else tr(Res.string.start_video), if(playing) WorkbenchGlyph.VIDEO else WorkbenchGlyph.VIDEO_OFF, state.connected && inputEnabled) { playing = !playing }
                 HudIconButton(if(sound) tr(Res.string.mute) else tr(Res.string.listen), if(sound) WorkbenchGlyph.SPEAKER else WorkbenchGlyph.MUTED,
-                    state.connected && !recording) { controls.toggleRobotMicrophone() }
-                HudIconButton(tr(Res.string.take_photo), WorkbenchGlyph.CAMERA, state.connected && latestFrame.get() != null) { controls.takePhoto() }
+                    state.connected && inputEnabled && !recording) { controls.toggleRobotMicrophone() }
+                HudIconButton(tr(Res.string.take_photo), WorkbenchGlyph.CAMERA, state.connected && inputEnabled && latestFrame.get() != null) { controls.takePhoto() }
                 HudIconButton(if(recording) tr(Res.string.stop_recording) else tr(Res.string.start_recording), if(recording) WorkbenchGlyph.STOP else WorkbenchGlyph.RECORD,
-                    state.connected && playing && (recording || latestFrame.get() != null)) { controls.toggleRecording() }
+                    state.connected && inputEnabled && playing && (recording || latestFrame.get() != null)) { controls.toggleRecording() }
             }
-            Text(status, Modifier.widthIn(max = 300.dp), color = Color.White, fontSize = 11.sp, maxLines = 1)
+            if (status.isNotBlank()) Text(status, Modifier.widthIn(max = 300.dp), color = Color.White, fontSize = 11.sp, maxLines = 1)
             if (sound) Text(audioStatus, Modifier.widthIn(max = 300.dp), color = Color.White, fontSize = 11.sp, maxLines = 1)
             if (captureStatus.isNotBlank()) Text(captureStatus, Modifier.widthIn(max = 300.dp), color = Color.White, fontSize = 11.sp, maxLines = 1)
         }

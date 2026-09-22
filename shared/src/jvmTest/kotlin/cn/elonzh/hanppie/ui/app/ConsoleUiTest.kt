@@ -24,6 +24,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
@@ -242,7 +243,9 @@ class ConsoleUiTest {
             assertTrue(chassis.center.x < 640f * .25f && gimbal.center.x > 640f * .75f)
             assertTrue(chassis.bottom <= 360f && gimbal.bottom <= 360f)
             assertTrue(gear.bottom <= chassis.top)
-            assertTrue(gear.width >= 48f && gear.height >= 48f)
+            assertTrue(gear.width >= 32f && gear.height >= 48f)
+            assertTrue(rule.onNodeWithTag("remote-gear-bar").fetchSemanticsNode().boundsInRoot.width <= 164f)
+            rule.runOnIdle { model.remoteEnabled.value = true }
             rule.onNodeWithContentDescription("切换弹药").assertIsDisplayed().performClick()
             val media = rule.onNodeWithContentDescription("关闭视频").assertIsDisplayed()
                 .fetchSemanticsNode().boundsInRoot
@@ -1135,6 +1138,10 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.waitForIdle()
             rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(Key.W); keyUp(Key.W) }
             rule.onNodeWithTag("keyboard-hints").assertIsDisplayed()
+            rule.onNodeWithTag("remote-touch-left").assertDoesNotExist()
+            rule.onNodeWithTag("remote-touch-right").assertDoesNotExist()
+            rule.onNodeWithTag("remote-surface").performMouseInput { click(center) }
+            rule.onNodeWithTag("keyboard-hints").assertDoesNotExist()
             val stick = rule.onNodeWithContentDescription("底盘 摇杆")
             stick.performTouchInput { down(center); moveTo(center.copy(y = center.y - 40f)) }
             rule.waitUntil(2000) { model.remoteInput.value[0] > 0 }

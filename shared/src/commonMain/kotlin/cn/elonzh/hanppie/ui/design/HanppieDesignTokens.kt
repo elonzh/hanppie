@@ -49,7 +49,7 @@ internal object HanppieDesignTokens {
     val RemoteHudSurface = Color(0xff1c232b)
     val RemoteHudContent = Color(0xfff4f7fa)
     val RemoteHudMuted = Color(0xffb7c0c8)
-    const val RemoteHudAlpha = 0.90f
+    const val RemoteHudAlpha = 0.60f
 }
 
 internal val GraphiteOrangeLightColors = lightColorScheme(

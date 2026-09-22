@@ -27,13 +27,13 @@ internal fun chassisHeadingInCameraFrame(relativeYaw: Double?): Double? =
     relativeYaw?.takeIf { it.isFinite() && it in -360.0..360.0 }?.let { -it }
 
 @Composable
-internal fun HeadingIndicator(relativeYaw: Double?) {
+internal fun HeadingIndicator(relativeYaw: Double?, modifier: Modifier = Modifier) {
     val heading = chassisHeadingInCameraFrame(relativeYaw)
     val degrees = heading?.let { kotlin.math.round(it).toInt() }
     val angle = degrees?.let { if (it > 0) "+$it°" else "$it°" } ?: "—"
     val description = if (degrees == null) tr(Res.string.chassis_gimbal_angle_unknown)
         else tr(Res.string.chassis_heading_camera_value, angle)
-    Row(Modifier.semantics { contentDescription = description }, verticalAlignment = Alignment.CenterVertically,
+    Row(modifier.semantics { contentDescription = description }, verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Canvas(Modifier.size(28.dp)) {
             scale(size.width / 64f, size.height / 64f, pivot = Offset.Zero) {
@@ -60,6 +60,6 @@ internal fun HeadingIndicator(relativeYaw: Double?) {
                 drawCircle(blue, 3f, Offset(32f, 34f))
             }
         }
-        Text(angle, modifier = Modifier.width(40.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, color = HanppieDesignTokens.RemoteHudContent, fontSize = 11.sp)
+        Text(angle, modifier = Modifier.width(40.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Start, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, color = HanppieDesignTokens.RemoteHudContent, fontSize = 11.sp)
     }
 }

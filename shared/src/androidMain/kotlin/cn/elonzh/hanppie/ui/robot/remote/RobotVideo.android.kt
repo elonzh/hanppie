@@ -14,10 +14,14 @@ import android.view.PixelCopy
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -114,7 +118,7 @@ internal class RobotDecoder(
                     var output = decoder.dequeueOutputBuffer(info, 0)
                     while (output >= 0) {
                         decoder.releaseOutputBuffer(output, true); frames++
-                        if (frames == 1 || frames % 30 == 0) report(tr(Res.string.video_value_decoded_frames,frames),false)
+                        if (frames == 1) report("", false)
                         output = decoder.dequeueOutputBuffer(info, 0)
                     }
                 }
@@ -445,6 +449,10 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
 
 @Composable internal actual fun RobotVideo(model: ConsoleController, controls: RemoteMediaController, modifier: Modifier) {
     val preview = LocalVideoPreview.current
+    val streamEnabled = LocalVideoStreamEnabled.current
+    val foreground by model.foregroundState.collectAsState()
+    val inputEnabled = LocalVideoInputEnabled.current && foreground
+    val mediaState by controls.state.collectAsState()
     val context = LocalContext.current.applicationContext
     val uiScope = rememberCoroutineScope()
     var surface by remember { mutableStateOf<Surface?>(null) }
@@ -457,6 +465,7 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
     var status by remember { mutableStateOf(tr(Res.string.video_off)) }
     var audioStatus by remember { mutableStateOf("") }
     val state by model.state.collectAsState()
+    val cachedFrame = model.videoFrames.image(state.connectedAddress)
     val mediaSettings by model.mediaSettings.collectAsState()
     val resolution = mediaSettings.videoResolution
     val requests by controls.requests.collectAsState()
@@ -509,11 +518,22 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
     LaunchedEffect(requests.robotMicrophone) {
         if (requests.robotMicrophone > 0 && !recording) { sound = !sound; if (sound) playing = true }
     }
-    DisposableEffect(surface, playing, sound, state.connected, resolution) {
+    fun retainFrame() {
+        val view = surfaceView ?: return
+        if (view.width <= 0 || view.height <= 0 || !controls.state.value.videoReady) return
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        runCatching {
+            PixelCopy.request(view, bitmap, { result ->
+                if (result == PixelCopy.SUCCESS) model.videoFrames.publish(state.connectedAddress, bitmap.asImageBitmap()) else bitmap.recycle()
+            }, Handler(Looper.getMainLooper()))
+        }.onFailure { bitmap.recycle() }
+    }
+    DisposableEffect(surface, playing, streamEnabled, sound, state.connected, resolution) {
         controls.videoReady(false)
-        status = if (!state.connected) "" else if (playing) tr(Res.string.waiting_for_video) else tr(Res.string.video_off)
-        audioStatus = if (sound && state.connected) tr(Res.string.waiting_for_audio) else ""
-        val activeDecoder = if (surface != null && playing && state.connected) RobotDecoder(surface!!, sound,
+        if (!playing) { controls.discardPreview() }
+        status = if (!state.connected || playing) "" else tr(Res.string.video_off)
+        audioStatus = ""
+        val activeDecoder = if (surface != null && playing && streamEnabled && state.connected) RobotDecoder(surface!!, sound,
             report = { message, isAudio -> uiScope.launch { if (isAudio) audioStatus = message else status = message } },
             onRecordingStopped = { uiScope.launch { recording = false; controls.recording(false) } },
             onVideoFrame = { controls.videoReady(true) },
@@ -521,6 +541,7 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
         decoder = activeDecoder
         if (activeDecoder != null) { model.videoSink = activeDecoder::video; model.audioSink = activeDecoder::audio; model.startMedia(sound) }
         onDispose {
+            retainFrame()
             controls.videoReady(false)
             if (decoder === activeDecoder) decoder = null
             recording = false
@@ -537,17 +558,20 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
                 override fun surfaceDestroyed(holder: SurfaceHolder) { surface = null }
             })
         } }, modifier = Modifier.fillMaxSize())
+        if (!mediaState.videoReady) cachedFrame?.let {
+            Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+        }
         if (!preview) Column(Modifier.align(Alignment.TopEnd).padding(end = HanppieDesignTokens.RemoteEdgePadding,
             top = HanppieDesignTokens.RemoteEdgePadding), horizontalAlignment = Alignment.End) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HudIconButton(if(playing) tr(Res.string.stop_video) else tr(Res.string.start_video), if(playing) WorkbenchGlyph.VIDEO else WorkbenchGlyph.VIDEO_OFF, state.connected) { playing = !playing }
+                HudIconButton(if(playing) tr(Res.string.stop_video) else tr(Res.string.start_video), if(playing) WorkbenchGlyph.VIDEO else WorkbenchGlyph.VIDEO_OFF, state.connected && inputEnabled) { playing = !playing }
                 HudIconButton(if(sound) tr(Res.string.mute) else tr(Res.string.listen), if(sound) WorkbenchGlyph.SPEAKER else WorkbenchGlyph.MUTED,
-                    state.connected && !recording) { controls.toggleRobotMicrophone() }
-                HudIconButton(tr(Res.string.take_photo), WorkbenchGlyph.CAMERA, state.connected && playing && surfaceView != null) { controls.takePhoto() }
+                    state.connected && inputEnabled && !recording) { controls.toggleRobotMicrophone() }
+                HudIconButton(tr(Res.string.take_photo), WorkbenchGlyph.CAMERA, state.connected && inputEnabled && playing && surfaceView != null) { controls.takePhoto() }
                 HudIconButton(if(recording) tr(Res.string.stop_recording) else tr(Res.string.start_recording), if(recording) WorkbenchGlyph.STOP else WorkbenchGlyph.RECORD,
-                    state.connected && playing && decoder != null) { controls.toggleRecording() }
+                    state.connected && inputEnabled && playing && decoder != null) { controls.toggleRecording() }
             }
-            Text(status, Modifier.widthIn(max = 300.dp), color = Color.White, fontSize = 11.sp, maxLines = 1)
+            if (status.isNotBlank()) Text(status, Modifier.widthIn(max = 300.dp), color = Color.White, fontSize = 11.sp, maxLines = 1)
             if (sound) Text(audioStatus, Modifier.widthIn(max = 300.dp), color = Color.White, fontSize = 11.sp, maxLines = 1)
             if (captureStatus.isNotBlank()) Text(captureStatus, Modifier.widthIn(max = 300.dp), color = Color.White, fontSize = 11.sp, maxLines = 1)
         }

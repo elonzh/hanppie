@@ -77,7 +77,7 @@ private class JvmRobotSession(
         app.drive(x, y, z, pitch, yaw, cameraRelative)
     override fun halt() = app.halt()
     override fun fireInfrared() = app.fireInfrared()
-    override suspend fun fireGelOnce(): Int = app.fireGelOnce()
+    override suspend fun fireGelOnce(onSent: (Int) -> Unit): Int = app.fireGelOnce(onSent)
     override suspend fun playSpeaker(encoded: ByteArray): Int = app.playSpeaker(encoded)
     override fun setLed(red: Int, green: Int, blue: Int, enabled: Boolean) {
         app.setLed(red, green, blue, enabled)

@@ -66,7 +66,7 @@ internal class DesktopMedia(
                                 ?: throw IllegalStateException("Video frame metadata missing")
                             if (!usable) continue // Retain the last good image until a clean intra frame.
                             onVideo(frame)
-                            if (++count == 1 || count % 30 == 0) onStatus(tr(Res.string.video_value_decoded_frames,count))
+                            if (++count == 1) onStatus("")
                         }
                     } catch (e: Exception) { if (active.get()) fail(e.message ?: tr(Res.string.video_decoding_failed)) }
                 }

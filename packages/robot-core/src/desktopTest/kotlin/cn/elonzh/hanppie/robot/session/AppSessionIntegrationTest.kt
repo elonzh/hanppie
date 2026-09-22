@@ -277,7 +277,15 @@ class AppSessionIntegrationTest {
                 delay(100)
                 assertTrue(sent.count { it.set == 4 && it.id == 0x0c } > stoppedCount)
                 val fireMark=sent.size
-                session.fireGelOnce()
+                var reportedAt = 0L
+                var reportedSequence = -1
+                val fireSequence = session.fireGelOnce { sequence ->
+                    reportedSequence = sequence
+                    reportedAt = System.nanoTime()
+                }
+                assertEquals(fireSequence, reportedSequence)
+                assertTrue(reportedAt > 0 && System.nanoTime() - reportedAt >= 300_000_000,
+                    "Shot feedback must be sent before the 400 ms lamp cleanup delay")
                 withTimeout(1000) {
                     while (sent.drop(fireMark).none {
                             it.receiver==9 && it.set==0x3f && it.id==0x33 &&

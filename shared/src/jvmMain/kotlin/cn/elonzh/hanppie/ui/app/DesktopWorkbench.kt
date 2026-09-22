@@ -3,9 +3,12 @@ package cn.elonzh.hanppie.ui.app
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -13,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.rememberWindowState
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.rememberLifecycleOwner
@@ -44,6 +48,8 @@ import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.filesDir
 import io.github.vinceglb.filekit.path
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
 import top.yukonga.miuix.kmp.basic.Button
@@ -52,6 +58,8 @@ import top.yukonga.miuix.kmp.basic.Text
 import java.awt.Desktop
 import java.awt.Dimension
 import java.awt.EventQueue
+import java.awt.event.ComponentAdapter
+import java.awt.event.ComponentEvent
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
 import java.io.File
@@ -131,10 +139,25 @@ private fun DesktopWorkbenchWindow(onExit: () -> Unit) {
     )
     val model = holder.model
     val document = holder.document
+    val mediaSettings by model.mediaSettings.collectAsState()
     var confirmExit by remember { mutableStateOf(false) }
     val desktopWindowState = rememberWindowState(width = 1120.dp, height = 658.dp)
+    var windowReady by remember { mutableStateOf(false) }
+    LaunchedEffect(holder.uiPreferencesLoaded) {
+        if (holder.uiPreferencesLoaded) {
+            desktopWindowState.position = restoreDesktopWindowPosition(holder.restoredWindowPosition)
+            windowReady = true
+        }
+    }
+    val windowScope = rememberCoroutineScope()
+    var lastWindowPosition by remember { mutableStateOf(holder.restoredWindowPosition) }
     val wifiSettingsCommand = remember { desktopWifiSettingsCommand() }
-    val shutdown = { holder.shutdown { EventQueue.invokeLater(onExit) } }
+    val shutdown: () -> Unit = {
+        windowScope.launch {
+            lastWindowPosition?.let { holder.saveWindowPosition(it) }
+            holder.shutdown { EventQueue.invokeLater(onExit) }
+        }
+    }
 
     Window(
         onCloseRequest = {
@@ -144,19 +167,39 @@ private fun DesktopWorkbenchWindow(onExit: () -> Unit) {
                 shutdown()
             }
         },
+        visible = windowReady,
         title = "Hanppie",
         icon = painterResource(Res.drawable.hanppie_app_icon),
         state = desktopWindowState,
     ) {
-        DisposableEffect(window) {
+        DisposableEffect(window, windowReady) {
+            var pendingSave: kotlinx.coroutines.Job? = null
+            fun rememberPosition() {
+                if (!windowReady || !window.isShowing || window.placement != WindowPlacement.Floating || window.isMinimized) return
+                val position = cn.elonzh.hanppie.ui.settings.SavedWindowPosition(window.x.toFloat(), window.y.toFloat())
+                lastWindowPosition = position
+                pendingSave?.cancel()
+                pendingSave = windowScope.launch { delay(300); holder.saveWindowPosition(position) }
+            }
+            val positionListener = object : ComponentAdapter() {
+                override fun componentMoved(event: ComponentEvent) = rememberPosition()
+                override fun componentShown(event: ComponentEvent) = rememberPosition()
+            }
+            window.addComponentListener(positionListener)
+            rememberPosition()
             window.minimumSize = Dimension(740, 480)
             val listener = object : WindowAdapter() {
                 override fun windowLostFocus(event: WindowEvent) = model.setForeground(false)
                 override fun windowGainedFocus(event: WindowEvent) = model.setForeground(true)
             }
             window.addWindowFocusListener(listener)
-            onDispose { window.removeWindowFocusListener(listener) }
+            onDispose {
+                pendingSave?.cancel()
+                window.removeComponentListener(positionListener)
+                window.removeWindowFocusListener(listener)
+            }
         }
+        DesktopVideoAspect(window, mediaSettings.videoResolution.width.toDouble() / mediaSettings.videoResolution.height)
         WorkbenchTheme(holder.appearance) {
             Console(
                 model = model,

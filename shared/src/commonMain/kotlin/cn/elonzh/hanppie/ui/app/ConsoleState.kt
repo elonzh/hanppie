@@ -40,6 +40,11 @@ internal data class ConsoleState(
     val scriptStartedAtEpochMillis: Long? = null,
     val scriptFinishedAtEpochMillis: Long? = null,
 ) {
+    val productName: String get() = when (robotProduct.model) {
+        cn.elonzh.hanppie.robot.product.RobotModel.UNKNOWN -> "RoboMaster"
+        cn.elonzh.hanppie.robot.product.RobotModel.ROBOMASTER_S1 -> "RoboMaster S1"
+        cn.elonzh.hanppie.robot.product.RobotModel.ROBOMASTER_EP -> "RoboMaster EP"
+    }
     val status: String get() = statusMessage.resolve()
     val scriptStatus: String get() = scriptMessage.resolve()
     fun canRun(source: String): Boolean = connected && !busy && !scriptRunPhase.mayBeExecuting && source.isNotBlank()

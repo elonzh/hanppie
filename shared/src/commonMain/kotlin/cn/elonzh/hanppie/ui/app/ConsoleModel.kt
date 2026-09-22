@@ -256,6 +256,7 @@ internal class ConsoleModel(
     override fun fireSelected() { if (gelSelected.value) fireGel() else fire() }
     private val videoConsumer = AtomicReference<((ByteArray) -> Unit)?>(null)
     private val audioConsumer = AtomicReference<((ByteArray) -> Unit)?>(null)
+    override val videoFrames = cn.elonzh.hanppie.ui.robot.remote.VideoFrameCache()
     override var videoSink: ((ByteArray) -> Unit)?
         get() = videoConsumer.load()
         set(value) = videoConsumer.store(value)
@@ -281,7 +282,14 @@ internal class ConsoleModel(
             }
         }
     }
+    private val gimbalCentering = cn.elonzh.hanppie.ui.robot.remote.GimbalCentering()
+    override fun recenterGimbal() {
+        if (remoteEnabled.value && isForeground && acceptingWork.load() && !chat.state.value.running && !state.value.busy) {
+            gimbalCentering.start(clock.now().toEpochMilliseconds())
+        }
+    }
     override fun haltRemote() {
+        gimbalCentering.cancel()
         remoteRevision.addAndFetch(1)
         stopFiring()
         cancelPushToTalk()
@@ -297,9 +305,14 @@ internal class ConsoleModel(
     }
     override fun drive(x: Double, y: Double, z: Double, pitch: Double, yaw: Double) {
         if (remoteEnabled.value && acceptingWork.load() && !chat.state.value.running && !state.value.busy) {
-            remoteInput.value = listOf(x,y,z,pitch,yaw)
+            val current = state.value
+            val centered = gimbalCentering.velocity(clock.now().toEpochMilliseconds(), current.gimbal,
+                current.gimbalReceivedAtMillis, listOf(x, y, z, pitch, yaw).any { it != 0.0 })
+            val effectivePitch = centered?.first ?: pitch
+            val effectiveYaw = centered?.second ?: yaw
+            remoteInput.value = listOf(x,y,z,effectivePitch,effectiveYaw)
             cameraYaw.value = session.load()?.cameraYaw
-            runCatching { session.load()?.drive(x, y, z, pitch, yaw, cameraRelative = true) }.onFailure {
+            runCatching { session.load()?.drive(x, y, z, effectivePitch, effectiveYaw, cameraRelative = true) }.onFailure {
                 haltRemote()
                 val message = tr(Res.string.remote_stopped_connection_unresponsive)
                 log(message)
@@ -319,10 +332,9 @@ internal class ConsoleModel(
                     if (gelSelected.value) {
                         val seq = gelFireMutex.withLock {
                             if (!firingInternal.load() || !remoteEnabled.value) return@withLock null
-                            runCatching { s.fireGelOnce() }.getOrNull()
+                            runCatching { s.fireGelOnce { _fireEvents.tryEmit(AmmoType.GEL) } }.getOrNull()
                         }
                         if (seq != null) {
-                            _fireEvents.tryEmit(AmmoType.GEL)
                             log(tr(Res.string.gel_fire_command_sent_seq_value_physical_firing_unconfirmed, seq))
                         } else {
                             break
@@ -367,9 +379,8 @@ internal class ConsoleModel(
             val s = session.load() ?: return@launch
             gelFireMutex.withLock {
                 runCatching {
-                    val sequence = s.fireGelOnce()
+                    val sequence = s.fireGelOnce { _fireEvents.tryEmit(AmmoType.GEL) }
                     log(tr(Res.string.gel_fire_command_sent_seq_value_physical_firing_unconfirmed, sequence))
-                    _fireEvents.tryEmit(AmmoType.GEL)
                 }.onFailure { error ->
                     val message = error.message ?: error::class.simpleName ?: "Unknown error"
                     log(tr(Res.string.error_value, message))
@@ -441,7 +452,7 @@ internal class ConsoleModel(
                 connected = snapshot.connected,
                 address = snapshot.connectedAddress,
                 batteryPercent = snapshot.battery,
-                signalQualityPercent = snapshot.signalQuality,
+                signalQualityRaw = snapshot.signalQuality,
                 script = RobotStatusTool.ScriptRun(
                     id = snapshot.scriptRunId,
                     title = snapshot.scriptTitle,
@@ -743,6 +754,7 @@ internal class ConsoleModel(
     }
 
     private fun connectionLost(candidate: RobotSession, reason: String) {
+        gimbalCentering.cancel()
         remoteEnabled.value = false
         stopFiring()
         remoteInput.value = List(5) { 0.0 }
