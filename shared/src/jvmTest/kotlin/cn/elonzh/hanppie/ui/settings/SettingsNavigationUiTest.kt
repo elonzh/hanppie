@@ -1,11 +1,28 @@
 package cn.elonzh.hanppie.ui.settings
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.test.*
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -13,15 +30,50 @@ import cn.elonzh.hanppie.ui.app.MemorySettingsStore
 import cn.elonzh.hanppie.ui.app.testConsoleModel
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
+import kotlinx.coroutines.runBlocking
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
-import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 @OptIn(ExperimentalTestApi::class)
 class SettingsNavigationUiTest {
+    @Test
+    fun dataDirectoryShowsActualPathAndAllowsRetryAfterFailure() =
+        runDesktopComposeUiTest(width = 393, height = 740) {
+            Localization.initialize("zh", null)
+            var attempts = 0
+            val directory =
+                DataDirectoryAccess("/Users/example/Library/Application Support/cn.elonzh.hanppie") {
+                    attempts++
+                    if (attempts == 1) error("File manager unavailable")
+                }
+            setContent {
+                WorkbenchTheme {
+                    CompositionLocalProvider(LocalDataDirectoryAccess provides directory) {
+                        Column(Modifier.fillMaxWidth().padding(20.dp)) { DataDirectorySetting() }
+                    }
+                }
+            }
+            onNodeWithTag("data-directory-path").assertTextEquals(directory.path)
+                .assertIsDisplayed()
+            snapshot("settings-data-directory", onRoot())
+            onNodeWithTag("open-data-directory").performClick()
+            onNodeWithText("无法打开目录，请复制路径并在文件管理器中打开。").assertIsDisplayed()
+            snapshot("settings-data-directory-narrow", onRoot())
+            onNodeWithTag("open-data-directory").assertIsEnabled().performClick()
+            onNodeWithText("无法打开目录，请复制路径并在文件管理器中打开。").assertDoesNotExist()
+            runOnIdle { assertEquals(2, attempts) }
+        }
+
+    @Test
+    fun dataDirectoryIsAbsentWithoutPlatformAccess() = runDesktopComposeUiTest {
+        setContent { WorkbenchTheme { DataDirectorySetting() } }
+        onNodeWithTag("data-directory-path").assertDoesNotExist()
+        onNodeWithTag("open-data-directory").assertDoesNotExist()
+    }
+
     @Test fun phoneUsesCategoryPagesAndPreservesDraftUntilSave() = runDesktopComposeUiTest(width = 393, height = 740) {
         Localization.initialize("zh", null)
         val store = MemorySettingsStore()

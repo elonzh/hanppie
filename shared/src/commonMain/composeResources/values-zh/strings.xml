@@ -612,4 +612,7 @@
     <string name="chat_reasoning_streaming">思考中…</string>
     <string name="chat_reasoning_expanded">思考过程已展开</string>
     <string name="chat_reasoning_collapsed">思考过程已折叠</string>
+    <string name="data_directory">数据目录</string>
+    <string name="open_data_directory">打开目录</string>
+    <string name="open_data_directory_failed">无法打开目录，请复制路径并在文件管理器中打开。</string>
 </resources>

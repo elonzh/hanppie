@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -13,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
@@ -23,7 +22,13 @@ import androidx.lifecycle.viewmodel.compose.rememberViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.resources.Res
+import cn.elonzh.hanppie.resources.back
+import cn.elonzh.hanppie.resources.could_not_open_wifi_settings
+import cn.elonzh.hanppie.resources.hanppie_app_icon
+import cn.elonzh.hanppie.resources.quit_anyway
+import cn.elonzh.hanppie.resources.quit_hanppie
+import cn.elonzh.hanppie.resources.unsaved_changes_will_be_lost_disconnecting_does_not_guarantee
 import cn.elonzh.hanppie.robot.session.JvmRobotRuntime
 import cn.elonzh.hanppie.ui.chat.createAgentHttpClient
 import cn.elonzh.hanppie.ui.design.WorkbenchDialog
@@ -32,18 +37,27 @@ import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.robot.audio.DesktopLabAudioImporter
 import cn.elonzh.hanppie.ui.robot.audio.DesktopLabAudioPlayer
 import cn.elonzh.hanppie.ui.robot.remote.DesktopSpeakerInput
-import cn.elonzh.hanppie.ui.settings.ModelSettings
+import cn.elonzh.hanppie.ui.settings.DataDirectoryAccess
+import cn.elonzh.hanppie.ui.settings.LocalDataDirectoryAccess
 import cn.elonzh.hanppie.ui.settings.ModelCatalog
 import cn.elonzh.hanppie.ui.settings.ModelProviderPreset
+import cn.elonzh.hanppie.ui.settings.ModelSettings
+import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.filesDir
+import io.github.vinceglb.filekit.path
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.jetbrains.compose.resources.painterResource
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Text
+import java.awt.Desktop
 import java.awt.Dimension
 import java.awt.EventQueue
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
 import java.io.File
 import java.util.Locale
-import org.jetbrains.compose.resources.painterResource
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.Text
 
 private fun createDesktopWorkbenchViewModel(): WorkbenchViewModel {
     val storage = WorkbenchStorage.create()
@@ -96,7 +110,16 @@ private fun desktopWifiSettingsCommand(): List<String>? {
 @Composable
 fun DesktopWorkbench(onExit: () -> Unit) {
     val lifecycleOwner = rememberLifecycleOwner(parent = null)
-    CompositionLocalProvider(LocalLifecycleOwner provides lifecycleOwner) {
+    val dataDirectory = remember {
+        val directory = File(FileKit.filesDir.path).absoluteFile
+        DataDirectoryAccess(directory.path) {
+            withContext(Dispatchers.IO) { Desktop.getDesktop().open(directory) }
+        }
+    }
+    CompositionLocalProvider(
+        LocalLifecycleOwner provides lifecycleOwner,
+        LocalDataDirectoryAccess provides dataDirectory,
+    ) {
         DesktopWorkbenchWindow(onExit)
     }
 }

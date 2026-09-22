@@ -612,4 +612,7 @@
     <string name="chat_reasoning_streaming">Thinking…</string>
     <string name="chat_reasoning_expanded">Reasoning expanded</string>
     <string name="chat_reasoning_collapsed">Reasoning collapsed</string>
+    <string name="data_directory">Data directory</string>
+    <string name="open_data_directory">Open folder</string>
+    <string name="open_data_directory_failed">Could not open the folder. Copy the path and open it in your file manager.</string>
 </resources>
