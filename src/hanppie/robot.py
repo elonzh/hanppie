@@ -942,6 +942,17 @@ class Robot:
             timeout,
         )
 
+    def set_speaker_volume(self, volume: int, *, timeout: float = 1.0) -> RobotAck:
+        clamped = max(0, min(100, int(volume)))
+        return self.request(
+            protocol.HOST_MOBILE,
+            protocol.HOST_CAMERA,
+            protocol.CMDSET_RM,
+            protocol.CMD_RM_SET_SPEAKER_VOLUME,
+            bytes([clamped]),
+            timeout,
+        )
+
     def capture(self, *, timeout: float = 1.0) -> RobotAck:
         return self.request(
             protocol.HOST_MOBILE,

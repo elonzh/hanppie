@@ -68,6 +68,7 @@ internal data class ControlSettings(
 internal data class SavedSettings(
     val model: ModelSettings = ModelSettings(),
     val control: ControlSettings = ControlSettings(),
+    val media: MediaSettings = MediaSettings(),
 )
 
 internal data class UiPreferences(

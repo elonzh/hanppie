@@ -3,6 +3,7 @@ package cn.elonzh.hanppie.robot.session
 import cn.elonzh.hanppie.robot.files.RobotFileService
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.robot.lab.LabUpload
+import cn.elonzh.hanppie.robot.media.VideoResolution
 import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
 import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.product.RobotProduct
@@ -65,7 +66,8 @@ interface RobotSession : AutoCloseable {
     suspend fun fireGelOnce(): Int
     suspend fun playSpeaker(encoded: ByteArray): Int
     fun setLed(red: Int, green: Int, blue: Int, enabled: Boolean)
-    fun media(start: Boolean, audio: Boolean)
+    fun setSpeakerVolume(volume: Int)
+    fun media(start: Boolean, audio: Boolean, resolution: VideoResolution = VideoResolution.R720P)
 }
 
 interface RobotRuntime {

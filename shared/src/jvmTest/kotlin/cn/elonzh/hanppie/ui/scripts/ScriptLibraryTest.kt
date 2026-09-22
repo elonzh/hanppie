@@ -172,8 +172,8 @@ class ScriptLibraryTest {
                 enablePresetSync = true,
             )
             val presets = repo.presets()
-            assertEquals(13, presets.size)
-            assertEquals(13, presets.map { it.id }.distinct().size)
+            assertEquals(12, presets.size)
+            assertEquals(12, presets.map { it.id }.distinct().size)
             presets.forEach {
                 assertTrue(Regex("(?m)^def start\\(\\):$").containsMatchIn(it.source), it.id)
                 assertTrue(it.source.endsWith("\n"), it.id)

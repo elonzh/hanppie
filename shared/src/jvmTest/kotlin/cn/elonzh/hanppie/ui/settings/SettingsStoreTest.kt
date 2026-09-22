@@ -27,6 +27,19 @@ class SettingsStoreTest {
         assertEquals(KeyBinding(ControlKey.G), restored.control.shortcuts[ControlAction.SwitchAmmo])
         assertEquals(KeyBinding(ControlKey.R, shift = true), restored.control.shortcuts[ControlAction.Recording])
         assertEquals(RemoteLedSettings(), restored.control.remoteLeds)
+        assertEquals(MediaSettings(), restored.media)
+    }
+
+    @Test fun customMediaSettingsRoundTrip() {
+        val media = MediaSettings(
+            videoResolution = cn.elonzh.hanppie.robot.media.VideoResolution.R1080P,
+            speakerVolume = 80,
+        )
+        val json = settingsJson.encodeToString(SavedSettings(media = media))
+        val restored = settingsJson.decodeFromString<SavedSettings>(json)
+        assertEquals(media, restored.media)
+        assertEquals(cn.elonzh.hanppie.robot.media.VideoResolution.R1080P, restored.media.videoResolution)
+        assertEquals(80, restored.media.speakerVolume)
     }
 
     @Test fun customMotionAndShortcutSettingsRoundTrip() {

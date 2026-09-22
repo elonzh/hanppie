@@ -18,6 +18,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.koog.prompt.llm.LLModel
+import cn.elonzh.hanppie.robot.media.VideoResolution
 import cn.elonzh.hanppie.ui.design.WorkbenchIconButton
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.ui.app.ConsoleController
@@ -142,6 +143,55 @@ internal fun ModelSettingsContent(model: ConsoleController) {
                 fontSize = 13.sp,
                 color = if (modelTest.success == false) MiuixTheme.colorScheme.error
                 else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            )
+        }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
+internal fun MediaSettingsContent(model: ConsoleController) {
+    val media by model.mediaSettings.collectAsState()
+    val chat by model.chat.state.collectAsState()
+    val settingsBusy by model.settingsBusy.collectAsState()
+    val enabled = !chat.running && !settingsBusy
+
+    SettingsDropdown(
+        label = tr(Res.string.video_resolution),
+        tag = "video-resolution",
+        selected = media.videoResolution.name,
+        values = VideoResolution.entries.map { it.name to it.label },
+    ) { id ->
+        model.settingsMessage.value = null
+        model.mediaSettings.value = media.copy(videoResolution = VideoResolution.valueOf(id))
+    }
+
+    Text(tr(Res.string.speaker_volume), fontSize = 15.sp)
+    Card(
+        modifier = Modifier.fillMaxWidth().testTag("speaker-volume-card"),
+        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(tr(Res.string.speaker_volume_summary), fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                Text("${media.speakerVolume}%", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Slider(
+                value = media.speakerVolume.toFloat(),
+                onValueChange = {
+                    model.settingsMessage.value = null
+                    model.mediaSettings.value = media.copy(speakerVolume = it.roundToInt().coerceIn(0, 100))
+                },
+                valueRange = 0f..100f,
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth().testTag("speaker-volume-slider"),
             )
         }
     }

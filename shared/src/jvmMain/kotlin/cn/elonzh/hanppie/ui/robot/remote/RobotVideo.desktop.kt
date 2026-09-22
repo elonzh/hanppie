@@ -34,6 +34,8 @@ import top.yukonga.miuix.kmp.basic.*
     val recorder = remember { AtomicReference<DesktopVideoRecorder?>(null) }
     val uiScope = rememberCoroutineScope()
     val state by model.state.collectAsState()
+    val mediaSettings by model.mediaSettings.collectAsState()
+    val resolution = mediaSettings.videoResolution
     val requests by controls.requests.collectAsState()
 
     fun finishRecording() {
@@ -53,7 +55,7 @@ import top.yukonga.miuix.kmp.basic.*
         if (!state.connected) return
         captureStatus = tr(Res.string.saving_photo)
         uiScope.launch {
-            val result = withContext(Dispatchers.IO) { runCatching { saveDesktopPhoto(snapshot) } }
+            val result = withContext(Dispatchers.IO) { runCatching { saveDesktopPhoto(snapshot, resolution) } }
             captureStatus = result.fold(
                 { tr(Res.string.photo_saved_to_value, it) },
                 { tr(Res.string.photo_failed_value, it.message ?: it.javaClass.simpleName) })
@@ -62,7 +64,7 @@ import top.yukonga.miuix.kmp.basic.*
     fun toggleRecording() {
         if (!state.connected || !playing) return
         if (recording) finishRecording() else try {
-            recorder.set(DesktopVideoRecorder(withAudio = sound))
+            recorder.set(DesktopVideoRecorder(withAudio = sound, resolution = resolution))
             recording = true
             controls.recording(true)
             captureStatus = tr(Res.string.recording)
@@ -86,7 +88,7 @@ import top.yukonga.miuix.kmp.basic.*
             recorder.getAndSet(null)?.let { active -> thread(name = "hanppie-recorder-finish", isDaemon = true) { runCatching { active.finish() } } }
         }
     }
-    DisposableEffect(playing, state.connected) {
+    DisposableEffect(playing, state.connected, resolution) {
         if (!playing) { frame = null; latestFrame.set(null) }
         status = if (!state.connected) "" else if (playing) tr(Res.string.waiting_for_video) else tr(Res.string.video_off)
         var media: DesktopMedia? = null
@@ -105,10 +107,10 @@ import top.yukonga.miuix.kmp.basic.*
                 } }
                 uiScope.launch {
                     frame = org.jetbrains.skia.Image.makeRaster(
-                        org.jetbrains.skia.ImageInfo(1280,720,org.jetbrains.skia.ColorType.BGRA_8888,org.jetbrains.skia.ColorAlphaType.OPAQUE),
-                        bytes,1280*4).toComposeImageBitmap()
+                        org.jetbrains.skia.ImageInfo(resolution.width, resolution.height, org.jetbrains.skia.ColorType.BGRA_8888, org.jetbrains.skia.ColorAlphaType.OPAQUE),
+                        bytes, resolution.width * 4).toComposeImageBitmap()
                 }
-            }, onStatus = { message -> uiScope.launch { status = message } })
+            }, onStatus = { message -> uiScope.launch { status = message } }, resolution = resolution)
             model.videoSink = media::video
             model.startMedia(false)
         } catch (e: Exception) { status = e.message ?: tr(Res.string.could_not_start_media) }

@@ -38,6 +38,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
 internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifier, onSpeechSettings: (() -> Unit)? = null) {
+    val media by model.mediaSettings.collectAsState()
     val control by model.controlSettings.collectAsState()
     val chat by model.chat.state.collectAsState()
     val settingsBusy by model.settingsBusy.collectAsState()
@@ -102,6 +103,7 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                             val summary = when (category) {
                                 SettingsCategory.GENERAL -> "${tr(Res.string.language)} · ${appearance.settings.nightMode.label()}"
                                 SettingsCategory.MODEL -> tr(Res.string.settings_model_summary)
+                                SettingsCategory.MEDIA -> "${media.videoResolution.label} · ${media.speakerVolume}%"
                                 SettingsCategory.CONTROL -> tr(Res.string.control_settings_summary)
                                 SettingsCategory.LIGHTS -> tr(Res.string.settings_lights_summary)
                                 SettingsCategory.SHORTCUTS -> tr(Res.string.keyboard_shortcuts_summary)
@@ -135,6 +137,7 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                             when (activeCategory) {
                                 SettingsCategory.GENERAL -> GeneralSettingsContent(model, onSpeechSettings)
                                 SettingsCategory.MODEL -> ModelSettingsContent(model)
+                                SettingsCategory.MEDIA -> MediaSettingsContent(model)
                                 SettingsCategory.CONTROL -> ControlSettingsContent(model)
                                 SettingsCategory.LIGHTS -> LightsSettingsContent(model)
                                 SettingsCategory.SHORTCUTS -> ShortcutsSettingsContent(model, capturing) { capturing = it; shortcutFocus.requestFocus() }
@@ -166,6 +169,7 @@ private enum class SettingsCategory(
 ) {
     GENERAL("general", Res.string.general_settings, WorkbenchGlyph.SETTINGS),
     MODEL("model", Res.string.model_service, WorkbenchGlyph.CHAT, canSave = true),
+    MEDIA("media", Res.string.audio_video, WorkbenchGlyph.VIDEO, canSave = true),
     CONTROL("control", Res.string.control, WorkbenchGlyph.CROSSHAIR, canSave = true),
     LIGHTS("lights", Res.string.remote_led_colors, WorkbenchGlyph.RECORD, canSave = true),
     SHORTCUTS("shortcuts", Res.string.keyboard_shortcuts, WorkbenchGlyph.CODE, canSave = true),

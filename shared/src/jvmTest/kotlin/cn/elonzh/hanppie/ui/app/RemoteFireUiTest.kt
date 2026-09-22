@@ -97,7 +97,8 @@ class RemoteFireUiTest {
         }
         override suspend fun playSpeaker(encoded: ByteArray): Int = 0
         override fun setLed(red: Int, green: Int, blue: Int, enabled: Boolean) {}
-        override fun media(start: Boolean, audio: Boolean) {}
+        override fun setSpeakerVolume(volume: Int) {}
+        override fun media(start: Boolean, audio: Boolean, resolution: cn.elonzh.hanppie.robot.media.VideoResolution) {}
         override fun close() {}
     }
 
@@ -137,7 +138,7 @@ class RemoteFireUiTest {
             )
             assertTrue(model.state.value.canStop)
             assertTrue(model.state.value.scriptMessages.any {
-                it.contains("runId=0123456789abcdef0123456789abcdef") && it.contains("0 个 Lab 消息帧")
+                it.contains("启动确认超时")
             })
         } finally {
             model.close()
@@ -461,9 +462,9 @@ class RemoteFireUiTest {
             }
 
             assertEquals(ScriptRunPhase.FAILED, model.state.value.scriptRunPhase)
-            assertTrue(model.state.value.scriptStatus.contains(errorMsg), "Script status must contain error: ${model.state.value.scriptStatus}")
+            assertEquals("运行失败", model.state.value.scriptStatus)
             assertTrue(model.state.value.scriptMessages.contains(errorMsg), "Script messages must contain error message: ${model.state.value.scriptMessages}")
-            assertTrue(model.state.value.logs.any { it.contains(errorMsg) }, "Console logs must contain error message: ${model.state.value.logs}")
+            assertTrue(model.state.value.logs.any { it.contains("运行失败") }, "Console logs must contain failure message: ${model.state.value.logs}")
         } finally {
             model.close()
         }

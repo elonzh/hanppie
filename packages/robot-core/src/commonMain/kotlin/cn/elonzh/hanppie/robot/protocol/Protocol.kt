@@ -96,6 +96,8 @@ object Protocol {
     const val CMD_RM_GAMECTRL_CMD = 0x0a
     const val CMD_RM_MODULE_STATUS_PUSH = 0x12
     const val CMD_RM_WORK_MODE_SET = 0x19
+    const val CMD_RM_SET_SPEAKER_VOLUME = 0x1b
+    const val CMD_RM_GET_SPEAKER_VOLUME = 0x1c
     const val CMD_RM_AUDIO_TO_APP = 0x1d
     const val CMD_RM_SET_AUDIO_STATUS = 0x1e
     const val CMD_RM_WHEEL_SPEED_SET = 0x20

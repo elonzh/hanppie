@@ -1,6 +1,7 @@
 package cn.elonzh.hanppie.ui.robot.remote
 
 import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.robot.media.VideoResolution
 import cn.elonzh.hanppie.ui.i18n.tr
 import java.io.EOFException
 import java.nio.file.Files
@@ -23,6 +24,7 @@ internal class DesktopMedia(
     private val playAudio: Boolean = pcmSink == null,
     executable: String = System.getenv("HANPPIE_FFMPEG") ?: "ffmpeg",
     videoEnabled: Boolean = true,
+    private val resolution: VideoResolution = VideoResolution.R720P,
 ) : AutoCloseable {
     private val active = AtomicBoolean(true)
     private val threads = java.util.concurrent.CopyOnWriteArrayList<Thread>()
@@ -37,14 +39,16 @@ internal class DesktopMedia(
     init {
         try {
             if (videoEnabled) {
+                val scale = "scale=${resolution.width}:${resolution.height}"
+                val frameSize = resolution.width * resolution.height * 4
                 val video = launch(executable, listOf("-probesize","32","-analyzeduration","0","-flags","low_delay",
-                    "-f","h264","-i","pipe:0","-an","-vf","scale=1280:720","-pix_fmt","bgra","-f","rawvideo","pipe:1"))
+                    "-f","h264","-i","pipe:0","-an","-vf",scale,"-pix_fmt","bgra","-f","rawvideo","pipe:1"))
                 writer(video, videoQueue)
                 threads += thread(name = "hanppie-video-output", isDaemon = true) {
                     try {
                         var count = 0
                         while (active.get()) {
-                            val frame = ByteArray(1280*720*4)
+                            val frame = ByteArray(frameSize)
                             var offset = 0
                             while (offset < frame.size) {
                                 val n = video.inputStream.read(frame, offset, frame.size-offset)
@@ -120,12 +124,12 @@ internal class DesktopMedia(
     }
 }
 
-internal fun saveDesktopPhoto(frame: ByteArray): String {
-    require(frame.size == 1280 * 720 * 4)
+internal fun saveDesktopPhoto(frame: ByteArray, resolution: VideoResolution = VideoResolution.R720P): String {
+    require(frame.size == resolution.width * resolution.height * 4)
     val output = desktopMediaPath("Pictures", "jpg")
     val image = org.jetbrains.skia.Image.makeRaster(
-        org.jetbrains.skia.ImageInfo(1280, 720, org.jetbrains.skia.ColorType.BGRA_8888,
-            org.jetbrains.skia.ColorAlphaType.OPAQUE), frame, 1280 * 4)
+        org.jetbrains.skia.ImageInfo(resolution.width, resolution.height, org.jetbrains.skia.ColorType.BGRA_8888,
+            org.jetbrains.skia.ColorAlphaType.OPAQUE), frame, resolution.width * 4)
     val encoded = checkNotNull(image.encodeToData(org.jetbrains.skia.EncodedImageFormat.JPEG, 95))
     try { Files.write(output, encoded.bytes) }
     finally { encoded.close(); image.close() }
@@ -137,6 +141,7 @@ internal class DesktopVideoRecorder(
     private val executable: String = System.getenv("HANPPIE_FFMPEG") ?: "ffmpeg",
     private val output: Path = desktopMediaPath("Movies", "mp4"),
     private val withAudio: Boolean = false,
+    private val resolution: VideoResolution = VideoResolution.R720P,
 ) {
     private val temporary = output.resolveSibling("${output.fileName}.part")
     private val videoTemporary = output.resolveSibling("${output.fileName}.video.part")
@@ -144,7 +149,7 @@ internal class DesktopVideoRecorder(
     private val closing = AtomicBoolean(false)
     private val errors = StringBuilder()
     private val process = ProcessBuilder(executable, "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
-        "-f", "rawvideo", "-pix_fmt", "bgra", "-s", "1280x720", "-r", "30", "-i", "pipe:0", "-an",
+        "-f", "rawvideo", "-pix_fmt", "bgra", "-s", "${resolution.width}x${resolution.height}", "-r", "30", "-i", "pipe:0", "-an",
         "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
         "-f", "mp4", videoTemporary.toString()).start()
     private val audioOutput = if (withAudio) Files.newOutputStream(audioTemporary) else null
@@ -158,7 +163,7 @@ internal class DesktopVideoRecorder(
 
     @Synchronized fun frame(bytes: ByteArray) {
         if (closing.get()) return
-        require(bytes.size == 1280 * 720 * 4)
+        require(bytes.size == resolution.width * resolution.height * 4)
         process.outputStream.write(bytes)
         frames++
     }

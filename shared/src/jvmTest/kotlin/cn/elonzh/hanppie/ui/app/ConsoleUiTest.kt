@@ -1634,14 +1634,14 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.onNodeWithText("我的脚本").assertIsDisplayed()
             rule.onNodeWithText("预置脚本").performScrollTo().assertIsDisplayed()
             snapshot("phone-script-library")
-            rule.onNodeWithContentDescription("script-preset-battery-mood-show").performScrollTo().performClick()
+            rule.onNodeWithContentDescription("script-preset-music-sprinkler").performScrollTo().performClick()
             rule.onNodeWithTag("script-editor").assertIsDisplayed()
             rule.onNodeWithText("Python 3.6.6").assertDoesNotExist()
-            rule.runOnIdle { assertTrue(document.value.source.contains("get_battery_percentage")) }
+            rule.runOnIdle { assertTrue(document.value.source.contains("media_sound_solmization")) }
             rule.onNodeWithTag("script-back").performClick()
             rule.onNodeWithText("替换未保存的脚本？").assertDoesNotExist()
             rule.onNodeWithTag("script-library").assertIsDisplayed()
-            rule.onNodeWithContentDescription("script-preset-battery-mood-show").performScrollTo().performClick()
+            rule.onNodeWithContentDescription("script-preset-music-sprinkler").performScrollTo().performClick()
             snapshot("phone-script-preset-editor")
             rule.onNodeWithTag("script-save").performClick()
             rule.onNodeWithContentDescription("script-name").performTextReplacement("我的电量脚本")

@@ -150,6 +150,11 @@ def test_direct_request_requires_success_ack() -> None:
     assert ack.accepted
     assert connection.duss[-1][3:5] == (0x3F, 0x33)
 
+    vol_ack = robot.set_speaker_volume(50)
+    assert vol_ack.accepted
+    assert connection.duss[-1][3:5] == (0x3F, 0x1B)
+    assert connection.duss[-1][5] == b"\x32"
+
     rejected, _ = make_robot(return_code=5)
     with pytest.raises(RuntimeError, match="rejected with 5"):
         rejected.play_sound(0x107)

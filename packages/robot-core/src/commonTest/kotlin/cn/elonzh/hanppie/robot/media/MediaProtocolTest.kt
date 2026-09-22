@@ -27,4 +27,17 @@ class MediaProtocolTest {
         assertNull(frames.accept(nals[1]))
         assertContentEquals(nals[0] + nals[1], frames.accept(nals[2]))
     }
+
+    @Test
+    fun videoResolutionsMapToExpectedDimensionsAndPayloads() {
+        assertEquals("0403000000", VideoResolution.R720P.payloadHex)
+        assertEquals(1280, VideoResolution.R720P.width)
+        assertEquals(720, VideoResolution.R720P.height)
+        assertEquals("0a03000000", VideoResolution.R1080P.payloadHex)
+        assertEquals(1920, VideoResolution.R1080P.width)
+        assertEquals(1080, VideoResolution.R1080P.height)
+        assertEquals(VideoResolution.R720P, VideoResolution.fromId("720p"))
+        assertEquals(VideoResolution.R1080P, VideoResolution.fromId("1080p"))
+        assertEquals(VideoResolution.R720P, VideoResolution.fromId("unknown"))
+    }
 }

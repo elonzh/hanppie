@@ -80,7 +80,7 @@
     <string name="default_settings_restored">已恢复默认设置</string>
     <string name="restore_defaults">恢复默认</string>
     <string name="restore_default_settings_question">恢复所有默认设置？</string>
-    <string name="restore_default_settings_summary">语言、显示模式、模型服务、控制参数、快捷键和 LED 颜色都会恢复默认值；已保存的 API Key 将被清除。</string>
+    <string name="restore_default_settings_summary">语言、显示模式、模型服务、音视频、控制参数、快捷键和 LED 颜色都会恢复默认值；已保存的 API Key 将被清除。</string>
     <string name="settings_load_failed">读取配置失败，请检查本地 DataStore。</string>
     <string name="settings_save_failed">保存失败，请检查配置与本地 DataStore。</string>
     <string name="speech_services">语音服务</string>
@@ -91,6 +91,16 @@
     <string name="general_settings">通用</string>
     <string name="control">控制</string>
     <string name="control_settings_summary">速度、云台与摇杆</string>
+    <string name="audio_video">音视频</string>
+    <string name="settings_media_summary">视频分辨率与扬声器音量</string>
+    <string name="video_resolution">视频分辨率</string>
+    <string name="video_resolution_summary">图传清晰度，分辨率越高对 Wi-Fi 信号质量要求越高</string>
+    <string name="video_resolution_720p">720p (1280×720)</string>
+    <string name="video_resolution_1080p">1080p (1920×1080)</string>
+    <string name="speaker_volume">扬声器音量</string>
+    <string name="speaker_volume_summary">机载扬声器播放音效与对讲时的音量大小</string>
+    <string name="speaker_volume_value">%1$s%%</string>
+    <string name="speaker_volume_request_failed_value">设置扬声器音量失败：%1$s</string>
     <string name="gimbal_sensitivity">云台灵敏度</string>
     <string name="push_to_talk_sent_packets_value">对讲已发送 · %1$s 个数据包</string>
     <string name="motion_parameters">运动参数 · 1–5 档</string>

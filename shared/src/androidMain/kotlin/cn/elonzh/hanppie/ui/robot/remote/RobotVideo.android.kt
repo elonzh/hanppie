@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.media.AnnexB
+import cn.elonzh.hanppie.robot.media.VideoResolution
 import cn.elonzh.hanppie.ui.app.ConsoleController
 import cn.elonzh.hanppie.ui.design.HanppieDesignTokens
 import cn.elonzh.hanppie.ui.design.WorkbenchGlyph
@@ -47,6 +48,7 @@ internal class RobotDecoder(
     private val audio: Boolean,
     private val report: (String, Boolean) -> Unit,
     private val onRecordingStopped: () -> Unit = {},
+    private val resolution: VideoResolution = VideoResolution.R720P,
 ) : AutoCloseable {
     private val videoQueue = ArrayBlockingQueue<ByteArray>(256)
     private val audioQueue = ArrayBlockingQueue<ByteArray>(64)
@@ -57,7 +59,7 @@ internal class RobotDecoder(
     fun audio(bytes: ByteArray) { if (audio && !audioQueue.offer(bytes)) { audioQueue.poll(); audioQueue.offer(bytes) } }
     @Synchronized fun startRecording(context: Context) {
         check(recorder.get() == null) { tr(Res.string.recording_already_running) }
-        val next = AndroidVideoRecorder(context, audio)
+        val next = AndroidVideoRecorder(context, audio, resolution)
         recorder.set(next)
     }
     @Synchronized fun stopRecording(): String? = recorder.getAndSet(null)?.finish()
@@ -78,7 +80,7 @@ internal class RobotDecoder(
                     if (type == 7) sps = nal
                     if (type == 8) pps = nal
                     if (codec == null && sps != null && pps != null) {
-                        val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, 1280, 720)
+                        val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, resolution.width, resolution.height)
                         format.setByteBuffer("csd-0", ByteBuffer.wrap(sps))
                         format.setByteBuffer("csd-1", ByteBuffer.wrap(pps))
                         format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 2_000_000)
@@ -218,7 +220,11 @@ private class AndroidVideoOutput(private val context: Context) {
     }
 }
 
-private class AndroidVideoRecorder(context: Context, private val withAudio: Boolean) {
+private class AndroidVideoRecorder(
+    context: Context,
+    private val withAudio: Boolean,
+    private val resolution: VideoResolution = VideoResolution.R720P,
+) {
     private data class Sample(val bytes: ByteArray, val timestamp: Long, val flags: Int)
 
     private val output = AndroidVideoOutput(context.applicationContext)
@@ -250,7 +256,7 @@ private class AndroidVideoRecorder(context: Context, private val withAudio: Bool
         val keyFrame = sample.hasNalType(5)
         if (videoTrack < 0) {
             if (!keyFrame || sps == null || pps == null) return
-            val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, 1280, 720).apply {
+            val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, resolution.width, resolution.height).apply {
                 setByteBuffer("csd-0", ByteBuffer.wrap(sps))
                 setByteBuffer("csd-1", ByteBuffer.wrap(pps))
                 setInteger(MediaFormat.KEY_FRAME_RATE, 30)
@@ -445,6 +451,8 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
     var status by remember { mutableStateOf(tr(Res.string.video_off)) }
     var audioStatus by remember { mutableStateOf("") }
     val state by model.state.collectAsState()
+    val mediaSettings by model.mediaSettings.collectAsState()
+    val resolution = mediaSettings.videoResolution
     val requests by controls.requests.collectAsState()
     fun takePhoto() {
         val view = surfaceView ?: return
@@ -492,12 +500,13 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
     LaunchedEffect(requests.robotMicrophone) {
         if (requests.robotMicrophone > 0 && !recording) { sound = !sound; if (sound) playing = true }
     }
-    DisposableEffect(surface, playing, sound, state.connected) {
+    DisposableEffect(surface, playing, sound, state.connected, resolution) {
         status = if (!state.connected) "" else if (playing) tr(Res.string.waiting_for_video) else tr(Res.string.video_off)
         audioStatus = if (sound && state.connected) tr(Res.string.waiting_for_audio) else ""
         val activeDecoder = if (surface != null && playing && state.connected) RobotDecoder(surface!!, sound,
             report = { message, isAudio -> uiScope.launch { if (isAudio) audioStatus = message else status = message } },
-            onRecordingStopped = { uiScope.launch { recording = false; controls.recording(false) } }) else null
+            onRecordingStopped = { uiScope.launch { recording = false; controls.recording(false) } },
+            resolution = resolution) else null
         decoder = activeDecoder
         if (activeDecoder != null) { model.videoSink = activeDecoder::video; model.audioSink = activeDecoder::audio; model.startMedia(sound) }
         onDispose {

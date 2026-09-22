@@ -80,7 +80,7 @@
     <string name="default_settings_restored">Default settings restored</string>
     <string name="restore_defaults">Restore defaults</string>
     <string name="restore_default_settings_question">Restore all defaults?</string>
-    <string name="restore_default_settings_summary">Language, display mode, model service, controls, shortcuts, and LED colors will return to defaults. The saved API key will be cleared.</string>
+    <string name="restore_default_settings_summary">Language, display mode, model service, media, controls, shortcuts, and LED colors will return to defaults. The saved API key will be cleared.</string>
     <string name="settings_load_failed">Could not read saved settings. Check local DataStore.</string>
     <string name="settings_save_failed">Could not save. Check settings and local DataStore.</string>
     <string name="speech_services">Speech services</string>
@@ -91,6 +91,16 @@
     <string name="general_settings">General</string>
     <string name="control">Controls</string>
     <string name="control_settings_summary">Speed, gimbal and joystick</string>
+    <string name="audio_video">Media</string>
+    <string name="settings_media_summary">Video resolution and speaker volume</string>
+    <string name="video_resolution">Video Resolution</string>
+    <string name="video_resolution_summary">Camera stream resolution; higher resolution requires stronger Wi-Fi signal</string>
+    <string name="video_resolution_720p">720p (1280×720)</string>
+    <string name="video_resolution_1080p">1080p (1920×1080)</string>
+    <string name="speaker_volume">Speaker Volume</string>
+    <string name="speaker_volume_summary">Volume level for onboard sound effects and voice talkback</string>
+    <string name="speaker_volume_value">%1$s%%</string>
+    <string name="speaker_volume_request_failed_value">Failed to set speaker volume: %1$s</string>
     <string name="gimbal_sensitivity">Gimbal sensitivity</string>
     <string name="push_to_talk_sent_packets_value">Intercom sent · %1$s packets</string>
     <string name="motion_parameters">Motion parameters · gears 1–5</string>

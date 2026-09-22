@@ -5,6 +5,7 @@ import cn.elonzh.hanppie.robot.files.RobotFileSystem
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.robot.lab.LabController
 import cn.elonzh.hanppie.robot.lab.LabUpload
+import cn.elonzh.hanppie.robot.media.VideoResolution
 import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
 import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.product.RobotProduct
@@ -81,7 +82,10 @@ private class JvmRobotSession(
     override fun setLed(red: Int, green: Int, blue: Int, enabled: Boolean) {
         app.setLed(red, green, blue, enabled)
     }
-    override fun media(start: Boolean, audio: Boolean) = app.media(start, audio)
+    override fun setSpeakerVolume(volume: Int) {
+        app.setSpeakerVolume(volume)
+    }
+    override fun media(start: Boolean, audio: Boolean, resolution: VideoResolution) = app.media(start, audio, resolution)
 
     override fun close() {
         files.close()

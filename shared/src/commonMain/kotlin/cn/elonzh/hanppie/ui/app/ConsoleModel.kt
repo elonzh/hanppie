@@ -72,6 +72,7 @@ import cn.elonzh.hanppie.resources.waiting_for_robot_to_scan_qr
 import cn.elonzh.hanppie.resources.waiting_for_script_start
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
+import cn.elonzh.hanppie.robot.media.VideoResolution
 import cn.elonzh.hanppie.robot.product.RobotProduct
 import cn.elonzh.hanppie.robot.product.RobotProductProtocol
 import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
@@ -169,6 +170,7 @@ internal class ConsoleModel(
         createHttpClient = createAgentHttpClient, clock = clock)
     override val modelCatalogState = modelTester.catalogState
     override val modelTestState = modelTester.state
+    override val mediaSettings = settings.media
     override val controlSettings = settings.control
     override val connectionPreferences = MutableStateFlow(ConnectionPreferences.fresh())
     override val settingsBusy = settings.busy
@@ -180,11 +182,32 @@ internal class ConsoleModel(
     init {
         scope.launch(start = CoroutineStart.UNDISPATCHED) { scriptLibrary.load() }
     }
-    override fun saveSettings() = settings.save()
+    override fun saveSettings() {
+        settings.save()
+        val current = session.load()
+        if (current != null && current.connected) {
+            scope.launch {
+                runCatching { current.setSpeakerVolume(mediaSettings.value.speakerVolume) }
+            }
+        }
+    }
     override fun loadModelCatalog() = modelTester.loadCatalog(modelSettings.value)
     override fun testModelSettings() = modelTester.test(modelSettings.value)
-    override fun restoreDefaultSettings() = settings.restoreDefaults()
-    private data class MediaRequest(val session: RobotSession, val start: Boolean, val audio: Boolean)
+    override fun restoreDefaultSettings() {
+        settings.restoreDefaults()
+        val current = session.load()
+        if (current != null && current.connected) {
+            scope.launch {
+                runCatching { current.setSpeakerVolume(mediaSettings.value.speakerVolume) }
+            }
+        }
+    }
+    private data class MediaRequest(
+        val session: RobotSession,
+        val start: Boolean,
+        val audio: Boolean,
+        val resolution: VideoResolution = VideoResolution.R720P,
+    )
     private data class LedRequest(val session: RobotSession, val color: RobotLedColor?)
     private val mediaRequests = kotlinx.coroutines.channels.Channel<MediaRequest>(16)
     private val ledRequests = kotlinx.coroutines.channels.Channel<LedRequest>(kotlinx.coroutines.channels.Channel.CONFLATED)
@@ -192,7 +215,7 @@ internal class ConsoleModel(
     init {
         mediaScope.launch {
             for (request in mediaRequests) if (request.session.connected) {
-                runCatching { request.session.media(request.start, request.audio) }
+                runCatching { request.session.media(request.start, request.audio, request.resolution) }
                     .onFailure { log(tr(Res.string.media_request_failed_value,it.message)) }
             }
         }
@@ -396,7 +419,9 @@ internal class ConsoleModel(
     }
     override fun startMedia(audio: Boolean) {
         val current = session.load() ?: return
-        if (acceptingWork.load() && mediaRequests.trySend(MediaRequest(current, true, audio)).isFailure) log(tr(Res.string.media_request_queue_is_full))
+        if (acceptingWork.load() && mediaRequests.trySend(MediaRequest(current, true, audio, mediaSettings.value.videoResolution)).isFailure) {
+            log(tr(Res.string.media_request_queue_is_full))
+        }
     }
     override fun stopMedia() {
         videoSink = null; audioSink = null
@@ -661,6 +686,7 @@ internal class ConsoleModel(
         try {
             candidate.connect()
             candidate.safetyStop()
+            runCatching { candidate.setSpeakerVolume(mediaSettings.value.speakerVolume) }
             currentCoroutineContext().ensureActive()
             check(revision == connectionRevision.load()) { tr(Res.string.connection_cancelled) }
             session.store(candidate)

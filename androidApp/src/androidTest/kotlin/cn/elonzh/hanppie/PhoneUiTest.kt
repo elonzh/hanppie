@@ -67,7 +67,7 @@ class PhoneUiTest {
 
     @Test fun systemBackReturnsFromUnmodifiedPresetWithoutDiscardDialog() {
         rule.onNodeWithContentDescription("脚本").performClick()
-        rule.onNodeWithContentDescription("script-preset-battery-mood-show").performScrollTo().performClick()
+        rule.onNodeWithContentDescription("script-preset-music-sprinkler").performScrollTo().performClick()
         rule.onNodeWithTag("script-editor").assertIsDisplayed()
         rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
         rule.onNodeWithTag("script-library").assertIsDisplayed()

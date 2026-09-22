@@ -10,6 +10,7 @@ import cn.elonzh.hanppie.ui.scripts.ScriptAudioLibrary
 import cn.elonzh.hanppie.ui.scripts.ScriptLibrary
 import cn.elonzh.hanppie.ui.settings.ConnectionPreferences
 import cn.elonzh.hanppie.ui.settings.ControlSettings
+import cn.elonzh.hanppie.ui.settings.MediaSettings
 import cn.elonzh.hanppie.ui.settings.ModelSettings
 import cn.elonzh.hanppie.ui.settings.RobotLedColor
 import cn.elonzh.hanppie.ui.speech.SpeechInput
@@ -31,6 +32,7 @@ internal interface ConsoleController : AutoCloseable {
     val modelSettings: MutableStateFlow<ModelSettings>
     val modelCatalogState: MutableStateFlow<ModelCatalogState>
     val modelTestState: MutableStateFlow<ModelTestState>
+    val mediaSettings: MutableStateFlow<MediaSettings>
     val controlSettings: MutableStateFlow<ControlSettings>
     val connectionPreferences: MutableStateFlow<ConnectionPreferences>
     val settingsBusy: MutableStateFlow<Boolean>

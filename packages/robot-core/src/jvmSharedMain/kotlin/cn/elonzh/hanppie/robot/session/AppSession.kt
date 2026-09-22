@@ -2,6 +2,7 @@ package cn.elonzh.hanppie.robot.session
 
 import cn.elonzh.hanppie.robot.lab.LabChannel
 import cn.elonzh.hanppie.robot.media.SpeakerAudio
+import cn.elonzh.hanppie.robot.media.VideoResolution
 import cn.elonzh.hanppie.robot.protocol.AppEnvelope
 import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
 import cn.elonzh.hanppie.robot.protocol.DussFrame
@@ -185,8 +186,13 @@ class AppSession(private val target: RobotTarget,
         check(active.get()) { "机器人未连接" }
         send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_LED_COLOR_SET, RemoteControl.led(red, green, blue, enabled))
     }
-    fun media(start: Boolean, audio: Boolean = false) {
-        if (start) send(Protocol.HOST_CAMERA, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_CAMERA, Protocol.CMD_SET_VIDEO_FORMAT, "0403000000".hexBytes())
+    fun setSpeakerVolume(volume: Int) = synchronized(txLock) {
+        check(active.get()) { "机器人未连接" }
+        val clamped = volume.coerceIn(0, 100)
+        send(Protocol.HOST_CAMERA, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SET_SPEAKER_VOLUME, byteArrayOf(clamped.toByte()))
+    }
+    fun media(start: Boolean, audio: Boolean = false, resolution: VideoResolution = VideoResolution.R720P) {
+        if (start) send(Protocol.HOST_CAMERA, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_CAMERA, Protocol.CMD_SET_VIDEO_FORMAT, resolution.payload)
         for (control in if (start) listOf(1, 2) else listOf(2, 1))
             send(Protocol.HOST_CAMERA, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_STREAM_CTRL, byteArrayOf(control.toByte(), if (start) 1 else 0, 0))
         if (start && audio) send(Protocol.HOST_CAMERA, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SET_AUDIO_STATUS, byteArrayOf(1))

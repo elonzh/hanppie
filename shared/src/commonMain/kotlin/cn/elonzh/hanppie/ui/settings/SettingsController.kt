@@ -31,6 +31,7 @@ internal class SettingsController(
 ) : AutoCloseable {
     val model = MutableStateFlow(runtimeDefaults())
     val control = MutableStateFlow(ControlSettings())
+    val media = MutableStateFlow(MediaSettings())
     val busy = MutableStateFlow(false)
     val message = MutableStateFlow<UiText?>(null)
 
@@ -53,7 +54,7 @@ internal class SettingsController(
     }
 
     fun save() {
-        val snapshot = SavedSettings(model.value, control.value)
+        val snapshot = SavedSettings(model.value, control.value, media.value)
         enqueue(Command.Save(snapshot, Res.string.settings_saved))
     }
 
@@ -105,6 +106,7 @@ internal class SettingsController(
     private fun apply(settings: SavedSettings) {
         model.value = settings.model
         control.value = settings.control
+        media.value = settings.media
     }
 
     override fun close() {

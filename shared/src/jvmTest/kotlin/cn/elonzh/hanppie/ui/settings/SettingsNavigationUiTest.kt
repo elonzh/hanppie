@@ -74,6 +74,30 @@ class SettingsNavigationUiTest {
         } finally { model.close() }
     }
 
+    @Test fun mediaSettingsCanBeSelectedAndSaved() = runDesktopComposeUiTest(width = 1080, height = 740) {
+        Localization.initialize("zh", null)
+        val store = MemorySettingsStore()
+        val model = testConsoleModel(settingsStore = store)
+        try {
+            waitUntil(timeoutMillis = 3_000) { !model.settingsBusy.value }
+            setContent { WorkbenchTheme { Box(Modifier.fillMaxSize()) { SettingsPage(model, Modifier.fillMaxSize().padding(horizontal = 20.dp)) } } }
+            onNodeWithTag("settings-category-media").performClick()
+            onNodeWithTag("settings-detail-media").assertIsDisplayed()
+            onNodeWithContentDescription("video-resolution-selector").assertIsDisplayed()
+            onNodeWithTag("speaker-volume-card").assertIsDisplayed()
+            onNodeWithTag("speaker-volume-slider").assertIsDisplayed()
+            snapshot("settings-desktop-media", onRoot())
+            onNodeWithContentDescription("video-resolution-selector").performClick()
+            onNodeWithContentDescription("video-resolution-R1080P").performClick()
+            onNodeWithTag("settings-save").performClick()
+            waitUntil(timeoutMillis = 3_000) { !model.settingsBusy.value }
+            runOnIdle {
+                assertEquals(cn.elonzh.hanppie.robot.media.VideoResolution.R1080P, model.mediaSettings.value.videoResolution)
+                assertEquals(cn.elonzh.hanppie.robot.media.VideoResolution.R1080P, runBlocking { store.load() }.media.videoResolution)
+            }
+        } finally { model.close() }
+    }
+
     @Test fun largeEnglishPhoneCanNavigateWithoutAccordionOrClippedActions() = runDesktopComposeUiTest(width = 320, height = 640) {
         Localization.initialize("en", null)
         val model = testConsoleModel()
