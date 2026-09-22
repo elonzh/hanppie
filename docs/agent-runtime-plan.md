@@ -16,7 +16,8 @@ Hanppie 的运行时聚合根是 **Agent Session**，不是 Conversation。一�
 1. 每个 Session 的追加式 JSONL 是耐久事实来源；供应商 SSE、token delta、keepalive 和 Koog `StreamFrame` 只属于实时运行通道。
 2. 事件直接保存 Koog `Message`、`MessagePart.Tool.Call`、`LLModel` 和 `AgentExecutionInfo`，不设计平行的消息、工具调用或执行 DTO。
 3. 事件模型沿用 DTEmpower 的 `SessionEvent`、`AgentStartingEvent`、`MessageEvent`、agent 终态事件和 `expectedLastEventId` 游标设计；Hanppie 只补 Session 元数据、人工审批和副作用开始这三类额外事实。
-4. 运行时独立拥有事件目录和 `agent-runtime.db`。应用的 `hanppie.db` 只保存脚本，两者没有共享表、外键、事务或迁移。
+4. 运行时独立拥有事件目录和 `agent-runtime.db`。脚本库使用本地目录树（`DirectoryScriptRepository`），与
+   Agent 运行时完全解耦，两者没有共享存储、事务或交叉依赖。
 5. 当前格式尚未发布，也没有需要保留的历史 Session 数据，因此不实现旧 schema upcaster、Unknown 事件、双写或兼容读取。格式正式发布后，只有存在真实历史数据时才单独设计并验证迁移。
 6. SQLite 只是可删除、可重建的查询投影；任何写命令先提交 JSONL，再更新投影。
 7. 工具副作用前必须先持久化 `ToolCallStartingEvent`。开始后没有匹配的 Koog `MessagePart.Tool.Result`，恢复时只能记为结果未知，禁止自动重放。
@@ -52,10 +53,11 @@ flowchart LR
     JSONL --> PROJECTOR[Session Projector]
     PROJECTOR --> RUNTIMEDB[(agent-runtime.db)]
     RUNTIMEDB --> ADAPTER
-    APPDB[(hanppie.db)]
+    SCRIPTS[(DirectoryScriptRepository<br/>scripts/ & presets/)]
 ```
 
-`hanppie.db` 在图中刻意不连接运行时。两个数据库可以由同一个 composition root 打开，但所有权和生命周期相互独立。`AgentRuntimeStorage` 接收显式数据库路径与事件目录，Hanppie 只是它的一个宿主。
+脚本库在架构上不连接运行时。两者由同一个 composition root (`WorkbenchStorage`) 初始化，但所有权和生命周期完全独立。
+`AgentRuntimeStorage` 接收显式数据库路径与事件目录，Hanppie 只是它的一个宿主。
 
 依赖方向固定为：
 
@@ -186,7 +188,8 @@ flowchart LR
 | `agent_runs` | `runId`、模型快照、开始/完成时间、终态和完整失败信息 |
 | `session_projection_checkpoints` | 每个 Session 的 `lastEventId` 与 `eventCount` |
 
-`hanppie.db` 只包含脚本表。运行时库可以单独关闭、删除并从 JSONL 重建；不能使用应用数据库事务制造跨库原子性，也不能用 `fallbackToDestructiveMigration` 冒充事件迁移。
+脚本库使用文件目录树存储。运行时库可以单独关闭、删除并从 JSONL 重建；不能使用外部存储事务制造跨系统原子性，也不能用
+`fallbackToDestructiveMigration` 冒充事件迁移。
 
 投影流程：
 
@@ -317,13 +320,13 @@ Hanppie 的差异只有机器人安全所需的审批和副作用开始事件，
 
 ## 11. 包与实施顺序
 
-| 路径 | 职责 |
-| --- | --- |
-| `agent/runtime` | Session events、Event Store、独立 Room 投影、恢复和存储生命周期 |
-| `agent/provider` | provider preset、模型目录和配置测试；不复制 Koog 模型/消息 DTO |
-| `agent/tools` | 具名的 class-based Koog tools、审批策略和 robot-core 适配 |
-| `ui/chat` | 对话产品展示与当前应用适配器 |
-| `ui/scripts` | 应用的 `hanppie.db` 与脚本 repository，不保存 Session |
+| 路径               | 职责                                              |
+|------------------|-------------------------------------------------|
+| `agent/runtime`  | Session events、Event Store、独立 Room 投影、恢复和存储生命周期 |
+| `agent/provider` | provider preset、模型目录和配置测试；不复制 Koog 模型/消息 DTO    |
+| `agent/tools`    | 具名的 class-based Koog tools、审批策略和 robot-core 适配  |
+| `ui/chat`        | 对话产品展示与当前应用适配器                                  |
+| `ui/scripts`     | 基于本地文件目录树的脚本 repository，不保存 Session             |
 
 实施顺序：
 
@@ -343,5 +346,5 @@ Hanppie 的差异只有机器人安全所需的审批和副作用开始事件，
 - `StreamFrame`、SSE 和 token delta 不出现在 Session Event Store；
 - 工具开始后崩溃，恢复只产生结果未知的 Koog Tool Result，不重放副作用；
 - API Key、Authorization、完整 provider body 不进入事件、投影或 UI；
-- `hanppie.db` 和 `agent-runtime.db` 可分别打开、关闭和验证；
+- `DirectoryScriptRepository` 和 `agent-runtime.db` 可分别初始化、关闭和独立验证；
 - JVM 运行时/ChatAgent 测试、Android 编译与 lint 分层通过；真实供应商和实机机器人验证仍需显式环境与授权。
