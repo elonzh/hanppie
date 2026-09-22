@@ -1,5 +1,8 @@
 package cn.elonzh.hanppie.agent.runtime
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.charset.StandardCharsets
@@ -11,9 +14,6 @@ import java.nio.file.StandardOpenOption.WRITE
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
 
 /** File-ordered Session event log following the same cursor contract used by DTEmpower. */
 internal class JsonlSessionEventStore(private val directory: Path) : SessionEventStore {
@@ -21,6 +21,16 @@ internal class JsonlSessionEventStore(private val directory: Path) : SessionEven
 
     init {
         Files.createDirectories(directory)
+        // Upgrades require all old application processes to be stopped first.
+        withDirectoryLock {
+            Files.list(directory).use { paths ->
+                paths.filter {
+                    validId(it.fileName.toString().removeSuffix(".lock")) &&
+                            it.fileName.toString().endsWith(".lock") && Files.isRegularFile(it)
+                }
+                    .forEach { Files.deleteIfExists(it) }
+            }
+        }
     }
 
     override suspend fun append(sessionId: String, expectedLastEventId: String?, event: SessionEvent) =
@@ -68,7 +78,7 @@ internal class JsonlSessionEventStore(private val directory: Path) : SessionEven
     override suspend fun delete(sessionId: String) = withSessionLock(sessionId) {
         Files.deleteIfExists(path(sessionId))
         Files.deleteIfExists(corruptTailPath(sessionId))
-        // Keep the lock file so contenders never synchronize on different POSIX inodes.
+        // The directory lock survives session deletion, preserving its inode for all contenders.
         Unit
     }
 
@@ -131,14 +141,18 @@ internal class JsonlSessionEventStore(private val directory: Path) : SessionEven
     private suspend fun <T> withSessionLock(sessionId: String, action: () -> T): T =
         withContext(Dispatchers.IO) {
             require(validId(sessionId)) { "Invalid session id" }
-            val lockFile = lockPath(sessionId).toAbsolutePath().normalize()
-            PROCESS_LOCKS.computeIfAbsent(lockFile) { ReentrantLock() }.withLock {
-                FileChannel.open(lockFile, CREATE, WRITE).use { channel -> channel.lock().use { action() } }
-            }
+            withDirectoryLock(action)
         }
 
+    private fun <T> withDirectoryLock(action: () -> T): T {
+        val lockFile = directory.toRealPath().resolve(LOCK_FILE)
+        return PROCESS_LOCKS.computeIfAbsent(lockFile) { ReentrantLock() }.withLock {
+            FileChannel.open(lockFile, CREATE, WRITE)
+                .use { channel -> channel.lock().use { action() } }
+        }
+    }
+
     private fun path(sessionId: String) = directory.resolve(sessionId + SUFFIX)
-    private fun lockPath(sessionId: String) = directory.resolve(sessionId + LOCK_SUFFIX)
     private fun corruptTailPath(sessionId: String) = directory.resolve(sessionId + CORRUPT_TAIL_SUFFIX)
     private fun validId(value: String) = ID.matches(value)
 
@@ -146,7 +160,7 @@ internal class JsonlSessionEventStore(private val directory: Path) : SessionEven
         val PROCESS_LOCKS = ConcurrentHashMap<Path, ReentrantLock>()
         val ID = Regex("[0-9a-fA-F-]{36}")
         const val SUFFIX = ".jsonl"
-        const val LOCK_SUFFIX = ".lock"
+        const val LOCK_FILE = ".sessions.lock"
         const val CORRUPT_TAIL_SUFFIX = ".jsonl.tail.corrupt"
     }
 }

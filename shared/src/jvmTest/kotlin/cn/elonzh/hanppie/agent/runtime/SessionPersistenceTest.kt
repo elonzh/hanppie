@@ -8,19 +8,87 @@ import androidx.room3.Room
 import cn.elonzh.hanppie.ui.scripts.DirectoryScriptRepository
 import cn.elonzh.hanppie.ui.scripts.StoredScript
 import cn.elonzh.hanppie.ui.settings.ModelSettings
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import java.nio.file.StandardOpenOption.APPEND
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
-import kotlinx.coroutines.runBlocking
 
 class SessionPersistenceTest {
     private val executionInfo = AgentExecutionInfo(null, "test")
     private val model = ModelSettings(apiKey = "unused").llModel
+
+    @Test
+    fun sessionChurnAndLegacyCleanupKeepOneStableLock() = runBlocking {
+        val directory = Files.createTempDirectory("hanppie-session-locks-")
+        val existingId = "11111111-1111-1111-1111-111111111111"
+        try {
+            val first = SessionCreatedEvent("event-1", 1, "保留")
+            JsonlSessionEventStore(directory).append(existingId, null, first)
+            val lock = directory.resolve(".sessions.lock")
+            val identity =
+                Files.readAttributes(lock, java.nio.file.attribute.BasicFileAttributes::class.java)
+                    .fileKey()
+            Files.createFile(directory.resolve("$existingId.lock"))
+            Files.createFile(directory.resolve("22222222-2222-2222-2222-222222222222.lock"))
+            val unrelated = directory.resolve("unrelated.lock")
+            Files.writeString(unrelated, "keep")
+            val store = JsonlSessionEventStore(directory)
+            assertEquals(listOf(first), store.read(existingId).events)
+            repeat(20) {
+                val id = java.util.UUID.randomUUID().toString()
+                store.read(id)
+                store.append(id, null, SessionCreatedEvent("created", 1, "临时"))
+                store.delete(id)
+            }
+            store.delete(existingId)
+            assertEquals(emptyList(), store.sessionIds())
+            assertEquals("keep", Files.readString(unrelated))
+            assertEquals(
+                setOf(".sessions.lock", "unrelated.lock"),
+                Files.list(directory)
+                    .use { paths -> paths.map { it.fileName.toString() }.toList().toSet() })
+            assertEquals(
+                identity,
+                Files.readAttributes(lock, java.nio.file.attribute.BasicFileAttributes::class.java)
+                    .fileKey()
+            )
+        } finally {
+            directory.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun competingStoreInstancesCannotBothAppendAtTheSameCursor() = runBlocking {
+        val directory = Files.createTempDirectory("hanppie-session-concurrent-")
+        val sessionId = "33333333-3333-3333-3333-333333333333"
+        try {
+            val stores = List(8) { JsonlSessionEventStore(directory) }
+            val results = stores.mapIndexed { index, store ->
+                async {
+                    try {
+                        store.append(
+                            sessionId,
+                            null,
+                            SessionCreatedEvent("event-$index", 1, "竞争")
+                        )
+                        true
+                    } catch (_: SessionCursorConflictException) {
+                        false
+                    }
+                }
+            }.awaitAll()
+            assertEquals(1, results.count { it })
+            assertEquals(1, stores.first().read(sessionId).events.size)
+        } finally {
+            directory.toFile().deleteRecursively()
+        }
+    }
 
     @Test
     fun uncommittedJsonlTailIsQuarantinedBeforeNextAppend() = runBlocking {

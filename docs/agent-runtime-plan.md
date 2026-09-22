@@ -168,7 +168,7 @@ flowchart LR
 写入契约与 DTEmpower 一致：
 
 1. 每个 store 在 append 前读取最后事件 ID；调用者必须提供 `expectedLastEventId`。
-2. store 在进程内锁与 `<session-id>.lock` 文件锁内重新校验游标。
+2. store 在进程内锁与文件锁内重新校验游标；锁的粒度和生命周期见 [当前架构](architecture.md)。
 3. 同一个 `eventId` 和完全相同内容重复写入视为幂等；相同 ID 不同内容立即报冲突。
 4. 一行只包含一个完整 UTF-8 JSON 对象，并以 `\n` 作为提交边界。
 5. 写完整行后调用 `FileChannel.force(true)`。
