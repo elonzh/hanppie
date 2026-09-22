@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "25"
           cache: gradle
       - name: Build and lint Android application
         run: ./gradlew :androidApp:assembleDebug :androidApp:lintDebug
@@ -37,7 +37,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "25"
           cache: gradle
       - name: Test and build desktop application
         shell: bash

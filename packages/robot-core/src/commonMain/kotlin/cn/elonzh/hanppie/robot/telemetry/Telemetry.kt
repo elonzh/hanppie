@@ -11,6 +11,20 @@ import cn.elonzh.hanppie.robot.protocol.u16
 data class MotionTelemetry(val batteryPercent: Int?, val headingLike: Float, val raw: List<Float>)
 data class LabMessage(val type: Int, val level: Int, val text: String)
 
+data class ChassisAttitude(val yawDegrees: Float, val pitchDegrees: Float, val rollDegrees: Float)
+/** Native ESC order: front right, front left, rear left, rear right; raw motor signs are preserved. */
+data class WheelTelemetry(val rpm: List<Int>, val anglesDegrees: List<Float>)
+
+/** Read-only topics verified on the native App session; see the dated homepage validation record. */
+internal object ChassisSubscriptions {
+    val topics = listOf(13 to 0x000200096b986306L, 14 to 0x00020009c14cb7c5L)
+    fun addPayload(messageId: Int, uid: Long) = ByteArray(15).apply {
+        this[0] = 2; this[1] = messageId.toByte(); this[4] = 1
+        repeat(8) { this[5 + it] = (uid ushr (it * 8)).toByte() }
+        put16(13, 10)
+    }
+}
+
 /** SDK GimbalPosSubject wire angles; ground reference is not a calibrated world frame. */
 data class GimbalTelemetry(
     val groundYawDegrees: Double, val groundPitchDegrees: Double,
@@ -34,6 +48,27 @@ internal object GimbalSubscription {
 }
 
 object Telemetry {
+    private fun topic(frame: DussFrame, message: Int, length: Int): ByteArray? = frame.payload.takeIf {
+        frame.valid && frame.set == Protocol.CMDSET_VIRTUAL_BUS && frame.id == Protocol.CMD_VBUS_DATA_ANALYSIS &&
+            it.size == length && it.u8(0) == 0 && it.u8(1) == message
+    }
+
+    fun chassisAttitude(frame: DussFrame): ChassisAttitude? {
+        val p = topic(frame, 13, 14) ?: return null
+        fun float(offset: Int) = Float.fromBits(p.u8(offset) or (p.u8(offset + 1) shl 8) or
+            (p.u8(offset + 2) shl 16) or (p.u8(offset + 3) shl 24))
+        val angles = listOf(float(2), float(6), float(10))
+        if (angles.any { !it.isFinite() || it !in -180f..180f }) return null
+        return ChassisAttitude(angles[0], angles[1], angles[2])
+    }
+
+    fun wheels(frame: DussFrame): WheelTelemetry? {
+        val p = topic(frame, 14, 38) ?: return null
+        val rpm = List(4) { p.u16(2 + it * 2).toShort().toInt() }
+        val angles = List(4) { p.u16(10 + it * 2) }
+        if (rpm.any { it !in -8192..8191 } || angles.any { it > 32767 }) return null
+        return WheelTelemetry(rpm, angles.map { it * 360f / 32768f })
+    }
     /** RoboMaster App Wi-Fi quality push (cmdset 0x07, cmdid 0x09); the value is not dBm. */
     fun wifiSignalQuality(frame: DussFrame): Int? {
         if (!frame.valid || frame.set != Protocol.CMDSET_WIFI || frame.id != Protocol.CMD_WIFI_AP_PUSH_RSSI || frame.payload.isEmpty()) return null

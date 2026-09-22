@@ -48,6 +48,7 @@ internal class RobotDecoder(
     private val audio: Boolean,
     private val report: (String, Boolean) -> Unit,
     private val onRecordingStopped: () -> Unit = {},
+    private val onVideoFrame: () -> Unit = {},
     private val resolution: VideoResolution = VideoResolution.R720P,
 ) : AutoCloseable {
     private val videoQueue = ArrayBlockingQueue<ByteArray>(256)
@@ -84,7 +85,11 @@ internal class RobotDecoder(
                         format.setByteBuffer("csd-0", ByteBuffer.wrap(sps))
                         format.setByteBuffer("csd-1", ByteBuffer.wrap(pps))
                         format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 2_000_000)
-                        codec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC).apply { configure(format, surface, null, 0); start() }
+                        codec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC).apply {
+                            configure(format, surface, null, 0)
+                            setOnFrameRenderedListener({ _, _, _ -> if (active.get()) onVideoFrame() }, android.os.Handler(android.os.Looper.getMainLooper()))
+                            start()
+                        }
                     }
                     val frame = units.accept(nal) ?: continue
                     val decoder = codec ?: continue
@@ -439,6 +444,7 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
 }
 
 @Composable internal actual fun RobotVideo(model: ConsoleController, controls: RemoteMediaController, modifier: Modifier) {
+    val preview = LocalVideoPreview.current
     val context = LocalContext.current.applicationContext
     val uiScope = rememberCoroutineScope()
     var surface by remember { mutableStateOf<Surface?>(null) }
@@ -495,21 +501,27 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
             }
         }
     }
+    LaunchedEffect(preview) {
+        if (preview) { if (recording) toggleRecording(); sound = false; playing = true }
+    }
     LaunchedEffect(requests.photo) { if (requests.photo > 0) takePhoto() }
     LaunchedEffect(requests.recording) { if (requests.recording > 0) toggleRecording() }
     LaunchedEffect(requests.robotMicrophone) {
         if (requests.robotMicrophone > 0 && !recording) { sound = !sound; if (sound) playing = true }
     }
     DisposableEffect(surface, playing, sound, state.connected, resolution) {
+        controls.videoReady(false)
         status = if (!state.connected) "" else if (playing) tr(Res.string.waiting_for_video) else tr(Res.string.video_off)
         audioStatus = if (sound && state.connected) tr(Res.string.waiting_for_audio) else ""
         val activeDecoder = if (surface != null && playing && state.connected) RobotDecoder(surface!!, sound,
             report = { message, isAudio -> uiScope.launch { if (isAudio) audioStatus = message else status = message } },
             onRecordingStopped = { uiScope.launch { recording = false; controls.recording(false) } },
+            onVideoFrame = { controls.videoReady(true) },
             resolution = resolution) else null
         decoder = activeDecoder
         if (activeDecoder != null) { model.videoSink = activeDecoder::video; model.audioSink = activeDecoder::audio; model.startMedia(sound) }
         onDispose {
+            controls.videoReady(false)
             if (decoder === activeDecoder) decoder = null
             recording = false
             controls.recording(false)
@@ -525,7 +537,7 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
                 override fun surfaceDestroyed(holder: SurfaceHolder) { surface = null }
             })
         } }, modifier = Modifier.fillMaxSize())
-        Column(Modifier.align(Alignment.TopEnd).padding(end = HanppieDesignTokens.RemoteEdgePadding,
+        if (!preview) Column(Modifier.align(Alignment.TopEnd).padding(end = HanppieDesignTokens.RemoteEdgePadding,
             top = HanppieDesignTokens.RemoteEdgePadding), horizontalAlignment = Alignment.End) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HudIconButton(if(playing) tr(Res.string.stop_video) else tr(Res.string.start_video), if(playing) WorkbenchGlyph.VIDEO else WorkbenchGlyph.VIDEO_OFF, state.connected) { playing = !playing }

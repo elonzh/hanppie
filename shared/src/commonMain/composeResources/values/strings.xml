@@ -615,4 +615,19 @@
     <string name="data_directory">Data directory</string>
     <string name="open_data_directory">Open folder</string>
     <string name="open_data_directory_failed">Could not open the folder. Copy the path and open it in your file manager.</string>
+    <string name="scene_accessibility">Interactive 3D robot illustration. Arrow keys rotate; plus and minus zoom; Home resets the view.</string>
+    <string name="scene_rotate_left">Rotate view left</string>
+    <string name="scene_rotate_right">Rotate view right</string>
+    <string name="scene_zoom_in">Zoom in</string>
+    <string name="scene_zoom_out">Zoom out</string>
+    <string name="scene_unavailable">3D preview unavailable · connection is still available</string>
+    <string name="scene_loading">Preparing your robot…</string>
+    <string name="scene_preview">Appearance preview · connect to see robot status</string>
+    <string name="scene_pose_waiting">Illustration · waiting for gimbal pose</string>
+    <string name="scene_pose_live">Illustration · gimbal pose updating</string>
+    <string name="scene_pose_stale">Last gimbal pose · updates paused</string>
+    <string name="scene_static">Appearance illustration · no joint pose available</string>
+    <string name="scene_retry">Reload preview</string>
+    <string name="scene_video_preparing">Preparing video…</string>
+    <string name="scene_video_retry">Video unavailable. Please try again.</string>
 </resources>

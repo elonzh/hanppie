@@ -23,6 +23,8 @@ import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.*
 
 @Composable internal actual fun RobotVideo(model: ConsoleController, controls: RemoteMediaController, modifier: Modifier) {
+    val preview = LocalVideoPreview.current
+    val hudAlpha = LocalVideoHudAlpha.current
     var playing by remember { mutableStateOf(true) }
     var sound by remember { mutableStateOf(false) }
     var frame by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -73,6 +75,9 @@ import top.yukonga.miuix.kmp.basic.*
             captureStatus = tr(Res.string.recording_failed_value, error.message ?: error.javaClass.simpleName)
         }
     }
+    LaunchedEffect(preview) {
+        if (preview) { finishRecording(); sound = false; playing = true }
+    }
     LaunchedEffect(requests.photo) { if (requests.photo > 0) takePhoto() }
     LaunchedEffect(requests.recording) { if (requests.recording > 0) toggleRecording() }
     LaunchedEffect(requests.robotMicrophone) {
@@ -89,11 +94,15 @@ import top.yukonga.miuix.kmp.basic.*
         }
     }
     DisposableEffect(playing, state.connected, resolution) {
+        controls.videoReady(false)
         if (!playing) { frame = null; latestFrame.set(null) }
         status = if (!state.connected) "" else if (playing) tr(Res.string.waiting_for_video) else tr(Res.string.video_off)
+        var decodedFrames = 0
+        val decoderActive = java.util.concurrent.atomic.AtomicBoolean(true)
         var media: DesktopMedia? = null
         if (playing && state.connected) try {
             media = DesktopMedia(false, onVideo = { bytes ->
+                if (!decoderActive.get()) return@DesktopMedia
                 latestFrame.set(bytes)
                 recorder.get()?.let { active -> runCatching { active.frame(bytes) }.onFailure { error ->
                     if (recorder.compareAndSet(active, null)) {
@@ -106,15 +115,17 @@ import top.yukonga.miuix.kmp.basic.*
                     }
                 } }
                 uiScope.launch {
+                    if (!decoderActive.get()) return@launch
                     frame = org.jetbrains.skia.Image.makeRaster(
                         org.jetbrains.skia.ImageInfo(resolution.width, resolution.height, org.jetbrains.skia.ColorType.BGRA_8888, org.jetbrains.skia.ColorAlphaType.OPAQUE),
                         bytes, resolution.width * 4).toComposeImageBitmap()
+                    if (++decodedFrames >= 8) controls.videoReady(true)
                 }
             }, onStatus = { message -> uiScope.launch { status = message } }, resolution = resolution)
             model.videoSink = media::video
             model.startMedia(false)
         } catch (e: Exception) { status = e.message ?: tr(Res.string.could_not_start_media) }
-        onDispose { if (media != null) { model.stopMedia(); media.close() } }
+        onDispose { decoderActive.set(false); controls.videoReady(false); if (media != null) { model.stopMedia(); media.close() } }
     }
     DisposableEffect(playing, sound, state.connected) {
         audioStatus = ""
@@ -131,7 +142,7 @@ import top.yukonga.miuix.kmp.basic.*
         Box(Modifier.fillMaxSize()) {
             frame?.let { Image(it,tr(Res.string.robot_live_video),Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
         }
-        Column(Modifier.align(Alignment.TopEnd).padding(end = HanppieDesignTokens.RemoteEdgePadding,
+        if (!preview) Column(Modifier.align(Alignment.TopEnd).graphicsLayer { alpha = hudAlpha }.padding(end = HanppieDesignTokens.RemoteEdgePadding,
             top = HanppieDesignTokens.RemoteEdgePadding), horizontalAlignment = Alignment.End) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HudIconButton(if(playing) tr(Res.string.stop_video) else tr(Res.string.start_video), if(playing) WorkbenchGlyph.VIDEO else WorkbenchGlyph.VIDEO_OFF, state.connected) { playing = !playing }

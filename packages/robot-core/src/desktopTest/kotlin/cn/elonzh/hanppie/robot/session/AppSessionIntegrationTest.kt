@@ -193,6 +193,11 @@ class AppSessionIntegrationTest {
                 withTimeout(2000) { while (received.isEmpty()) delay(10) }
                 assertTrue(sent.all { it.valid })
                 assertTrue(sent.any { it.set == 0x48 && it.id == 3 })
+                // The homepage receives pose without entering remote mode or sending actuator speeds.
+                assertTrue(sent.any { it.set == 0x48 && it.id == 3 &&
+                    it.payload.contentEquals(byteArrayOf(2, 10, 0, 0, 1, 0x97.toByte(), 0x3c, 0x9b.toByte(), 0xf7.toByte(), 9, 0, 2, 0, 10, 0)) })
+                assertFalse(sent.any { (it.set == 4 && it.id == 0x0c) || (it.set == 0x3f && it.id == 0x21) })
+
                 assertTrue(sent.any { it.receiver == 0x28 && it.set == 0x3f && it.id == 0xfe && it.payload.contentEquals(byteArrayOf(0)) })
                 session.send(0x28, 0xc0, 0x3f, 0xfe, byteArrayOf(0, 1))
                 session.send(0x28, 0x00, 0x3f, 0x12, byteArrayOf(2,

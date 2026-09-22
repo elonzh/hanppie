@@ -42,6 +42,13 @@ tasks:
     cmds:
       - '{{if eq OS "windows"}}.\gradlew.bat{{else}}./gradlew{{end}} :packages:robot-core:desktopTest :shared:jvmTest :desktopApp:classes'
 
+  scene:test:
+    desc: Run real GPU scene and responsive rendering tests on a graphical desktop
+    env:
+      HANPPIE_GPU_TESTS: "1"
+    cmds:
+      - '{{if eq OS "windows"}}.\gradlew.bat{{else}}./gradlew{{end}} :shared:jvmTest --tests "*RobotSceneUiTest"'
+
   desktop:run:
     desc: Run the Compose desktop application
     cmds:

@@ -6,13 +6,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.rememberWindowState
@@ -134,9 +132,7 @@ private fun DesktopWorkbenchWindow(onExit: () -> Unit) {
     val model = holder.model
     val document = holder.document
     var confirmExit by remember { mutableStateOf(false) }
-    val desktopWindowState = rememberWindowState(width = 1040.dp, height = 760.dp)
-    var cockpitActive by remember { mutableStateOf(false) }
-    var workbenchSize by remember { mutableStateOf(desktopWindowState.size) }
+    val desktopWindowState = rememberWindowState(width = 1120.dp, height = 658.dp)
     val wifiSettingsCommand = remember { desktopWifiSettingsCommand() }
     val shutdown = { holder.shutdown { EventQueue.invokeLater(onExit) } }
 
@@ -153,7 +149,7 @@ private fun DesktopWorkbenchWindow(onExit: () -> Unit) {
         state = desktopWindowState,
     ) {
         DisposableEffect(window) {
-            window.minimumSize = Dimension(320, 480)
+            window.minimumSize = Dimension(740, 480)
             val listener = object : WindowAdapter() {
                 override fun windowLostFocus(event: WindowEvent) = model.setForeground(false)
                 override fun windowGainedFocus(event: WindowEvent) = model.setForeground(true)
@@ -161,23 +157,10 @@ private fun DesktopWorkbenchWindow(onExit: () -> Unit) {
             window.addWindowFocusListener(listener)
             onDispose { window.removeWindowFocusListener(listener) }
         }
-        LaunchedEffect(cockpitActive) {
-            if (cockpitActive) {
-                workbenchSize = desktopWindowState.size
-                window.minimumSize = Dimension(740, 480)
-                if (workbenchSize.width < 900.dp || workbenchSize.width < workbenchSize.height) {
-                    desktopWindowState.size = DpSize(1040.dp, 700.dp)
-                }
-            } else {
-                window.minimumSize = Dimension(320, 480)
-                desktopWindowState.size = workbenchSize
-            }
-        }
         WorkbenchTheme(holder.appearance) {
             Console(
                 model = model,
                 document = document,
-                onCockpitChanged = { cockpitActive = it },
                 onImport = holder::importScript,
                 onExport = holder::exportScript,
                 onImportAudio = holder::importScriptAudio,

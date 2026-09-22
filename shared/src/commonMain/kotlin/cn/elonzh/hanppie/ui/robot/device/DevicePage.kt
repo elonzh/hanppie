@@ -1,138 +1,106 @@
 package cn.elonzh.hanppie.ui.robot.device
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.robot.product.RobotModel
 import cn.elonzh.hanppie.ui.app.ConsoleController
 import cn.elonzh.hanppie.ui.app.ConsoleState
-import cn.elonzh.hanppie.ui.design.HanppieBrandAssets
 import cn.elonzh.hanppie.ui.design.WorkbenchGlyph
 import cn.elonzh.hanppie.ui.design.WorkbenchIcon
 import cn.elonzh.hanppie.ui.i18n.tr
-import cn.elonzh.hanppie.robot.product.RobotModel
-import org.jetbrains.compose.resources.painterResource
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import cn.elonzh.hanppie.ui.robot.scene.RobotScene
+import cn.elonzh.hanppie.ui.robot.scene.RobotSceneState
+import kotlinx.coroutines.delay
+import kotlin.time.Clock
+import top.yukonga.miuix.kmp.basic.Text
 
+/** Home-only visual vocabulary; other workbench pages retain their component theme. */
 @Composable
 internal fun DevicePage(model: ConsoleController, state: ConsoleState, compact: Boolean, modifier: Modifier,
-    onConnectionGuide: () -> Unit, onRemote: () -> Unit) {
-    val colors = MiuixTheme.colorScheme
-    val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
-    LazyColumn(modifier.fillMaxWidth().testTag("device-page"), verticalArrangement = Arrangement.spacedBy(20.dp),
-        contentPadding = PaddingValues(bottom = 24.dp)) {
-        item {
-            Card(Modifier.fillMaxWidth(), insideMargin = PaddingValues(0.dp),
-                colors = CardDefaults.defaultColors(color = colors.surfaceContainer)) {
-                if (compact) Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                    DeviceIdentity(state, Modifier.fillMaxWidth(), compact = true)
-                    if (!state.connecting) DeviceActions(model, state, onConnectionGuide, onRemote)
-                } else Row(Modifier.padding(32.dp), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(32.dp)) {
-                    DeviceIdentity(state, Modifier.weight(1f), compact = false)
-                    if (!state.connecting) Column(Modifier.width(260.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                        DeviceActions(model, state, onConnectionGuide, onRemote)
-                    }
-                }
+    onRemote: () -> Unit, onConnectionDetails: () -> Unit = {},
+    showScene: Boolean = true, preparing: Boolean = false, preparationFailed: Boolean = false,
+    onNavigate: (Int) -> Unit = {}) {
+    val preferences by model.connectionPreferences.collectAsState()
+    val connectionMode = preferences.robots.firstOrNull { it.ip == state.connectedAddress }?.mode ?: cn.elonzh.hanppie.ui.settings.ConnectionMode.UNKNOWN
+    var now by remember { mutableLongStateOf(Clock.System.now().toEpochMilliseconds()) }
+    LaunchedEffect(state.connected) {
+        while (state.connected) { now = Clock.System.now().toEpochMilliseconds(); delay(250) }
+    }
+    BoxWithConstraints(modifier.fillMaxSize().testTag("device-page")) {
+        val dense = compact || maxHeight < 480.dp
+        val inset = if (dense) 16.dp else 28.dp
+        if (showScene) RobotScene(RobotSceneState.from(state, now), Modifier.matchParentSize())
+        Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(
+            Color.Black.copy(alpha = .42f), Color.Transparent, Color.Transparent, Color.Black.copy(alpha = .52f)))))
+        Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(horizontal = inset, vertical = if (dense) 10.dp else 20.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("HANPPIE", fontSize = 10.sp, letterSpacing = 3.sp, color = Color.White.copy(alpha = .65f))
+                Text(when (state.robotProduct.model) {
+                    RobotModel.UNKNOWN -> "RoboMaster"
+                    RobotModel.ROBOMASTER_S1 -> "RoboMaster S1"
+                    RobotModel.ROBOMASTER_EP -> "RoboMaster EP"
+                }, fontSize = if (dense) 18.sp else 22.sp, fontWeight = FontWeight.Medium, color = Color.White)
+            }
+            Spacer(Modifier.weight(1f))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ConnectionStatusChip(state, Color.White.copy(alpha = .78f), sceneStyle = true, connectionMode = connectionMode, onClick = onConnectionDetails)
+                HomeLink(tr(Res.string.settings), WorkbenchGlyph.SETTINGS, iconOnly = true) { onNavigate(4) }
             }
         }
-        if (state.connected) item {
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                if (maxWidth / fontScale < 300.dp) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        DeviceMetric(WorkbenchGlyph.BATTERY, tr(Res.string.battery), state.battery?.let { "$it%" } ?: "—", Modifier.fillMaxWidth(), inline = true)
-                        DeviceMetric(WorkbenchGlyph.SIGNAL, tr(Res.string.signal), state.signalQuality?.toString() ?: "—", Modifier.fillMaxWidth(), inline = true)
-                        DeviceMetric(WorkbenchGlyph.FILE_TEXT, tr(Res.string.script), state.scriptStatus, Modifier.fillMaxWidth(), inline = true)
-                    }
-                } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    DeviceMetric(WorkbenchGlyph.BATTERY, tr(Res.string.battery), state.battery?.let { "$it%" } ?: "—", Modifier.weight(1f))
-                    DeviceMetric(WorkbenchGlyph.SIGNAL, tr(Res.string.signal), state.signalQuality?.toString() ?: "—", Modifier.weight(1f))
-                    DeviceMetric(WorkbenchGlyph.FILE_TEXT, tr(Res.string.script), state.scriptStatus, Modifier.weight(1f))
-                }
+        Column(Modifier.align(Alignment.BottomCenter).padding(bottom = if (dense) 16.dp else 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (preparationFailed) Text(tr(Res.string.scene_video_retry), fontSize = 12.sp, color = Color.White.copy(alpha = .8f))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (dense) 8.dp else 20.dp)) {
+                HomeLink(tr(Res.string.script), WorkbenchGlyph.CODE) { onNavigate(1) }
+                HomeAction(
+                    label = when { preparing -> tr(Res.string.scene_video_preparing); state.connected -> tr(Res.string.fullscreen_cockpit)
+                        state.connecting -> tr(Res.string.connecting); else -> tr(Res.string.automatic_connection) },
+                    symbol = if (state.connected) WorkbenchGlyph.CROSSHAIR else WorkbenchGlyph.CONNECT,
+                    tag = if (state.connected) "enter-remote" else "auto-connect",
+                    enabled = !preparing && !state.connecting && !state.busy,
+                    onClick = if (state.connected) onRemote else model::discover)
+                HomeLink(tr(Res.string.chat), WorkbenchGlyph.CHAT) { onNavigate(3) }
             }
+
         }
+
     }
 }
 
 @Composable
-private fun DeviceIdentity(state: ConsoleState, modifier: Modifier, compact: Boolean) {
-    val colors = MiuixTheme.colorScheme
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("DJI", fontSize = 10.sp, fontWeight = FontWeight.Medium, letterSpacing = .6.sp, maxLines = 1,
-                color = colors.onSurfaceVariantSummary)
-            val productName = when (state.robotProduct.model) {
-                RobotModel.UNKNOWN -> "RoboMaster"
-                RobotModel.ROBOMASTER_S1 -> "RoboMaster S1"
-                RobotModel.ROBOMASTER_EP -> "RoboMaster EP"
-            }
-            Text(productName, fontSize = if (compact) 30.sp else 48.sp, fontWeight = FontWeight.Bold,
-                maxLines = 1, color = colors.onSurface)
-            if (!state.connecting) Text(
-                if (state.connected) tr(Res.string.robot_ready) else tr(Res.string.not_connected),
-                fontSize = 13.sp,
-                color = colors.onSurfaceVariantSummary,
-            )
-        }
-        // Brand identity in the connection overview; never presented as a picture of the physical robot.
-        Box(Modifier.size(if (compact) 100.dp else 128.dp).background(colors.surfaceContainerHigh, CircleShape),
-            contentAlignment = Alignment.Center) {
-            Image(painterResource(HanppieBrandAssets.avatar), null, Modifier.fillMaxSize().padding(10.dp))
-        }
+private fun HomeLink(label: String, symbol: WorkbenchGlyph, modifier: Modifier = Modifier, iconOnly: Boolean = false, onClick: () -> Unit) {
+    Row(modifier.widthIn(min = 48.dp).heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = onClick)
+        .semantics { contentDescription = label }.padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        WorkbenchIcon(symbol, Color.White.copy(alpha = .72f), Modifier.size(17.dp))
+        if (!iconOnly) Text(label, color = Color.White.copy(alpha = .82f), fontSize = 12.sp, maxLines = 1)
     }
 }
 
 @Composable
-private fun DeviceActions(model: ConsoleController, state: ConsoleState, onGuide: () -> Unit, onRemote: () -> Unit) {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        when {
-            state.connected -> CockpitEntry(onRemote)
-            else -> {
-                Button(model::discover, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("auto-connect"), enabled = !state.busy,
-                    colors = ButtonDefaults.buttonColorsPrimary()) {
-                    WorkbenchIcon(WorkbenchGlyph.CONNECT, MiuixTheme.colorScheme.onPrimary)
-                    Spacer(Modifier.width(10.dp)); Text(tr(Res.string.automatic_connection))
-                }
-                Button(onGuide, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("connection-guide")) {
-                    Text(tr(Res.string.connection_settings))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CockpitEntry(onRemote: () -> Unit) {
-        Button(onRemote, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("enter-remote"),
-            colors = ButtonDefaults.buttonColorsPrimary()) {
-            WorkbenchIcon(WorkbenchGlyph.CROSSHAIR, MiuixTheme.colorScheme.onPrimary)
-            Spacer(Modifier.width(10.dp)); Text(tr(Res.string.fullscreen_cockpit))
-        }
-}
-
-@Composable
-private fun DeviceMetric(symbol: WorkbenchGlyph, label: String, value: String, modifier: Modifier, inline: Boolean = false) {
-    val colors = MiuixTheme.colorScheme
-    Card(modifier, insideMargin = PaddingValues(0.dp), colors = CardDefaults.defaultColors(color = colors.surfaceContainer)) {
-        if (inline) Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            WorkbenchIcon(symbol, colors.onSurfaceVariantSummary, Modifier.size(20.dp))
-            Text(label, Modifier.weight(1f), fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
-            Text(value, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-        } else Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            WorkbenchIcon(symbol, colors.onSurfaceVariantSummary, Modifier.size(20.dp))
-            Text(value, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
-            Text(label, fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
-        }
+private fun HomeAction(label: String, symbol: WorkbenchGlyph, tag: String, enabled: Boolean, onClick: () -> Unit) {
+    Row(Modifier.widthIn(min = 184.dp).heightIn(min = 48.dp).testTag(tag).clip(RoundedCornerShape(22.dp))
+        .background(Color(0xffe97635).copy(alpha = if (enabled) .95f else .7f))
+        .clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(horizontal = 24.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally)) {
+        WorkbenchIcon(symbol, Color(0xff201a16), Modifier.size(18.dp))
+        Text(label, color = Color(0xff201a16), fontSize = 14.sp, fontWeight = FontWeight.Medium)
     }
 }

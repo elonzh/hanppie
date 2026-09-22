@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import cn.elonzh.hanppie.ui.app.MemorySettingsStore
 import cn.elonzh.hanppie.ui.app.testConsoleModel
-import cn.elonzh.hanppie.ui.design.WorkbenchTheme
+import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme as WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
 import kotlinx.coroutines.runBlocking
 import java.awt.image.BufferedImage

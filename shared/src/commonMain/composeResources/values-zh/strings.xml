@@ -615,4 +615,19 @@
     <string name="data_directory">数据目录</string>
     <string name="open_data_directory">打开目录</string>
     <string name="open_data_directory_failed">无法打开目录，请复制路径并在文件管理器中打开。</string>
+    <string name="scene_accessibility">机器人三维示意模型。方向键旋转，加减键缩放，Home 键重置视角。</string>
+    <string name="scene_rotate_left">向左旋转视角</string>
+    <string name="scene_rotate_right">向右旋转视角</string>
+    <string name="scene_zoom_in">放大模型</string>
+    <string name="scene_zoom_out">缩小模型</string>
+    <string name="scene_unavailable">三维预览暂不可用 · 仍可连接机器人</string>
+    <string name="scene_loading">正在准备机器人模型…</string>
+    <string name="scene_preview">外观预览 · 连接后查看机器人状态</string>
+    <string name="scene_pose_waiting">示意模型 · 等待云台姿态</string>
+    <string name="scene_pose_live">示意模型 · 云台姿态更新中</string>
+    <string name="scene_pose_stale">最近云台姿态 · 更新已暂停</string>
+    <string name="scene_static">外观示意 · 暂无关节姿态</string>
+    <string name="scene_retry">重新加载</string>
+    <string name="scene_video_preparing">正在准备画面…</string>
+    <string name="scene_video_retry">画面暂未就绪，请重试</string>
 </resources>

@@ -5,6 +5,8 @@ import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
 import cn.elonzh.hanppie.robot.product.RobotProduct
 import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import cn.elonzh.hanppie.robot.telemetry.GimbalTelemetry
+import cn.elonzh.hanppie.robot.telemetry.ChassisAttitude
+import cn.elonzh.hanppie.robot.telemetry.WheelTelemetry
 import cn.elonzh.hanppie.ui.i18n.UiText
 import cn.elonzh.hanppie.ui.i18n.uiText
 
@@ -23,6 +25,11 @@ internal data class ConsoleState(
     val signalQuality: Int? = null,
     val values: List<Pair<String, String>> = emptyList(),
     val gimbal: GimbalTelemetry? = null,
+    val gimbalReceivedAtMillis: Long? = null,
+    val chassisAttitude: ChassisAttitude? = null,
+    val chassisReceivedAtMillis: Long? = null,
+    val wheels: WheelTelemetry? = null,
+    val wheelsReceivedAtMillis: Long? = null,
     val logs: List<String> = emptyList(),
     val frames: List<String> = emptyList(),
     val scriptMessage: UiText = uiText(Res.string.no_script_running),
@@ -41,7 +48,8 @@ internal data class ConsoleState(
             scriptRunPhase == ScriptRunPhase.UNKNOWN)
 
     fun lost(reason: String): ConsoleState = copy(connected = false, connectedAddress = null, connecting = false, statusMessage = uiText(Res.string.connection_lost), error = reason,
-        robotProduct = RobotProduct(), battery = null, signalQuality = null, values = emptyList(), gimbal = null,
+        robotProduct = RobotProduct(), battery = null, signalQuality = null, values = emptyList(), gimbal = null, gimbalReceivedAtMillis = null,
+        chassisAttitude = null, chassisReceivedAtMillis = null, wheels = null, wheelsReceivedAtMillis = null,
         scriptRunPhase = if (scriptRunPhase.mayBeExecuting) ScriptRunPhase.UNKNOWN else scriptRunPhase,
         scriptMessage = if (scriptRunPhase.mayBeExecuting) uiText(Res.string.connection_lost_robot_execution_state_unknown) else scriptMessage)
 }

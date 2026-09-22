@@ -41,8 +41,15 @@ internal class DesktopMedia(
             if (videoEnabled) {
                 val scale = "scale=${resolution.width}:${resolution.height}"
                 val frameSize = resolution.width * resolution.height * 4
-                val video = launch(executable, listOf("-probesize","32","-analyzeduration","0","-flags","low_delay",
-                    "-f","h264","-i","pipe:0","-an","-vf",scale,"-pix_fmt","bgra","-f","rawvideo","pipe:1"))
+                val frameHealth = ArrayBlockingQueue<Boolean>(256)
+                val health = DecodedFrameHealth()
+                val video = launch(executable, listOf("-probesize","32","-analyzeduration","0","-flags","low_delay","-fflags","+discardcorrupt","-err_detect","explode",
+                    "-threads","1","-f","h264","-i","pipe:0","-an","-vf","$scale,showinfo","-fps_mode","passthrough",
+                    "-pix_fmt","bgra","-enc_time_base","filter","-f","rawvideo","pipe:1"), diagnostics = { message ->
+                    health.accept(message)?.let {
+                        if (!frameHealth.offer(it)) fail("Video frame metadata overflow")
+                    }
+                })
                 writer(video, videoQueue)
                 threads += thread(name = "hanppie-video-output", isDaemon = true) {
                     try {
@@ -55,6 +62,9 @@ internal class DesktopMedia(
                                 if (n < 0) throw EOFException(tr(Res.string.video_decoder_exited))
                                 offset += n
                             }
+                            val usable = frameHealth.poll(2, TimeUnit.SECONDS)
+                                ?: throw IllegalStateException("Video frame metadata missing")
+                            if (!usable) continue // Retain the last good image until a clean intra frame.
                             onVideo(frame)
                             if (++count == 1 || count % 30 == 0) onStatus(tr(Res.string.video_value_decoded_frames,count))
                         }
@@ -88,12 +98,12 @@ internal class DesktopMedia(
             }
         } catch (e: Exception) { close(); throw IllegalStateException(tr(Res.string.cannot_start_ffmpeg_install_it_or_set_hanppie_ffmpeg,e.message),e) }
     }
-    private fun launch(executable: String, args: List<String>): Process {
-        val process = ProcessBuilder(listOf(executable,"-hide_banner","-loglevel","error","-nostdin") + args).start()
+    private fun launch(executable: String, args: List<String>, diagnostics: ((String) -> Unit)? = null): Process {
+        val process = ProcessBuilder(listOf(executable,"-hide_banner","-loglevel", if (diagnostics == null) "error" else "info", "-nostdin") + args).start()
         processes += process
         threads += thread(name = "hanppie-codec-errors", isDaemon = true) {
             // Drain stderr so a malformed stream cannot block the child. No device media is logged.
-            runCatching { process.errorStream.use { stream -> val buffer = ByteArray(1024); while (stream.read(buffer) >= 0) { } } }
+            runCatching { process.errorStream.bufferedReader().useLines { lines -> lines.forEach { diagnostics?.invoke(it) } } }
         }
         return process
     }
@@ -250,4 +260,24 @@ private fun desktopMediaPath(folder: String, extension: String): Path {
     Files.createDirectories(directory)
     val stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS"))
     return directory.resolve("Hanppie-$stamp.$extension")
+}
+
+/** FFmpeg showinfo describes each output frame; decode errors invalidate dependent P/B frames. */
+internal class DecodedFrameHealth {
+    private var referencesDamaged = true
+    private var frameError = false
+    fun accept(line: String): Boolean? {
+        val message = line.lowercase()
+        val decoderMessage = "[h264 @" in message || "[dec:h264 @" in message
+        if (decoderMessage && ("error" in message || "corrupt" in message || "concealing" in message ||
+            "invalid" in message || "missing picture" in message || "reference picture missing" in message)) {
+            referencesDamaged = true
+            frameError = true
+        }
+        if ("showinfo" !in line || "iskey:" !in line || " n:" !in line) return null
+        if (("iskey:1" in line || "type:I" in line) && !frameError) referencesDamaged = false
+        val usable = !referencesDamaged && !frameError
+        frameError = false
+        return usable
+    }
 }

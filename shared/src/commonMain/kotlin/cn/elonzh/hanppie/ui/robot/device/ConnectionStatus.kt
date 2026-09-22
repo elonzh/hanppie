@@ -1,5 +1,9 @@
 package cn.elonzh.hanppie.ui.robot.device
 
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.ColorFilter
+import org.jetbrains.compose.resources.painterResource
+import cn.elonzh.hanppie.ui.settings.ConnectionMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -21,7 +25,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-internal fun ConnectionStatusChip(state: ConsoleState, onClick: () -> Unit) {
+internal fun ConnectionStatusChip(state: ConsoleState, contentColor: Color = MiuixTheme.colorScheme.onSurfaceVariantSummary, sceneStyle: Boolean = false, connectionMode: ConnectionMode = ConnectionMode.UNKNOWN, onClick: () -> Unit) {
     val colors = MiuixTheme.colorScheme
     val label = when {
         state.connected -> state.battery?.let { "$it%" } ?: tr(Res.string.connected)
@@ -33,14 +37,28 @@ internal fun ConnectionStatusChip(state: ConsoleState, onClick: () -> Unit) {
         state.connecting -> colors.primary
         else -> Color(0xffaab1bb)
     }
-    Row(Modifier.widthIn(max = 144.dp).heightIn(min = 48.dp).testTag("connection-status")
+    Row(Modifier.widthIn(max = 200.dp).heightIn(min = 48.dp).testTag("connection-status")
         .clickable(onClick = onClick).padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(6.dp).background(indicator, RoundedCornerShape(50)))
+        if (sceneStyle && state.connected) {
+            Image(painterResource(when (connectionMode) {
+                ConnectionMode.ROUTER -> Res.drawable.official_connection_router
+                ConnectionMode.DIRECT -> Res.drawable.official_connection_direct
+                ConnectionMode.UNKNOWN -> Res.drawable.official_connection_generic
+            }), tr(Res.string.connected), Modifier.size(22.dp), colorFilter = ColorFilter.tint(contentColor))
+            state.battery?.let { battery ->
+                Image(painterResource(when {
+                    battery > 65 -> Res.drawable.official_battery_full
+                    battery > 30 -> Res.drawable.official_battery_mid
+                    battery > 0 -> Res.drawable.official_battery_low
+                    else -> Res.drawable.official_battery_empty
+                }), null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(contentColor))
+            }
+        } else Box(Modifier.size(6.dp).background(indicator, RoundedCornerShape(50)))
         Text(label,
             Modifier.weight(1f, fill = false),
-            fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.onSurfaceVariantSummary)
-        WorkbenchIcon(WorkbenchGlyph.CHEVRON_RIGHT, colors.onSurfaceVariantSummary, Modifier.size(16.dp))
+            fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = contentColor)
+        if (!sceneStyle) WorkbenchIcon(WorkbenchGlyph.CHEVRON_RIGHT, contentColor, Modifier.size(16.dp))
     }
 }
 

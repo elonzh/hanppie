@@ -769,7 +769,7 @@ internal class ConsoleModel(
                 statusMessage = uiText(Res.string.disconnected), error = null,
                 scriptRunPhase = if (uncertain) ScriptRunPhase.UNKNOWN else it.scriptRunPhase,
                 scriptMessage = if (uncertain) uiText(Res.string.session_ended_robot_state_unknown) else it.scriptMessage,
-                robotProduct = RobotProduct(), battery = null, signalQuality = null, values = emptyList(), gimbal = null)
+                robotProduct = RobotProduct(), battery = null, signalQuality = null, values = emptyList(), gimbal = null, gimbalReceivedAtMillis = null, chassisAttitude = null, chassisReceivedAtMillis = null, wheels = null, wheelsReceivedAtMillis = null)
         }
         log(tr(Res.string.connection_closed_scripts_on_the_robot_may_still_be))
     }
@@ -857,6 +857,8 @@ internal class ConsoleModel(
         val line = "seq=${frame.sequence} ${frame.sender.toString(16)}→${frame.receiver.toString(16)} " +
             "${frame.set.toString(16)}:${frame.id.toString(16)} attr=${frame.attr.toString(16)} ${frame.payload.hex()}"
         val motion = Telemetry.motion(frame)
+        val chassisAttitude = Telemetry.chassisAttitude(frame)
+        val wheels = Telemetry.wheels(frame)
         val gimbal = Telemetry.gimbal(frame)
         val signalQuality = Telemetry.wifiSignalQuality(frame)
         val values = motion?.let {
@@ -898,7 +900,12 @@ internal class ConsoleModel(
             robotProduct = RobotProductProtocol.updated(old.robotProduct, frame) ?: old.robotProduct,
             battery = if (motion == null) old.battery else motion.batteryPercent,
             signalQuality = signalQuality ?: old.signalQuality,
+            chassisAttitude = chassisAttitude ?: old.chassisAttitude,
+            chassisReceivedAtMillis = if (chassisAttitude != null) clock.now().toEpochMilliseconds() else old.chassisReceivedAtMillis,
+            wheels = wheels ?: old.wheels,
+            wheelsReceivedAtMillis = if (wheels != null) clock.now().toEpochMilliseconds() else old.wheelsReceivedAtMillis,
             gimbal = gimbal ?: old.gimbal,
+            gimbalReceivedAtMillis = if (gimbal != null) clock.now().toEpochMilliseconds() else old.gimbalReceivedAtMillis,
             scriptMessages = if (newMessages.isEmpty()) old.scriptMessages else (old.scriptMessages + newMessages).takeLast(200),
             scriptRunPhase = if (isRunningTransition) ScriptRunPhase.RUNNING else old.scriptRunPhase,
             scriptMessage = if (isRunningTransition) uiText(Res.string.script_running) else old.scriptMessage,
@@ -956,7 +963,7 @@ internal class ConsoleModel(
             val uncertain = it.scriptRunPhase.mayBeExecuting
             it.copy(connected = false, connectedAddress = null, connecting = false, busy = false,
                 statusMessage = uiText(Res.string.disconnected), battery = null, signalQuality = null,
-                values = emptyList(), gimbal = null,
+                values = emptyList(), gimbal = null, gimbalReceivedAtMillis = null, chassisAttitude = null, chassisReceivedAtMillis = null, wheels = null, wheelsReceivedAtMillis = null,
                 scriptRunPhase = if (uncertain) ScriptRunPhase.UNKNOWN else it.scriptRunPhase,
                 scriptMessage = if (uncertain) uiText(Res.string.connection_closed_robot_state_unknown) else it.scriptMessage)
         }

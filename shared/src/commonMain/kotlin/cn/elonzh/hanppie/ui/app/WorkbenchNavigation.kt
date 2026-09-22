@@ -24,9 +24,6 @@ internal data object ChatRoute : WorkbenchRoute { override val topLevelIndex = 3
 internal data object SettingsRoute : WorkbenchRoute { override val topLevelIndex = 4 }
 
 @Serializable
-internal data object CockpitRoute : WorkbenchRoute { override val topLevelIndex = 0 }
-
-@Serializable
 internal data object ConnectionGuideRoute : WorkbenchRoute { override val topLevelIndex = 0 }
 
 @Serializable

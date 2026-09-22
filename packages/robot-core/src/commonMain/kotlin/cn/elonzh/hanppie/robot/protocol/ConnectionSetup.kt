@@ -1,6 +1,9 @@
 package cn.elonzh.hanppie.robot.protocol
 
-/** Ordered startup transcript from lab/protocol.py; not inferred SDK commands. */
+import cn.elonzh.hanppie.robot.telemetry.GimbalSubscription
+import cn.elonzh.hanppie.robot.telemetry.ChassisSubscriptions
+
+/** Startup transcript from lab/protocol.py, followed by the existing packet-tested gimbal DDS subscription. */
 data class SetupCommand(val receiver: Int, val set: Int, val id: Int,
                         val payload: String = "", val flags: String = "0000", val control: Boolean = false)
 
@@ -23,4 +26,11 @@ val connectionSetup: List<SetupCommand> = listOf(
     SetupCommand(Protocol.HOST_HDVT_UAV, Protocol.CMDSET_VIRTUAL_BUS, Protocol.CMD_VBUS_ADD_NODE, "0200000003"),
     SetupCommand(Protocol.HOST_HDVT_UAV, Protocol.CMDSET_VIRTUAL_BUS, Protocol.CMD_VBUS_DEL_MSG, "000201"),
 ) + List(2) { SetupCommand(Protocol.HOST_HDVT_UAV, Protocol.CMDSET_VIRTUAL_BUS, Protocol.CMD_VBUS_ADD_MSG,
-    "02010000059f22626809000200c49ac5c409000200fd7b4c7809000200ceceb7ee090002009c00a449090002000100") }
+    "02010000059f22626809000200c49ac5c409000200fd7b4c7809000200ceceb7ee090002009c00a449090002000100") } + listOf(
+        // Reuse the packet-tested read-only DDS subscription independently of remote mode.
+        SetupCommand(Protocol.HOST_HDVT_UAV, Protocol.CMDSET_VIRTUAL_BUS, Protocol.CMD_VBUS_DEL_MSG, GimbalSubscription.removePayload().hex()),
+        SetupCommand(Protocol.HOST_HDVT_UAV, Protocol.CMDSET_VIRTUAL_BUS, Protocol.CMD_VBUS_ADD_MSG, GimbalSubscription.addPayload().hex()),
+    ) + ChassisSubscriptions.topics.flatMap { (messageId, uid) -> listOf(
+        SetupCommand(Protocol.HOST_HDVT_UAV, Protocol.CMDSET_VIRTUAL_BUS, Protocol.CMD_VBUS_DEL_MSG, byteArrayOf(0, 2, messageId.toByte()).hex()),
+        SetupCommand(Protocol.HOST_HDVT_UAV, Protocol.CMDSET_VIRTUAL_BUS, Protocol.CMD_VBUS_ADD_MSG, ChassisSubscriptions.addPayload(messageId, uid).hex()),
+    ) }

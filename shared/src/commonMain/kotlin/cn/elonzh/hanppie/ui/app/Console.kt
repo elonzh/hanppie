@@ -36,10 +36,8 @@ import cn.elonzh.hanppie.ui.robot.device.ConnectionDetail
 import cn.elonzh.hanppie.ui.robot.device.ConnectionGuideMode
 import cn.elonzh.hanppie.ui.robot.device.ConnectionGuidePage
 import cn.elonzh.hanppie.ui.robot.device.ConnectionStatusChip
-import cn.elonzh.hanppie.ui.robot.device.DevicePage
 import cn.elonzh.hanppie.ui.robot.diagnostics.DebugPage
 import cn.elonzh.hanppie.ui.robot.diagnostics.RobotFilesDebugTab
-import cn.elonzh.hanppie.ui.robot.remote.RemotePage
 import cn.elonzh.hanppie.ui.scripts.EditorDocument
 import cn.elonzh.hanppie.ui.scripts.ScriptPage
 import cn.elonzh.hanppie.ui.scripts.scriptRunColor
@@ -67,7 +65,6 @@ private val workbenchNavigationConfiguration = SavedStateConfiguration {
             subclass(DebugRoute.serializer())
             subclass(ChatRoute.serializer())
             subclass(SettingsRoute.serializer())
-            subclass(CockpitRoute.serializer())
             subclass(ConnectionGuideRoute.serializer())
             subclass(DirectConnectionGuideRoute.serializer())
             subclass(RouterConnectionGuideRoute.serializer())
@@ -138,9 +135,6 @@ internal fun Console(
     var ip by rememberSaveable { mutableStateOf("") }
     var appId by rememberSaveable { mutableStateOf("") }
     var diagnosticTab by rememberSaveable { mutableStateOf(0) }
-    fun openCockpit() {
-        if (state.connected && backStack.lastOrNull() != CockpitRoute) backStack.add(CockpitRoute)
-    }
     fun openConnectionGuide() {
         navigate(0)
         backStack.add(ConnectionGuideRoute)
@@ -157,19 +151,22 @@ internal fun Console(
             manual = false
             manualAttempted = false
         }
-        if (!state.connected && currentRoute == CockpitRoute && backStack.size > 1) backStack.removeLastOrNull()
         if (state.connected && currentRoute in listOf(ConnectionGuideRoute, DirectConnectionGuideRoute, RouterConnectionGuideRoute)) {
             navigate(0)
         }
     }
-    LaunchedEffect(currentRoute) { onCockpitChanged(currentRoute == CockpitRoute) }
+
 
     WorkbenchDialog(show = connectionDetails, onDismissRequest = { connectionDetails = false }, title = tr(Res.string.connection_details)) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Image(painterResource(HanppieBrandAssets.avatar), null, Modifier.size(64.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("RoboMaster", fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("RoboMaster", Modifier.weight(1f), fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
+                        WorkbenchIconButton(tr(Res.string.debug), WorkbenchGlyph.OPEN,
+                            onClick = { connectionDetails = false; navigate(2) }, tag = "connection-diagnostics")
+                    }
                     Text(state.status, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 13.sp)
                 }
             }
@@ -185,7 +182,7 @@ internal fun Console(
                 Button({ model.disconnect(); connectionDetails = false }, Modifier.fillMaxWidth().heightIn(min = 48.dp), enabled = !state.busy) { Text(tr(Res.string.disconnect_close_session)) }
             } else {
                 Button({ connectionDetails = false; model.discover() }, Modifier.fillMaxWidth().heightIn(min = 48.dp), colors = ButtonDefaults.buttonColorsPrimary(), enabled = !state.busy) { Text(tr(Res.string.automatic_connection)) }
-                Button({ connectionDetails = false; openConnectionGuide() }, Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(tr(Res.string.connection_settings)) }
+                Button({ connectionDetails = false; openConnectionGuide() }, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("connection-guide")) { Text(tr(Res.string.connection_settings)) }
             }
         }
     }
@@ -212,20 +209,18 @@ internal fun Console(
         entryProvider = { key ->
             NavEntry(key) {
                 val route = key as WorkbenchRoute
-                if (route == CockpitRoute) {
-                    RemotePage(model, Modifier.fillMaxSize().safeDrawingPadding(), onBack = ::goBack,
-                        onPushToTalkStart = onPushToTalkStart, onPushToTalkStop = onPushToTalkStop)
-                } else {
                     val routeTab = route.topLevelIndex
                     BoxWithConstraints(Modifier.fillMaxSize().background(CanvasColor).safeDrawingPadding().imePadding()) {
                         val compact = maxWidth < HanppieDesignTokens.CompactBreakpoint
+                        val useNavigationRail = !compact || maxWidth > maxHeight
+                        val shortWindow = maxHeight < 480.dp
                         val workspacePage = route == ScriptRoute || route == ChatRoute
                         val isConnectionGuide = route == ConnectionGuideRoute ||
                             route == DirectConnectionGuideRoute || route == RouterConnectionGuideRoute
                         Row(Modifier.fillMaxSize()) {
-                            if (!compact) NavigationRail(color = MiuixTheme.colorScheme.surfaceVariant,
+                            if (route != RobotRoute && useNavigationRail) NavigationRail(color = MiuixTheme.colorScheme.surfaceVariant,
                                 defaultWindowInsetsPadding = false,
-                                header = { Image(painterResource(HanppieBrandAssets.avatar), null,
+                                header = { if (!shortWindow) Image(painterResource(HanppieBrandAssets.avatar), null,
                                     Modifier.padding(vertical = 18.dp).size(36.dp)) }) {
                                 navigationOrder.forEach { index ->
                                     val label = labels[index]
@@ -240,12 +235,12 @@ internal fun Console(
                             }
                             Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
                                 Column(Modifier.weight(1f)
-                                    .then(if (workspacePage) Modifier else Modifier.widthIn(max = HanppieDesignTokens.PageMaxWidth))
+                                    .then(if (workspacePage || route == RobotRoute) Modifier else Modifier.widthIn(max = HanppieDesignTokens.PageMaxWidth))
                                     .fillMaxWidth()
-                                    .padding(horizontal = if (compact) HanppieDesignTokens.PagePaddingCompact
+                                    .padding(horizontal = if (route == RobotRoute) 0.dp else if (compact) HanppieDesignTokens.PagePaddingCompact
                                     else HanppieDesignTokens.PagePaddingExpanded)
                                     .padding(bottom = if (workspacePage) HanppieDesignTokens.PagePaddingCompact else 0.dp)) {
-                                    if (routeTab != 1 && !isConnectionGuide) {
+                                    if (routeTab != 1 && route != RobotRoute && !isConnectionGuide) {
                                         Row(Modifier.fillMaxWidth().height(72.dp), verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.SpaceBetween) {
                                             Text(if (routeTab == 0) tr(Res.string.my_robot) else labels[routeTab],
@@ -284,8 +279,10 @@ internal fun Console(
                                                 if (document.value.dirty) pendingChatScript = scriptId else openChatScript(scriptId)
                                             }, onSettings = { navigate(4) })
                                         SettingsRoute -> SettingsPage(model, Modifier.weight(1f), onSpeechSettings)
-                                        RobotRoute -> DevicePage(model, state, compact, Modifier.weight(1f),
-                                            onConnectionGuide = ::openConnectionGuide, onRemote = ::openCockpit)
+                                        RobotRoute -> cn.elonzh.hanppie.ui.robot.scene.RobotExperience(
+                                            model, state, compact, Modifier.weight(1f),
+                                            { connectionDetails = true }, ::navigate, onCockpitChanged,
+                                            onPushToTalkStart, onPushToTalkStop)
                                         ScriptRoute -> ScriptPage(model, document, compact, onImport, onExport,
                                             fileError, onFileError, onConnectionDetails = { connectionDetails = true },
                                             onImportAudio = onImportAudio,
@@ -293,7 +290,6 @@ internal fun Console(
                                                 ::goBack else null)
                                         DebugRoute -> DebugPage(model, state, diagnosticTab, { diagnosticTab = it }, compact,
                                             Modifier.weight(1f), onRobotFileUpload, onRobotFileDownload, onRobotFileOpen)
-                                        CockpitRoute -> Unit
                                         ConnectionGuideRoute -> ConnectionGuidePage(
                                             mode = null,
                                             compact = compact,
@@ -326,8 +322,8 @@ internal fun Console(
                                         )
                                     }
                                 }
-                                if (routeTab != 1) ScriptRunBanner(state, onOpen = { navigate(1) }, onStop = model::stop)
-                                if (compact) NavigationBar(Modifier.testTag("bottom-navigation"),
+                                if (routeTab != 1 && route != RobotRoute) ScriptRunBanner(state, onOpen = { navigate(1) }, onStop = model::stop)
+                                if (route != RobotRoute && !useNavigationRail) NavigationBar(Modifier.testTag("bottom-navigation"),
                                     mode = NavigationBarDisplayMode.IconOnly,
                                     color = MiuixTheme.colorScheme.surfaceVariant, defaultWindowInsetsPadding = false) {
                                     navigationOrder.forEach { index ->
@@ -339,7 +335,6 @@ internal fun Console(
                             }
                         }
                     }
-                }
             }
         },
     )

@@ -10,6 +10,29 @@ import org.junit.Assume
 import org.junit.Test
 
 class DesktopMediaTest {
+    @Test fun damagedReferencesAreHiddenUntilACleanKeyframe() {
+        val health = DecodedFrameHealth()
+        fun frame(key: Boolean) = health.accept("[Parsed_showinfo_1] n: 0 pts: 0 iskey:${if (key) 1 else 0} type:${if (key) "I" else "P"}")
+        assertEquals(false, frame(false))
+        assertEquals(true, frame(true))
+        assertEquals(true, frame(false))
+        health.accept("[rawvideo @ 0x2] Application provided invalid, non monotonically increasing dts to muxer")
+        assertEquals(true, frame(false), "Mux timestamps are not decoder corruption")
+        health.accept("[h264 @ 0x1] error while decoding MB 21 5")
+        assertEquals(false, frame(false))
+        assertEquals(false, frame(false))
+        health.accept("[h264 @ 0x1] concealing 80 DC errors in I frame")
+        assertEquals(false, frame(true))
+        assertEquals(false, frame(false))
+        assertEquals(true, frame(true))
+        assertEquals(true, frame(false))
+        health.accept("[h264 @ 0x1] decode_slice_header error")
+        assertEquals(false, frame(false))
+        assertEquals(true, health.accept("[Parsed_showinfo_1] n: 45 pts: 1800000 iskey:0 type:I"),
+            "An intra picture can restore display even when the encoder does not flag it as an IDR")
+        assertEquals(true, frame(false))
+    }
+
     @Test fun opusPagesHaveValidHeadersLacingAndChecksum() {
         val ogg = OpusOgg()
         val headers = ogg.headers()

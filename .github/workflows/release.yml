@@ -34,7 +34,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: gradle
       - name: Build Android Release APK
         run: ./gradlew :androidApp:assembleRelease
@@ -57,7 +57,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: gradle
       - name: Package macOS DMG
         run: ./gradlew :desktopApp:packageDmg
@@ -80,7 +80,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: gradle
       - name: Setup WiX Toolset for jpackage
         shell: pwsh

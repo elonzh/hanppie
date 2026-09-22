@@ -34,7 +34,9 @@ Before using physical hardware, read the architecture's [safety and recovery mod
 
 Both desktop and Android support **Settings → Language → System default / 简体中文 / English**. The choice is saved and takes effect immediately without reconnecting the robot.
 
-Install JDK 21 and run from the repository root (use `gradlew.bat` on Windows):
+Use the app in landscape orientation. On the home page, drag to orbit, pinch or scroll to zoom, and press Home to reset the camera. When connected, telemetry updates the gimbal, chassis heading, and wheels.
+
+Install JDK 25 and run from the repository root (use `gradlew.bat` on Windows):
 
 ```bash
 ./gradlew :desktopApp:run

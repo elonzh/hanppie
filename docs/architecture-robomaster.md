@@ -433,9 +433,18 @@ RoboMaster macOS `1.1.5`（build `239`）安装包采用 Unity `2019.2.3f1` / Mo
 
 macOS 云台回调还包含参考值相减和角度折返，官方 UI 展示值不必等于原始字段直接缩放。`DJISubscribeController` 的 `Input.gyro` 路径采集的是客户端传感器；它不是机器人 IMU 解码器。
 
+**底盘独立订阅：** 原生 App 会话已收到 UID `0x000200096b986306`（本会话 message 13）的
+三项 little-endian float yaw/pitch/roll，单位度；UID `0x00020009c14cb7c5`（message 14）采用
+SDK `EscSubject` 的 `<hhhhhhhhIIIIBBBB`：四项有符号 RPM、四项编码器角度、四项时间戳与四项状态。
+编码器 `0..32767` 对应一圈，顺序右前、左前、左后、右后；左右电机原始符号相反。
+这两种推送同样包含 `00,messageId` 两字节订阅头，完整 payload 长度为 14/38 字节。
+2026-09-22 的低速前后与小角度原地旋转实测验证了字段变化和 yaw 正方向；
+独立 IMU 主题也有回传，但尚未用于模型。不能把这些结果扩展为全部设备、机械标定或世界坐标定位。
+具体证据与 UI 验证见[首页验证记录](home-scene-validation-2026-09-22.md#官方-app-对照与完整运动链路复核)。
+
 **内部调试控制路径：** `ViewChassis.sendSpeedAndFollow` 用两个不同 key 选择速度和跟随处理。`DJIRobomasterChassisControlProcessor::OnTimerTicked` 的速度分支构造 `3f:21` 的三个 float、共 12 字节载荷，与当前 Kotlin 底盘速度路径相互印证；跟随分支构造 `3f:22` 的 `(x,y,0)` float 载荷，并调用 `SendGimbalYaw`。这只证明该客户端存在上述发送路径，未确认其在当前 S1 固件上的完整模式前置条件、参考系和失联行为。Hanppie 没有启用这个原生跟随分支。**代码**
 
-可复现的输入指纹、反汇编地址和本次验证记录见 [macOS App 静态分析记录](s1-app-static-analysis-2026-09-08.md)。本地提取对象索引位于 `.hanppie/app-analysis/2026-09-08/report.md`；厂商程序、反编译输出和模型保留在 Git 忽略目录。
+可复现的输入指纹、反汇编地址和本次验证记录见 [macOS App 静态分析记录](s1-app-static-analysis-2026-09-08.md)。本地提取对象索引位于 `.hanppie/app-analysis/2026-09-08/report.md`；原始分析材料仍保留在该目录，首页使用的转换模型及来源说明见 [展示素材](../assets/robot-scene/README.md)。
 
 ### 5.4 原生媒体路径
 

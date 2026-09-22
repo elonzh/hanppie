@@ -109,19 +109,23 @@ internal fun RemotePage(
     onBack: (() -> Unit)? = null,
     onPushToTalkStart: (() -> Unit)? = null,
     onPushToTalkStop: (() -> Unit)? = null,
+    mediaControls: RemoteMediaController = remember { RemoteMediaController() },
+    videoContent: (@Composable () -> Unit)? = null,
+    inputEnabled: Boolean = true,
+    manageSession: Boolean = true,
 ) {
     RemoteOrientation(onBack)
     var keyboardHints by remember { mutableStateOf(false) }
     val colors = MiuixTheme.colorScheme
     val connected by model.state.collectAsState()
-    val enabled by model.remoteEnabled.collectAsState()
+    val remoteEnabled by model.remoteEnabled.collectAsState()
+    val enabled = remoteEnabled && inputEnabled
     val gelSelected by model.gelSelected.collectAsState()
     val gear by model.driveGear.collectAsState()
     val control by model.controlSettings.collectAsState()
     val talking by model.talking.collectAsState()
     val microphoneReady by model.microphoneReady.collectAsState()
     val talkBusy by model.talkBusy.collectAsState()
-    val mediaControls = remember { RemoteMediaController() }
     val mediaState by mediaControls.state.collectAsState()
     var left by remember { mutableStateOf(Offset.Zero) }
     var right by remember { mutableStateOf(Offset.Zero) }
@@ -143,8 +147,7 @@ internal fun RemotePage(
         model.stopFiring()
         (onPushToTalkStop ?: model::endPushToTalk)()
         model.setRemoteLed(null)
-        model.leaveRemote()
-        model.stopMedia()
+        if (manageSession) { model.leaveRemote(); model.stopMedia() }
     } }
     LaunchedEffect(enabled) {
         if (enabled) focus.requestFocus()
@@ -175,7 +178,7 @@ internal fun RemotePage(
     LaunchedEffect(shouldFire) {
         if (shouldFire) model.startFiring() else model.stopFiring()
     }
-    BoxWithConstraints(modifier.fillMaxSize().testTag("remote-surface").background(colors.background).pointerInput(Unit) {
+    BoxWithConstraints(modifier.fillMaxSize().testTag("remote-surface").background(if (videoContent == null) colors.background else Color.Transparent).pointerInput(Unit) {
         awaitPointerEventScope {
             while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -190,6 +193,7 @@ internal fun RemotePage(
             model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
         }
     }.onPreviewKeyEvent {
+        if (!inputEnabled) return@onPreviewKeyEvent false
         val supported = control.shortcuts.supports(it.key)
         if (it.type == KeyEventType.KeyDown) keyboardHints = true
         if (supported) {
@@ -229,13 +233,13 @@ internal fun RemotePage(
             keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; model.stopFiring()
             if (landscapeReady && foreground) focus.requestFocus()
         }
-        LaunchedEffect(landscapeReady, foreground, pageFocused, connected.connected) {
-            if (landscapeReady && foreground && pageFocused && connected.connected) {
+        LaunchedEffect(landscapeReady, foreground, pageFocused, connected.connected, inputEnabled) {
+            if (manageSession && inputEnabled && landscapeReady && foreground && pageFocused && connected.connected) {
                 snapshotFlow { connected.busy }.first { !it }
                 if (!model.remoteEnabled.value) model.enableRemote()
             }
         }
-        RobotVideo(model, mediaControls, Modifier.fillMaxSize())
+        if (videoContent == null) RobotVideo(model, mediaControls, Modifier.fillMaxSize()) else videoContent()
         RemoteCrosshair(model, Modifier.align(Alignment.Center))
         Row(Modifier.align(Alignment.TopStart).padding(HanppieDesignTokens.RemoteEdgePadding),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -324,6 +328,7 @@ internal fun RemotePage(
                     androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp)
                 .testTag("keyboard-hints"), color = HanppieDesignTokens.RemoteHudMuted, fontSize = 10.sp, maxLines = 2)
         }
+
     }
 }
 

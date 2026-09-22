@@ -15,7 +15,7 @@ import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import cn.elonzh.hanppie.ui.design.WorkbenchTheme
+import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme as WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
 import cn.elonzh.hanppie.ui.app.Console
 import cn.elonzh.hanppie.ui.app.testConsoleModel
