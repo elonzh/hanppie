@@ -35,7 +35,7 @@ class DesignUiTest {
     @Test fun ledColorPickerAtPhoneWidth() = runDesktopComposeUiTest(width = 320, height = 640) {
         Localization.initialize("zh", null)
         val color = mutableStateOf(RobotLedColor(255, 0, 0))
-        setContent { WorkbenchTheme {
+        setContent { TestWorkbenchTheme {
             RemoteLedColorPicker("待机", "test-led", color.value, androidx.compose.ui.Modifier) { color.value = it }
         } }
         onNodeWithContentDescription("test-led").performClick()
@@ -58,7 +58,7 @@ class DesignUiTest {
 
     @Test fun cameraFixedTopViews() = runDesktopComposeUiTest(width = 640, height = 160) {
         setContent {
-            WorkbenchTheme {
+            TestWorkbenchTheme {
                 androidx.compose.foundation.layout.Row(
                     androidx.compose.ui.Modifier
                         .background(HanppieDesignTokens.RemoteHudSurface).fillMaxSize(),
@@ -83,7 +83,7 @@ class DesignUiTest {
             logs = (0..150).map { "测试日志 $it" },
         )
         try {
-            setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
+            setContent { TestWorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
             onNodeWithTag("connection-status").assertTextContains("连接中")
             onNodeWithText("正在自动识别并连接机器人…", substring = false).assertDoesNotExist()
             saveDesignSnapshot("desktop-device-connecting", onRoot(), 1040, 700)
@@ -94,9 +94,9 @@ class DesignUiTest {
             ) }
             waitForIdle()
             val chat = onNodeWithContentDescription("对话").fetchSemanticsNode().boundsInRoot
-            val debug = onNodeWithContentDescription("诊断").fetchSemanticsNode().boundsInRoot
+            val script = onNodeWithContentDescription("脚本").fetchSemanticsNode().boundsInRoot
             assertEquals(48f, chat.height)
-            assertTrue(chat.bottom < debug.top)
+            assertEquals(chat.center.y, script.center.y)
             onNodeWithTag("connection-status").performClick()
             onNodeWithText("连接状态").assertIsDisplayed()
             runOnIdle { model.state.value = model.state.value.copy(connected = true, statusMessage = uiText(Res.string.connected), connectedAddress = "192.0.2.1", battery = 72, signalQuality = 80) }
@@ -122,7 +122,7 @@ class DesignUiTest {
     @Test fun headingChangesNeverResizeTelemetry() = runDesktopComposeUiTest(width = 740, height = 393) {
         val model = testConsoleModel()
         try {
-            setContent { WorkbenchTheme { RemotePage(model) } }
+            setContent { TestWorkbenchTheme { RemotePage(model) } }
             val original = onNodeWithTag("remote-telemetry").fetchSemanticsNode().boundsInRoot
             for (angle in listOf(0.0, 9.0, -10.0, 180.0, -359.0)) {
                 runOnIdle { model.state.value = model.state.value.copy(gimbal = cn.elonzh.hanppie.robot.telemetry.GimbalTelemetry(0.0, 0.0, angle, 0.0, 0)) }
@@ -135,8 +135,8 @@ class DesignUiTest {
     @Test fun minimumDesktopContentFits() = runDesktopComposeUiTest(width = 900, height = 572) {
         val model = testConsoleModel()
         try {
-            setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
-            onNodeWithTag("connection-guide").assertIsDisplayed()
+            setContent { TestWorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
+            onNodeWithTag("connection-guide").assertDoesNotExist()
             onNodeWithContentDescription("设置").performClick()
             onNodeWithTag("settings-category-control").performScrollTo().performClick()
             onNodeWithContentDescription("gimbal-sensitivity-selector").performScrollTo().assertIsDisplayed()
@@ -146,26 +146,27 @@ class DesignUiTest {
         } finally { model.close() }
     }
 
-    @Test fun narrowPhoneWithLargeEnglishText() = runDesktopComposeUiTest(width = 320, height = 640) {
+    @Test fun compactLandscapeWithLargeEnglishText() = runDesktopComposeUiTest(width = 740, height = 393) {
         Localization.initialize("en", null)
         val model = testConsoleModel()
         try {
             setContent {
                 CompositionLocalProvider(LocalDensity provides Density(1f, 1.3f)) {
-                    WorkbenchTheme(AppearanceController(AppearanceSettings(NightMode.LIGHT))) {
+                    TestWorkbenchTheme(AppearanceController(AppearanceSettings(NightMode.LIGHT))) {
                         Console(model, mutableStateOf(EditorDocument()))
                     }
                 }
             }
-            onNodeWithTag("connection-guide").assertIsDisplayed()
+            onNodeWithTag("connection-guide").assertDoesNotExist()
             onNodeWithTag("manual-connect").assertDoesNotExist()
-            assertTrue(onNodeWithTag("connection-status").fetchSemanticsNode().boundsInRoot.right <= 300f)
-            saveDesignSnapshot("design-phone-320-large-text", onRoot(), 320, 640)
-            onNode(hasContentDescription("Debug") and hasClickAction()).performClick()
+            assertTrue(onNodeWithTag("connection-status").fetchSemanticsNode().boundsInRoot.right <= 724f)
+            saveDesignSnapshot("design-landscape-large-text", onRoot(), 740, 393)
+            onNodeWithTag("connection-status").performClick()
+            onNodeWithTag("connection-diagnostics").performClick()
             onNodeWithTag("manual-connect").assertIsDisplayed()
             onNode(hasContentDescription("Chat") and hasClickAction()).performClick()
             onNodeWithText("What would you like to do?").assertIsDisplayed()
-            saveDesignSnapshot("design-chat-320-large-text", onRoot(), 320, 640)
+            saveDesignSnapshot("design-chat-landscape-large-text", onRoot(), 740, 393)
         } finally { model.close(); Localization.initialize("zh", null) }
     }
 
@@ -174,10 +175,10 @@ class DesignUiTest {
         val model = testConsoleModel()
         val appearance = AppearanceController(AppearanceSettings(NightMode.LIGHT))
         try {
-            setContent { WorkbenchTheme(appearance) { Console(model, mutableStateOf(EditorDocument())) } }
+            setContent { TestWorkbenchTheme(appearance) { Console(model, mutableStateOf(EditorDocument())) } }
             val page = onNodeWithTag("device-page").fetchSemanticsNode().boundsInRoot
-            assertTrue(page.width <= 1080f)
-            assertTrue(page.left > 100f && page.right < 1340f, "Wide content must leave readable side margins")
+            assertEquals(1440f, page.width)
+            assertEquals(0f, page.left, "The home scene fills the entire viewport")
             saveDesignSnapshot("design-desktop-1440-light", onRoot(), 1440, 900)
             runOnIdle { appearance.update(AppearanceSettings(NightMode.DARK)) }
             saveDesignSnapshot("design-desktop-1440-dark", onRoot(), 1440, 900)

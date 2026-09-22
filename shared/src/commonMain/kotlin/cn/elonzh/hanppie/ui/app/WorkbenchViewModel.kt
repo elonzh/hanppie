@@ -57,6 +57,15 @@ internal class WorkbenchViewModel(
     private val pausePlatformResources: () -> Unit = {},
     private val releasePlatformResources: () -> Unit = {},
 ) : ViewModel() {
+    var restoredWindowPosition by mutableStateOf<cn.elonzh.hanppie.ui.settings.SavedWindowPosition?>(null)
+        private set
+    var uiPreferencesLoaded by mutableStateOf(false)
+        private set
+
+    suspend fun saveWindowPosition(position: cn.elonzh.hanppie.ui.settings.SavedWindowPosition) {
+        persistUi("window position") { storage.settings.saveWindowPosition(position) }
+    }
+
     val document: MutableState<EditorDocument> = mutableStateOf(EditorDocument())
     var fileError by mutableStateOf<String?>(null)
         private set
@@ -82,12 +91,15 @@ internal class WorkbenchViewModel(
                 val preferences = storage.settings.loadUi()
                 Localization.initialize(this@WorkbenchViewModel.systemLanguage, preferences.language, persistLanguage)
                 appearance.load(preferences.appearance)
+                restoredWindowPosition = preferences.windowPosition
                 applyPlatformPreferences(preferences)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
                 workbenchLogger.error(error) { "Could not load UI preferences" }
                 fileError = error.message ?: error.javaClass.simpleName
+            } finally {
+                uiPreferencesLoaded = true
             }
         }
     }

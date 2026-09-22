@@ -35,7 +35,7 @@ internal class RobotStatusTool(
         val connected: Boolean,
         val address: String? = null,
         val batteryPercent: Int? = null,
-        val signalQualityPercent: Int? = null,
+        val signalQualityRaw: Int? = null,
         val script: ScriptRun,
     )
 

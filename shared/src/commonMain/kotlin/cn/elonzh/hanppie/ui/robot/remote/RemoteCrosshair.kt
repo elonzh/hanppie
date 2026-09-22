@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import cn.elonzh.hanppie.ui.app.AmmoType
 import cn.elonzh.hanppie.ui.app.ConsoleController
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.pow
@@ -49,7 +50,7 @@ internal fun RemoteCrosshair(
     var lastFiredAmmo by remember { mutableStateOf(AmmoType.INFRARED) }
 
     LaunchedEffect(model) {
-        model.fireEvents.collect { ammo ->
+        model.fireEvents.collectLatest { ammo ->
             lastFiredAmmo = ammo
             coroutineScope {
                 launch {

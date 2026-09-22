@@ -2,11 +2,27 @@ package cn.elonzh.hanppie.robot.telemetry
 
 import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.protocol.hex
+import cn.elonzh.hanppie.robot.protocol.hexBytes
 import cn.elonzh.hanppie.robot.remote.RemoteControl
 import cn.elonzh.hanppie.robot.remote.remoteSetup
 import kotlin.test.*
 
 class TelemetryTest {
+    @Test fun capturedNativeChassisTopicsAndInvalidEnvelopes() {
+        val attitude = frame(0x48, 8, "000dd8aad23edb7b063eb512d6bf".hexBytes())
+        val decoded = Telemetry.chassisAttitude(attitude)!!
+        assertEquals(.4114597f, decoded.yawDegrees, .00001f)
+        val wheels = frame(0x48, 8, "000efdff0100fdff0000254dd90fc142b872869b1700879b1700899b1700849b170000000000".hexBytes())
+        assertEquals(listOf(-3, 1, -3, 0), Telemetry.wheels(wheels)!!.rpm)
+        assertEquals(19749 * 360f / 32768f, Telemetry.wheels(wheels)!!.anglesDegrees[0])
+        for (source in listOf(attitude, wheels)) {
+            for (bad in listOf(source.copy(valid = false), source.copy(id = 3),
+                source.copy(payload = source.payload.dropLast(1).toByteArray()),
+                source.copy(payload = source.payload.copyOf().apply { this[1] = 10 }))) {
+                assertNull(Telemetry.chassisAttitude(bad)); assertNull(Telemetry.wheels(bad))
+            }
+        }
+    }
     @Test fun wifiSignalQualityUsesTheNativePushValue() {
         assertEquals(37, Telemetry.wifiSignalQuality(frame(0x07, 0x09, byteArrayOf(37))))
         assertEquals(255, Telemetry.wifiSignalQuality(frame(0x07, 0x09, byteArrayOf(0xff.toByte(), 1))))

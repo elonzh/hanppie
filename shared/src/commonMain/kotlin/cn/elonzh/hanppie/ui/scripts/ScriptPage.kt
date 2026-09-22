@@ -677,7 +677,7 @@ private fun ScriptTopBar(
                 )
             }
         }
-        ConnectionStatusChip(state, onConnectionDetails)
+        ConnectionStatusChip(state, onClick = onConnectionDetails)
     }
 }
 

@@ -121,7 +121,7 @@ class AppSession(private val target: RobotTarget,
         gimbalInput = 0.0 to 0.0; chassisYawInput = 0.0
     }
     /** The S1-verified route sends 3f:51 to hdvt_uav_id (900 -> 0x09), not EP's 0x17. */
-    suspend fun fireGelOnce(): Int = withContext(Dispatchers.IO) {
+    suspend fun fireGelOnce(onSent: (Int) -> Unit = {}): Int = withContext(Dispatchers.IO) {
         var fireLedEnabled = false
         var blasterLedEnabled = false
         try {
@@ -133,6 +133,7 @@ class AppSession(private val target: RobotTarget,
                 blasterLedEnabled = true
                 send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SHOOT_CMD, byteArrayOf(1))
             }
+            onSent(fireSequence)
             delay(400)
             fireSequence
         } finally {

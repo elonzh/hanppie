@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="recenter_gimbal">Recenter gimbal</string>
     <string name="gimbal_protocol_angles_last_received">Gimbal protocol angles · last received</string>
     <string name="gimbal_yaw">Gimbal yaw</string>
     <string name="gimbal_pitch">Gimbal pitch</string>
@@ -313,7 +314,6 @@
     <string name="talking">Talking…</string>
     <string name="sending_talk">Sending talk…</string>
     <string name="video_off">Video off</string>
-    <string name="waiting_for_video">Waiting for video…</string>
     <string name="could_not_start_media">Could not start media</string>
     <string name="could_not_start_audio">Could not start audio</string>
     <string name="robot_live_video">Robot live video</string>
@@ -374,7 +374,6 @@
     <string name="action_continue">Continue</string>
     <string name="quit_hanppie_2">Quit Hanppie?</string>
     <string name="video_frame_exceeds_decoder_buffer">Video frame exceeds decoder buffer</string>
-    <string name="waiting_for_audio">Waiting for audio…</string>
     <string name="audio">Audio</string>
     <string name="initializing_system_speech">Initializing system speech…</string>
     <string name="system_speech_unavailable">System speech unavailable</string>
@@ -384,7 +383,6 @@
     <string name="could_not_start_speaking">Could not start speaking</string>
     <string name="gear_value">Gear %1$s</string>
     <string name="value_joystick">%1$s joystick</string>
-    <string name="video_value_decoded_frames">Video: %1$s decoded frames</string>
     <string name="audio_value_decoded_bytes">Audio: %1$s decoded bytes</string>
     <string name="first_token_value_run_value_ms">First token %1$s · Run %2$sms</string>
     <string name="value_selected">%1$s · Selected</string>
@@ -615,4 +613,22 @@
     <string name="data_directory">Data directory</string>
     <string name="open_data_directory">Open folder</string>
     <string name="open_data_directory_failed">Could not open the folder. Copy the path and open it in your file manager.</string>
+    <string name="scene_accessibility">Interactive 3D robot illustration. Arrow keys rotate; plus and minus zoom; Home resets the view.</string>
+    <string name="scene_rotate_left">Rotate view left</string>
+    <string name="scene_rotate_right">Rotate view right</string>
+    <string name="scene_zoom_in">Zoom in</string>
+    <string name="scene_zoom_out">Zoom out</string>
+    <string name="scene_unavailable">3D preview unavailable · connection is still available</string>
+    <string name="scene_loading">Preparing your robot…</string>
+    <string name="scene_preview">Appearance preview · connect to see robot status</string>
+    <string name="scene_pose_waiting">Illustration · waiting for gimbal pose</string>
+    <string name="scene_pose_live">Illustration · gimbal pose updating</string>
+    <string name="scene_pose_stale">Last gimbal pose · updates paused</string>
+    <string name="scene_static">Appearance illustration · no joint pose available</string>
+    <string name="scene_retry">Reload preview</string>
+    <string name="signal_level_strong">Strong</string>
+    <string name="signal_level_fair">Fair</string>
+    <string name="signal_level_weak">Weak</string>
+    <string name="signal_level_unknown">Unknown</string>
+    <string name="signal_quality_raw">Wi-Fi quality raw value: %1$s (0x07:0x09; not dBm or a percentage)</string>
 </resources>

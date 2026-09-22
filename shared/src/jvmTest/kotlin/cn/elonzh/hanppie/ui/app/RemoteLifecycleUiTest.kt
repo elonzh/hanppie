@@ -5,7 +5,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import cn.elonzh.hanppie.robot.session.RobotNetwork
-import cn.elonzh.hanppie.ui.design.WorkbenchTheme
+import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme as WorkbenchTheme
 import cn.elonzh.hanppie.ui.robot.remote.RemotePage
 import cn.elonzh.hanppie.ui.robot.remote.chassisHeadingInCameraFrame
 import cn.elonzh.hanppie.ui.scripts.EditorDocument

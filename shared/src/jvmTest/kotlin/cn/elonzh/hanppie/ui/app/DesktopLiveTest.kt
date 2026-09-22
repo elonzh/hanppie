@@ -9,7 +9,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.unit.dp
 import cn.elonzh.hanppie.resources.*
-import cn.elonzh.hanppie.ui.design.WorkbenchTheme
+import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme as WorkbenchTheme
 import cn.elonzh.hanppie.ui.robot.remote.DesktopSpeakerInput
 import cn.elonzh.hanppie.ui.scripts.EditorDocument
 import java.awt.image.BufferedImage

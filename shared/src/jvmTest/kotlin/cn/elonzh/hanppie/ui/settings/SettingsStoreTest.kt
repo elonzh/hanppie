@@ -18,6 +18,7 @@ class SettingsStoreTest {
         override suspend fun loadUi() = UiPreferences()
         override suspend fun saveLanguage(language: String) = Unit
         override suspend fun saveAppearance(appearance: AppearanceSettings) = Unit
+        override suspend fun saveWindowPosition(position: SavedWindowPosition) = Unit
         override suspend fun saveSpeechService(service: String) = Unit
     }
 
@@ -72,6 +73,7 @@ class SettingsStoreTest {
             store.saveLanguage("en")
             store.saveAppearance(AppearanceSettings(NightMode.DARK))
             store.saveSpeechService("test.service/.Recognizer")
+            store.saveWindowPosition(SavedWindowPosition(-320f, 72f))
             val connection = ConnectionPreferences(
                 appId = "ABCDEF12",
                 routerSsid = "test-network",
@@ -81,7 +83,7 @@ class SettingsStoreTest {
             store.saveConnection(connection)
 
             assertEquals(expected, store.load())
-            assertEquals(UiPreferences("en", AppearanceSettings(NightMode.DARK), "test.service/.Recognizer"), store.loadUi())
+            assertEquals(UiPreferences("en", AppearanceSettings(NightMode.DARK), "test.service/.Recognizer", SavedWindowPosition(-320f, 72f)), store.loadUi())
             assertEquals(connection.copy(appId = "abcdef12", robots = listOf(connection.robots.single().copy(appId = "abcdef12"))), store.loadConnection())
             assertTrue(file.readBytes().toString(Charsets.ISO_8859_1).contains("secret-value"))
 

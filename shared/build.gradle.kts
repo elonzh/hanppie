@@ -9,15 +9,16 @@ plugins {
 }
 
 kotlin {
-    jvm()
+    jvm { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25 } }
     android {
         namespace = "cn.elonzh.hanppie.ui"
         compileSdk { version = release(37) { minorApiLevel = 0 } }
         buildToolsVersion = "36.1.0"
         minSdk = 26
+        compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17 }
         androidResources.enable = true
     }
-    jvmToolchain(21)
+    jvmToolchain(25)
     sourceSets {
         val jvmSharedMain = create("jvmSharedMain") { dependsOn(commonMain.get()) }
         jvmSharedMain.dependencies {
@@ -32,6 +33,7 @@ kotlin {
             }
         }
         commonMain.dependencies {
+            implementation(libs.filament.compose)
             implementation(libs.androidx.datastore.preferences.core)
             implementation(libs.androidx.lifecycle.runtime.compose)
             implementation(libs.androidx.lifecycle.viewmodel)
@@ -84,4 +86,12 @@ room3 {
 compose.resources {
     packageOfResClass = "cn.elonzh.hanppie.resources"
     generateResClass = always
+}
+
+// Filament and Skia load native code in the real GPU test suite.
+tasks.withType<Test>().configureEach {
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    inputs.property("gpuTests", providers.environmentVariable("HANPPIE_GPU_TESTS").orElse("0"))
+    // Hardware evidence must come from this invocation, never an earlier cached run.
+    outputs.upToDateWhen { System.getenv("HANPPIE_TEST_ROBOT_IP").isNullOrBlank() }
 }

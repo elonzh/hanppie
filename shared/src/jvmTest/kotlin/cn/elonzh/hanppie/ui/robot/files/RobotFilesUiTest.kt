@@ -8,7 +8,7 @@ import cn.elonzh.hanppie.robot.files.RobotFileKind
 import cn.elonzh.hanppie.ui.app.Console
 import cn.elonzh.hanppie.ui.app.testConsoleModel
 import cn.elonzh.hanppie.ui.design.WorkbenchGlyph
-import cn.elonzh.hanppie.ui.design.WorkbenchTheme
+import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme as WorkbenchTheme
 import cn.elonzh.hanppie.ui.design.icon
 import cn.elonzh.hanppie.ui.i18n.Localization
 import cn.elonzh.hanppie.ui.scripts.EditorDocument
@@ -144,7 +144,8 @@ class RobotFilesUiTest {
                 model.robotFiles.state.value = RobotFilesState(entries = entries)
                 setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument()),
                     onRobotFileUpload = {}, onRobotFileDownload = {}, onRobotFileOpen = {}) } }
-                onNodeWithContentDescription("诊断").performClick()
+                onNodeWithTag("connection-status").performClick()
+                onNodeWithTag("connection-diagnostics").performClick()
                 onNodeWithTag("debug-tabs").assertIsDisplayed()
                 onNodeWithText("FTP").performClick()
                 runOnIdle { model.robotFiles.state.value = RobotFilesState(entries = entries) }

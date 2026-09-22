@@ -1,18 +1,24 @@
 package cn.elonzh.hanppie.ui.robot.remote
 
+import cn.elonzh.hanppie.ui.robot.telemetry.signalQualityLabel
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.painterResource
+import cn.elonzh.hanppie.resources.official_ammo_infrared
+import cn.elonzh.hanppie.resources.official_ammo_gel
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
@@ -36,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -48,9 +55,12 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -77,7 +87,8 @@ import cn.elonzh.hanppie.resources.switch_ammo
 import cn.elonzh.hanppie.resources.talking
 import cn.elonzh.hanppie.resources.value_joystick
 import cn.elonzh.hanppie.ui.app.ConsoleController
-import cn.elonzh.hanppie.ui.design.HanppieBrandAssets
+import cn.elonzh.hanppie.ui.robot.device.BatteryIcon
+import cn.elonzh.hanppie.resources.recenter_gimbal
 import cn.elonzh.hanppie.ui.design.HanppieDesignTokens
 import cn.elonzh.hanppie.ui.design.WorkbenchGlyph
 import cn.elonzh.hanppie.ui.design.WorkbenchIcon
@@ -89,9 +100,6 @@ import cn.elonzh.hanppie.ui.settings.isHeld
 import cn.elonzh.hanppie.ui.settings.supports
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
-import org.jetbrains.compose.resources.painterResource
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -109,23 +117,28 @@ internal fun RemotePage(
     onBack: (() -> Unit)? = null,
     onPushToTalkStart: (() -> Unit)? = null,
     onPushToTalkStop: (() -> Unit)? = null,
+    mediaControls: RemoteMediaController = remember { RemoteMediaController() },
+    videoContent: (@Composable () -> Unit)? = null,
+    inputEnabled: Boolean = true,
+    navigationEnabled: Boolean = inputEnabled,
+    manageSession: Boolean = true,
 ) {
     RemoteOrientation(onBack)
     var keyboardHints by remember { mutableStateOf(false) }
     val colors = MiuixTheme.colorScheme
     val connected by model.state.collectAsState()
-    val enabled by model.remoteEnabled.collectAsState()
+    val remoteEnabled by model.remoteEnabled.collectAsState()
+    val foreground by model.foregroundState.collectAsState()
+    val enabled = remoteEnabled && inputEnabled && foreground
     val gelSelected by model.gelSelected.collectAsState()
     val gear by model.driveGear.collectAsState()
     val control by model.controlSettings.collectAsState()
     val talking by model.talking.collectAsState()
     val microphoneReady by model.microphoneReady.collectAsState()
     val talkBusy by model.talkBusy.collectAsState()
-    val mediaControls = remember { RemoteMediaController() }
     val mediaState by mediaControls.state.collectAsState()
     var left by remember { mutableStateOf(Offset.Zero) }
     var right by remember { mutableStateOf(Offset.Zero) }
-    val foreground by model.foregroundState.collectAsState()
     var pageFocused by remember { mutableStateOf(false) }
     var keys by remember { mutableStateOf(setOf<Key>()) }
     var firePointerHeld by remember { mutableStateOf(false) }
@@ -143,8 +156,7 @@ internal fun RemotePage(
         model.stopFiring()
         (onPushToTalkStop ?: model::endPushToTalk)()
         model.setRemoteLed(null)
-        model.leaveRemote()
-        model.stopMedia()
+        if (manageSession) { model.leaveRemote(); model.stopMedia() }
     } }
     LaunchedEffect(enabled) {
         if (enabled) focus.requestFocus()
@@ -175,11 +187,14 @@ internal fun RemotePage(
     LaunchedEffect(shouldFire) {
         if (shouldFire) model.startFiring() else model.stopFiring()
     }
-    BoxWithConstraints(modifier.fillMaxSize().testTag("remote-surface").background(colors.background).pointerInput(Unit) {
+    BoxWithConstraints(modifier.fillMaxSize().testTag("remote-surface").background(if (videoContent == null) colors.background else Color.Transparent).pointerInput(Unit) {
         awaitPointerEventScope {
             while (true) {
-                val event = awaitPointerEvent(PointerEventPass.Initial)
-                if (event.changes.any { it.type == PointerType.Touch && it.pressed }) keyboardHints = false
+                val event = awaitPointerEvent(PointerEventPass.Final)
+                if (event.changes.any { it.changedToUpIgnoreConsumed() && !it.isConsumed }) {
+                    keyboardHints = false
+                    focus.requestFocus()
+                }
             }
         }
     }.focusRequester(focus).onFocusChanged {
@@ -190,8 +205,12 @@ internal fun RemotePage(
             model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
         }
     }.onPreviewKeyEvent {
+        if (!inputEnabled || !foreground) return@onPreviewKeyEvent false
         val supported = control.shortcuts.supports(it.key)
-        if (it.type == KeyEventType.KeyDown) keyboardHints = true
+        if (supported && enabled && it.type == KeyEventType.KeyDown) {
+            keyboardHints = true
+            left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+        }
         if (supported) {
             if (it.type == KeyEventType.KeyUp) {
                 if (control.shortcuts[ControlAction.PushToTalk].key.matches(it.key))
@@ -229,18 +248,18 @@ internal fun RemotePage(
             keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; model.stopFiring()
             if (landscapeReady && foreground) focus.requestFocus()
         }
-        LaunchedEffect(landscapeReady, foreground, pageFocused, connected.connected) {
-            if (landscapeReady && foreground && pageFocused && connected.connected) {
+        LaunchedEffect(landscapeReady, foreground, pageFocused, connected.connected, inputEnabled) {
+            if (manageSession && inputEnabled && landscapeReady && foreground && pageFocused && connected.connected) {
                 snapshotFlow { connected.busy }.first { !it }
                 if (!model.remoteEnabled.value) model.enableRemote()
             }
         }
-        RobotVideo(model, mediaControls, Modifier.fillMaxSize())
+        if (videoContent == null) RobotVideo(model, mediaControls, Modifier.fillMaxSize()) else videoContent()
         RemoteCrosshair(model, Modifier.align(Alignment.Center))
         Row(Modifier.align(Alignment.TopStart).padding(HanppieDesignTokens.RemoteEdgePadding),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            onBack?.let { back -> HudIconButton(tr(Res.string.back_to_console), WorkbenchGlyph.BACK, action = back) }
-            if (connected.canStop) HudIconButton(tr(Res.string.stop_script), WorkbenchGlyph.STOP, action = model::stop)
+            onBack?.let { back -> HudIconButton(tr(Res.string.back_to_console), WorkbenchGlyph.BACK, enabled = navigationEnabled && foreground, action = back) }
+            if (connected.canStop) HudIconButton(tr(Res.string.stop_script), WorkbenchGlyph.STOP, enabled = inputEnabled && foreground, action = model::stop)
         }
         val leftHudWidth = (if (onBack != null) 48 else 0) + (if (connected.canStop) 56 else 0)
         val mediaHudWidth = 216
@@ -251,15 +270,21 @@ internal fun RemotePage(
             .testTag("remote-telemetry"),
             colors = CardDefaults.defaultColors(color = HanppieDesignTokens.RemoteHudSurface.copy(alpha = HanppieDesignTokens.RemoteHudAlpha)),
             insideMargin = PaddingValues(0.dp)) {
-                Row(Modifier.padding(horizontal = if (compactHud) 8.dp else 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(if (compactHud) 6.dp else 12.dp),
+                Row(Modifier.padding(horizontal = if (compactHud) 8.dp else 12.dp, vertical = 0.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    Image(painterResource(HanppieBrandAssets.expression(ledState)), null,
-                        Modifier.size(if (compactHud) 28.dp else 40.dp, if (compactHud) 14.dp else 20.dp))
-                    Text(if (connected.connected) "${connected.battery ?: "—"}%" else tr(Res.string.not_connected),
-                        color = HanppieDesignTokens.RemoteHudContent, style = MiuixTheme.textStyles.footnote1)
-                    SignalIndicator(connected.signalQuality, compactHud)
-                    HeadingIndicator(connected.gimbal?.yawDegrees)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        BatteryIcon(connected.battery, HanppieDesignTokens.RemoteHudContent)
+                        Text(if (connected.connected) "${connected.battery ?: "—"}%" else "—",
+                            modifier = Modifier.width(34.dp), maxLines = 1,
+                            color = HanppieDesignTokens.RemoteHudContent, style = MiuixTheme.textStyles.footnote1)
+                    }
+                    SignalIndicator(connected.signalQuality)
+                    HeadingIndicator(connected.gimbal?.yawDegrees, Modifier.heightIn(min = 48.dp)
+                        .testTag("recenter-gimbal")
+                        .clickable(enabled = enabled && connected.gimbal != null, onClickLabel = tr(Res.string.recenter_gimbal)) {
+                            model.recenterGimbal(); focus.requestFocus()
+                        })
                 }
         }
         if (!landscapeReady) {
@@ -267,53 +292,66 @@ internal fun RemotePage(
                 color = colors.onSurface, style = MiuixTheme.textStyles.subtitle)
             return@BoxWithConstraints
         }
-        Column(Modifier.align(Alignment.BottomStart).padding(HanppieDesignTokens.RemoteEdgePadding),
-            verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.background(HanppieDesignTokens.RemoteHudSurface.copy(alpha = .82f), CircleShape)
-                .border(1.dp, Color.White.copy(alpha = .18f), CircleShape).padding(2.dp)) {
-                repeat(DriveSpeed.gearCount) { index ->
-                    val value = index + 1
-                    val gearLabel = tr(Res.string.gear_value, value)
-                    IconButton(onClick = { model.selectGear(value); focus.requestFocus() },
-                        modifier = Modifier.size(HanppieDesignTokens.TouchTarget).semantics {
-                            contentDescription = gearLabel
-                        }, cornerRadius = 24.dp,
-                        backgroundColor = if (gear == value) colors.primary else Color.Transparent) {
-                        Text(value.toString(), color = if (gear == value) colors.onPrimary else HanppieDesignTokens.RemoteHudContent,
-                            fontSize = 14.sp)
+        val touchInset = (maxWidth * .06f).coerceIn(32.dp, 80.dp)
+        if (!keyboardHints) {
+            Column(Modifier.align(Alignment.BottomStart).padding(start = touchInset, bottom = 32.dp).testTag("remote-touch-left"),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.testTag("remote-gear-bar").drawBehind {
+                    val height = 28.dp.toPx()
+                    drawRoundRect(HanppieDesignTokens.RemoteHudSurface.copy(alpha = .55f),
+                        topLeft = Offset(0f, (size.height - height) / 2), size = Size(size.width, height),
+                        cornerRadius = CornerRadius(height / 2))
+                }) {
+                    repeat(DriveSpeed.gearCount) { index ->
+                        val value = index + 1
+                        Box(Modifier.size(32.dp, 48.dp).clickable(enabled = enabled, role = Role.RadioButton) {
+                            model.selectGear(value); focus.requestFocus()
+                        }.semantics { contentDescription = tr(Res.string.gear_value, value) }, contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(24.dp).background(
+                                if (gear == value) colors.primary.copy(alpha = .7f) else Color.Transparent,
+                                CircleShape), contentAlignment = Alignment.Center) {
+                                Text(value.toString(), color = HanppieDesignTokens.RemoteHudContent, fontSize = 12.sp)
+                            }
+                        }
                     }
                 }
-            }
-            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Stick(tr(Res.string.chassis),
-                    foreground && enabled, { keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
-                    tr(Res.string.chassis)) { left = it }
+                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Stick(tr(Res.string.chassis),
+                        foreground && enabled, { keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
+                        tr(Res.string.chassis)) { left = it }
 
+                }
             }
-        }
-        Column(Modifier.align(Alignment.BottomEnd).padding(HanppieDesignTokens.RemoteEdgePadding),
-            horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                HudIconButton(if (gelSelected) tr(Res.string.fire_one_gel_bead) else tr(Res.string.fire_infrared),
-                    WorkbenchGlyph.CROSSHAIR, enabled = enabled && !connected.busy, selected = true,
-                    onPressChange = { held ->
-                        firePointerHeld = held
-                        if (held) {
-                            keyboardHints = false
+            Column(Modifier.align(Alignment.BottomEnd).padding(end = touchInset, bottom = 32.dp).testTag("remote-touch-right"),
+                horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    HudIconButton(if (gelSelected) tr(Res.string.fire_one_gel_bead) else tr(Res.string.fire_infrared),
+                        WorkbenchGlyph.CROSSHAIR, enabled = enabled && !connected.busy, selected = firePointerHeld,
+                        onPressChange = { held ->
+                            firePointerHeld = held
+                            if (held) {
+                                keyboardHints = false
+                                focus.requestFocus()
+                            }
+                        },
+                        action = {
+                            model.fireSelected()
                             focus.requestFocus()
-                        }
-                    },
-                    action = {
-                        model.fireSelected()
-                        focus.requestFocus()
-                    })
-                HudButton(tr(Res.string.switch_ammo), if (gelSelected) tr(Res.string.gel) else tr(Res.string.ir), symbol = WorkbenchGlyph.PACKETS) {
+                        })
+
+                }
+                Stick("${tr(Res.string.gimbal)} · ${control.gimbalSpeed}°/s", foreground && enabled,
+                    { keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
+                    tr(Res.string.gimbal)) { right = it }
+            }
+            Box(Modifier.align(Alignment.BottomEnd).padding(end = touchInset + 76.dp, bottom = 180.dp).testTag("remote-ammo")) {
+                HudIconButton(tr(Res.string.switch_ammo),
+                    WorkbenchGlyph.PACKETS,
+                    artwork = if (gelSelected) Res.drawable.official_ammo_gel else Res.drawable.official_ammo_infrared,
+                    enabled = enabled, stateLabel = if (gelSelected) tr(Res.string.gel) else tr(Res.string.ir)) {
                     model.switchAmmo(); focus.requestFocus()
                 }
             }
-            Stick("${tr(Res.string.gimbal)} · ${control.gimbalSpeed}°/s", foreground && enabled,
-                { keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
-                tr(Res.string.gimbal)) { right = it }
         }
         if (talking || talkBusy) Text(if (talking) tr(if (microphoneReady) Res.string.talking else Res.string.microphone_preparing) else tr(Res.string.sending_talk),
             Modifier.align(Alignment.BottomCenter).padding(bottom = 54.dp), color = HanppieDesignTokens.RemoteHudContent,
@@ -324,6 +362,7 @@ internal fun RemotePage(
                     androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp)
                 .testTag("keyboard-hints"), color = HanppieDesignTokens.RemoteHudMuted, fontSize = 10.sp, maxLines = 2)
         }
+
     }
 }
 
@@ -349,34 +388,18 @@ private fun keyboardHint(shortcuts: ControlShortcuts): String = listOf(tr(
 )).joinToString(" · ")
 
 @Composable
-private fun SignalIndicator(quality: Int?, compact: Boolean = false) {
-    val colors = MiuixTheme.colorScheme
-    val bars = when {
-        quality == null || quality <= 0 -> 0
-        quality < 20 -> 1
-        quality < 30 -> 2
-        quality < 40 -> 3
-        else -> 4
+private fun SignalIndicator(quality: Int?) {
+    val label = signalQualityLabel(quality)
+    val description = tr(Res.string.signal_strength_value, label)
+    val glyph = when {
+        quality == null || quality !in 0..255 -> WorkbenchGlyph.SIGNAL_UNKNOWN
+        quality < 20 -> WorkbenchGlyph.SIGNAL_LOW
+        quality < 40 -> WorkbenchGlyph.SIGNAL_MEDIUM
+        else -> WorkbenchGlyph.SIGNAL
     }
-    val description = quality?.let { tr(Res.string.signal_strength_value, it) }
-        ?: tr(Res.string.signal_strength_unknown)
-    Row(Modifier.semantics { contentDescription = description },
-        horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-        Canvas(Modifier.size(if (compact) 20.dp else 28.dp, if (compact) 16.dp else 18.dp)) {
-            val width = (if (compact) 3.dp else 4.dp).toPx()
-            val gap = (if (compact) 2.dp else 3.dp).toPx()
-            repeat(4) { index ->
-                val height = (5 + index * 4).dp.toPx()
-                drawRoundRect(
-                    color = if (index < bars) colors.primary else colors.dividerLine,
-                    topLeft = Offset(index * (width + gap), size.height - height),
-                    size = Size(width, height),
-                    cornerRadius = CornerRadius(width / 2, width / 2),
-                )
-            }
-        }
-        Text(quality?.toString() ?: "—", color = HanppieDesignTokens.RemoteHudMuted,
-            style = MiuixTheme.textStyles.footnote1)
+    Box(Modifier.size(20.dp).testTag("remote-signal").semantics { contentDescription = description },
+        contentAlignment = Alignment.Center) {
+        WorkbenchIcon(glyph, HanppieDesignTokens.RemoteHudContent, Modifier.size(20.dp))
     }
 }
 
@@ -405,8 +428,8 @@ private fun SignalIndicator(quality: Int?, compact: Boolean = false) {
                 }
             }) {
             val radius = size.minDimension / 2
-            drawCircle(Brush.radialGradient(listOf(Color(0xff34414d).copy(alpha = .84f),
-                HanppieDesignTokens.RemoteHudSurface.copy(alpha = .9f)), radius = radius))
+            drawCircle(Brush.radialGradient(listOf(Color(0xff34414d).copy(alpha = .48f),
+                HanppieDesignTokens.RemoteHudSurface.copy(alpha = .58f)), radius = radius))
             drawCircle(Color.White.copy(alpha = .32f), radius - 1.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
             drawCircle(Color.White.copy(alpha = .10f), radius * .76f, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
             for (direction in listOf(Offset(0f, -1f), Offset(1f, 0f), Offset(0f, 1f), Offset(-1f, 0f))) {
@@ -425,30 +448,13 @@ private fun SignalIndicator(quality: Int?, compact: Boolean = false) {
     }
 }
 
-@Composable internal fun HudButton(label: String, text: String, enabled: Boolean = true,
-                                   selected: Boolean = false, modifier: Modifier = Modifier, symbol: WorkbenchGlyph? = null, action: () -> Unit) {
-    Button(onClick = action, enabled = enabled,
-        modifier = modifier.heightIn(min = HanppieDesignTokens.TouchTarget).semantics { contentDescription = label },
-        insideMargin = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-        colors = ButtonDefaults.buttonColors(
-            color = (if (selected) MiuixTheme.colorScheme.primary else HanppieDesignTokens.RemoteHudSurface).copy(alpha = .94f),
-            contentColor = if (selected) MiuixTheme.colorScheme.onPrimary else HanppieDesignTokens.RemoteHudContent)) {
-        symbol?.let {
-            WorkbenchIcon(it, if (selected) MiuixTheme.colorScheme.onPrimary else HanppieDesignTokens.RemoteHudContent,
-                Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-        }
-        Text(text, fontSize = 14.sp)
-    }
-}
-
 @Composable internal fun HudIconButton(label: String, symbol: WorkbenchGlyph, enabled: Boolean = true,
-    selected: Boolean = false, onPressChange: ((Boolean) -> Unit)? = null, action: () -> Unit = {}) {
+    selected: Boolean = false, stateLabel: String? = null, artwork: DrawableResource? = null, onPressChange: ((Boolean) -> Unit)? = null, action: () -> Unit = {}) {
     val colors = MiuixTheme.colorScheme
-    val surface = if (selected && enabled) colors.primary else HanppieDesignTokens.RemoteHudSurface.copy(alpha = .88f)
+    val surface = if (selected) colors.primary else HanppieDesignTokens.RemoteHudSurface.copy(alpha = .60f)
     val ink = when {
         symbol == WorkbenchGlyph.RECORD || symbol == WorkbenchGlyph.STOP -> Color(0xffff7165)
-        selected && enabled -> colors.onPrimary
+        selected -> colors.onPrimary
         else -> HanppieDesignTokens.RemoteHudContent
     }
     val currentOnPressChange by rememberUpdatedState(onPressChange)
@@ -472,8 +478,16 @@ private fun SignalIndicator(quality: Int?, compact: Boolean = false) {
     IconButton(onClick = action, enabled = enabled, cornerRadius = 24.dp,
         modifier = Modifier.size(HanppieDesignTokens.TouchTarget)
             .then(holdModifier)
-            .border(1.dp, Color.White.copy(alpha = .22f), CircleShape)
-            .semantics { contentDescription = label }, backgroundColor = surface) {
-        WorkbenchIcon(symbol, ink.copy(alpha = if (enabled) 1f else .45f))
+            .drawBehind {
+                val radius = size.minDimension / 2 - 4.dp.toPx()
+                if (artwork == null) {
+                    drawCircle(surface.copy(alpha = if (selected) .75f else .60f), radius)
+                    drawCircle(Color.White.copy(alpha = .22f), radius,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+                }
+            }
+            .semantics { contentDescription = label; stateLabel?.let { stateDescription = it }; if (!enabled) disabled() }, backgroundColor = Color.Transparent) {
+        if (artwork != null) Image(painterResource(artwork), null, Modifier.size(40.dp))
+        else WorkbenchIcon(symbol, ink, Modifier.size(20.dp))
     }
 }

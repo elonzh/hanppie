@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="recenter_gimbal">云台回中</string>
     <string name="gimbal_protocol_angles_last_received">云台协议角度 · 最近接收</string>
     <string name="gimbal_yaw">云台 yaw</string>
     <string name="gimbal_pitch">云台 pitch</string>
@@ -313,7 +314,6 @@
     <string name="talking">正在对讲…</string>
     <string name="sending_talk">正在发送对讲…</string>
     <string name="video_off">视频未开启</string>
-    <string name="waiting_for_video">等待视频帧…</string>
     <string name="could_not_start_media">媒体启动失败</string>
     <string name="could_not_start_audio">音频启动失败</string>
     <string name="robot_live_video">机器人实时画面</string>
@@ -374,7 +374,6 @@
     <string name="action_continue">继续</string>
     <string name="quit_hanppie_2">退出憨皮？</string>
     <string name="video_frame_exceeds_decoder_buffer">视频帧超过解码缓冲区</string>
-    <string name="waiting_for_audio">等待音频…</string>
     <string name="audio">音频</string>
     <string name="initializing_system_speech">正在初始化系统语音…</string>
     <string name="system_speech_unavailable">系统语音不可用</string>
@@ -384,7 +383,6 @@
     <string name="could_not_start_speaking">无法开始播报</string>
     <string name="gear_value">%1$s 档</string>
     <string name="value_joystick">%1$s 摇杆</string>
-    <string name="video_value_decoded_frames">视频已解码 %1$s 帧</string>
     <string name="audio_value_decoded_bytes">音频已解码 %1$s 字节</string>
     <string name="first_token_value_run_value_ms">首字 %1$s · 本次运行 %2$sms</string>
     <string name="value_selected">%1$s · 已选择</string>
@@ -615,4 +613,22 @@
     <string name="data_directory">数据目录</string>
     <string name="open_data_directory">打开目录</string>
     <string name="open_data_directory_failed">无法打开目录，请复制路径并在文件管理器中打开。</string>
+    <string name="scene_accessibility">机器人三维示意模型。方向键旋转，加减键缩放，Home 键重置视角。</string>
+    <string name="scene_rotate_left">向左旋转视角</string>
+    <string name="scene_rotate_right">向右旋转视角</string>
+    <string name="scene_zoom_in">放大模型</string>
+    <string name="scene_zoom_out">缩小模型</string>
+    <string name="scene_unavailable">三维预览暂不可用 · 仍可连接机器人</string>
+    <string name="scene_loading">正在准备机器人模型…</string>
+    <string name="scene_preview">外观预览 · 连接后查看机器人状态</string>
+    <string name="scene_pose_waiting">示意模型 · 等待云台姿态</string>
+    <string name="scene_pose_live">示意模型 · 云台姿态更新中</string>
+    <string name="scene_pose_stale">最近云台姿态 · 更新已暂停</string>
+    <string name="scene_static">外观示意 · 暂无关节姿态</string>
+    <string name="scene_retry">重新加载</string>
+    <string name="signal_level_strong">强</string>
+    <string name="signal_level_fair">中</string>
+    <string name="signal_level_weak">弱</string>
+    <string name="signal_level_unknown">未知</string>
+    <string name="signal_quality_raw">Wi-Fi 质量原始值：%1$s（0x07:0x09；不是 dBm 或百分比）</string>
 </resources>

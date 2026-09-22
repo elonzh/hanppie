@@ -52,6 +52,7 @@ internal interface ConsoleController : AutoCloseable {
     val talking: MutableStateFlow<Boolean>
     val microphoneReady: MutableStateFlow<Boolean>
     val talkBusy: MutableStateFlow<Boolean>
+    val videoFrames: cn.elonzh.hanppie.ui.robot.remote.VideoFrameCache
     var videoSink: ((ByteArray) -> Unit)?
     var audioSink: ((ByteArray) -> Unit)?
 
@@ -66,6 +67,7 @@ internal interface ConsoleController : AutoCloseable {
     fun startFiring()
     fun stopFiring()
     fun enableRemote()
+    fun recenterGimbal()
     fun haltRemote()
     fun leaveRemote()
     fun drive(x: Double, y: Double, z: Double, pitch: Double, yaw: Double)

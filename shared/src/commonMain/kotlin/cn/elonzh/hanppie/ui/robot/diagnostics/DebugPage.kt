@@ -100,6 +100,10 @@ internal fun DebugPage(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     if (selectedTab == 1) {
+                        item { Text(tr(Res.string.signal_quality_raw, state.signalQuality?.toString() ?: "—"),
+                            modifier = Modifier.testTag("signal-quality-raw"), fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary) }
+
                         state.gimbal?.let { gimbal ->
                             item { Text(tr(Res.string.gimbal_protocol_angles_last_received), fontSize = 12.sp,
                                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary) }

@@ -71,10 +71,14 @@ internal data class SavedSettings(
     val media: MediaSettings = MediaSettings(),
 )
 
+@Serializable
+internal data class SavedWindowPosition(val x: Float, val y: Float)
+
 internal data class UiPreferences(
     val language: String = "system",
     val appearance: AppearanceSettings = AppearanceSettings(),
     val speechService: String? = null,
+    val windowPosition: SavedWindowPosition? = null,
 )
 
 @Serializable
@@ -140,6 +144,7 @@ internal interface SettingsStore {
     suspend fun loadUi(): UiPreferences
     suspend fun saveLanguage(language: String)
     suspend fun saveAppearance(appearance: AppearanceSettings)
+    suspend fun saveWindowPosition(position: SavedWindowPosition)
     suspend fun saveSpeechService(service: String)
     suspend fun loadConnection(): ConnectionPreferences = ConnectionPreferences.fresh()
     suspend fun saveConnection(preferences: ConnectionPreferences) = Unit
@@ -172,6 +177,7 @@ internal class DataStoreSettingsStore(
             language = preferences[Keys.language] ?: "system",
             appearance = AppearanceSettings.decode(preferences[Keys.appearance]),
             speechService = preferences[Keys.speechService],
+            windowPosition = preferences[Keys.windowPosition]?.let { settingsJson.decodeFromString<SavedWindowPosition>(it) },
         )
     }
 
@@ -182,6 +188,11 @@ internal class DataStoreSettingsStore(
 
     override suspend fun saveAppearance(appearance: AppearanceSettings) {
         dataStore.edit { it[Keys.appearance] = appearance.encode() }
+    }
+
+    override suspend fun saveWindowPosition(position: SavedWindowPosition) {
+        require(position.x.isFinite() && position.y.isFinite())
+        dataStore.edit { it[Keys.windowPosition] = settingsJson.encodeToString(position) }
     }
 
     override suspend fun saveSpeechService(service: String) {
@@ -209,5 +220,6 @@ internal class DataStoreSettingsStore(
         val appearance = stringPreferencesKey("appearance")
         val speechService = stringPreferencesKey("speech_service")
         val connection = stringPreferencesKey("connection")
+        val windowPosition = stringPreferencesKey("window_position")
     }
 }

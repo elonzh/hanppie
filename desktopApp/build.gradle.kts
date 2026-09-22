@@ -6,7 +6,24 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
-kotlin { jvmToolchain(21) }
+kotlin {
+    jvmToolchain(25)
+    compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25 }
+}
+
+// Select only the host's native renderer when building a desktop distribution.
+configurations.matching { it.isCanBeResolved }.configureEach {
+    attributes {
+        val os = when {
+            System.getProperty("os.name").startsWith("Mac") -> "macos"
+            System.getProperty("os.name").startsWith("Windows") -> "windows"
+            else -> "linux"
+        }
+        val arch = if (System.getProperty("os.arch") in listOf("aarch64", "arm64")) "arm64" else "x86-64"
+        attribute(org.gradle.nativeplatform.OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, objects.named(os))
+        attribute(org.gradle.nativeplatform.MachineArchitecture.ARCHITECTURE_ATTRIBUTE, objects.named(arch))
+    }
+}
 
 dependencies {
     implementation(project(":shared"))
@@ -17,6 +34,7 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "cn.elonzh.hanppie.desktop.MainKt"
+        jvmArgs("--enable-native-access=ALL-UNNAMED")
         if (System.getProperty("os.name").startsWith("Mac")) {
             jvmArgs("-Xdock:name=Hanppie")
         }

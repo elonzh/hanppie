@@ -91,9 +91,11 @@ class RemoteFireUiTest {
         override fun fireInfrared() {
             infraredCount.incrementAndGet()
         }
-        override suspend fun fireGelOnce(): Int {
+        override suspend fun fireGelOnce(onSent: (Int) -> Unit): Int {
+            val sequence = gelCount.incrementAndGet()
+            onSent(sequence)
             delay(50)
-            return gelCount.incrementAndGet()
+            return sequence
         }
         override suspend fun playSpeaker(encoded: ByteArray): Int = 0
         override fun setLed(red: Int, green: Int, blue: Int, enabled: Boolean) {}

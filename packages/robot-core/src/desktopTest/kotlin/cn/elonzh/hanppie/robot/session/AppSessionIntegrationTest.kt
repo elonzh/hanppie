@@ -193,6 +193,11 @@ class AppSessionIntegrationTest {
                 withTimeout(2000) { while (received.isEmpty()) delay(10) }
                 assertTrue(sent.all { it.valid })
                 assertTrue(sent.any { it.set == 0x48 && it.id == 3 })
+                // The homepage receives pose without entering remote mode or sending actuator speeds.
+                assertTrue(sent.any { it.set == 0x48 && it.id == 3 &&
+                    it.payload.contentEquals(byteArrayOf(2, 10, 0, 0, 1, 0x97.toByte(), 0x3c, 0x9b.toByte(), 0xf7.toByte(), 9, 0, 2, 0, 10, 0)) })
+                assertFalse(sent.any { (it.set == 4 && it.id == 0x0c) || (it.set == 0x3f && it.id == 0x21) })
+
                 assertTrue(sent.any { it.receiver == 0x28 && it.set == 0x3f && it.id == 0xfe && it.payload.contentEquals(byteArrayOf(0)) })
                 session.send(0x28, 0xc0, 0x3f, 0xfe, byteArrayOf(0, 1))
                 session.send(0x28, 0x00, 0x3f, 0x12, byteArrayOf(2,
@@ -272,7 +277,15 @@ class AppSessionIntegrationTest {
                 delay(100)
                 assertTrue(sent.count { it.set == 4 && it.id == 0x0c } > stoppedCount)
                 val fireMark=sent.size
-                session.fireGelOnce()
+                var reportedAt = 0L
+                var reportedSequence = -1
+                val fireSequence = session.fireGelOnce { sequence ->
+                    reportedSequence = sequence
+                    reportedAt = System.nanoTime()
+                }
+                assertEquals(fireSequence, reportedSequence)
+                assertTrue(reportedAt > 0 && System.nanoTime() - reportedAt >= 300_000_000,
+                    "Shot feedback must be sent before the 400 ms lamp cleanup delay")
                 withTimeout(1000) {
                     while (sent.drop(fireMark).none {
                             it.receiver==9 && it.set==0x3f && it.id==0x33 &&

@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.scripts
 
+import cn.elonzh.hanppie.ui.robot.telemetry.signalQualityLabel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -68,7 +69,7 @@ internal fun ScriptStatusStrip(state: ConsoleState) {
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         StatusChip(WorkbenchGlyph.BATTERY, tr(Res.string.script_status_battery_value, state.battery?.let { "$it%" } ?: "--"))
-        StatusChip(WorkbenchGlyph.SIGNAL, tr(Res.string.script_status_signal_value, state.signalQuality?.let { "$it%" } ?: "--"))
+        StatusChip(WorkbenchGlyph.SIGNAL, tr(Res.string.script_status_signal_value, signalQualityLabel(state.signalQuality)))
         state.gimbal?.let { gimbal ->
             StatusChip(
                 WorkbenchGlyph.CROSSHAIR,

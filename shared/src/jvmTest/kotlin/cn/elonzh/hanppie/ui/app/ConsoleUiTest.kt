@@ -24,6 +24,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
@@ -77,7 +78,7 @@ import cn.elonzh.hanppie.ui.chat.ChatPage
 import cn.elonzh.hanppie.ui.chat.ChatPhase
 import cn.elonzh.hanppie.ui.chat.ChatRole
 import cn.elonzh.hanppie.ui.chat.ToolApproval
-import cn.elonzh.hanppie.ui.design.WorkbenchTheme
+import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme as WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
 import cn.elonzh.hanppie.ui.i18n.uiText
 import cn.elonzh.hanppie.ui.robot.remote.RemotePage
@@ -242,7 +243,9 @@ class ConsoleUiTest {
             assertTrue(chassis.center.x < 640f * .25f && gimbal.center.x > 640f * .75f)
             assertTrue(chassis.bottom <= 360f && gimbal.bottom <= 360f)
             assertTrue(gear.bottom <= chassis.top)
-            assertTrue(gear.width >= 48f && gear.height >= 48f)
+            assertTrue(gear.width >= 32f && gear.height >= 48f)
+            assertTrue(rule.onNodeWithTag("remote-gear-bar").fetchSemanticsNode().boundsInRoot.width <= 164f)
+            rule.runOnIdle { model.remoteEnabled.value = true }
             rule.onNodeWithContentDescription("切换弹药").assertIsDisplayed().performClick()
             val media = rule.onNodeWithContentDescription("关闭视频").assertIsDisplayed()
                 .fetchSemanticsNode().boundsInRoot
@@ -319,7 +322,7 @@ class ConsoleUiTest {
             rule.setContent { WorkbenchTheme {
                 Box(Modifier.requiredSize(393.dp, 740.dp)) { Console(model, mutableStateOf(EditorDocument())) }
             } }
-            rule.onNodeWithTag("bottom-navigation").assertIsDisplayed()
+            rule.onNodeWithTag("bottom-navigation").assertDoesNotExist()
             rule.onNodeWithText("自动连接").assertIsDisplayed()
             rule.onNodeWithText("手机或电脑需与机器人连接同一 Wi-Fi").assertDoesNotExist()
             snapshot("phone-device")
@@ -1135,6 +1138,10 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.waitForIdle()
             rule.onNodeWithTag("remote-surface").performKeyInput { keyDown(Key.W); keyUp(Key.W) }
             rule.onNodeWithTag("keyboard-hints").assertIsDisplayed()
+            rule.onNodeWithTag("remote-touch-left").assertDoesNotExist()
+            rule.onNodeWithTag("remote-touch-right").assertDoesNotExist()
+            rule.onNodeWithTag("remote-surface").performMouseInput { click(center) }
+            rule.onNodeWithTag("keyboard-hints").assertDoesNotExist()
             val stick = rule.onNodeWithContentDescription("底盘 摇杆")
             stick.performTouchInput { down(center); moveTo(center.copy(y = center.y - 40f)) }
             rule.waitUntil(2000) { model.remoteInput.value[0] > 0 }
@@ -1178,7 +1185,7 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
 
     @Test fun homepageKeepsConnectionChoicesOutOfTheEverydayFlow() {
         val model = testConsoleModel()
-        val width = mutableStateOf(393.dp)
+        val width = mutableStateOf(740.dp)
         try {
             model.connectionPreferences.value = cn.elonzh.hanppie.ui.settings.ConnectionPreferences(
                 appId = "AABBCCDD",
@@ -1189,26 +1196,24 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             model.state.value = model.state.value.copy(devices = listOf(
                 cn.elonzh.hanppie.robot.protocol.DiscoveredRobot("192.0.2.20", "AA:BB:CC:DD:EE:FF", "AABBCCDD", false),
             ))
-            rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(width.value, 740.dp)) {
+            rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(width.value, if (width.value < 1000.dp) 393.dp else 740.dp)) {
                 Console(model, mutableStateOf(EditorDocument()))
             } } }
-            fun checkPair(first: String, second: String) {
-                val a = rule.onNodeWithTag(first).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-                val b = rule.onNodeWithTag(second).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-                assertEquals(a.left, b.left)
-                assertEquals(a.width, b.width)
-                assertEquals(a.height, b.height)
-                assertTrue(b.top > a.bottom)
+            fun checkHomeActions() {
+                rule.onNodeWithTag("auto-connect").assertIsDisplayed()
+                rule.onNodeWithTag("connection-guide").assertDoesNotExist()
+                rule.onNodeWithTag("connection-diagnostics").assertDoesNotExist()
             }
-            checkPair("auto-connect", "connection-guide")
+            checkHomeActions()
             rule.onNodeWithTag("manual-connect").assertDoesNotExist()
             rule.onNodeWithText("192.0.2.10", substring = true).assertDoesNotExist()
             rule.onNodeWithText("192.0.2.20", substring = true).assertDoesNotExist()
             snapshot("home-actions-phone")
             rule.runOnIdle { width.value = 1040.dp }
-            checkPair("auto-connect", "connection-guide")
+            checkHomeActions()
             snapshot("home-actions-desktop")
-            rule.onNodeWithContentDescription("诊断").performClick()
+            rule.onNodeWithTag("connection-status").performClick()
+            rule.onNodeWithTag("connection-diagnostics").performClick()
             rule.onNodeWithTag("manual-connect").assertIsDisplayed()
             rule.onNodeWithContentDescription("设备").performClick()
             rule.runOnIdle { model.state.value = model.state.value.copy(connected = true, connectedAddress = "192.0.2.1") }
@@ -1216,9 +1221,10 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.onNodeWithTag("auto-connect").assertDoesNotExist()
             rule.onNodeWithTag("connection-guide").assertDoesNotExist()
             rule.onNodeWithText("192.0.2.1", substring = true).assertDoesNotExist()
-            rule.onNodeWithText("机器人已准备好").assertIsDisplayed()
+            rule.onNodeWithText("机器人已准备好").assertDoesNotExist()
+            rule.onNodeWithTag("enter-remote").assertIsDisplayed()
             snapshot("home-connected-desktop")
-            rule.runOnIdle { width.value = 393.dp }
+            rule.runOnIdle { width.value = 740.dp }
             rule.waitForIdle()
             snapshot("home-connected-phone")
             rule.onNodeWithTag("connection-status").performClick()
@@ -1235,6 +1241,7 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(width.value, 740.dp)) {
                 Console(model, mutableStateOf(EditorDocument()), onOpenWifiSettings = { wifiSettingsOpenCount++ })
             } } }
+            rule.onNodeWithTag("connection-status").performClick()
             rule.onNodeWithTag("connection-guide").performClick()
             rule.onNodeWithText("配置连接方式").assertIsDisplayed()
             rule.onNodeWithTag("direct-mode").assertIsDisplayed()
@@ -1435,7 +1442,8 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
         val model = testConsoleModel()
         try {
             rule.setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
-            rule.onNodeWithContentDescription("诊断").performClick()
+            rule.onNodeWithTag("connection-status").performClick()
+            rule.onNodeWithTag("connection-diagnostics").performClick()
             rule.onNodeWithTag("manual-connect").performClick()
             rule.onNodeWithText("连接", substring = false).performClick()
             rule.waitUntil(timeoutMillis = 3000) {
@@ -1464,8 +1472,9 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
                 byteArrayOf(1, 2, message.size.toByte(), 0) + message, true))
             rule.setContent { WorkbenchTheme { Console(model, mutableStateOf(EditorDocument())) } }
             rule.onNodeWithTag("connection-status").assertTextContains("88%")
-            rule.onAllNodesWithText("88%", substring = true).assertCountEquals(2)
-            rule.onNodeWithContentDescription("诊断").performClick()
+            rule.onAllNodesWithText("88%", substring = true).assertCountEquals(1)
+            rule.onNodeWithTag("connection-status").performClick()
+            rule.onNodeWithTag("connection-diagnostics").performClick()
             rule.onNodeWithText("遥测").performClick()
             rule.onNodeWithText("云台协议角度 · 最近接收").assertExists()
             rule.onNodeWithText("-229.4°").assertExists()
@@ -1493,6 +1502,8 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.setContent { WorkbenchTheme {
                 Box(Modifier.requiredSize(393.dp, 740.dp)) { Console(model, mutableStateOf(EditorDocument())) }
             } }
+            rule.onNodeWithTag("script-run-banner").assertDoesNotExist()
+            rule.onNodeWithContentDescription("对话").performClick()
             rule.onNodeWithTag("script-run-banner").assertIsDisplayed()
             rule.onNode(
                 hasText("停止命令已发送；未获得机内停止确认。") and
@@ -1529,6 +1540,8 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.setContent { WorkbenchTheme {
                 Box(Modifier.requiredSize(width.value, height.value)) { Console(model, mutableStateOf(EditorDocument())) }
             } }
+            rule.onNodeWithTag("script-run-banner").assertDoesNotExist()
+            rule.onNodeWithContentDescription("对话").performClick()
             rule.onNodeWithTag("script-run-banner").assertIsDisplayed()
             rule.onNodeWithText("好奇哨兵").assertIsDisplayed()
             rule.onNodeWithText("Sentry scan 2/3: left").assertIsDisplayed()
