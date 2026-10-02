@@ -198,6 +198,7 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
     }
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val expanded = maxWidth >= 840.dp
+        val shortWindow = maxHeight < 220.dp
         val compactHistoryListHeightLimit = (maxHeight - 220.dp).coerceIn(120.dp, 420.dp)
         if (historyOpen && !expanded) {
             WorkbenchDialog(show = true, onDismissRequest = { historyOpen = false }, title = tr(Res.string.conversations)) {
@@ -238,7 +239,7 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
             fillAvailableHeight = true,
             modifier = Modifier.width(280.dp).fillMaxHeight())
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (!expanded) Row(Modifier.fillMaxWidth()) {
+        if (!expanded && !shortWindow) Row(Modifier.fillMaxWidth()) {
             ComposerIcon(tr(Res.string.conversations), WorkbenchGlyph.CHAT,
                 enabled = state.ready) { historyOpen = true }
         }
@@ -318,6 +319,8 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
         if (microphone.active) Text(microphone.partial.ifBlank { if (microphone.processing) tr(Res.string.recognizing) else tr(Res.string.listening) }, fontSize = 13.sp)
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
+            if (!expanded && shortWindow) ComposerIcon(tr(Res.string.conversations), WorkbenchGlyph.CHAT,
+                enabled = state.ready) { focus.clearFocus(); keyboard?.hide(); historyOpen = true }
             TextField(composerValue, { value ->
                 if (value.text.length <= 12000) {
                     composerValue = value
@@ -330,7 +333,7 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
                         submit()
                     } else false
                 },
-                label = tr(Res.string.message), maxLines = 4, enabled = !microphone.active)
+                label = tr(Res.string.message), maxLines = if (shortWindow) 1 else 4, enabled = !microphone.active)
 
             if (onVoiceInput != null) ComposerIcon(
                 if (!microphone.active) tr(Res.string.voice_input) else if (microphone.processing) tr(Res.string.cancel_recognition) else tr(Res.string.finish_recording),

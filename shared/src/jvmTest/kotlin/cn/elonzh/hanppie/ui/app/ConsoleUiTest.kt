@@ -354,6 +354,22 @@ class ConsoleUiTest {
         } finally { model.close() }
     }
 
+    @Test fun chatComposerKeepsItsTouchTargetsInAShortLandscapeWindow() {
+        val model = testConsoleModel()
+        try {
+            rule.setContent { WorkbenchTheme {
+                Box(Modifier.requiredSize(740.dp, 160.dp)) { Console(model, mutableStateOf(EditorDocument())) }
+            } }
+            rule.onNodeWithContentDescription("对话").performClick()
+            rule.onNodeWithTag("chat-input").performTextInput("Review before sending")
+            rule.onNodeWithTag("chat-input").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+            rule.onNodeWithContentDescription("发送").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+            rule.onNodeWithContentDescription("对话记录").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+            rule.runOnIdle { assertEquals("Review before sending", model.chat.state.value.draft) }
+            snapshot("short-landscape-chat-composer")
+        } finally { model.close() }
+    }
+
     @Test fun sendAvailabilityUsesTheRuntimePhase() {
         val model = testConsoleModel()
         try {

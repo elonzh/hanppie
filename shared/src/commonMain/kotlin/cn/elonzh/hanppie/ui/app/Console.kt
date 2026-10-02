@@ -216,6 +216,7 @@ internal fun Console(
                         val useNavigationRail = !compact || maxWidth > maxHeight
                         val shortWindow = maxHeight < 480.dp
                         val workspacePage = route == ScriptRoute || route == ChatRoute
+                        val compressedChat = route == ChatRoute && maxHeight < 240.dp
                         val isConnectionGuide = route == ConnectionGuideRoute ||
                             route == DirectConnectionGuideRoute || route == RouterConnectionGuideRoute
                         Row(Modifier.fillMaxSize()) {
@@ -240,9 +241,9 @@ internal fun Console(
                                     .fillMaxWidth()
                                     .padding(horizontal = if (route == RobotRoute) 0.dp else if (compact) HanppieDesignTokens.PagePaddingCompact
                                     else HanppieDesignTokens.PagePaddingExpanded)
-                                    .padding(bottom = if (workspacePage) HanppieDesignTokens.PagePaddingCompact else 0.dp)) {
+                                    .padding(bottom = if (compressedChat) 4.dp else if (workspacePage) HanppieDesignTokens.PagePaddingCompact else 0.dp)) {
                                     if (routeTab != 1 && route != RobotRoute && !isConnectionGuide) {
-                                        Row(Modifier.fillMaxWidth().height(72.dp), verticalAlignment = Alignment.CenterVertically,
+                                        Row(Modifier.fillMaxWidth().height(if (compressedChat) 48.dp else 72.dp), verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.SpaceBetween) {
                                             Text(if (routeTab == 0) tr(Res.string.my_robot) else labels[routeTab],
                                                 modifier = Modifier.weight(1f), fontSize = 26.sp, fontWeight = FontWeight.Bold,
