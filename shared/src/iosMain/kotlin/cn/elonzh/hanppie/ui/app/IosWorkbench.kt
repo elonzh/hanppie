@@ -14,6 +14,7 @@ import cn.elonzh.hanppie.robot.session.PlatformRobotRuntime
 import cn.elonzh.hanppie.ui.chat.createAgentHttpClient
 import cn.elonzh.hanppie.ui.design.WorkbenchDialog
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
+import cn.elonzh.hanppie.ui.i18n.applyAppLocale
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.platform.*
 import cn.elonzh.hanppie.ui.robot.audio.*
@@ -37,6 +38,10 @@ fun MainViewController(platform: IosPlatformServices): UIViewController = Compos
 }
 
 private fun createIosWorkbench(platform: IosPlatformServices): WorkbenchViewModel {
+    // Catalog loading temporarily overrides AppleLanguages; capture the system value before
+    // starting model workers that can resolve localized diagnostics in the background.
+    val systemLanguage = NSLocale.preferredLanguages.firstOrNull() as? String ?: "en-US"
+    applyAppLocale("en-US")
     val storage = WorkbenchStorage.create()
     return try {
         lateinit var model: ConsoleModel
@@ -52,7 +57,7 @@ private fun createIosWorkbench(platform: IosPlatformServices): WorkbenchViewMode
             skills = storage.skills::await,
             createAgentHttpClient = ::createAgentHttpClient,
         )
-        WorkbenchViewModel(model, storage, NSLocale.preferredLanguages.firstOrNull() as? String ?: "en-US",
+        WorkbenchViewModel(model, storage, systemLanguage,
             pausePlatformResources = { platform.cancelTalk(); platform.cancelSpeech(); platform.stopVideo(); platform.stopAudio() })
     } catch (error: Exception) { storage.close(); throw error }
 }

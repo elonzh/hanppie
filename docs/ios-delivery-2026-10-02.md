@@ -14,12 +14,12 @@
 | 桌面分发 | `:desktopApp:packageDmg` | 通过 |
 | Android 分发 | `:androidApp:assembleRelease :androidApp:lintRelease` | 10 月 3 日通过；APK 版本 `1.0.0`、build `1`，lint 0 错误、12 警告 |
 | iOS 原生契约 | `:packages:robot-core:iosSimulatorArm64Test` | 10 月 3 日在 iOS 27.0 模拟器运行，32 项通过、0 失败、0 跳过 |
-| iOS 应用、媒体单元测试及 UI 测试 | Xcode `test`，arm64 Simulator | 最终完整回归：iPhone 16、iPad Pro 11-inch (M4) 各 7 项通过、0 失败、0 跳过 |
+| iOS 应用、媒体单元测试及 UI 测试 | Xcode `test`，arm64 Simulator | 共享布局修改后的完整回归：iPhone 16、iPad Pro 11-inch (M4) 各 7 项通过、0 失败、0 跳过；后续语言初始化修复的证据见下文 |
 | iOS 设备归档 | Xcode Release `archive`，关闭代码签名 | 通过；归档含共享资源、模型及隐私清单 |
 | Apple Opus 编解码 | 本机 AVAudioConverter 往返 1 秒测试音频 | 51 个 Opus 包、48,840 个解码采样帧；属于 macOS 编解码证据 |
 | 发布定义 | Actionlint、ShellCheck、Bash 语法及版本/CHANGELOG 一致性检查 | 通过 |
 
-最终本地 iOS 测试脚本正常退出，iPhone/iPad 的 xcresult 均为 Passed，日志为 `/tmp/hanppie-ios-full-screenshot-2026-10-03.log`。首轮验证的日志保存在本机 `/tmp/hanppie-ios-local-tests-final-2026-10-03.log`、`/tmp/hanppie-ios-release-final-2026-10-03.log`、`/tmp/hanppie-final-android-2026-10-03.log`、`/tmp/hanppie-desktop-package-final-2026-10-03.log`、`/tmp/hanppie-final-kotlin-2026-10-03.log` 和 `/tmp/hanppie-final-python-2026-10-03.log`。测试记录及临时日志不随仓库提交。
+共享布局修改后的本地 iOS 测试脚本正常退出，iPhone/iPad 的 xcresult 均为 Passed，日志为 `/tmp/hanppie-ios-full-screenshot-2026-10-03.log`。首轮验证的日志保存在本机 `/tmp/hanppie-ios-local-tests-final-2026-10-03.log`、`/tmp/hanppie-ios-release-final-2026-10-03.log`、`/tmp/hanppie-final-android-2026-10-03.log`、`/tmp/hanppie-desktop-package-final-2026-10-03.log`、`/tmp/hanppie-final-kotlin-2026-10-03.log` 和 `/tmp/hanppie-final-python-2026-10-03.log`。测试记录及临时日志不随仓库提交。
 
 版本统一为 `1.0.0` 后，重新完成 iOS Release 归档、桌面编译与 DMG 打包及 Python wheel 构建。归档与桌面应用的 `CFBundleShortVersionString` 均为 `1.0.0`，Python 导入版本与 wheel 元数据也为 `1.0.0`；发布脚本校验 Python 包与客户端版本一致。此次日志为 `/tmp/hanppie-version-1.0.0-ios.log`、`/tmp/hanppie-version-1.0.0-desktop.log` 和 `/tmp/hanppie-version-1.0.0-python.log`。
 
@@ -64,6 +64,12 @@ Xcode 27 云端结果（[37053494527](https://github.com/elonzh/hanppie/actions/
 沿共享键盘布局检查设置与脚本页，发现短横屏下模型表单可视区只有 1 dp、脚本编辑区为 0 dp。新增回归明确检查父级可视区，避免仅检查文本框自身高度而误判通过。设置保存操作移到分类标题行，短窗口收起重复页标题；脚本编辑时将返回操作并入现有工具栏，暂时收起行列状态和内联日志，恢复窗口高度后重新显示。输入、保存、执行、停止及日志状态逻辑不变。修复前回归分别失败，修复后的 Console 55 项、设置导航 7 项、编辑器 4 项共 66 项通过，覆盖窗口从 393 dp 缩至 213 / 126 dp 的实际可视区。日志为 `/tmp/hanppie-short-workspaces-after-2026-10-03.log`；Android Release 与 lint、桌面 DMG 打包也通过，日志为 `/tmp/hanppie-short-workspaces-android-2026-10-03.log` 和 `/tmp/hanppie-short-workspaces-dmg-2026-10-03.log`。
 
 模型与脚本页新增真实键盘输入用例，本机 iPhone 与 iPad 的定向复核各 1 项通过、0 失败、0 跳过；检查原文本完整保留、输入栏位于窗口内和键盘上方、可视区至少 48 pt、保存入口可点击，并保留两页全屏截图，日志为 `/tmp/hanppie-ios-workspace-keyboard-2026-10-03.log`。没有保存测试模型地址或执行脚本。随后完整回归正常退出：原生契约 32 项、iPhone 与 iPad 各 7 项全部通过，0 失败、0 跳过；结果位于未提交的 `build/ios-full-screenshot-verification/`，日志为 `/tmp/hanppie-ios-full-screenshot-2026-10-03.log`。测试创建的模拟器已关闭并删除，云端仍须验证此次补充修改。
+
+共享布局补充修改后的完整 CI（[37071622025](https://github.com/elonzh/hanppie/actions/runs/37071622025)，提交 `e5456a5`）中 Python、Android、Linux、macOS、Windows 和 iOS 设备归档通过。三个桌面平台均为共享测试 274 项、0 失败、13 项环境限定跳过，机器人契约 63 项、0 失败、5 项需机器人环境而跳过；Python 34 项通过。下载的设备归档已核对版本 `1.0.0`、build `1`、最低 iOS `18.5`、ARM64 程序、模型和隐私清单，没有签名或描述文件。云端原生契约 32 项、iPhone 7 项全部通过；iPad 5 项通过、2 项失败，不能视为全部通过。
+
+该轮 iPad 聊天测试在首次导航稳定等待超时，尚未进入键盘断言；快照中导航坐标有效，单轮辅助功能快照约耗时 15 秒，30 秒内只有两轮检查。等待上限改为 60 秒，仍要求有效坐标、启用、至少 0.35 秒稳定和可点击，再执行真实点击。另一项语言测试已进入设置，但启动参数指定英文时实际显示中文；截图确认设置入口及表单可见。检查发现旧语言目录的并发初始化会交错覆盖和恢复 Foundation 参数域，而宿主可能在后台诊断启动后才读取系统语言。本机 macOS Foundation 的受控双线程实验复现了错误恢复：初始英文最终变为中文；顺序预加载目录后的 32 次并发读取保持英文。此实验是 Foundation 并发机制证据，不能替代 iOS 应用验证。
+
+iOS 宿主现先保存系统语言，再预加载两个语言目录，随后启动模型后台任务；目录通过 Kotlin 同步 lazy 一次性发布不可变映射，后续读取与语言切换不再覆盖 Foundation 参数域。UI 回归保留中英文切换及重启保存断言，并增加切回跟随系统后显示英文的检查。修改后的本机 iPhone/iPad 聊天键盘与导航语言定向复核各 2 项通过、0 失败、0 跳过，两份 xcresult 均为 Passed，脚本正常退出；日志为 `/tmp/hanppie-ios-locale-navigation-2026-10-03.log`，结果位于未提交的 `build/ios-locale-navigation-verification/`。测试创建的模拟器已关闭并删除，新提交仍须通过云端完整验证。
 
 Xcode 27 的结果还包含线程优先级诊断和 iPad 横屏配置的未来策略提醒；这些不是测试失败，也不构成真机性能或未来系统兼容性结论。工作流保留 xcresult 的日志与截图，关闭耗时的设备全量 sysdiagnose 收集，截图使用完整屏幕范围。新增键盘覆盖后，云端模拟器任务限时调整为 75 分钟，保留每项原有等待和断言。
 

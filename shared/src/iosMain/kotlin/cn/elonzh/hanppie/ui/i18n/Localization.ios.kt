@@ -11,10 +11,10 @@ import platform.Foundation.NSDateFormatter
 import platform.Foundation.NSLocale
 import platform.Foundation.dateWithTimeIntervalSince1970
 
-private val catalogs = mutableMapOf<String, Map<StringResource, String>>()
-
-internal actual fun applyAppLocale(languageTag: String) {
-    if (languageTag !in catalogs) {
+// Build both supported catalogs once, before model workers start. Kotlin's synchronized lazy
+// publishes an immutable lookup; changing app language never changes Foundation defaults again.
+private val catalogs by lazy {
+    listOf("en-US", "zh-CN").associateWith { languageTag ->
         val defaults = NSUserDefaults.standardUserDefaults
         val previous = defaults.volatileDomainForName(NSArgumentDomain)
         val environment = try {
@@ -25,12 +25,13 @@ internal actual fun applyAppLocale(languageTag: String) {
         } finally {
             defaults.setVolatileDomain(previous, NSArgumentDomain)
         }
-        catalogs[languageTag] = runBlocking { Res.allStringResources.values.associateWith { getString(environment, it) } }
+        runBlocking { Res.allStringResources.values.associateWith { getString(environment, it) } }
     }
 }
 
+internal actual fun applyAppLocale(languageTag: String) { catalogs.getValue(languageTag) }
+
 internal actual fun localizedResource(resource: StringResource, languageTag: String, args: Array<out Any?>): String {
-    applyAppLocale(languageTag)
     val template = catalogs.getValue(languageTag).getValue(resource)
     var nextArgument = 0
     return Regex("%(?:(\\d+)\\$)?[sd]").replace(template) { match ->

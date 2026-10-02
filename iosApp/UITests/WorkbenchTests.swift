@@ -37,7 +37,8 @@ final class WorkbenchTests: XCTestCase {
             }
             return ProcessInfo.processInfo.systemUptime - stableSince >= 0.35 && element.isHittable
         }, evaluatedWith: element)
-        wait(for: [ready], timeout: 30)
+        // A hosted iPad AX snapshot can take 15 seconds; allow multiple complete samples.
+        wait(for: [ready], timeout: 60)
         element.tap()
     }
     private func navigate(_ index: Int) {
@@ -133,6 +134,8 @@ final class WorkbenchTests: XCTestCase {
         navigate(4)
         tapWhenStable(app.descendants(matching: .any)["settings-category-general"])
         selectLanguage("en")
+        XCTAssertTrue(app.staticTexts["Language"].waitForExistence(timeout: 10))
+        selectLanguage("system")
         XCTAssertTrue(app.staticTexts["Language"].waitForExistence(timeout: 10))
         XCTAssertGreaterThan(app.frame.width, app.frame.height)
         attachScreen("Landscape workbench")

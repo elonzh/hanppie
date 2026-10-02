@@ -462,6 +462,7 @@ iOS 与其他客户端共用导航、设置、脚本库、AI 工具及审批、J
 私有 Preferences DataStore，日志不包含密钥。
 
 - 宿主限定左右横屏，使用安全区域；共享输入布局通过 `imePadding` 处理软键盘，iOS 宿主关闭 Compose UIKit 的聚焦自动平移，避免重复位移将输入栏推离窗口。最低系统版本为 iOS 18.5，跟随当前渲染依赖的最低边界。
+- 宿主在模型后台任务启动前读取系统语言，并一次性初始化中英文不可变资源目录。目录加载时临时覆盖 Foundation 参数域并立即恢复；后续语言切换和后台诊断只读取目录，避免并发覆盖 `AppleLanguages` 或将应用语言误记为系统语言。
 - 本地网络权限用于 UDP/FTP。自动发现涉及广播，需要签名配置包含 Apple 批准的
   `com.apple.developer.networking.multicast` entitlement；手动 IPv4 不能替代系统局域网权限。Wi-Fi 引导使用公开系统设置操作，不依赖私有 URL scheme。
 - H.264 接收队列最多 4 个待处理 Access Unit，丢包后等待关键帧；下行 Opus 使用 Apple 编解码器，播放最多排队 25 帧。照片与 MP4 保存只申请相册添加权限；监听打开时录像包含收到的音频。
