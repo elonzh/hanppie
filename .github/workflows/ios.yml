@@ -15,7 +15,8 @@ permissions:
 jobs:
   test:
     name: iPhone and iPad tests
-    runs-on: macos-26
+    # Match the locally verified simulator toolchain on GitHub's standard hosted image.
+    runs-on: xcode-27
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
@@ -37,6 +38,7 @@ jobs:
           name: hanppie-ios-test-results
           path: |
             build/ios-tests/*.xcresult
+            build/ios-tests/diagnostics
             packages/robot-core/build/reports/tests/iosSimulatorArm64Test
             packages/robot-core/build/test-results/iosSimulatorArm64Test
           if-no-files-found: warn

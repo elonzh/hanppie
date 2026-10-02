@@ -1182,13 +1182,16 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.onNodeWithTag("palette-editor").assertDoesNotExist()
             rule.onNodeWithContentDescription("night-mode-selector").performClick()
             settleTransitions()
-            rule.onNodeWithContentDescription("night-mode-LIGHT").assertIsDisplayed().performClick()
+            rule.onNodeWithContentDescription("night-mode-LIGHT").assertIsDisplayed().assertIsEnabled()
+                .assertHeightIsAtLeast(48.dp)
+                .performMouseInput { click(center.copy(x = width - 4f)) }
             rule.waitUntil(5_000) { appearance.settings.nightMode == NightMode.LIGHT }
             rule.waitUntil(5_000) { rule.onAllNodesWithContentDescription("night-mode-LIGHT").fetchSemanticsNodes().isEmpty() }
             snapshot("appearance-light")
             rule.onNodeWithContentDescription("night-mode-selector").performClick()
             settleTransitions()
-            rule.onNodeWithContentDescription("night-mode-DARK").assertIsDisplayed().performClick()
+            rule.onNodeWithContentDescription("night-mode-DARK").assertIsDisplayed().assertIsEnabled()
+                .performClick()
             rule.waitUntil(5_000) { appearance.settings.nightMode == NightMode.DARK }
             rule.waitUntil(5_000) { rule.onAllNodesWithContentDescription("night-mode-DARK").fetchSemanticsNodes().isEmpty() }
             snapshot("appearance-dark")

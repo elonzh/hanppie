@@ -58,7 +58,8 @@ internal fun SettingsDropdown(
         WindowListPopup(expanded, onDismissRequest = { expanded = false }) {
             ListPopupColumn {
                 values.forEachIndexed { index, (id, title) ->
-                    Box(Modifier.testTag("$tag-$id").semantics(mergeDescendants = true) { contentDescription = "$tag-$id" }) {
+                    Box(Modifier.heightIn(min = 48.dp).testTag("$tag-$id").semantics(mergeDescendants = true) { contentDescription = "$tag-$id" },
+                        propagateMinConstraints = true) {
                         DropdownImpl(DropdownItem(title), values.size, selected == id, index,
                             onSelectedIndexChange = { expanded = false; change(id) })
                     }

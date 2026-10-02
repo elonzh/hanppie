@@ -41,6 +41,10 @@ Android 17 / API 37 的 Medium Phone 模拟器（2400×1080 横屏）复核发�
 
 修复后的 CI（[37050182333](https://github.com/elonzh/hanppie/actions/runs/37050182333)）中 Windows、Android 和 Python 检查通过；Linux 首次外观选择及 macOS 模型菜单出现仍有点击时机失败。JVM 界面测试进一步用测试时钟推进导航和菜单动画、等待绘制及选项出现，仍执行真实鼠标点击。全部 53 项 Console 本地复核通过，日志为 `/tmp/hanppie-popup-frames-local-2026-10-03.log`；CI 同时保存已有 UI 截图。本机 iPhone 的输入高度新断言复核通过，日志为 `/tmp/hanppie-iphone-keyboard-touch-size-2026-10-03.log`。
 
+继续复核发现共享下拉项的标签外框宽 200 px，但实际可点击行仅宽 104 px。点击整行右侧的新增回归在修复前稳定失败；外框向行传递最小约束并保持 48 dp 高度后，该回归及全部 53 项 Console 测试通过，Android Release 与 lint 通过。日志为 `/tmp/hanppie-dropdown-edge-before-2026-10-03.log` 和 `/tmp/hanppie-dropdown-row-final-2026-10-03.log`。菜单点击仍使用鼠标事件，没有替换为直接调用状态或辅助功能动作。
+
+首轮云端 iOS 原生契约构建成功，但 iOS 26.5 上应用以 SIGABRT 提前退出，媒体测试未能启动，UI 测试未找到导航。日志显示 Filament 启动后 SimMetalHost 连接中断，尚不能仅凭日志确定根因。模拟器测试改用与本机相同的 Xcode 27 / iOS 27 工具链，并在失败时保存应用和 SimMetalHost 崩溃报告及定向运行日志；实际渲染与原有媒体、界面断言均保留。[GitHub 官方 Xcode 27 镜像](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md) 当前为公开预览。Actionlint 当前版本尚未识别官方 `xcode-27` 标签；仅排除此标签提示后，其余检查、ShellCheck 及 Bash 语法检查通过。旧提交的剩余重复 CI 已停止，新提交仍须完成全部平台检查。
+
 Xcode 27 的结果还包含线程优先级诊断和 iPad 横屏配置的未来策略提醒；这些不是测试失败，也不构成真机性能或未来系统兼容性结论。工作流保留 xcresult 的日志、录屏与截图，关闭耗时的设备全量 sysdiagnose 收集。
 
 GitHub iOS 工作流使用 runner 已安装的模拟器运行时执行同一测试脚本。首版发布必须等待平台检查成功；本记录将在实际发布后补充流水线链接与结果。
