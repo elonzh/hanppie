@@ -45,6 +45,8 @@ Android 17 / API 37 的 Medium Phone 模拟器（2400×1080 横屏）复核发�
 
 首轮云端 iOS 原生契约构建成功，但 iOS 26.5 上应用以 SIGABRT 提前退出，媒体测试未能启动，UI 测试未找到导航。日志显示 Filament 启动后 SimMetalHost 连接中断，尚不能仅凭日志确定根因。模拟器测试改用与本机相同的 Xcode 27 / iOS 27 工具链，并在失败时保存应用和 SimMetalHost 崩溃报告及定向运行日志；实际渲染与原有媒体、界面断言均保留。[GitHub 官方 Xcode 27 镜像](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md) 当前为公开预览。Actionlint 当前版本尚未识别官方 `xcode-27` 标签；仅排除此标签提示后，其余检查、ShellCheck 及 Bash 语法检查通过。旧提交的剩余重复 CI 已停止，新提交仍须完成全部平台检查。
 
+整行修复后的 CI（[37052425839](https://github.com/elonzh/hanppie/actions/runs/37052425839)）已通过 Windows、Linux、macOS、Android 和 Python。iOS 模拟器任务在下载 Gradle 时连接重置，未进入编译或应用测试。通过官方 `wrapper` 任务启用三次下载重试、初始 1 秒退避和 30 秒网络超时，仍使用 Gradle 9.6.0；生成的 Wrapper JAR 与官方 SHA-256 一致，`--version` 检查通过。本机 Android Release 包同时复核右侧点击能切换外观、强制停止重启后设置保持，随后恢复系统默认设置并停止模拟器。
+
 Xcode 27 的结果还包含线程优先级诊断和 iPad 横屏配置的未来策略提醒；这些不是测试失败，也不构成真机性能或未来系统兼容性结论。工作流保留 xcresult 的日志、录屏与截图，关闭耗时的设备全量 sysdiagnose 收集。
 
 GitHub iOS 工作流使用 runner 已安装的模拟器运行时执行同一测试脚本。首版发布必须等待平台检查成功；本记录将在实际发布后补充流水线链接与结果。
