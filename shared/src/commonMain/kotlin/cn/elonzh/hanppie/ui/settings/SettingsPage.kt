@@ -89,11 +89,12 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
         val categoryWidth = 240.dp * LocalDensity.current.fontScale
         val wide = maxWidth >= categoryWidth + 480.dp * LocalDensity.current.fontScale + 16.dp
         val activeCategory = selectedCategory ?: if (wide) SettingsCategory.GENERAL else null
+        val shortWindow = maxHeight < 240.dp
         val backToCategories = { capturing = null; selectedCategory = null }
         PlatformBackHandler(enabled = !wide && selectedCategory != null && !confirmDefaults && capturing == null,
             onBack = backToCategories)
         PlatformBackHandler(enabled = capturing != null, onBack = { capturing = null })
-        Row(Modifier.fillMaxSize().padding(bottom = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(Modifier.fillMaxSize().padding(bottom = if (shortWindow) 4.dp else 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             if (wide || activeCategory == null) {
                 Column((if (wide) Modifier.width(categoryWidth) else Modifier.fillMaxWidth()).fillMaxHeight(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -124,16 +125,24 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                 }
             }
             if (activeCategory != null) {
-                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(if (shortWindow) 8.dp else 12.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (!wide) WorkbenchIconButton(tr(Res.string.back), WorkbenchGlyph.BACK,
                             backToCategories, tag = "settings-back")
-                        Text(tr(activeCategory.title), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                        Text(tr(activeCategory.title), Modifier.weight(1f), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                        if (activeCategory.canSave) {
+                            Button(model::saveSettings, colors = ButtonDefaults.buttonColorsPrimary(),
+                                enabled = !settingsBusy && !chat.running,
+                                modifier = Modifier.heightIn(min = 48.dp).testTag("settings-save")) {
+                                Text(tr(Res.string.save_settings))
+                            }
+                        }
                     }
                     key(activeCategory) {
                         Column(Modifier.weight(1f).fillMaxWidth().testTag("settings-detail-${activeCategory.id}")
                             .verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            settingsMessage?.let { Text(it.resolve(), fontSize = 13.sp) }
                             when (activeCategory) {
                                 SettingsCategory.GENERAL -> GeneralSettingsContent(model, onSpeechSettings)
                                 SettingsCategory.MODEL -> ModelSettingsContent(model)
@@ -145,16 +154,6 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                             }
                         }
                     }
-                    if (activeCategory.canSave) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            settingsMessage?.let { Text(it.resolve(), fontSize = 13.sp) }
-                            Button(model::saveSettings, colors = ButtonDefaults.buttonColorsPrimary(),
-                                enabled = !settingsBusy && !chat.running,
-                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("settings-save")) {
-                                Text(tr(Res.string.save_settings))
-                            }
-                        }
-                    } else settingsMessage?.let { Text(it.resolve(), fontSize = 13.sp) }
                 }
             }
         }

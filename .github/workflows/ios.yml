@@ -17,7 +17,8 @@ jobs:
     name: iPhone and iPad tests
     # Match the locally verified simulator toolchain on GitHub's standard hosted image.
     runs-on: xcode-27
-    timeout-minutes: 60
+    # Fresh Kotlin/Native builds and both devices' expanded keyboard coverage need this budget.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v6
         with:

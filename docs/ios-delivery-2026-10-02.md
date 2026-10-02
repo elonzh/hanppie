@@ -9,17 +9,17 @@
 | 层级 | 操作 | 结果 |
 | --- | --- | --- |
 | 机器人共享契约 | `:packages:robot-core:desktopTest` | 63 项，58 通过、5 项需机器人环境而跳过；0 失败 |
-| 共享 UI / 持久化回归 | `:shared:jvmTest` | 271 项，261 通过、10 项环境限定而跳过；0 失败 |
+| 共享 UI / 持久化回归 | `:shared:jvmTest` | 首轮完整回归 271 项，261 通过、10 项环境限定而跳过；本次短窗口影响面 66 项通过；均为 0 失败 |
 | Python | Ruff 格式、静态检查、pytest | 34 项通过，10 月 3 日复核覆盖率 80.25% |
 | 桌面分发 | `:desktopApp:packageDmg` | 通过 |
 | Android 分发 | `:androidApp:assembleRelease :androidApp:lintRelease` | 10 月 3 日通过；APK 版本 `1.0.0`、build `1`，lint 0 错误、12 警告 |
 | iOS 原生契约 | `:packages:robot-core:iosSimulatorArm64Test` | 10 月 3 日在 iOS 27.0 模拟器运行，32 项通过、0 失败、0 跳过 |
-| iOS 应用、媒体单元测试及 UI 测试 | Xcode `test`，arm64 Simulator | iPhone 16、iPad Pro 11-inch (M4) 各 6 项通过、0 失败、0 跳过 |
+| iOS 应用、媒体单元测试及 UI 测试 | Xcode `test`，arm64 Simulator | 最终完整回归：iPhone 16、iPad Pro 11-inch (M4) 各 7 项通过、0 失败、0 跳过 |
 | iOS 设备归档 | Xcode Release `archive`，关闭代码签名 | 通过；归档含共享资源、模型及隐私清单 |
 | Apple Opus 编解码 | 本机 AVAudioConverter 往返 1 秒测试音频 | 51 个 Opus 包、48,840 个解码采样帧；属于 macOS 编解码证据 |
 | 发布定义 | Actionlint、ShellCheck、Bash 语法及版本/CHANGELOG 一致性检查 | 通过 |
 
-最终测试脚本正常退出，iPhone/iPad 的 xcresult 均为 Passed。10 月 3 日最终源码的日志保存在本机 `/tmp/hanppie-ios-local-tests-final-2026-10-03.log`、`/tmp/hanppie-ios-release-final-2026-10-03.log`、`/tmp/hanppie-final-android-2026-10-03.log`、`/tmp/hanppie-desktop-package-final-2026-10-03.log`、`/tmp/hanppie-final-kotlin-2026-10-03.log` 和 `/tmp/hanppie-final-python-2026-10-03.log`。测试记录及临时日志不随仓库提交。
+最终本地 iOS 测试脚本正常退出，iPhone/iPad 的 xcresult 均为 Passed，日志为 `/tmp/hanppie-ios-full-screenshot-2026-10-03.log`。首轮验证的日志保存在本机 `/tmp/hanppie-ios-local-tests-final-2026-10-03.log`、`/tmp/hanppie-ios-release-final-2026-10-03.log`、`/tmp/hanppie-final-android-2026-10-03.log`、`/tmp/hanppie-desktop-package-final-2026-10-03.log`、`/tmp/hanppie-final-kotlin-2026-10-03.log` 和 `/tmp/hanppie-final-python-2026-10-03.log`。测试记录及临时日志不随仓库提交。
 
 版本统一为 `1.0.0` 后，重新完成 iOS Release 归档、桌面编译与 DMG 打包及 Python wheel 构建。归档与桌面应用的 `CFBundleShortVersionString` 均为 `1.0.0`，Python 导入版本与 wheel 元数据也为 `1.0.0`；发布脚本校验 Python 包与客户端版本一致。此次日志为 `/tmp/hanppie-version-1.0.0-ios.log`、`/tmp/hanppie-version-1.0.0-desktop.log` 和 `/tmp/hanppie-version-1.0.0-python.log`。
 
@@ -59,13 +59,19 @@ Xcode 27 云端结果（[37053494527](https://github.com/elonzh/hanppie/actions/
 
 关闭原生聚焦平移后，本机 iPhone 与 iPad 的键盘定向回归各 1 项通过，完整窗口范围、原有草稿、发送按钮及 48 pt 断言均通过，日志为 `/tmp/hanppie-ios-keyboard-insets-2026-10-03.log`。全屏复核同时发现键盘压缩空间后空态标题被截断，共享空态现按消息区域高度缩小间距与头像，在很小的空间隐藏装饰内容；输入和消息行为不变。修改后的 53 项 Console 界面回归及 Android Release、lint 通过，lint 仍为 0 错误、12 警告，日志为 `/tmp/hanppie-empty-state-desktop-2026-10-03.log` 和 `/tmp/hanppie-empty-state-android-2026-10-03.log`。XCTest 附件改用 `XCUIScreen.main.screenshot()`，避免应用截图在横屏下产生错误裁剪；新空态的 iPhone 与 iPad 键盘回归各 1 项通过、0 失败、0 跳过，日志为 `/tmp/hanppie-ios-empty-state-2026-10-03.log`；两端全屏截图确认输入栏及发送按钮可见，iPad 空态标题完整显示。测试创建的模拟器均已关闭并删除。
 
-Xcode 27 的结果还包含线程优先级诊断和 iPad 横屏配置的未来策略提醒；这些不是测试失败，也不构成真机性能或未来系统兼容性结论。工作流保留 xcresult 的日志、录屏与截图，关闭耗时的设备全量 sysdiagnose 收集。
+修复键盘重复位移与聊天空态后的云端 iOS 工作流（[37063327518](https://github.com/elonzh/hanppie/actions/runs/37063327518)，提交 `56ed0dc`）全部通过：原生契约 32 项，iPhone 与 iPad 各 6 项通过、0 失败、0 跳过，设备归档成功。已下载 xcresult 并核对结果；此结果对应设置表单与脚本编辑区补充修复之前的源码。
+
+沿共享键盘布局检查设置与脚本页，发现短横屏下模型表单可视区只有 1 dp、脚本编辑区为 0 dp。新增回归明确检查父级可视区，避免仅检查文本框自身高度而误判通过。设置保存操作移到分类标题行，短窗口收起重复页标题；脚本编辑时将返回操作并入现有工具栏，暂时收起行列状态和内联日志，恢复窗口高度后重新显示。输入、保存、执行、停止及日志状态逻辑不变。修复前回归分别失败，修复后的 Console 55 项、设置导航 7 项、编辑器 4 项共 66 项通过，覆盖窗口从 393 dp 缩至 213 / 126 dp 的实际可视区。日志为 `/tmp/hanppie-short-workspaces-after-2026-10-03.log`；Android Release 与 lint、桌面 DMG 打包也通过，日志为 `/tmp/hanppie-short-workspaces-android-2026-10-03.log` 和 `/tmp/hanppie-short-workspaces-dmg-2026-10-03.log`。
+
+模型与脚本页新增真实键盘输入用例，本机 iPhone 与 iPad 的定向复核各 1 项通过、0 失败、0 跳过；检查原文本完整保留、输入栏位于窗口内和键盘上方、可视区至少 48 pt、保存入口可点击，并保留两页全屏截图，日志为 `/tmp/hanppie-ios-workspace-keyboard-2026-10-03.log`。没有保存测试模型地址或执行脚本。随后完整回归正常退出：原生契约 32 项、iPhone 与 iPad 各 7 项全部通过，0 失败、0 跳过；结果位于未提交的 `build/ios-full-screenshot-verification/`，日志为 `/tmp/hanppie-ios-full-screenshot-2026-10-03.log`。测试创建的模拟器已关闭并删除，云端仍须验证此次补充修改。
+
+Xcode 27 的结果还包含线程优先级诊断和 iPad 横屏配置的未来策略提醒；这些不是测试失败，也不构成真机性能或未来系统兼容性结论。工作流保留 xcresult 的日志与截图，关闭耗时的设备全量 sysdiagnose 收集，截图使用完整屏幕范围。新增键盘覆盖后，云端模拟器任务限时调整为 75 分钟，保留每项原有等待和断言。
 
 GitHub iOS 工作流使用 runner 已安装的模拟器运行时执行同一测试脚本。首版发布必须等待平台检查成功；本记录将在实际发布后补充流水线链接与结果。
 
 归档使用 `macos-26-intel`，其标准 runner 提供 14 GB 内存，默认 Xcode 26.6。工具链和容量依据 [GitHub runner 文档](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax) 与 [macOS 26 镜像清单](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-Readme.md)。未在本机改变 Xcode 选择。
 
-用户已确认功能完整并授权 Android 验证、通过后提交推送与首版发布。Android Release 构建与 lint 已通过；lint 的目标 SDK、固定横屏、备份配置、启动图标与 Commons Net 内置 TLS 信任器警告已保留，未通过隐藏检查消除。机器人 FTP 当前使用普通 FTP，不调用该 TLS 信任器；其余警告不构成未来系统兼容性结论。网站中英文产品介绍已在本地更新并完成静态检查、生产构建与响应式浏览器检查，网站未部署。
+用户已确认功能完整并授权 Android 验证、通过后提交推送与首版发布。Android Release 构建与 lint 已通过；lint 的目标 SDK、固定横屏、备份配置、启动图标与 Commons Net 内置 TLS 信任器警告已保留，未通过隐藏检查消除。机器人 FTP 当前使用普通 FTP，不调用该 TLS 信任器；其余警告不构成未来系统兼容性结论。网站中英文产品介绍已完成静态检查、生产构建与响应式浏览器检查，以 `5b29276` 提交推送；[CNB 流水线](https://cnb.cool/elonzh/elonzh-cn/-/build/logs/cnb-n2k-1k3v68tul) 的生产构建与镜像推送成功。没有执行生产部署。
 
 ## 尚未验证的边界
 

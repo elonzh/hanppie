@@ -160,7 +160,7 @@ internal fun ModelSettingsContent(model: ConsoleController) {
             config.copy(provider = provider)
         } else ModelCatalog.defaults(provider).copy(apiKey = config.apiKey)
     }
-    TextField(config.endpoint, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(endpoint = it) }, label = tr(Res.string.api_endpoint), modifier = Modifier.fillMaxWidth(), enabled = !chat.running && !settingsBusy, singleLine = true)
+    TextField(config.endpoint, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(endpoint = it) }, label = tr(Res.string.api_endpoint), modifier = Modifier.fillMaxWidth().testTag("model-endpoint"), enabled = !chat.running && !settingsBusy, singleLine = true)
     TextField(config.apiKey, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(apiKey = it) }, label = tr(Res.string.api_key), modifier = Modifier.fillMaxWidth(), enabled = !chat.running && !settingsBusy, singleLine = true,
         visualTransformation = PasswordVisualTransformation())
     val discoveredModels = modelCatalog.models.takeIf {

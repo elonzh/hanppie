@@ -370,6 +370,50 @@ class ConsoleUiTest {
         } finally { model.close() }
     }
 
+    @Test fun modelSettingsKeepTheInputVisibleWhenTheLandscapeWindowShrinks() {
+        val model = testConsoleModel()
+        val height = mutableStateOf(393.dp)
+        try {
+            rule.setContent { WorkbenchTheme {
+                Box(Modifier.requiredSize(740.dp, height.value)) { Console(model, mutableStateOf(EditorDocument())) }
+            } }
+            rule.onNodeWithContentDescription("设置").performClick()
+            openSettingsCategory("model")
+            val endpoint = model.modelSettings.value.endpoint
+            rule.onNodeWithText(endpoint).performScrollTo().performClick()
+            rule.runOnIdle { height.value = 213.dp }
+            rule.onNodeWithTag("settings-detail-model").assertHeightIsAtLeast(48.dp)
+            rule.onNodeWithText(endpoint).performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+            snapshot("short-landscape-model-settings")
+            rule.runOnIdle { height.value = 126.dp }
+            rule.onNodeWithTag("settings-detail-model").assertHeightIsAtLeast(48.dp)
+            rule.onNodeWithText(endpoint).performScrollTo().assertIsDisplayed()
+            snapshot("short-landscape-model-settings-minimum")
+        } finally { model.close() }
+    }
+
+    @Test fun scriptEditorKeepsItsViewportWhenTheLandscapeWindowShrinks() {
+        val model = testConsoleModel()
+        val height = mutableStateOf(393.dp)
+        val document = mutableStateOf(EditorDocument())
+        try {
+            rule.setContent { WorkbenchTheme {
+                Box(Modifier.requiredSize(740.dp, height.value)) { Console(model, document) }
+            } }
+            rule.onNodeWithContentDescription("脚本").performClick()
+            rule.onNodeWithTag("script-new").performClick()
+            rule.onNodeWithTag("script-editor").performTextReplacement("print(1)")
+            rule.runOnIdle { height.value = 213.dp }
+            snapshot("short-landscape-script-editor")
+            rule.onNodeWithTag("script-editor-viewport").assertHeightIsAtLeast(48.dp)
+            rule.runOnIdle { height.value = 126.dp }
+            rule.onNodeWithTag("script-editor-viewport").assertHeightIsAtLeast(48.dp)
+            rule.onNodeWithTag("script-save").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+            rule.runOnIdle { assertEquals("print(1)", document.value.source) }
+            snapshot("short-landscape-script-editor-minimum")
+        } finally { model.close() }
+    }
+
     @Test fun sendAvailabilityUsesTheRuntimePhase() {
         val model = testConsoleModel()
         try {

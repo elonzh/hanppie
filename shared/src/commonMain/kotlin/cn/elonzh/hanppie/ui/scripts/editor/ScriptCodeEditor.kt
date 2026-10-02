@@ -38,6 +38,7 @@ internal fun ScriptCodeEditor(
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
     history: CodeHistory = remember { CodeHistory(field.value) },
+    showCursorPosition: Boolean = true,
 ) {
     val value = field.value
     val focus = remember { FocusRequester() }
@@ -109,7 +110,7 @@ internal fun ScriptCodeEditor(
             val horizontal = rememberScrollState()
             val lines = remember(value.text) { value.text.count { it == '\n' } + 1 }
             val gutterWidth = (lines.toString().length * 10 * LocalDensity.current.fontScale + 20).dp
-            Row(Modifier.fillMaxSize().verticalScroll(vertical)) {
+            Row(Modifier.fillMaxSize().verticalScroll(vertical).testTag("script-editor-viewport")) {
                 Text((1..lines).joinToString("\n"),
                     Modifier.width(gutterWidth).padding(end = 10.dp).testTag("editor-line-numbers"),
                     style = style.copy(color = colors.onSurfaceVariantSummary, textAlign = androidx.compose.ui.text.style.TextAlign.End))
@@ -142,10 +143,12 @@ internal fun ScriptCodeEditor(
                 )
             }
         }
-        val cursor = value.selection.end
-        val line = value.text.take(cursor).count { it == '\n' } + 1
-        val column = cursor - value.text.lastIndexOf('\n', cursor - 1)
-        Text(tr(Res.string.editor_position, line, column), Modifier.padding(vertical = 4.dp),
-            color = colors.onSurfaceVariantSummary, fontSize = 12.sp)
+        if (showCursorPosition) {
+            val cursor = value.selection.end
+            val line = value.text.take(cursor).count { it == '\n' } + 1
+            val column = cursor - value.text.lastIndexOf('\n', cursor - 1)
+            Text(tr(Res.string.editor_position, line, column), Modifier.padding(vertical = 4.dp),
+                color = colors.onSurfaceVariantSummary, fontSize = 12.sp)
+        }
     }
 }

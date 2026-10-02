@@ -36,7 +36,7 @@ for device in 'iPhone 16' 'iPad Pro 11-inch (M4)'; do
     ./gradlew :packages:robot-core:iosSimulatorArm64Test --device "$udid"
     core_tested=true
   fi
-  # xcresult retains logs, UI recordings and screenshots; skip device-wide sysdiagnoses.
+  # xcresult retains logs and screenshots; skip device-wide sysdiagnoses.
   xcodebuild -project iosApp/Hanppie.xcodeproj -scheme Hanppie -configuration Debug \
     -destination "platform=iOS Simulator,id=$udid" -derivedDataPath build/ios-derived \
     -resultBundlePath "build/ios-tests/$slug.xcresult" \

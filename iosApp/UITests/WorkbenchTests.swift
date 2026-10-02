@@ -53,11 +53,7 @@ final class WorkbenchTests: XCTestCase {
         XCTAssertTrue(option.waitForExistence(timeout: 10))
         tapWhenStable(option)
     }
-    func testChatComposerRemainsVisibleWithLandscapeKeyboard() {
-        let chat = app.buttons["navigate-3"]
-        XCTAssertTrue(chat.waitForExistence(timeout: 30)); navigate(3)
-        let input = app.descendants(matching: .any)["chat-input"]
-        XCTAssertTrue(input.waitForExistence(timeout: 10)); input.tap(); input.typeText("Review before sending")
+    private func assertInputVisibleWithKeyboard(_ input: XCUIElement) {
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
         let keyboard = app.keyboards.firstMatch
         let aboveKeyboard = expectation(for: NSPredicate { _, _ in
@@ -67,12 +63,54 @@ final class WorkbenchTests: XCTestCase {
         wait(for: [aboveKeyboard], timeout: 10)
         XCTAssertTrue(app.frame.contains(input.frame))
         XCTAssertLessThanOrEqual(input.frame.maxY, app.keyboards.firstMatch.frame.minY + 2)
-        XCTAssertEqual(input.value as? String, "Review before sending")
-        XCTAssertTrue(app.buttons["Send"].isHittable)
         XCTAssertGreaterThanOrEqual(input.frame.height, 48)
         XCTAssertGreaterThan(app.frame.width, app.frame.height)
+    }
+    private func attachScreen(_ name: String) {
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        attachment.name = "Landscape keyboard"; attachment.lifetime = .keepAlways; add(attachment)
+        attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+    }
+    func testChatComposerRemainsVisibleWithLandscapeKeyboard() {
+        let chat = app.buttons["navigate-3"]
+        XCTAssertTrue(chat.waitForExistence(timeout: 30)); navigate(3)
+        let input = app.descendants(matching: .any)["chat-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10)); input.tap(); input.typeText("Review before sending")
+        assertInputVisibleWithKeyboard(input)
+        XCTAssertEqual(input.value as? String, "Review before sending")
+        XCTAssertTrue(app.buttons["Send"].isHittable)
+        attachScreen("Landscape keyboard")
+    }
+    func testSettingsAndScriptInputsRemainVisibleWithLandscapeKeyboard() throws {
+        navigate(4)
+        tapWhenStable(app.descendants(matching: .any)["settings-category-model"])
+        let endpoint = app.descendants(matching: .any)["model-endpoint"]
+        XCTAssertTrue(endpoint.waitForExistence(timeout: 10))
+        let originalEndpoint = try XCTUnwrap(endpoint.value as? String)
+        endpoint.tap(); endpoint.typeText("hanppieuitest")
+        assertInputVisibleWithKeyboard(endpoint)
+        let endpointValue = try XCTUnwrap(endpoint.value as? String)
+        XCTAssertTrue(endpointValue.contains("hanppieuitest"))
+        XCTAssertEqual(endpointValue.replacingOccurrences(of: "hanppieuitest", with: ""), originalEndpoint)
+        let form = app.descendants(matching: .any)["settings-detail-model"]
+        XCTAssertGreaterThanOrEqual(form.frame.height, 48)
+        XCTAssertTrue(form.frame.height.isFinite)
+        XCTAssertTrue(app.buttons["settings-save"].isHittable)
+        attachScreen("Landscape model settings keyboard")
+        navigate(1)
+        tapWhenStable(app.buttons["script-new"])
+        let editor = app.descendants(matching: .any)["script-editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        let originalSource = try XCTUnwrap(editor.value as? String)
+        editor.tap(); editor.typeText("print(1)")
+        assertInputVisibleWithKeyboard(editor)
+        let editedSource = try XCTUnwrap(editor.value as? String)
+        XCTAssertTrue(editedSource.contains("print(1)"))
+        XCTAssertEqual(editedSource.replacingOccurrences(of: "print(1)", with: ""), originalSource)
+        let viewport = app.descendants(matching: .any)["script-editor-viewport"]
+        XCTAssertGreaterThanOrEqual(viewport.frame.height, 48)
+        XCTAssertTrue(viewport.frame.height.isFinite)
+        XCTAssertTrue(app.buttons["script-save"].isHittable)
+        attachScreen("Landscape script editor keyboard")
     }
     func testOfflineNavigationAndSettingsPersistAcrossLaunch() throws {
         let settings = app.buttons["navigate-4"]
@@ -97,7 +135,6 @@ final class WorkbenchTests: XCTestCase {
         selectLanguage("en")
         XCTAssertTrue(app.staticTexts["Language"].waitForExistence(timeout: 10))
         XCTAssertGreaterThan(app.frame.width, app.frame.height)
-        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        attachment.name = "Landscape workbench"; attachment.lifetime = .keepAlways; add(attachment)
+        attachScreen("Landscape workbench")
     }
 }

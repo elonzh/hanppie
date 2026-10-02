@@ -458,96 +458,104 @@ internal fun ScriptPage(
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
-        ScriptTopBar(
-            title = if (editorOpen) document.value.displayName ?: tr(Res.string.new_script) else tr(Res.string.script),
-            dirty = editorOpen && document.value.dirty,
-            state = robotState,
-            onRename = if (editorOpen) document.value.scriptId?.let {
-                {
-                    nameDraft = document.value.displayName.orEmpty()
-                    nameOperation = NameOperation.RENAME
-                }
-            } else null,
-            onConnectionDetails = onConnectionDetails,
-            onBack = navigateBack.takeIf { editorOpen },
-            backLabel = tr(if (onBackToOrigin != null) Res.string.back_to_chat else Res.string.back_to_script_library),
-        )
-        fileError?.let {
-            Text(it, Modifier.padding(vertical = 8.dp), color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
-        }
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val availableHeight = maxHeight
-            // With the view already inline there is nothing left for a "monitor" entry to reveal.
-            val monitorInline = !compact && availableHeight >= 520.dp
-            val editor: @Composable (Modifier) -> Unit = { editorModifier ->
-                    ScriptEditor(
-                        document = document,
-                        field = editorField,
-                        history = editorHistory,
-                        robotState = robotState,
-                        libraryBusy = libraryState.busy,
-                        onSave = {
-                            if (document.value.scriptId == null) {
-                                nameDraft = model.scriptLibrary.uniqueName(document.value.displayName ?: tr(Res.string.new_script))
-                                nameOperation = NameOperation.SAVE
-                            } else saveToLibrary()
-                        },
-                        onMore = { moreOpen = true },
-                        onMonitor = if (monitorInline) null else ({ monitorOpen = true }),
-                        onAudio = { audioOpen = true },
-                        onRun = {
-                            model.runScript(
-                                document.value.source,
-                                document.value.displayName ?: "Hanppie Script",
-                                audioState.clips,
-                            )
-                        },
-                        onStop = model::stop,
-                        modifier = editorModifier,
-                    )
-            }
-
-            // A run must never replace the page: the console and the monitor sit around the editor on
-            // phones (below) and on wide layouts (right), and the library keeps the same console while a
-            // run is in flight so the global run bar always leads somewhere that shows the run.
-            val monitoring = editorOpen || robotState.scriptRunPhase.active
-            val library: @Composable (Modifier) -> Unit = { libraryModifier ->
-                ScriptLibraryView(
-                    state = libraryState,
-                    compact = compact,
-                    onNew = { showEditor(EditorDocument(title = tr(Res.string.new_script))) },
-                    onImport = onImport,
-                    onOpen = { showEditor(EditorDocument.from(it)) },
-                    onManage = { scriptMenu = it },
-                    onPreset = {
-                        showEditor(EditorDocument(source = it.source, title = it.name, initialAudio = it.audioClips))
-                    },
-                    modifier = libraryModifier,
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val shortWindow = maxHeight < 240.dp
+        Column(Modifier.fillMaxSize()) {
+            if (!shortWindow || !editorOpen) {
+                ScriptTopBar(
+                    title = if (editorOpen) document.value.displayName ?: tr(Res.string.new_script) else tr(Res.string.script),
+                    dirty = editorOpen && document.value.dirty,
+                    state = robotState,
+                    onRename = if (editorOpen) document.value.scriptId?.let {
+                        {
+                            nameDraft = document.value.displayName.orEmpty()
+                            nameOperation = NameOperation.RENAME
+                        }
+                    } else null,
+                    onConnectionDetails = onConnectionDetails,
+                    onBack = navigateBack.takeIf { editorOpen },
+                    backLabel = tr(if (onBackToOrigin != null) Res.string.back_to_chat else Res.string.back_to_script_library),
+                    shortWindow = shortWindow,
                 )
             }
-            val primary: @Composable (Modifier) -> Unit = { primaryModifier ->
-                if (editorOpen) editor(primaryModifier) else library(primaryModifier)
+            fileError?.let {
+                Text(it, Modifier.padding(vertical = 8.dp), color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
             }
-            if (compact) {
-                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // Keep code primary, while retaining a visible result/stop context.
-                    val consoleHeight = (availableHeight * 0.25f).coerceAtMost(160.dp)
-                    Box(Modifier.weight(1f).fillMaxWidth()) { primary(Modifier.fillMaxSize()) }
-                    if (monitoring) ScriptConsolePanel(robotState,
-                        (if (editorOpen) Modifier.height(consoleHeight) else Modifier.weight(
-                            if (availableHeight < 460.dp) 1.1f else 0.85f
-                        )).fillMaxWidth())
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                val availableHeight = maxHeight
+                // With the view already inline there is nothing left for a "monitor" entry to reveal.
+                val monitorInline = !compact && availableHeight >= 520.dp
+                val editor: @Composable (Modifier) -> Unit = { editorModifier ->
+                        ScriptEditor(
+                            document = document,
+                            field = editorField,
+                            history = editorHistory,
+                            robotState = robotState,
+                            libraryBusy = libraryState.busy,
+                            onSave = {
+                                if (document.value.scriptId == null) {
+                                    nameDraft = model.scriptLibrary.uniqueName(document.value.displayName ?: tr(Res.string.new_script))
+                                    nameOperation = NameOperation.SAVE
+                                } else saveToLibrary()
+                            },
+                            onMore = { moreOpen = true },
+                            onMonitor = if (monitorInline) null else ({ monitorOpen = true }),
+                            onAudio = { audioOpen = true },
+                            shortWindow = shortWindow,
+                            onBack = navigateBack.takeIf { shortWindow },
+                            backLabel = tr(if (onBackToOrigin != null) Res.string.back_to_chat else Res.string.back_to_script_library),
+                            onRun = {
+                                model.runScript(
+                                    document.value.source,
+                                    document.value.displayName ?: "Hanppie Script",
+                                    audioState.clips,
+                                )
+                            },
+                            onStop = model::stop,
+                            modifier = editorModifier,
+                        )
                 }
-            } else {
-                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Box(Modifier.weight(1f).fillMaxHeight()) { primary(Modifier.fillMaxSize()) }
-                    if (monitoring) {
-                        Column(Modifier.width(380.dp).fillMaxHeight(),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            ScriptMonitorPanel(model, robotState, showVideo = monitorInline,
-                                modifier = Modifier.fillMaxWidth())
-                            ScriptConsolePanel(robotState, Modifier.weight(1f).fillMaxWidth())
+
+                // Short editing windows keep the code and run/stop controls visible; the inline console
+                // returns when the keyboard closes. The library keeps its console while a run is active.
+                val monitoring = (editorOpen || robotState.scriptRunPhase.active) && (!shortWindow || !editorOpen)
+                val library: @Composable (Modifier) -> Unit = { libraryModifier ->
+                    ScriptLibraryView(
+                        state = libraryState,
+                        compact = compact,
+                        onNew = { showEditor(EditorDocument(title = tr(Res.string.new_script))) },
+                        onImport = onImport,
+                        onOpen = { showEditor(EditorDocument.from(it)) },
+                        onManage = { scriptMenu = it },
+                        onPreset = {
+                            showEditor(EditorDocument(source = it.source, title = it.name, initialAudio = it.audioClips))
+                        },
+                        modifier = libraryModifier,
+                    )
+                }
+                val primary: @Composable (Modifier) -> Unit = { primaryModifier ->
+                    if (editorOpen) editor(primaryModifier) else library(primaryModifier)
+                }
+                if (compact) {
+                    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        // Keep code primary, while retaining a visible result/stop context.
+                        val consoleHeight = (availableHeight * 0.25f).coerceAtMost(160.dp)
+                        Box(Modifier.weight(1f).fillMaxWidth()) { primary(Modifier.fillMaxSize()) }
+                        if (monitoring) ScriptConsolePanel(robotState,
+                            (if (editorOpen) Modifier.height(consoleHeight) else Modifier.weight(
+                                if (availableHeight < 460.dp) 1.1f else 0.85f
+                            )).fillMaxWidth())
+                    }
+                } else {
+                    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Box(Modifier.weight(1f).fillMaxHeight()) { primary(Modifier.fillMaxSize()) }
+                        if (monitoring) {
+                            Column(Modifier.width(380.dp).fillMaxHeight(),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                ScriptMonitorPanel(model, robotState, showVideo = monitorInline,
+                                    modifier = Modifier.fillMaxWidth())
+                                ScriptConsolePanel(robotState, Modifier.weight(1f).fillMaxWidth())
+                            }
                         }
                     }
                 }
@@ -646,8 +654,9 @@ private fun ScriptTopBar(
     onConnectionDetails: () -> Unit,
     onBack: (() -> Unit)?,
     backLabel: String,
+    shortWindow: Boolean,
 ) {
-    Row(Modifier.fillMaxWidth().height(72.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().height(if (shortWindow) 48.dp else 72.dp), verticalAlignment = Alignment.CenterVertically) {
         if (onBack != null) {
             WorkbenchIconButton(
                 label = backLabel,
@@ -750,15 +759,21 @@ private fun ScriptEditor(
     onAudio: () -> Unit,
     onRun: () -> Unit,
     onStop: () -> Unit,
+    shortWindow: Boolean,
+    onBack: (() -> Unit)?,
+    backLabel: String,
     modifier: Modifier = Modifier,
 ) {
     val disabled = document.value.busy || libraryBusy
-    Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(if (shortWindow) 4.dp else 10.dp)) {
         // Actions sit on the left as icon buttons; running the script is the primary action and stays on
         // the right edge of this bar, next to the code it applies to.
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
             FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                onBack?.let { back ->
+                    WorkbenchIconButton(backLabel, WorkbenchGlyph.BACK, back, tag = "script-back")
+                }
                 WorkbenchIconButton(
                     label = tr(Res.string.save_to_library),
                     glyph = WorkbenchGlyph.SAVE,
@@ -812,9 +827,11 @@ private fun ScriptEditor(
             }
         }
         Box(Modifier.weight(1f).fillMaxWidth()
-            .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(HanppieDesignTokens.CardRadius)).padding(16.dp)) {
+            .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(HanppieDesignTokens.CardRadius))
+            .padding(if (shortWindow) 8.dp else 16.dp)) {
             ScriptCodeEditor(
                 history = history,
+                showCursorPosition = !shortWindow,
                 field = field,
                 enabled = !disabled,
                 onChange = { updated ->
