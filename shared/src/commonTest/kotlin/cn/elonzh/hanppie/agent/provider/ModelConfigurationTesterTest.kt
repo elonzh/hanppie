@@ -4,18 +4,11 @@ import cn.elonzh.hanppie.ui.settings.ModelSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 
 class ModelConfigurationTesterTest {
-    private fun tester() = ModelConfigurationTester(
-        scope = CoroutineScope(SupervisorJob()),
-        createHttpClient = { throw AssertionError("an invalid configuration must not reach the network") },
-    )
-
     @Test fun theTestOnlyVerifiesAuthenticationAndANormalResponse() {
         // Streaming text and tool calling are deliberately not probed: anything beyond "the endpoint
         // authenticates and answers" would mean shaping model requests for the test's sake.
@@ -23,14 +16,18 @@ class ModelConfigurationTesterTest {
     }
 
     @Test fun anIncompleteConfigurationFailsLocallyWithoutAnyRequest() = runBlocking {
-        val tester = tester()
+        val tester = ModelConfigurationTester(
+            scope = this,
+            createHttpClient = { throw AssertionError("an invalid configuration must not reach the network") },
+        )
         tester.test(ModelSettings(apiKey = ""))
-        withTimeout(5_000) {
-            while (tester.state.value.success == null) delay(10)
+        val state = withTimeout(5_000) {
+            tester.state.first { !it.running && it.success != null }
         }
-        val state = tester.state.value
         assertEquals(false, state.success)
         assertEquals(false, state.running)
+        assertEquals(listOf(ModelTestStage.LOCAL), state.stages.map { it.stage })
+        assertEquals(false, state.stages.single().passed)
         assertTrue(state.stages.none { it.stage == ModelTestStage.CATALOG },
             "no catalog request may be attempted before the configuration is valid")
     }

@@ -47,6 +47,8 @@ Android 17 / API 37 的 Medium Phone 模拟器（2400×1080 横屏）复核发�
 
 整行修复后的 CI（[37052425839](https://github.com/elonzh/hanppie/actions/runs/37052425839)）已通过 Windows、Linux、macOS、Android 和 Python。iOS 模拟器任务在下载 Gradle 时连接重置，未进入编译或应用测试。通过官方 `wrapper` 任务启用三次下载重试、初始 1 秒退避和 30 秒网络超时，仍使用 Gradle 9.6.0；生成的 Wrapper JAR 与官方 SHA-256 一致，`--version` 检查通过。本机 Android Release 包同时复核右侧点击能切换外观、强制停止重启后设置保持，随后恢复系统默认设置并停止模拟器。
 
+下载修复后的 CI（[37053494527](https://github.com/elonzh/hanppie/actions/runs/37053494527)）中 Windows、Linux、Android 和 Python 通过；macOS 的无效模型配置测试在独立后台作用域等待结果时触发 5 秒超时。该用例现使用测试自身的结构化协程作用域，通过状态流等待本地校验完成，保留原来的超时上限、禁止网络请求断言，并检查唯一失败阶段为本地校验。定向两项回归通过，日志为 `/tmp/hanppie-model-test-scope-2026-10-03.log`；应用实现未改变，云端 macOS 验证仍待完成。
+
 Xcode 27 的结果还包含线程优先级诊断和 iPad 横屏配置的未来策略提醒；这些不是测试失败，也不构成真机性能或未来系统兼容性结论。工作流保留 xcresult 的日志、录屏与截图，关闭耗时的设备全量 sysdiagnose 收集。
 
 GitHub iOS 工作流使用 runner 已安装的模拟器运行时执行同一测试脚本。首版发布必须等待平台检查成功；本记录将在实际发布后补充流水线链接与结果。
