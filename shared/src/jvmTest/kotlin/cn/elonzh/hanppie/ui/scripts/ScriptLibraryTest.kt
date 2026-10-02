@@ -208,6 +208,7 @@ class ScriptLibraryTest {
             presets.forEach { preset ->
                 val process = ProcessBuilder(
                     python,
+                    "-X", "utf8",
                     "-c",
                     "import ast,sys; ast.parse(sys.stdin.read(), feature_version=(3,6))",
                 ).start()
