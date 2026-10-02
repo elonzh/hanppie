@@ -39,6 +39,8 @@ Android 17 / API 37 的 Medium Phone 模拟器（2400×1080 横屏）复核发�
 
 共享键盘布局修改后的 iPhone 完整复核为 6 项通过；iPad 首次复核的重启语言测试因导航过渡时点击不稳定失败。UI 测试改为等待可点击元素的坐标稳定，再操作同一控件，未放宽原有语言和重启断言，并增加输入框至少 48 pt 的检查及失败截图、辅助功能树。本地 iPad 该项定向复核通过，日志为 `/tmp/hanppie-ipad-settings-stable-2026-10-03.log`。最终云端结果仍须以修复后的提交为准。
 
+修复后的 CI（[37050182333](https://github.com/elonzh/hanppie/actions/runs/37050182333)）中 Windows、Android 和 Python 检查通过；Linux 首次外观选择及 macOS 模型菜单出现仍有点击时机失败。JVM 界面测试进一步用测试时钟推进导航和菜单动画、等待绘制及选项出现，仍执行真实鼠标点击。全部 53 项 Console 本地复核通过，日志为 `/tmp/hanppie-popup-frames-local-2026-10-03.log`；CI 同时保存已有 UI 截图。本机 iPhone 的输入高度新断言复核通过，日志为 `/tmp/hanppie-iphone-keyboard-touch-size-2026-10-03.log`。
+
 Xcode 27 的结果还包含线程优先级诊断和 iPad 横屏配置的未来策略提醒；这些不是测试失败，也不构成真机性能或未来系统兼容性结论。工作流保留 xcresult 的日志、录屏与截图，关闭耗时的设备全量 sysdiagnose 收集。
 
 GitHub iOS 工作流使用 runner 已安装的模拟器运行时执行同一测试脚本。首版发布必须等待平台检查成功；本记录将在实际发布后补充流水线链接与结果。

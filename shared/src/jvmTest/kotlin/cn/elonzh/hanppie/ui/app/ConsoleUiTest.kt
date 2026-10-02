@@ -1181,12 +1181,14 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.onNodeWithContentDescription("theme-selector").assertDoesNotExist()
             rule.onNodeWithTag("palette-editor").assertDoesNotExist()
             rule.onNodeWithContentDescription("night-mode-selector").performClick()
-            rule.onNodeWithContentDescription("night-mode-LIGHT").performClick()
+            settleTransitions()
+            rule.onNodeWithContentDescription("night-mode-LIGHT").assertIsDisplayed().performClick()
             rule.waitUntil(5_000) { appearance.settings.nightMode == NightMode.LIGHT }
             rule.waitUntil(5_000) { rule.onAllNodesWithContentDescription("night-mode-LIGHT").fetchSemanticsNodes().isEmpty() }
             snapshot("appearance-light")
             rule.onNodeWithContentDescription("night-mode-selector").performClick()
-            rule.onNodeWithContentDescription("night-mode-DARK").performClick()
+            settleTransitions()
+            rule.onNodeWithContentDescription("night-mode-DARK").assertIsDisplayed().performClick()
             rule.waitUntil(5_000) { appearance.settings.nightMode == NightMode.DARK }
             rule.waitUntil(5_000) { rule.onAllNodesWithContentDescription("night-mode-DARK").fetchSemanticsNodes().isEmpty() }
             snapshot("appearance-dark")
@@ -1305,6 +1307,13 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.onNodeWithTag("settings-back").performClick()
         }
         rule.onNodeWithTag("settings-category-$id").performScrollTo().performClick()
+        settleTransitions()
+    }
+
+    private fun settleTransitions() {
+        // Nav3 and window popups can expose semantics before their moving surface has settled.
+        rule.mainClock.advanceTimeBy(1_000)
+        rule.waitForIdle()
     }
 
     private fun snapshot(name: String, node: SemanticsNodeInteraction = rule.onRoot()) {
@@ -1370,7 +1379,10 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
 
             // The id lives in one field and the picker offers it alongside the built-in catalog.
             openSettingsCategory("model")
-            rule.onNodeWithTag("model-picker").performScrollTo().performClick()
+            rule.onNodeWithTag("model-picker").performScrollTo()
+            settleTransitions()
+            rule.onNodeWithTag("model-picker").assertIsDisplayed().performClick()
+            rule.waitUntil(5_000) { rule.onAllNodesWithTag("model-option-qwen-plus").fetchSemanticsNodes().size == 1 }
             rule.onNodeWithTag("model-option-qwen-plus").assertExists()
         } finally { model.close() }
     }

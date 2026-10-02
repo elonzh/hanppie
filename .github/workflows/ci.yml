@@ -58,6 +58,7 @@ jobs:
           path: |
             shared/build/test-results/jvmTest
             shared/build/reports/tests/jvmTest
+            shared/build/reports/ui
             packages/robot-core/build/test-results/desktopTest
           if-no-files-found: warn
 
