@@ -182,7 +182,7 @@ class ConsoleUiTest {
             rule.onNodeWithContentDescription("Take photo").assertIsDisplayed()
             rule.onNodeWithContentDescription("Start recording").assertIsDisplayed()
             rule.onNodeWithContentDescription("Gear 3").assertIsDisplayed()
-            rule.onNodeWithContentDescription("Signal strength 37").assertIsDisplayed()
+            rule.onNodeWithContentDescription("Signal strength Fair").assertIsDisplayed()
             rule.onNodeWithContentDescription("Chassis heading relative to camera -42°").assertIsDisplayed()
             rule.onNodeWithText("S1", substring = true).assertDoesNotExist()
             snapshot("phone-cockpit-en")

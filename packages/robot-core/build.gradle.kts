@@ -5,6 +5,11 @@ plugins {
 
 kotlin {
     jvm("desktop")
+    listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
+        target.compilations.getByName("main").cinterops.create("robotPlatform") {
+            definitionFile.set(project.file("src/nativeInterop/cinterop/robotPlatform.def"))
+        }
+    }
     android {
         namespace = "cn.elonzh.hanppie.robot"
         compileSdk { version = release(37) { minorApiLevel = 0 } }
@@ -12,6 +17,7 @@ kotlin {
         minSdk = 26
     }
     jvmToolchain(21)
+    applyDefaultHierarchyTemplate()
     sourceSets {
         val jvmSharedMain by creating {
             dependsOn(commonMain.get())

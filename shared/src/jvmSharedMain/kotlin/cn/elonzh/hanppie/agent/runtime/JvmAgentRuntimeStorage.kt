@@ -16,7 +16,7 @@ internal fun openAgentRuntimeStorage(
     return try {
         AgentRuntimeStorage(
             sessions = SessionRepository(
-                events = JsonlSessionEventStore(eventDirectory),
+                events = JsonlSessionEventStore(JvmJournalDirectory(eventDirectory)),
                 dao = database.sessionProjectionDao(),
                 database = database,
             ),

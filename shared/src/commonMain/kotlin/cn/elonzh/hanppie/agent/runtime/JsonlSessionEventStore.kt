@@ -1,37 +1,14 @@
 package cn.elonzh.hanppie.agent.runtime
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import java.nio.ByteBuffer
-import java.nio.channels.FileChannel
-import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.StandardOpenOption.APPEND
-import java.nio.file.StandardOpenOption.CREATE
-import java.nio.file.StandardOpenOption.WRITE
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
 
 /** File-ordered Session event log following the same cursor contract used by DTEmpower. */
-internal class JsonlSessionEventStore(private val directory: Path) : SessionEventStore {
+internal class JsonlSessionEventStore(private val directory: JournalDirectory) : SessionEventStore {
     private val json = Json { encodeDefaults = true; explicitNulls = false }
 
-    init {
-        Files.createDirectories(directory)
-        // Upgrades require all old application processes to be stopped first.
-        withDirectoryLock {
-            Files.list(directory).use { paths ->
-                paths.filter {
-                    validId(it.fileName.toString().removeSuffix(".lock")) &&
-                            it.fileName.toString().endsWith(".lock") && Files.isRegularFile(it)
-                }
-                    .forEach { Files.deleteIfExists(it) }
-            }
-        }
-    }
 
     override suspend fun append(sessionId: String, expectedLastEventId: String?, event: SessionEvent) =
         withSessionLock(sessionId) {
@@ -47,13 +24,8 @@ internal class JsonlSessionEventStore(private val directory: Path) : SessionEven
                 throw SessionCursorConflictException(expectedLastEventId, current.lastEventId)
             }
 
-            val bytes = (json.encodeToString(SessionEvent.serializer(), event) + "\n")
-                .toByteArray(StandardCharsets.UTF_8)
-            FileChannel.open(path(sessionId), CREATE, WRITE, APPEND).use { channel ->
-                val buffer = ByteBuffer.wrap(bytes)
-                while (buffer.hasRemaining()) channel.write(buffer)
-                channel.force(true)
-            }
+            val bytes = (json.encodeToString(SessionEvent.serializer(), event) + "\n").encodeToByteArray()
+            directory.append(path(sessionId), bytes)
         }
 
     override suspend fun read(sessionId: String, afterEventId: String?): SessionEventStream =
@@ -67,30 +39,24 @@ internal class JsonlSessionEventStore(private val directory: Path) : SessionEven
         }
 
     override suspend fun sessionIds(): List<String> = withContext(Dispatchers.IO) {
-        if (!Files.exists(directory)) emptyList() else Files.list(directory).use { paths ->
-            paths.filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(SUFFIX) }
-                .map { it.fileName.toString().removeSuffix(SUFFIX) }
-                .filter(::validId)
-                .toList()
-        }
+        directory.names().filter { it.endsWith(SUFFIX) }.map { it.removeSuffix(SUFFIX) }.filter(::validId)
     }
 
     override suspend fun delete(sessionId: String) = withSessionLock(sessionId) {
-        Files.deleteIfExists(path(sessionId))
-        Files.deleteIfExists(corruptTailPath(sessionId))
+        directory.delete(path(sessionId))
+        directory.delete(corruptTailPath(sessionId))
         // The directory lock survives session deletion, preserving its inode for all contenders.
         Unit
     }
 
     private fun readValidatedFile(sessionId: String): SessionEventStream {
         val file = path(sessionId)
-        if (!Files.exists(file)) return SessionEventStream(emptyList())
-        val bytes = Files.readAllBytes(file)
+        val bytes = directory.read(file) ?: return SessionEventStream(emptyList())
         if (bytes.isEmpty()) return SessionEventStream(emptyList())
         if (bytes.last() != '\n'.code.toByte()) {
             throw SessionEventCorruptionException("Session event log has an uncommitted tail: $file")
         }
-        val events = bytes.toString(StandardCharsets.UTF_8).dropLast(1).split('\n').mapIndexed { index, line ->
+        val events = bytes.decodeToString().dropLast(1).split('\n').mapIndexed { index, line ->
             if (line.isBlank()) {
                 throw SessionEventCorruptionException("Session event log contains a blank line at ${index + 1}: $file")
             }
@@ -111,20 +77,13 @@ internal class JsonlSessionEventStore(private val directory: Path) : SessionEven
     }
 
     /** A line is committed only when its newline is durable; any other tail is quarantined and truncated. */
-    private fun discardUncommittedTail(file: Path) {
-        if (!Files.exists(file)) return
-        val bytes = Files.readAllBytes(file)
+    private fun discardUncommittedTail(file: String) {
+        val bytes = directory.read(file) ?: return
         if (bytes.isEmpty() || bytes.last() == '\n'.code.toByte()) return
-        val lastNewline = bytes.indexOfLast { byte -> byte == '\n'.code.toByte() }
-        val tailStart = lastNewline + 1
-        Files.write(corruptTailPath(file.fileName.toString().removeSuffix(SUFFIX)),
-            bytes.copyOfRange(tailStart, bytes.size), CREATE, WRITE, APPEND)
-        Files.write(corruptTailPath(file.fileName.toString().removeSuffix(SUFFIX)),
-            byteArrayOf('\n'.code.toByte()), CREATE, WRITE, APPEND)
-        FileChannel.open(file, WRITE).use { channel ->
-            channel.truncate(tailStart.toLong())
-            channel.force(true)
-        }
+        val tailStart = bytes.indexOfLast { it == '\n'.code.toByte() } + 1
+        directory.append(corruptTailPath(file.removeSuffix(SUFFIX)),
+            bytes.copyOfRange(tailStart, bytes.size) + byteArrayOf('\n'.code.toByte()))
+        directory.truncate(file, tailStart.toLong())
     }
 
     private fun validateEvent(event: SessionEvent) {
@@ -141,26 +100,16 @@ internal class JsonlSessionEventStore(private val directory: Path) : SessionEven
     private suspend fun <T> withSessionLock(sessionId: String, action: () -> T): T =
         withContext(Dispatchers.IO) {
             require(validId(sessionId)) { "Invalid session id" }
-            withDirectoryLock(action)
+            directory.locked(action)
         }
 
-    private fun <T> withDirectoryLock(action: () -> T): T {
-        val lockFile = directory.toRealPath().resolve(LOCK_FILE)
-        return PROCESS_LOCKS.computeIfAbsent(lockFile) { ReentrantLock() }.withLock {
-            FileChannel.open(lockFile, CREATE, WRITE)
-                .use { channel -> channel.lock().use { action() } }
-        }
-    }
-
-    private fun path(sessionId: String) = directory.resolve(sessionId + SUFFIX)
-    private fun corruptTailPath(sessionId: String) = directory.resolve(sessionId + CORRUPT_TAIL_SUFFIX)
+    private fun path(sessionId: String) = sessionId + SUFFIX
+    private fun corruptTailPath(sessionId: String) = sessionId + CORRUPT_TAIL_SUFFIX
     private fun validId(value: String) = ID.matches(value)
 
     private companion object {
-        val PROCESS_LOCKS = ConcurrentHashMap<Path, ReentrantLock>()
         val ID = Regex("[0-9a-fA-F-]{36}")
         const val SUFFIX = ".jsonl"
-        const val LOCK_FILE = ".sessions.lock"
         const val CORRUPT_TAIL_SUFFIX = ".jsonl.tail.corrupt"
     }
 }

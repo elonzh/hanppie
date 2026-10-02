@@ -26,9 +26,29 @@ Each document has one responsibility so that a conclusion is never maintained in
 | [Early research report](./docs/robomaster-s1-revival-report.md) | Historical research into S.BUS, SocketCAN, vcan, ROS 2, and alternative approaches |
 | [`src/robomaster/UPSTREAM.md`](./src/robomaster/UPSTREAM.md) | Provenance and maintenance boundary of the bundled DJI SDK fork |
 
-Before using physical hardware, read the architecture's [safety and recovery model](./docs/architecture.md#113-安全与恢复模型). Its [capability matrix](./docs/architecture.md#111-当前能力矩阵) is the sole current status table.
+Before using physical hardware, read the architecture's [safety and recovery model](./docs/architecture.md#112-安全与恢复模型). Its [capability matrix](./docs/architecture.md#110-当前能力矩阵) is the sole current status table.
 
 ## Installation
+
+### Release downloads
+
+Get APK, macOS DMG, Windows MSI and the unsigned iOS archive from [GitHub Releases](https://github.com/elonzh/hanppie/releases). Verify downloads against `SHA256SUMS.txt`. Changes are listed in [CHANGELOG](./CHANGELOG.md).
+
+### iPhone / iPad
+
+Requires iOS 18.5+, landscape orientation, JDK 25, full Xcode and Git LFS for source builds. The unsigned `.xcarchive.zip` is not directly installable. Open `iosApp/Hanppie.xcodeproj`, select the `Hanppie` scheme and your device, then configure your Apple Team, Bundle ID and a profile with the approved multicast capability before running.
+
+```bash
+git lfs pull
+xcodebuild -project iosApp/Hanppie.xcodeproj -scheme Hanppie \
+  -destination 'generic/platform=iOS' -archivePath build/Hanppie.xcarchive \
+  CODE_SIGNING_ALLOWED=NO archive
+scripts/release/ios-tests.sh # installed iOS 18.5+ simulator runtime required
+```
+
+Allow Local Network access, join the robot hotspot in Settings → Wi-Fi, and return to Hanppie. Microphone, speech recognition and Photos permissions are requested only for the corresponding actions. Speech recognition may process audio online; review the draft before sending it.
+
+The iOS release provides source and an unsigned archive. Current platform evidence is recorded in the [architecture](./docs/architecture.md#1312-ios-平台能力与分发).
 
 ### Desktop application
 
@@ -49,7 +69,7 @@ Desktop video/audio requires FFmpeg with H.264 and Opus support on the applicati
 Connecting opens a full-screen cockpit with a video background and touch controls. **控制台** returns to conversation, scripts and settings. The water-shot button sends one direct command; it does not upload or start a Lab script. Physical water firing remains unverified.
 Click a discovered robot to connect, or select manual connection and enter an explicit IPv4/AppID. The script tab manages local scripts and editable copies of five multi-step presets, with import/export, rename, and delete operations. Choosing **Run script** is the execution intent: the app validates the source, overwrites the single `python_raw.dsp`, and sends the start command without a second confirmation checkbox. Lab scripts use SDK-provided objects such as `time` directly and must not contain ordinary imports. Starting a script opens a focused execution view where lifecycle state and output sent through `log_ctrl.print_msg(...)` take priority; returning to the editor does not stop the script, and a global status strip keeps the active run and Stop action visible on other pages. The run view shows a copyable run ID plus host-side upload, start, and report-reception diagnostics. If no onboard `STARTED` report arrives within 10 seconds, the run becomes unknown and retains the Stop action instead of waiting forever or retrying automatically. Normal return or failure closes the onboard run automatically, while a lost connection is also reported as unknown. Gimbal and chassis demonstrations are visibly marked, run for a finite number of rounds, and require clear space.
 For Android, configure the SDK managed by IDEA in the ignored `local.properties`, install API 37 and Build Tools 36.1.0, and run `task android:check`. The APK is at `androidApp/build/outputs/apk/debug/androidApp-debug.apk`.
-See the [client architecture](./docs/architecture.md#130-单体仓库与-kotlin-多平台客户端) for current implementation and verification boundaries.
+See the [client architecture](./docs/architecture.md#131-多平台工程组织与模块划分) for current implementation and verification boundaries.
 
 On Android or desktop, open **设置** to select a DashScope, OpenAI, DeepSeek, or MiMo preset, or enter a custom model ID and compatible API URL. The remote model list loads on demand only when the model selector opens; opening Settings makes no catalog request, built-in presets and the current ID appear immediately, and manual input remains available after a catalog failure. **测试模型配置** independently checks local configuration, the model catalog, streaming text, and a side-effect-free tool call; the two model requests may incur a small provider charge. Each product-level conversation maps to an Agent Session. Semantic Session events are appended to runtime-owned JSONL, while list and complete Koog `Message` queries use the rebuildable projection in the independent `agent-runtime.db`, not the application's `hanppie.db`. Sessions can be created, opened, renamed, and permanently deleted after confirmation, and survive restarts. Connect a specific robot in **设备** before requesting scripts, and review the generated source before confirming execution. Cancelling the current agent run does not stop an onboard script; use **脚本 → 停止脚本** for that.
 

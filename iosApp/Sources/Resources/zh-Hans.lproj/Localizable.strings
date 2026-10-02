@@ -1,0 +1,5 @@
+"Audio codec unavailable" = "系统音频服务暂不可用，请稍后重试";
+"Audio is empty, invalid or exceeds 10 minutes" = "音频为空、格式无效或超过 10 分钟";
+"Wait for a live video frame" = "请等待实时视频画面";
+"Permission denied. Enable access in Settings → Apps → Hanppie" = "权限未开启，请在“设置 → App → Hanppie”中允许访问";
+"Saved to Photos" = "已保存到照片";

@@ -48,7 +48,7 @@ internal class ScriptLibrary(
             throw error
         } catch (error: Exception) {
             scriptLibraryLogger.error(error) { "Could not load the script library" }
-            state.value = state.value.copy(loading = false, error = error.message ?: error.javaClass.simpleName)
+            state.value = state.value.copy(loading = false, error = error.message ?: error::class.simpleName.orEmpty())
         }
     }
 
@@ -169,7 +169,7 @@ internal class ScriptLibrary(
             throw error
         } catch (error: Exception) {
             scriptLibraryLogger.error(error) { "Script library operation failed" }
-            state.value = state.value.copy(error = error.message ?: error.javaClass.simpleName)
+            state.value = state.value.copy(error = error.message ?: error::class.simpleName.orEmpty())
             throw error
         } finally {
             state.value = state.value.copy(busy = false)

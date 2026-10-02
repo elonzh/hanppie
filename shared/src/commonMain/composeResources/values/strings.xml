@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="ios_wifi_guidance">Open Settings → Wi-Fi and join the robot or its local network, then return to Hanppie. Allow Local Network access on first connection. If denied, enable it in Settings → Apps → Hanppie.</string>
     <string name="recenter_gimbal">Recenter gimbal</string>
     <string name="gimbal_protocol_angles_last_received">Gimbal protocol angles · last received</string>
     <string name="gimbal_yaw">Gimbal yaw</string>

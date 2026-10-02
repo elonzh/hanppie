@@ -76,7 +76,7 @@ internal class ScriptAudioLibrary(
             throw error
         } catch (error: Exception) {
             audioLogger.error(error) { "Could not load script audio" }
-            state.value = state.value.copy(loading = false, error = error.message ?: error.javaClass.simpleName)
+            state.value = state.value.copy(loading = false, error = error.message ?: error::class.simpleName.orEmpty())
         }
     }
 
@@ -160,7 +160,7 @@ internal class ScriptAudioLibrary(
             throw error
         } catch (error: Exception) {
             audioLogger.error(error) { "Script audio operation failed" }
-            state.value = state.value.copy(error = error.message ?: error.javaClass.simpleName)
+            state.value = state.value.copy(error = error.message ?: error::class.simpleName.orEmpty())
             throw error
         } finally {
             state.value = state.value.copy(busy = false)

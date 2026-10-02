@@ -82,17 +82,18 @@ flowchart TD
     subgraph APPS["平台应用入口 (Platform Entry)"]
         ANDROID["androidApp<br/>(Android Activity / APK)"]
         DESKTOP["desktopApp<br/>(Desktop JVM / Main)"]
+        IOS["iosApp<br/>(SwiftUI / Xcode)"]
     end
 
     subgraph SHARED["共享 UI 与业务库 (shared)"]
         UI_COMMON["commonMain<br/>Navigation 3 路由 / Miuix 主题 / ViewModel / Koog 智能体"]
-        UI_JVMSHARED["jvmSharedMain<br/>Java 文件路径 / 本地格式化桥接"]
-        UI_PLATFORM["androidMain / jvmMain<br/>平台渲染 / 窗口 / 录制与音频编解码"]
+        UI_JVMSHARED["jvmSharedMain<br/>NIO 文件锁 / Java 路径 / 格式化桥接"]
+        UI_PLATFORM["androidMain / jvmMain / iosMain<br/>平台渲染 / 窗口 / 录制与音频编解码"]
     end
 
     subgraph ROBOTCORE["跨平台协议库 (packages/robot-core)"]
-        CORE_COMMON["commonMain<br/>DUSS 协议 / CRC / App 封包 / 广播解析 / Lab 打包"]
-        CORE_JVMSHARED["jvmSharedMain (JvmRobotRuntime)<br/>UDP Socket / Apache Commons Net FTP"]
+        CORE_COMMON["commonMain<br/>DUSS / AppSession / LabController / RobotFileSystem / PlatformRobotRuntime"]
+        CORE_JVMSHARED["jvmSharedMain / iosMain<br/>JVM Socket + Commons Net / Darwin BSD Socket + FTP"]
     end
 
     subgraph PYTHON["Python 核心与工具链 (src/)"]
@@ -102,17 +103,19 @@ flowchart TD
 
     ANDROID --> SHARED
     DESKTOP --> SHARED
+    IOS --> SHARED
     SHARED --> ROBOTCORE
 ```
 
 - **`packages/robot-core`**：独立 KMP 协议模块，根包为 `cn.elonzh.hanppie.robot`。按 `protocol`、
   `product`、`session`、`lab`、`remote`、`media`、`telemetry`、`files` 分工。`commonMain` 实现纯 Kotlin
-  逻辑（DUSS 封包、CRC8/16、DSP 打包、遥测解析等）；`jvmSharedMain` 通过 `JvmRobotRuntime` 组合平台 UDP 与
-  FTP 实现。
+  逻辑（DUSS 封包、CRC8/16、DSP 打包、遥测解析等）、完整连接与 Lab 生命周期、文件管理策略和
+  `PlatformRobotRuntime`。平台层只实现 `RobotTransport`、同步原语、随机数、日期和 MD5。Android 保留
+  按连接选择的网络路由；iOS 使用 Darwin BSD Socket 与被动 FTP，业务请求保持共享。
 - **`shared`**：共享 UI 库，根包为 `cn.elonzh.hanppie.ui`。采用 shared-first
   原则，所有界面、导航、ViewModel、本地持久化与智能体逻辑均位于共享层；平台 source set（`androidMain`、
-  `jvmMain`）仅提供平台能力注入（如 Android `MediaCodec`、桌面 FFmpeg 管道、文件选择器适配等）。
-- **`androidApp` / `desktopApp`**：无业务逻辑的轻量平台入口，负责宿主初始化、窗口管理与应用打包。
+  `jvmMain`、`iosMain`）仅提供平台能力注入（如 Android `MediaCodec`、桌面 FFmpeg 管道、文件选择器适配等）。
+- **`androidApp` / `desktopApp` / `iosApp`**：无业务逻辑的轻量平台入口，负责宿主初始化、窗口管理与应用打包。
 - **`src/hanppie`**：纯 Python 实现的高性能直接控制与 Lab 脚本部署库，提供与 KMP 核心对等的协议能力。
 
 ---
@@ -168,7 +171,7 @@ Android 验证须等用户明确确认功能完整后再进行，规则见 AGENT
 失败保留连接操作并提供重试。布局与状态测试替换 GPU 表面，
 `HANPPIE_GPU_TESTS=1` 启用真实 GPU 图像测试。桌面使用 JDK 25 工具链和随包运行时，并按目标系统选取
 Filament 原生库；该版本上游提供 macOS arm64、Windows x64、Linux x64/arm64 原生包。
-Android 使用官方 Filament OpenGL ES 后端。桌面 Compose 集成包含 GPU 像素回读，性能结论需要限定
+Android 使用官方 Filament OpenGL ES 后端；iOS 共享场景通过库提供的 Metal 实现渲染，已在模拟器运行，真机仍待验证。iOS 使用非透明 UIKit 场景表面，保证共享界面的文字与控制按钮在场景上方合成。桌面 Compose 集成包含 GPU 像素回读，性能结论需要限定
 到实际运行的设备、视口与分辨率。
 
 #### 1.3.2 客户端架构与分层设计
@@ -208,7 +211,7 @@ flowchart LR
     CMODEL --> RUNTIME
 ```
 
-- **状态管理**：`WorkbenchViewModel` 作为双端共同的顶层状态所有者，管理导航栈、编辑草稿与文件交互；
+- **状态管理**：`WorkbenchViewModel` 作为各平台共同的顶层状态所有者，管理导航栈、编辑草稿与文件交互；
   `ConsoleModel` 负责连接生命周期、遥控、脚本运行与智能体对话之间的跨模块仲裁。
 - **统一存储模型 (`WorkbenchStorage`)**：
     1. **配置存储**：基于 Preferences DataStore，保存模型 API Key、控制参数、语言、显示模式、持久 AppID
@@ -216,7 +219,8 @@ flowchart LR
     2. **脚本库**：基于本地文件系统目录树的 `DirectoryScriptRepository`。将脚本存为独立目录（含
        `manifest.json`、`script.py` 及 `audio/` Opus 音频文件），废除中间数据库形式化分层；
     3. **智能体存储**：`AgentRuntimeStorage` 组合独立的追加式 JSONL 文件存储与 Room 3 查询投影库（
-       `agent-runtime.db`）。
+       `agent-runtime.db`）。JSONL 语义、幂等、游标和尾部隔离在 commonMain；JVM 用 NIO、iOS 用
+       POSIX `fsync` / `flock` 实现 `JournalDirectory`。每个目录使用稳定的 `.sessions.lock`，不会随会话删除重建。
 
 ---
 
@@ -307,9 +311,9 @@ flowchart TD
 
     subgraph CLIENT_PIPELINE["客户端媒体处理"]
         RES_CTRL["分辨率控制: DUSS 0x02/0x18<br/>(720p / 1080p)"]
-        V_DEC["视频解码 (Android MediaCodec / 桌面 FFmpeg BGRA)"]
+        V_DEC["视频解码 (Android MediaCodec / 桌面 FFmpeg / iOS VideoToolbox)"]
         A_DEC["音频解码 (Opus → 48kHz 单声道 PCM)"]
-        PTT["短片对讲 (12kHz PCM 采集 → Opus 编码上传)"]
+        PTT["短片对讲 (平台 PCM 采集 → 20ms Opus 编码上传)"]
     end
 
     CAM --> V_NET --> V_DEC
@@ -320,7 +324,7 @@ flowchart TD
 
 - **流媒体与分辨率协商**：图传分辨率由 DUSS `0x02/0x18` 控制，支持 720p 与 1080p 动态切换；
 - **扬声器与短片对讲**：扬声器音量由 DUSS `0x3F/0x1B` 统一调节；支持按住录音、松开发送的 Opus
-  短片对讲传输，在机内通过 DUSS `0x3F/0xB3` 触发播放。
+  短片对讲传输，最多保留 15 秒采集，在机内通过 DUSS `0x3F/0xB3` 触发播放。
 
 ---
 
@@ -450,6 +454,24 @@ flowchart LR
 
 ---
 
+#### 1.3.12 iOS 平台能力与分发
+
+iOS 与其他客户端共用导航、设置、脚本库、AI 工具及审批、JSONL/Room 会话与机器人生命周期。平台能力由
+`IosPlatformServices` 注入，Swift 不维护机器人业务或另一套 UI。HTTP 使用 Ktor Darwin；密钥保存在应用
+私有 Preferences DataStore，日志不包含密钥。
+
+- 宿主限定左右横屏，使用安全区域；共享输入布局处理软键盘。最低系统版本为 iOS 18.5，跟随当前渲染依赖的最低边界。
+- 本地网络权限用于 UDP/FTP。自动发现涉及广播，需要签名配置包含 Apple 批准的
+  `com.apple.developer.networking.multicast` entitlement；手动 IPv4 不能替代系统局域网权限。Wi-Fi 引导使用公开系统设置操作，不依赖私有 URL scheme。
+- H.264 接收队列最多 4 个待处理 Access Unit，丢包后等待关键帧；下行 Opus 使用 Apple 编解码器，播放最多排队 25 帧。照片与 MP4 保存只申请相册添加权限；监听打开时录像包含收到的音频。
+- 录音与语音输入共享单个麦克风所有者，权限回调带取消代次，后台释放采集、播放及解码资源。识别服务可在线处理音频，首次启动先展示说明；识别文本回填草稿，不自动发送。对讲松手后编码上传，取消或后台不发送。
+- 发布工作流先通过版本/CHANGELOG 校验和平台测试，再发布 APK、DMG、MSI、未签名 xcarchive 与 SHA-256 校验文件。未签名 iOS 归档不是可安装 IPA。
+
+Apple 的 [本地网络隐私说明](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)
+是权限与广播能力的上游依据。外部模型/系统识别的数据行为由用户选定服务决定；隐私清单不表示这些服务离线运行。
+
+---
+
 ### 1.4 包边界
 
 | 路径                     | 核心职责                                      |
@@ -458,6 +480,7 @@ flowchart LR
 | `shared/`              | 跨平台 UI、ViewModel、本地存储聚合、Koog 智能体与媒体管道     |
 | `androidApp/`          | Android 宿主入口、权限配置与原生打包                    |
 | `desktopApp/`          | 桌面 JVM 宿主入口与多平台分发打包                       |
+| `iosApp/`              | SwiftUI 宿主、Apple 媒体与权限服务、Xcode 打包与 XCTest |
 | `src/hanppie/`         | Python 核心协议与直接控制库                         |
 | `src/robomaster/`      | 官方 Python SDK 纯源码归档与导入兼容层                 |
 | `assets/s1-system/`    | 逆向提取的原机系统文件与参考脚本（不随包分发）                   |
@@ -471,7 +494,7 @@ flowchart LR
 - **运行环境约束**：
     - S1 机载 Lab 环境固定为 Python 3.6.6；
     - 主机端 Python 开发与 CI 基准为 Python 3.10+；
-    - Kotlin 跨平台层使用纯 Kotlin/JVM 实现，无 Python 运行时依赖。
+    - Kotlin 跨平台层使用共享 Kotlin 与平台能力适配，无 Python 运行时依赖。
 
 ---
 
@@ -513,7 +536,8 @@ SDK。
 ### 1.8 媒体兼容与编解码
 
 - **视频流**：相机视频流采用 H.264 格式，分辨率通过 DUSS `0x02/0x18` 在 720p 与 1080p 间切换。Android
-  端通过 `MediaCodec` 硬解至 `SurfaceView`；桌面端通过 FFmpeg 软解为 BGRA 帧提供给 Compose/Skia 渲染；
+  端通过 `MediaCodec` 解码至合成表面；桌面端通过 FFmpeg 软解为 BGRA 帧；iOS 由共享 AnnexB / Access Unit
+  解析器分包，再通过 VideoToolbox 解码、UIKit 显示，并将采样 PNG 帧交给共享缓存；
 - **音频下行**：机身麦克风音频通过 DUSS `0x3F/0x1E` 请求，S1 返回 Opus 编码流（DUSS `0x3F/0x1D`），解码为
   48 kHz 单声道 PCM 后输出至系统音频；
 - **音频上行（对讲）**：本地麦克风采集音频并编码为 20ms Opus 帧，通过 DUSS `0x3F/0x5F` 与 `0x00/0x09`
@@ -526,13 +550,15 @@ SDK。
 1. **静态分析与代码规范**：Python 端强制要求类型注解、相对路径导入及显式静态 `__all__` 声明；使用
    `ruff` 与 `prek` 门禁；
 2. **自动化测试**：覆盖协议封包、CRC 校验、产品识别、DSP 容器构建及媒体编解码，核心逻辑要求 70% 以上覆盖率；
-3. **分层构建验证**：Kotlin 模块通过 Gradle 运行协议测试、JVM 单元测试及 Android APK 构建。
+3. **分层构建验证**：Kotlin 协议与共享业务回归、平台构建、UI 运行、设备连接与物理动作分别记录；
+   Android 验证遵循 AGENTS.md 的功能确认门槛。iOS 流水线分别执行 iPhone/iPad 媒体契约与横屏 UI 测试，
+   以及未签名设备归档。
 
 ---
 
 ### 1.10 当前能力矩阵
 
-下表总结 Hanppie 当前的技术实现与实测验证状态：
+下表总结既有机器人证据，实机均来自 S1；这些证据不自动证明新增 iOS 平台的网络、媒体或物理动作。iOS 当前已通过原生编译、未签名设备归档、模拟器协议与媒体契约，以及 iPhone/iPad 横屏 UI 测试；真机权限、机器人连接、音视频与机械动作仍待验证。单次证据见 [2026-10-02 iOS 交付记录](./ios-delivery-2026-10-02.md)。
 
 | 能力分类        | 核心模块                                    | 验证状态        | 架构说明                                           |
 |-------------|-----------------------------------------|-------------|------------------------------------------------|

@@ -2,7 +2,7 @@ package cn.elonzh.hanppie.ui.app
 
 internal data class HanppieBuildInfo(
     val appName: String = "Hanppie",
-    val versionName: String = "0.1.0",
+    val versionName: String = HANPPIE_VERSION,
     val platformName: String,
     val runtimeVersion: String,
     val frameworkVersion: String = "Kotlin 2.4.10 · Compose 1.12.0",

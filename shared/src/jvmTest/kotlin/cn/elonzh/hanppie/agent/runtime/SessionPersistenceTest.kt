@@ -29,7 +29,7 @@ class SessionPersistenceTest {
         val existingId = "11111111-1111-1111-1111-111111111111"
         try {
             val first = SessionCreatedEvent("event-1", 1, "保留")
-            JsonlSessionEventStore(directory).append(existingId, null, first)
+            JsonlSessionEventStore(JvmJournalDirectory(directory)).append(existingId, null, first)
             val lock = directory.resolve(".sessions.lock")
             val identity =
                 Files.readAttributes(lock, java.nio.file.attribute.BasicFileAttributes::class.java)
@@ -38,7 +38,7 @@ class SessionPersistenceTest {
             Files.createFile(directory.resolve("22222222-2222-2222-2222-222222222222.lock"))
             val unrelated = directory.resolve("unrelated.lock")
             Files.writeString(unrelated, "keep")
-            val store = JsonlSessionEventStore(directory)
+            val store = JsonlSessionEventStore(JvmJournalDirectory(directory))
             assertEquals(listOf(first), store.read(existingId).events)
             repeat(20) {
                 val id = java.util.UUID.randomUUID().toString()
@@ -68,7 +68,7 @@ class SessionPersistenceTest {
         val directory = Files.createTempDirectory("hanppie-session-concurrent-")
         val sessionId = "33333333-3333-3333-3333-333333333333"
         try {
-            val stores = List(8) { JsonlSessionEventStore(directory) }
+            val stores = List(8) { JsonlSessionEventStore(JvmJournalDirectory(directory)) }
             val results = stores.mapIndexed { index, store ->
                 async {
                     try {
@@ -96,10 +96,10 @@ class SessionPersistenceTest {
         val sessionId = "22222222-2222-2222-2222-222222222222"
         try {
             val first = SessionCreatedEvent("event-1", 1, "一")
-            JsonlSessionEventStore(directory).append(sessionId, null, first)
+            JsonlSessionEventStore(JvmJournalDirectory(directory)).append(sessionId, null, first)
             Files.writeString(directory.resolve("$sessionId.jsonl"), "{\"eventType\":", APPEND)
 
-            val reopened = JsonlSessionEventStore(directory)
+            val reopened = JsonlSessionEventStore(JvmJournalDirectory(directory))
             assertEquals(listOf(first), reopened.read(sessionId).events)
             val second = SessionRenamedEvent("event-2", 2, "二")
             reopened.append(sessionId, first.eventId, second)
@@ -117,7 +117,7 @@ class SessionPersistenceTest {
         val directory = Files.createTempDirectory("hanppie-session-corrupt-")
         val sessionId = "55555555-5555-5555-5555-555555555555"
         try {
-            val store = JsonlSessionEventStore(directory)
+            val store = JsonlSessionEventStore(JvmJournalDirectory(directory))
             store.append(sessionId, null, SessionCreatedEvent("event-1", 1, "一"))
             Files.writeString(directory.resolve("$sessionId.jsonl"), "{not-json}\n", APPEND)
 
@@ -132,7 +132,7 @@ class SessionPersistenceTest {
         val directory = Files.createTempDirectory("hanppie-session-cursor-")
         val sessionId = "99999999-9999-9999-9999-999999999999"
         try {
-            val store = JsonlSessionEventStore(directory)
+            val store = JsonlSessionEventStore(JvmJournalDirectory(directory))
             store.append(sessionId, null, SessionCreatedEvent("event-1", 1, "一"))
 
             val error = assertFailsWith<SessionCursorConflictException> {
@@ -150,7 +150,7 @@ class SessionPersistenceTest {
         val directory = Files.createTempDirectory("hanppie-session-id-")
         val sessionId = "88888888-8888-8888-8888-888888888888"
         try {
-            val store = JsonlSessionEventStore(directory)
+            val store = JsonlSessionEventStore(JvmJournalDirectory(directory))
             val event = SessionCreatedEvent("event-1", 1, "一")
             store.append(sessionId, null, event)
             store.append(sessionId, "stale-cursor-is-ignored-for-idempotency", event)
@@ -196,7 +196,7 @@ class SessionPersistenceTest {
         var database: AgentRuntimeDatabase? = null
         try {
             database = openRuntime(directory.resolve("agent-runtime.db"))
-            val eventStore = JsonlSessionEventStore(directory.resolve("events"))
+            val eventStore = JsonlSessionEventStore(JvmJournalDirectory(directory.resolve("events")))
             val repository = SessionRepository(eventStore, database.sessionProjectionDao(), database)
             val session = repository.create("测试会话")
             val runId = "11111111-1111-1111-1111-111111111111"
@@ -255,7 +255,7 @@ class SessionPersistenceTest {
         val directory = Files.createTempDirectory("hanppie-run-recovery-")
         val database = openRuntime(directory.resolve("agent-runtime.db"))
         try {
-            val eventStore = JsonlSessionEventStore(directory.resolve("events"))
+            val eventStore = JsonlSessionEventStore(JvmJournalDirectory(directory.resolve("events")))
             val repository = SessionRepository(eventStore, database.sessionProjectionDao(), database)
             val session = repository.create("恢复")
             val runId = "33333333-3333-3333-3333-333333333333"
@@ -281,7 +281,7 @@ class SessionPersistenceTest {
         val directory = Files.createTempDirectory("hanppie-tool-recovery-")
         val database = openRuntime(directory.resolve("agent-runtime.db"))
         try {
-            val eventStore = JsonlSessionEventStore(directory.resolve("events"))
+            val eventStore = JsonlSessionEventStore(JvmJournalDirectory(directory.resolve("events")))
             val repository = SessionRepository(eventStore, database.sessionProjectionDao(), database)
             val session = repository.create("工具恢复")
             val runId = "66666666-6666-6666-6666-666666666666"
@@ -314,7 +314,7 @@ class SessionPersistenceTest {
         val directory = Files.createTempDirectory("hanppie-approval-recovery-")
         val database = openRuntime(directory.resolve("agent-runtime.db"))
         try {
-            val eventStore = JsonlSessionEventStore(directory.resolve("events"))
+            val eventStore = JsonlSessionEventStore(JvmJournalDirectory(directory.resolve("events")))
             val repository = SessionRepository(eventStore, database.sessionProjectionDao(), database)
             val session = repository.create("审批恢复")
             val runId = "77777777-7777-7777-7777-777777777777"

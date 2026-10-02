@@ -226,7 +226,7 @@ internal fun Console(
                                 navigationOrder.forEach { index ->
                                     val label = labels[index]
                                     IconButton(onClick = { navigate(index) },
-                                        modifier = Modifier.padding(vertical = 4.dp).size(48.dp)
+                                        modifier = Modifier.testTag("navigate-$index").padding(vertical = 4.dp).size(48.dp)
                                             .background(if (routeTab == index) MiuixTheme.colorScheme.primary.copy(alpha = .14f)
                                                 else Color.Transparent, RoundedCornerShape(16.dp))
                                             .semantics { contentDescription = label; selected = routeTab == index }) {

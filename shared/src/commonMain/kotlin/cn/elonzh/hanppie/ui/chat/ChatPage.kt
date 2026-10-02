@@ -73,9 +73,11 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
         onDispose { model.voicePageActive = false; model.voiceInput.cancel() }
     }
     var composerValue by remember(state.sessionId) { mutableStateOf(TextFieldValue(state.draft)) }
-    LaunchedEffect(state.draft) {
-        if (composerValue.text != state.draft) {
-            composerValue = TextFieldValue(state.draft, TextRange(state.draft.length))
+    LaunchedEffect(state.sessionId, state.draft) {
+        // Collection can lag a local edit; never replace it with an older collected draft.
+        val draft = model.chat.state.value.draft
+        if (composerValue.text != draft) {
+            composerValue = TextFieldValue(draft, TextRange(draft.length))
         }
     }
     LaunchedEffect(microphone.resultId, state.sessionId) {

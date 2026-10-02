@@ -1,0 +1,68 @@
+name: iOS
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: iPhone and iPad tests
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          lfs: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Run media contracts and landscape UI tests
+        run: scripts/release/ios-tests.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hanppie-ios-test-results
+          path: |
+            build/ios-tests/*.xcresult
+            packages/robot-core/build/reports/tests/iosSimulatorArm64Test
+            packages/robot-core/build/test-results/iosSimulatorArm64Test
+          if-no-files-found: warn
+
+  archive:
+    name: iOS unsigned archive
+    # Intel runners have 14 GB RAM for Kotlin/Native release optimization.
+    runs-on: macos-26-intel
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          lfs: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Archive for iOS devices
+        run: |
+          xcodebuild -project iosApp/Hanppie.xcodeproj -scheme Hanppie -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/Hanppie.xcarchive \
+            -derivedDataPath build/ios-derived CODE_SIGNING_ALLOWED=NO archive
+      - name: Package source-build archive
+        run: |
+          mkdir -p dist
+          ditto -c -k --keepParent build/Hanppie.xcarchive dist/Hanppie-ios-unsigned.xcarchive.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hanppie-ios
+          path: dist/Hanppie-ios-unsigned.xcarchive.zip
+          if-no-files-found: error

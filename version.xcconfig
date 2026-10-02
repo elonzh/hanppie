@@ -1,0 +1,3 @@
+// Product version for all application targets.
+MARKETING_VERSION = 1.0.0
+CURRENT_PROJECT_VERSION = 1

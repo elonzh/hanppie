@@ -8,3 +8,9 @@ plugins {
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.room3) apply false
 }
+
+val releaseVersion = java.util.Properties().apply {
+    rootProject.file("version.xcconfig").inputStream().use(::load)
+}
+allprojects { version = releaseVersion.getProperty("MARKETING_VERSION") }
+extra["releaseBuild"] = releaseVersion.getProperty("CURRENT_PROJECT_VERSION").toInt()

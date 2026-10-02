@@ -36,6 +36,8 @@ internal val LocalRobotSceneRenderer = staticCompositionLocalOf<SceneRenderer> {
 }
 
 internal val LocalSceneEntryProgress = staticCompositionLocalOf { 0f }
+// Native surfaces choose their compositing mode at the platform entry point.
+internal val LocalRobotSceneTransparency = staticCompositionLocalOf { true }
 
 /** A read-only scene: gestures change the viewing camera, never the robot. */
 @Composable
@@ -191,7 +193,7 @@ private fun RobotSceneRenderer(
         }
     }
     // Alpha-capable surfaces use TextureView on Android, preserving Compose clipping and transitions.
-    FilamentView(scene = scene, cameraState = camera, modifier = Modifier.fillMaxSize(), transparent = true, screenSpaceRefractionEnabled = true, shadows = Shadows.Pcss(),
+    FilamentView(scene = scene, cameraState = camera, modifier = Modifier.fillMaxSize(), transparent = LocalRobotSceneTransparency.current, screenSpaceRefractionEnabled = true, shadows = Shadows.Pcss(),
         postProcessing = PostProcessing(antiAliasing = AntiAliasing(fxaaEnabled = true, msaaEnabled = true),
             ambientOcclusion = AmbientOcclusion()))
 }

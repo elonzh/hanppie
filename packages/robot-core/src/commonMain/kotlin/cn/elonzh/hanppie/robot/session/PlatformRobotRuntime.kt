@@ -10,9 +10,9 @@ import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
 import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.product.RobotProduct
 
-/** JVM transport composition. Common callers only observe [RobotRuntime]. */
-class JvmRobotRuntime(
-    private val networkProvider: () -> RobotNetwork = { RobotNetwork.Default },
+/** Platform transport composition. Common callers only observe [RobotRuntime]. */
+class PlatformRobotRuntime(
+    private val networkProvider: () -> RobotTransport = { RobotTransport.Default },
 ) : RobotRuntime {
     override suspend fun discover(timeoutMillis: Long): List<DiscoveredRobot> =
         AppSession.discover(timeoutMillis = timeoutMillis, network = networkProvider())
@@ -30,14 +30,14 @@ class JvmRobotRuntime(
         onLost: (RobotSession, String) -> Unit,
     ): RobotSession {
         val network = networkProvider()
-        lateinit var result: JvmRobotSession
+        lateinit var result: PlatformRobotSession
         val app = AppSession(
             target,
             onFrame,
             onLog,
             network,
         ) { reason -> onLost(result, reason) }
-        result = JvmRobotSession(
+        result = PlatformRobotSession(
             app = app,
             labController = LabController(app, target, onLog, network),
             files = RobotFileSystem(target, network),
@@ -46,7 +46,7 @@ class JvmRobotRuntime(
     }
 }
 
-private class JvmRobotSession(
+private class PlatformRobotSession(
     private val app: AppSession,
     labController: LabController,
     override val files: RobotFileService,

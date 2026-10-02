@@ -31,7 +31,7 @@ import cn.elonzh.hanppie.resources.hanppie_app_icon
 import cn.elonzh.hanppie.resources.quit_anyway
 import cn.elonzh.hanppie.resources.quit_hanppie
 import cn.elonzh.hanppie.resources.unsaved_changes_will_be_lost_disconnecting_does_not_guarantee
-import cn.elonzh.hanppie.robot.session.JvmRobotRuntime
+import cn.elonzh.hanppie.robot.session.PlatformRobotRuntime
 import cn.elonzh.hanppie.ui.chat.createAgentHttpClient
 import cn.elonzh.hanppie.ui.design.WorkbenchDialog
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
@@ -72,7 +72,7 @@ private fun createDesktopWorkbenchViewModel(): WorkbenchViewModel {
             speakerInput = DesktopSpeakerInput(),
             audioImporter = DesktopLabAudioImporter(),
             audioPlayer = DesktopLabAudioPlayer(),
-            robotRuntime = JvmRobotRuntime(),
+            robotRuntime = PlatformRobotRuntime(),
             settingsStore = storage.settings,
             scriptRepository = storage.scripts,
             sessionHistory = storage.sessions,

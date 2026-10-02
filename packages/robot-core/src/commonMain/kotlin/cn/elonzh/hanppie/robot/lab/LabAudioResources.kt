@@ -1,7 +1,7 @@
 package cn.elonzh.hanppie.robot.lab
 
 import cn.elonzh.hanppie.robot.protocol.hex
-import java.security.MessageDigest
+import cn.elonzh.hanppie.robot.session.robotMd5
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
@@ -17,7 +17,7 @@ import kotlin.io.encoding.ExperimentalEncodingApi
 @OptIn(ExperimentalEncodingApi::class)
 internal fun labAudioDigest(packets: ByteArray): String {
     val body = Base64.Default.encode(packets)
-    return MessageDigest.getInstance("MD5").digest(body.encodeToByteArray()).hex().take(8)
+    return robotMd5(body.encodeToByteArray()).hex().take(8)
 }
 
 /**
@@ -42,7 +42,7 @@ fun labAudioListXml(
     return clips.sortedBy { it.id }
         .joinToString(prefix = "<audio-list>", postfix = "</audio-list>", separator = "") { clip ->
             val body = Base64.Default.encode(clip.packets)
-            val digest = MessageDigest.getInstance("MD5").digest(body.encodeToByteArray()).hex().take(8)
+            val digest = robotMd5(body.encodeToByteArray()).hex().take(8)
             val cached = isSlotCached(clip.id, digest)
             labAudioNodeXml(clip, digest, body, cached)
         }

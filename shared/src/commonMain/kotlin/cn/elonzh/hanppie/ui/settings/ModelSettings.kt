@@ -73,15 +73,15 @@ internal enum class ModelProviderPreset(
 
 /** Maintained model evidence. Unknown model IDs keep safe baseline capabilities and unknown limits. */
 internal object ModelCatalog {
-    private val textTools = listOf(
+    private val textTools: List<LLMCapability> = listOf(
         LLMCapability.Temperature,
         LLMCapability.Tools,
         LLMCapability.ToolChoice,
         LLMCapability.Completion,
         LLMCapability.OpenAIEndpoint.Completions,
     )
-    private val visionTools = textTools + LLMCapability.Vision.Image
-    private val structuredVisionTools = visionTools + LLMCapability.Schema.JSON.Standard
+    private val visionTools: List<LLMCapability> = textTools + LLMCapability.Vision.Image
+    private val structuredVisionTools: List<LLMCapability> = visionTools + LLMCapability.Schema.JSON.Standard
 
     val providers: List<ModelProviderPreset> = ModelProviderPreset.entries
     val models: Map<ModelProviderPreset, List<LLModel>> = mapOf(

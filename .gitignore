@@ -29,3 +29,14 @@ local.properties
 !.env.example
 
 .codex/
+
+# Xcode local state and signing material
+**/xcuserdata/
+DerivedData/
+*.xcarchive/
+*.xcresult/
+*.ipa
+*.mobileprovision
+*.p12
+*.p8
+release-notes.md

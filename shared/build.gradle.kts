@@ -8,8 +8,27 @@ plugins {
     alias(libs.plugins.room3)
 }
 
+val generatedVersionDirectory = layout.buildDirectory.dir("generated/version/commonMain")
+val productVersion = project.version.toString()
+val generateHanppieVersion = tasks.register("generateHanppieVersion") {
+    inputs.property("productVersion", productVersion)
+    outputs.dir(generatedVersionDirectory)
+    doLast {
+        val file = generatedVersionDirectory.get().file("cn/elonzh/hanppie/ui/app/HanppieVersion.kt").asFile
+        file.parentFile.mkdirs()
+        file.writeText("package cn.elonzh.hanppie.ui.app\n\ninternal const val HANPPIE_VERSION = \"$productVersion\"\n")
+    }
+}
+
 kotlin {
     jvm { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25 } }
+    listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
+        target.binaries.framework {
+            baseName = "HanppieShared"
+            isStatic = true
+            binaryOption("bundleId", "cn.elonzh.hanppie.shared")
+        }
+    }
     android {
         namespace = "cn.elonzh.hanppie.ui"
         compileSdk { version = release(37) { minorApiLevel = 0 } }
@@ -19,7 +38,9 @@ kotlin {
         androidResources.enable = true
     }
     jvmToolchain(25)
+    applyDefaultHierarchyTemplate()
     sourceSets {
+        commonMain { kotlin.srcDir(generateHanppieVersion) }
         val jvmSharedMain = create("jvmSharedMain") { dependsOn(commonMain.get()) }
         jvmSharedMain.dependencies {
             implementation(libs.coil.network)
@@ -70,6 +91,10 @@ kotlin {
             runtimeOnly(libs.slf4j.simple)
         } }
         commonTest.dependencies { implementation(kotlin("test")) }
+        iosMain.dependencies {
+            implementation(libs.ktor.darwin)
+            implementation(libs.coil.network.ktor)
+        }
         jvmTest.dependencies { implementation(libs.compose.test) }
     }
 }
@@ -77,6 +102,8 @@ kotlin {
 dependencies {
     add("kspAndroid", libs.androidx.room3.compiler)
     add("kspJvm", libs.androidx.room3.compiler)
+    add("kspIosArm64", libs.androidx.room3.compiler)
+    add("kspIosSimulatorArm64", libs.androidx.room3.compiler)
 }
 
 room3 {

@@ -26,9 +26,29 @@ Hanppie 是一个面向 DJI RoboMaster 系列机器人的开源保存与电脑�
 | [早期调研报告](./docs/robomaster-s1-revival-report.md) | S.BUS、SocketCAN、vcan、ROS 2 和备选路线的历史调研 |
 | [`src/robomaster/UPSTREAM.md`](./src/robomaster/UPSTREAM.md) | 内置 DJI SDK fork 的来源与改动边界 |
 
-使用实机前请先阅读技术架构中的[安全与恢复模型](./docs/architecture.md#113-安全与恢复模型)；当前验证状态只查看其中的[能力矩阵](./docs/architecture.md#111-当前能力矩阵)。
+使用实机前请先阅读技术架构中的[安全与恢复模型](./docs/architecture.md#112-安全与恢复模型)；当前验证状态只查看其中的[能力矩阵](./docs/architecture.md#110-当前能力矩阵)。
 
 ## 安装
+
+### 获取首版
+
+从 [GitHub Releases](https://github.com/elonzh/hanppie/releases) 获取 APK、macOS DMG、Windows MSI 和 iOS 未签名归档；使用同页 `SHA256SUMS.txt` 校验下载文件。更新内容见 [CHANGELOG](./CHANGELOG.md)。
+
+### iPhone / iPad
+
+最低 iOS 18.5；应用按左右横屏使用。GitHub 的 `Hanppie-ios-unsigned.xcarchive.zip` 需要签名，不能直接安装。开发者安装 JDK 25、完整 Xcode 和 Git LFS 后打开 `iosApp/Hanppie.xcodeproj`，选择 `Hanppie` scheme 与目标设备；设置自己的 Apple Team 和 Bundle ID，配置包含 multicast 能力的描述文件，再运行。
+
+```bash
+git lfs pull
+xcodebuild -project iosApp/Hanppie.xcodeproj -scheme Hanppie \
+  -destination 'generic/platform=iOS' -archivePath build/Hanppie.xcarchive \
+  CODE_SIGNING_ALLOWED=NO archive
+scripts/release/ios-tests.sh # 需要已安装 iOS 18.5+ 模拟器运行时
+```
+
+首次连接允许“本地网络”。直连时先在 iOS“设置 → Wi-Fi”加入机器人热点，再返回 Hanppie；拒绝权限后在“设置 → App → Hanppie”重新开启。语音输入和对讲按操作申请麦克风/语音权限；照片与录像只申请保存到照片的权限。系统语音识别可能联网，识别结果需检查后手动发送。
+
+当前 iOS 分发仅提供源码与未签名归档。平台验证边界见 [架构](./docs/architecture.md#1312-ios-平台能力与分发)。
 
 ### Android 程序
 
@@ -55,7 +75,7 @@ Android 模拟器使用默认 NAT/DHCP 即可尝试直连机器人，不要把�
 "$ANDROID_HOME/emulator/emulator" -avd <上一步的设备名称> -no-snapshot-load
 ```
 
-`ANDROID_HOME` 指向 IDEA 使用的同一套 SDK。不要为此额外安装 SDK。当前验证边界见[客户端架构](./docs/architecture.md#130-单体仓库与-kotlin-多平台客户端)。
+`ANDROID_HOME` 指向 IDEA 使用的同一套 SDK。不要为此额外安装 SDK。当前验证边界见[客户端架构](./docs/architecture.md#131-多平台工程组织与模块划分)。
 
 编辑脚本时，键盘可用 `Tab` / `Shift+Tab` 缩进，`Ctrl/Cmd+Z` 撤销，`Ctrl/Cmd+Shift+Z` 重做，`Ctrl/Cmd+F` 查找，`Ctrl/Cmd+S` 保存到脚本库。查找区分大小写，点击替换只替换当前选中的匹配项；保存不会运行机器人。
 
@@ -79,7 +99,7 @@ Android 和桌面连接后进入驾驶舱即建立直控通道，使用左侧底
 打开后默认只自动尝试一次最近的机器人；连接记录只在内部用于自动决策，不显示为可选列表。首次配置、添加或更换机器人时进入“添加或更换机器人”：直连模式引导电脑加入机器人热点，随后自动发现或探测默认地址；路由器模式由 Hanppie 本地生成配网二维码，等待机器人扫码、建立会话并确认配网。手动 IPv4/AppID 只在“诊断”页提供给开发和故障排查。
 在“脚本”页从“我的脚本”或“预置脚本”进入编辑器；“保存到脚本库”持久化当前脚本，“导出 .py”另存副本。预置脚本包含电量心情秀、彩虹音阶、好奇哨兵、方形巡演和胜利舞会，每次运行会执行有限轮次；涉及云台或底盘动作的脚本会直接标明风险，使用前仍需检查完整源码并留出安全空间。
 连接机器人后直接点击“运行脚本”；软件会先校验源码、把当前源码覆盖上传到唯一的 `python_raw.dsp`，再发送启动命令，不把这个单一运行槽位包装成程序管理。Lab 脚本直接使用机内提供的 `time` 等对象，不写普通 `import`。启动后进入以运行状态和 `log_ctrl.print_msg(...)` 输出为主体的运行界面；返回编辑器不会停止脚本，切换到其他页面后仍可从全局状态条查看并返回。运行页显示可复制的运行标识以及上传、启动和回报接收诊断。启动命令发出后 10 秒内没有收到机内 `STARTED` 回报会标为状态未知并保留停止入口，不会永久等待或自动重试。正常返回或报错会自动结束机内运行态；断开连接后无法确认机内状态，也会明确标为未知。
-能力与验证边界以[客户端架构](./docs/architecture.md#130-单体仓库与-kotlin-多平台客户端)为准。
+能力与验证边界以[客户端架构](./docs/architecture.md#131-多平台工程组织与模块划分)为准。
 
 Android 和桌面均可进入“设置”，从 DashScope、OpenAI、DeepSeek、MiMo 预设中快速选择模型，也可填写自定义模型 ID 和兼容 API 地址；地址、供应商、模型及 API Key 由应用私有的 Preferences DataStore 保存。远端模型列表只在展开模型选择器时按需获取，打开设置页不会请求；内置预设与当前模型会立即显示，目录失败仍可手动输入。点击“测试模型配置”会独立检查本地配置、模型目录、流式文本和无副作用工具调用，可能产生少量供应商费用。产品中每条“对话记录”对应一个 Agent Session；Session 语义事件先追加到运行时私有 JSONL，列表和完整 Koog `Message` 从独立 `agent-runtime.db` 的可重建投影读取，不与应用的 `hanppie.db` 共库；支持新建、打开、重命名和二次确认后永久删除，重启后恢复。对话智能体会先查询由机内运行时源码核对的 Lab API，再生成 Python 3.6 脚本；它可以按名称列出、读取、保存、重命名和经确认后删除“我的脚本”，保存不会自动上传或运行。回答、流式输出和审批源码支持 fenced code 语法高亮。需要控制机器人时先在“设备”页连接指定目标，在聊天中检查生成的完整脚本并“确认执行”。“取消”仅取消当前 agent run；停止机内脚本使用“脚本”页的“停止脚本”。
 

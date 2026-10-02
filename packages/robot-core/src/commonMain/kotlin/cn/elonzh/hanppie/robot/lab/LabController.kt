@@ -3,28 +3,25 @@ package cn.elonzh.hanppie.robot.lab
 import cn.elonzh.hanppie.robot.protocol.Protocol
 import cn.elonzh.hanppie.robot.protocol.hex
 import cn.elonzh.hanppie.robot.protocol.hexBytes
+import cn.elonzh.hanppie.robot.session.robotMd5
+import cn.elonzh.hanppie.robot.session.robotRandomBytes
+import cn.elonzh.hanppie.robot.session.robotDate
+import kotlinx.io.Buffer
 import cn.elonzh.hanppie.robot.session.AppSession
-import cn.elonzh.hanppie.robot.session.RobotNetwork
+import cn.elonzh.hanppie.robot.session.RobotTransport
 import cn.elonzh.hanppie.robot.session.RobotTarget
-import java.security.MessageDigest
-import java.security.SecureRandom
-import java.time.Duration
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import org.apache.commons.net.ftp.FTP
-import org.apache.commons.net.ftp.FTPClient
-import org.apache.commons.net.ftp.FTPReply
 
 /** Serializes lifecycle operations. A sent start command is NOT execution confirmation. */
 class LabController internal constructor(private val session: LabChannel,
                     private val uploadBytes: (ByteArray) -> Unit,
                     private val log: (String) -> Unit = {}) {
-    constructor(session: AppSession, target: RobotTarget, log: (String) -> Unit = {}, network: RobotNetwork = RobotNetwork.Default) :
+    constructor(session: AppSession, target: RobotTarget, log: (String) -> Unit = {}, network: RobotTransport = RobotTransport.Default) :
         this(session, { bytes -> transfer(target.ip, bytes, network = network) }, log)
     private val mutex = Mutex()
     private var entered = false
@@ -46,9 +43,8 @@ class LabController internal constructor(private val session: LabChannel,
         check(session.connected) { "机器人未连接" }
         check(!startRequested) { "请先停止已启动的脚本，再上传新脚本" }
         require(source.isNotBlank()) { "脚本不能为空" }
-        val random = SecureRandom()
-        val candidateGuid = ByteArray(16).also(random::nextBytes).hex()
-        val candidateSign = ByteArray(8).also(random::nextBytes).hex()
+                val candidateGuid = robotRandomBytes(16).hex()
+        val candidateSign = robotRandomBytes(8).hex()
         val candidate = LabProgram(
             source,
             candidateGuid,
@@ -59,7 +55,7 @@ class LabController internal constructor(private val session: LabChannel,
             uploadedAudioSlots[slotId] == md5
         }
         val bytes = candidate.dsp(
-            LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd")),
+            robotDate(),
             audioXml,
         )
         require(bytes.size <= LabProgram.MAX_DSP_BYTES) {
@@ -88,7 +84,7 @@ class LabController internal constructor(private val session: LabChannel,
         withContext(Dispatchers.IO) { uploadBytes(bytes) }
         delay(500)
         check(session.connected) { "上传期间机器人连接已断开" }
-        val hash = MessageDigest.getInstance("MD5").digest(bytes)
+        val hash = robotMd5(bytes)
         program = candidate; digest = hash; runId = candidateGuid
         val activeSlots = mutableSetOf<Int>()
         audio.forEach { clip ->
@@ -142,22 +138,14 @@ class LabController internal constructor(private val session: LabChannel,
     }
 
     companion object {
-        internal fun transfer(ip: String, bytes: ByteArray, port: Int = Protocol.ROBOT_FTP_PORT, network: RobotNetwork = RobotNetwork.Default) {
-            val ftp = FTPClient()
-            ftp.setSocketFactory(network.socketFactory)
-            ftp.connectTimeout = 5000
-            ftp.defaultTimeout = 10000
-            ftp.dataTimeout = Duration.ofSeconds(10)
-            try {
+        internal fun transfer(ip: String, bytes: ByteArray, port: Int = Protocol.ROBOT_FTP_PORT, network: RobotTransport = RobotTransport.Default) {
+            network.ftp().use { ftp ->
                 ftp.connect(ip, port)
-                check(FTPReply.isPositiveCompletion(ftp.replyCode)) { "FTP 连接失败：${ftp.replyString}" }
-                check(ftp.login("anonymous", "")) { "FTP 登录失败：${ftp.replyString}" }
-                check(ftp.changeWorkingDirectory("python")) { "FTP python 目录不可用：${ftp.replyString}" }
-                check(ftp.setFileType(FTP.BINARY_FILE_TYPE)) { "FTP 二进制模式失败" }
-                ftp.enterLocalPassiveMode()
-                check(ftp.storeFile("python_raw.dsp", bytes.inputStream())) { "FTP 上传失败：${ftp.replyString}" }
-                ftp.logout()
-            } finally { if (ftp.isConnected) ftp.disconnect() }
+                check(ftp.login()) { "FTP 登录失败：${ftp.replyText}" }
+                check(ftp.changeWorkingDirectory("python")) { "FTP python 目录不可用：${ftp.replyText}" }
+                check(ftp.binary()) { "FTP 二进制模式失败" }
+                check(ftp.storeFile("python_raw.dsp", Buffer().apply { write(bytes) })) { "FTP 上传失败：${ftp.replyText}" }
+            }
         }
     }
 }

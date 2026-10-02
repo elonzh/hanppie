@@ -174,7 +174,7 @@ internal fun ScriptPage(
     }
 
     fun report(error: Throwable) {
-        onFileError(error.message ?: error.javaClass.simpleName)
+        onFileError(error.message ?: error::class.simpleName.orEmpty())
     }
 
     fun deleteScript(target: StoredScript) {

@@ -8,11 +8,15 @@ permissions:
   contents: read
 
 jobs:
+  ios:
+    uses: ./.github/workflows/ios.yml
   android:
     name: Android APK
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          lfs: true
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -34,6 +38,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          lfs: true
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -49,6 +55,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          lfs: true
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.12.6"

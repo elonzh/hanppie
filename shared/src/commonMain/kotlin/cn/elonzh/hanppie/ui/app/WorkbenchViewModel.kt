@@ -36,6 +36,7 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -97,7 +98,7 @@ internal class WorkbenchViewModel(
                 throw error
             } catch (error: Exception) {
                 workbenchLogger.error(error) { "Could not load UI preferences" }
-                fileError = error.message ?: error.javaClass.simpleName
+                fileError = error.message ?: error::class.simpleName.orEmpty()
             } finally {
                 uiPreferencesLoaded = true
             }
@@ -225,7 +226,7 @@ internal class WorkbenchViewModel(
                 throw error
             } catch (error: Exception) {
                 workbenchLogger.error(error) { "Could not $name" }
-                fileError = error.message ?: error.javaClass.simpleName
+                fileError = error.message ?: error::class.simpleName.orEmpty()
             } finally {
                 document.value = document.value.copy(busy = false)
             }
@@ -242,7 +243,7 @@ internal class WorkbenchViewModel(
                 throw error
             } catch (error: Exception) {
                 workbenchLogger.error(error) { "Could not $name" }
-                fileError = error.message ?: error.javaClass.simpleName
+                fileError = error.message ?: error::class.simpleName.orEmpty()
             }
         }
     }
@@ -254,7 +255,7 @@ internal class WorkbenchViewModel(
             throw error
         } catch (error: Exception) {
             workbenchLogger.error(error) { "Could not persist $name preference" }
-            fileError = error.message ?: error.javaClass.simpleName
+            fileError = error.message ?: error::class.simpleName.orEmpty()
         }
     }
 }

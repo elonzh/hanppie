@@ -56,13 +56,13 @@ internal fun DevicePage(model: ConsoleController, state: ConsoleState, compact: 
             Spacer(Modifier.weight(1f))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ConnectionStatusChip(state, Color.White.copy(alpha = .78f), sceneStyle = true, connectionMode = connectionMode, onClick = onConnectionDetails)
-                HomeLink(tr(Res.string.settings), WorkbenchGlyph.SETTINGS, iconOnly = true) { onNavigate(4) }
+                HomeLink(tr(Res.string.settings), WorkbenchGlyph.SETTINGS, Modifier.testTag("navigate-4"), iconOnly = true) { onNavigate(4) }
             }
         }
         Column(Modifier.align(Alignment.BottomCenter).padding(bottom = if (dense) 16.dp else 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (dense) 8.dp else 20.dp)) {
-                HomeLink(tr(Res.string.script), WorkbenchGlyph.CODE) { onNavigate(1) }
+                HomeLink(tr(Res.string.script), WorkbenchGlyph.CODE, Modifier.testTag("navigate-1")) { onNavigate(1) }
                 HomeAction(
                     label = when { state.connected -> tr(Res.string.fullscreen_cockpit)
                         state.connecting -> tr(Res.string.connecting); else -> tr(Res.string.automatic_connection) },
@@ -70,7 +70,7 @@ internal fun DevicePage(model: ConsoleController, state: ConsoleState, compact: 
                     tag = if (state.connected) "enter-remote" else "auto-connect",
                     enabled = !preparing && !state.connecting && !state.busy,
                     onClick = if (state.connected) onRemote else model::discover)
-                HomeLink(tr(Res.string.chat), WorkbenchGlyph.CHAT) { onNavigate(3) }
+                HomeLink(tr(Res.string.chat), WorkbenchGlyph.CHAT, Modifier.testTag("navigate-3")) { onNavigate(3) }
             }
 
         }

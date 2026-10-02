@@ -30,7 +30,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.session.RobotNetwork
-import cn.elonzh.hanppie.robot.session.JvmRobotRuntime
+import cn.elonzh.hanppie.robot.session.PlatformRobotRuntime
 import cn.elonzh.hanppie.ui.chat.createAgentHttpClient
 import cn.elonzh.hanppie.ui.design.WorkbenchDialog
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
@@ -84,7 +84,7 @@ private fun createAndroidWorkbenchViewModel(
             speakerInput = AndroidSpeakerInput(app),
             audioImporter = AndroidLabAudioImporter(),
             audioPlayer = AndroidLabAudioPlayer(),
-            robotRuntime = JvmRobotRuntime(network::network),
+            robotRuntime = PlatformRobotRuntime(network::network),
             settingsStore = storage.settings,
             scriptRepository = storage.scripts,
             sessionHistory = storage.sessions,

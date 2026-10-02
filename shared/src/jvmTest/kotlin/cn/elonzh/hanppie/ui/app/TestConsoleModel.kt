@@ -3,7 +3,7 @@ package cn.elonzh.hanppie.ui.app
 import cn.elonzh.hanppie.agent.runtime.SessionHistory
 import cn.elonzh.hanppie.agent.runtime.TestSessionHistory
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
-import cn.elonzh.hanppie.robot.session.JvmRobotRuntime
+import cn.elonzh.hanppie.robot.session.PlatformRobotRuntime
 import cn.elonzh.hanppie.robot.session.RobotNetwork
 import cn.elonzh.hanppie.robot.session.RobotRuntime
 import cn.elonzh.hanppie.ui.robot.audio.LabAudioImporter
@@ -113,7 +113,7 @@ internal fun testConsoleModel(
     speakerInput: SpeakerInput = NoSpeakerInput(),
     audioImporter: LabAudioImporter = NoLabAudioImporter(),
     robotNetwork: () -> RobotNetwork = { RobotNetwork.Default },
-    robotRuntime: RobotRuntime = JvmRobotRuntime(robotNetwork),
+    robotRuntime: RobotRuntime = PlatformRobotRuntime(robotNetwork),
     settingsStore: SettingsStore = MemorySettingsStore(),
     scriptRepository: ScriptRepository = MemoryScriptRepository(),
     sessionHistory: SessionHistory = TestSessionHistory(),

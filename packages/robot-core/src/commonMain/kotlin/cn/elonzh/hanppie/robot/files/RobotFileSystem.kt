@@ -1,21 +1,15 @@
 package cn.elonzh.hanppie.robot.files
 
-import cn.elonzh.hanppie.robot.session.RobotNetwork
+import cn.elonzh.hanppie.robot.session.RobotLock
+import cn.elonzh.hanppie.robot.session.RobotFtpClient
+import kotlin.concurrent.Volatile
+import cn.elonzh.hanppie.robot.session.RobotTransport
 import cn.elonzh.hanppie.robot.session.RobotTarget
-import java.io.FilterInputStream
-import java.io.InputStream
-import java.time.Duration
-import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
 import kotlinx.io.Sink
 import kotlinx.io.Source
-import kotlinx.io.asInputStream
-import kotlinx.io.asOutputStream
-import org.apache.commons.net.ftp.FTP
-import org.apache.commons.net.ftp.FTPClient
-import org.apache.commons.net.ftp.FTPFile
-import org.apache.commons.net.ftp.FTPReply
 
 /**
  * Bounded view of the anonymous FTP tree currently verified at `/data/ftp` on S1.
@@ -23,10 +17,11 @@ import org.apache.commons.net.ftp.FTPReply
  */
 class RobotFileSystem(
     private val target: RobotTarget,
-    private val network: RobotNetwork = RobotNetwork.Default,
+    private val network: RobotTransport = RobotTransport.Default,
     private val port: Int = 21,
 ) : RobotFileService {
-    private val activeClients = ConcurrentHashMap.newKeySet<FTPClient>()
+    private val clientsLock = RobotLock()
+    private val activeClients = mutableSetOf<RobotFtpClient>()
     @Volatile private var closed = false
 
     init { require(port in 1..65535) }
@@ -35,8 +30,8 @@ class RobotFileSystem(
         val directory = RobotFilePath.normalize(path)
         withClient { ftp ->
             val files = ftp.listFiles(directory)
-            check(FTPReply.isPositiveCompletion(ftp.replyCode)) {
-                "FTP 目录读取失败：${ftp.replyText()}"
+            check(ftp.replyCode in 200..299) {
+                "FTP 目录读取失败：${ftp.replyText}"
             }
             files.mapNotNull { file ->
                 val name = file.name
@@ -44,9 +39,9 @@ class RobotFileSystem(
                 RobotFileEntry(
                     path = RobotFilePath.child(directory, name),
                     name = name,
-                    kind = file.kind(),
+                    kind = file.kind,
                     size = file.size.coerceAtLeast(0),
-                    modifiedAtEpochMillis = file.timestampInstant?.toEpochMilli(),
+                    modifiedAtEpochMillis = file.modifiedAtEpochMillis,
                 )
             }.sortedWith(compareBy<RobotFileEntry>({ !it.isDirectory }, { it.name.lowercase() }, { it.name }))
         }
@@ -59,14 +54,14 @@ class RobotFileSystem(
             val safeName = RobotFilePath.portableUploadName(preferredName)
             withClient { ftp ->
                 val occupied = ftp.listFiles(parent).mapTo(mutableSetOf()) { it.name }
-                check(FTPReply.isPositiveCompletion(ftp.replyCode)) {
-                    "FTP 目录读取失败：${ftp.replyText()}"
+                check(ftp.replyCode in 200..299) {
+                    "FTP 目录读取失败：${ftp.replyText}"
                 }
                 val name = uniqueName(parent, safeName, occupied)
                 val path = RobotFilePath.child(parent, name)
-                val counted = CountingInputStream(source.asInputStream())
-                check(ftp.storeFile(path, counted)) { "FTP 上传失败：${ftp.replyText()}" }
-                RobotFileEntry(path, name, RobotFileKind.FILE, counted.count)
+
+                check(ftp.storeFile(path, source)) { "FTP 上传失败：${ftp.replyText}" }
+                RobotFileEntry(path, name, RobotFileKind.FILE, ftp.transferredBytes)
             }
         }
 
@@ -74,7 +69,7 @@ class RobotFileSystem(
         val source = RobotFilePath.normalize(path)
         check(source != "/") { "FTP 根目录不能作为文件下载" }
         withClient { ftp ->
-            check(ftp.retrieveFile(source, destination.asOutputStream())) { "FTP 下载失败：${ftp.replyText()}" }
+            check(ftp.retrieveFile(source, destination)) { "FTP 下载失败：${ftp.replyText}" }
         }
     }
 
@@ -83,7 +78,7 @@ class RobotFileSystem(
         val path = RobotFilePath.child(directory, RobotFilePath.requireName(name))
         check(!RobotFilePath.isProtected(path)) { "保留路径不能由文件管理器创建" }
         withClient { ftp ->
-            check(ftp.makeDirectory(path)) { "FTP 新建目录失败：${ftp.replyText()}" }
+            check(ftp.makeDirectory(path)) { "FTP 新建目录失败：${ftp.replyText}" }
             RobotFileEntry(path, path.substringAfterLast('/'), RobotFileKind.DIRECTORY)
         }
     }
@@ -95,7 +90,7 @@ class RobotFileSystem(
         val destination = RobotFilePath.child(RobotFilePath.parent(source), RobotFilePath.requireName(newName))
         check(!RobotFilePath.isProtected(destination)) { "不能覆盖 Lab 当前上传槽位" }
         withClient { ftp ->
-            check(ftp.rename(source, destination)) { "FTP 重命名失败：${ftp.replyText()}" }
+            check(ftp.rename(source, destination)) { "FTP 重命名失败：${ftp.replyText}" }
         }
         destination
     }
@@ -108,45 +103,33 @@ class RobotFileSystem(
         withClient { ftp ->
             val deleted = if (entry.isDirectory) ftp.removeDirectory(path) else ftp.deleteFile(path)
             check(deleted) {
-                if (entry.isDirectory) "FTP 目录删除失败；请确认目录为空：${ftp.replyText()}"
-                else "FTP 文件删除失败：${ftp.replyText()}"
+                if (entry.isDirectory) "FTP 目录删除失败；请确认目录为空：${ftp.replyText}"
+                else "FTP 文件删除失败：${ftp.replyText}"
             }
         }
     }
 
-    private fun <T> withClient(block: (FTPClient) -> T): T {
+    private fun <T> withClient(block: (RobotFtpClient) -> T): T {
         check(!closed) { "机内文件服务已关闭" }
-        val ftp = FTPClient()
-        activeClients += ftp
+        val ftp = network.ftp()
+        clientsLock.withLock { activeClients += ftp }
         try {
             check(!closed) { "机内文件服务已关闭" }
-            ftp.setSocketFactory(network.socketFactory)
-            ftp.setAutodetectUTF8(true)
-            ftp.controlEncoding = Charsets.UTF_8.name()
-            ftp.connectTimeout = 5000
-            ftp.defaultTimeout = 10000
-            ftp.dataTimeout = Duration.ofSeconds(30)
             ftp.connect(target.ip, port)
-            check(FTPReply.isPositiveCompletion(ftp.replyCode)) { "FTP 连接失败：${ftp.replyText()}" }
-            check(ftp.login("anonymous", "")) { "FTP 登录失败：${ftp.replyText()}" }
-            check(ftp.setFileType(FTP.BINARY_FILE_TYPE)) { "FTP 二进制模式失败：${ftp.replyText()}" }
-            ftp.enterLocalPassiveMode()
-            ftp.listHiddenFiles = true
+            check(ftp.login()) { "FTP 登录失败：${ftp.replyText}" }
+            check(ftp.binary()) { "FTP 二进制模式失败：${ftp.replyText}" }
             return block(ftp)
         } finally {
-            if (ftp.isConnected) {
-                runCatching { ftp.logout() }
-                runCatching { ftp.disconnect() }
-            }
-            activeClients -= ftp
+            runCatching { ftp.close() }
+            clientsLock.withLock { activeClients -= ftp }
         }
     }
 
     /** Interrupts active FTP sockets when the robot session is lost or the app leaves the foreground. */
     override fun close() {
         closed = true
-        activeClients.toList().forEach { ftp ->
-            if (ftp.isConnected) runCatching { ftp.disconnect() }
+        clientsLock.withLock { activeClients.toList() }.forEach { ftp ->
+            runCatching { ftp.close() }
         }
     }
 
@@ -163,23 +146,4 @@ class RobotFileSystem(
         error("同名文件过多，请先整理当前目录")
     }
 
-}
-
-private fun FTPFile.kind(): RobotFileKind = when {
-    isDirectory -> RobotFileKind.DIRECTORY
-    isFile -> RobotFileKind.FILE
-    isSymbolicLink -> RobotFileKind.LINK
-    else -> RobotFileKind.UNKNOWN
-}
-
-private fun FTPClient.replyText(): String = replyString?.trim().orEmpty().ifBlank { "code $replyCode" }
-
-private class CountingInputStream(source: InputStream) : FilterInputStream(source) {
-    var count: Long = 0
-        private set
-
-    override fun read(): Int = super.read().also { if (it >= 0) count++ }
-
-    override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
-        super.read(buffer, offset, length).also { if (it > 0) count += it }
 }
