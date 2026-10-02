@@ -3,6 +3,7 @@ package cn.elonzh.hanppie.ui.app
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.uikit.OnFocusBehavior
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ComposeUIViewController
 import androidx.lifecycle.Lifecycle
@@ -25,7 +26,12 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Text
 
-fun MainViewController(platform: IosPlatformServices): UIViewController = ComposeUIViewController {
+fun MainViewController(platform: IosPlatformServices): UIViewController = ComposeUIViewController(
+    configure = {
+        // Shared imePadding owns keyboard layout; UIKit panning would apply a second offset.
+        onFocusBehavior = OnFocusBehavior.DoNothing
+    },
+) {
     // Filament's transparent UIKit surface is placed above Compose, hiding home controls.
     CompositionLocalProvider(LocalIosPlatformServices provides platform, LocalRobotSceneTransparency provides false) { IosWorkbench(platform) }
 }

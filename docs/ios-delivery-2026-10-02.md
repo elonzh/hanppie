@@ -43,11 +43,21 @@ Android 17 / API 37 的 Medium Phone 模拟器（2400×1080 横屏）复核发�
 
 继续复核发现共享下拉项的标签外框宽 200 px，但实际可点击行仅宽 104 px。点击整行右侧的新增回归在修复前稳定失败；外框向行传递最小约束并保持 48 dp 高度后，该回归及全部 53 项 Console 测试通过，Android Release 与 lint 通过。日志为 `/tmp/hanppie-dropdown-edge-before-2026-10-03.log` 和 `/tmp/hanppie-dropdown-row-final-2026-10-03.log`。菜单点击仍使用鼠标事件，没有替换为直接调用状态或辅助功能动作。
 
+整行修复后的最终本地 iOS 复核正常退出：原生契约 32 项通过，iPhone 16 与 iPad Pro 11-inch (M4) 各 6 项通过、0 失败、0 跳过。两份 xcresult 的摘要均为 Passed；输入栏至少 48 pt、完整草稿及语言重启保存断言全部保留。日志为 `/tmp/hanppie-ios-dropdown-final-2026-10-03.log`，结果位于未提交的 `build/ios-tests/`。测试创建的模拟器已关闭并删除。
+
 首轮云端 iOS 原生契约构建成功，但 iOS 26.5 上应用以 SIGABRT 提前退出，媒体测试未能启动，UI 测试未找到导航。日志显示 Filament 启动后 SimMetalHost 连接中断，尚不能仅凭日志确定根因。模拟器测试改用与本机相同的 Xcode 27 / iOS 27 工具链，并在失败时保存应用和 SimMetalHost 崩溃报告及定向运行日志；实际渲染与原有媒体、界面断言均保留。[GitHub 官方 Xcode 27 镜像](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md) 当前为公开预览。Actionlint 当前版本尚未识别官方 `xcode-27` 标签；仅排除此标签提示后，其余检查、ShellCheck 及 Bash 语法检查通过。旧提交的剩余重复 CI 已停止，新提交仍须完成全部平台检查。
 
 整行修复后的 CI（[37052425839](https://github.com/elonzh/hanppie/actions/runs/37052425839)）已通过 Windows、Linux、macOS、Android 和 Python。iOS 模拟器任务在下载 Gradle 时连接重置，未进入编译或应用测试。通过官方 `wrapper` 任务启用三次下载重试、初始 1 秒退避和 30 秒网络超时，仍使用 Gradle 9.6.0；生成的 Wrapper JAR 与官方 SHA-256 一致，`--version` 检查通过。本机 Android Release 包同时复核右侧点击能切换外观、强制停止重启后设置保持，随后恢复系统默认设置并停止模拟器。
 
 下载修复后的 CI（[37053494527](https://github.com/elonzh/hanppie/actions/runs/37053494527)）中 Windows、Linux、Android 和 Python 通过；macOS 的无效模型配置测试在独立后台作用域等待结果时触发 5 秒超时。该用例现使用测试自身的结构化协程作用域，通过状态流等待本地校验完成，保留原来的超时上限、禁止网络请求断言，并检查唯一失败阶段为本地校验。定向两项回归通过，日志为 `/tmp/hanppie-model-test-scope-2026-10-03.log`；应用实现未改变，云端 macOS 验证仍待完成。
+
+结构化测试修复后的 CI（[37055203329](https://github.com/elonzh/hanppie/actions/runs/37055203329)）已通过 macOS、Windows、Linux、Android 和 Python。三个桌面平台的报告均为共享测试 272 项、0 失败、13 项环境限定跳过，机器人契约 63 项、0 失败、5 项需机器人环境而跳过；无效模型配置用例在三个平台均通过。设备归档成功；iPhone 键盘和导航等待各有一项失败，未执行 iPad，不能将此轮 CI 记为全部通过。
+
+Xcode 27 云端结果（[37053494527](https://github.com/elonzh/hanppie/actions/runs/37053494527)）确认原生契约 32 项、媒体测试 4 项及导航/语言保存测试通过，设备归档成功。已下载归档核对版本 `1.0.0`、build `1`、最低 iOS `18.5`、ARM64 设备程序、模型及隐私清单；归档没有签名或描述文件。iPhone 键盘用例在首次导航的稳定等待中失败，未进入输入断言，因此脚本未继续执行 iPad。辅助功能诊断先返回有效行坐标，后返回无穷坐标；10 秒内只完成两轮等待检查。测试改为应用启动后设置横屏，每轮用单份快照读取属性，拒绝无效坐标，保留至少 0.35 秒稳定及可点击条件，并沿用导航的 30 秒上限。后续键盘、草稿、输入高度和持久化断言保持不变，应用实现未改变。
+
+等待逻辑的本机 iPhone 键盘、iPad 导航/语言保存两项定向复核通过，日志为 `/tmp/hanppie-ios-ready-targets-2026-10-03.log`。随后检查 37055203329 的键盘失败截图及辅助功能树，发现输入栏位于 `y=-71.3`，发送按钮位于 `y=-67.0`，属于实际窗口定位问题。原来的“输入在键盘上方”检查不能排除负坐标。Compose 1.12.0 的默认 `FocusableAboveKeyboard` 会平移界面，共享布局又使用 `imePadding`；iOS 宿主现设为 `OnFocusBehavior.DoNothing`，保留独立的键盘 inset 更新，由共享布局负责避让。UI 回归新增完整输入栏必须位于窗口内的断言，保留真实输入、发送按钮可点击及至少 48 pt 的原有检查。iOS 工作流同时固定到触发提交的 SHA，防止验证中混入后来推送的分支内容。
+
+关闭原生聚焦平移后，本机 iPhone 与 iPad 的键盘定向回归各 1 项通过，完整窗口范围、原有草稿、发送按钮及 48 pt 断言均通过，日志为 `/tmp/hanppie-ios-keyboard-insets-2026-10-03.log`。全屏复核同时发现键盘压缩空间后空态标题被截断，共享空态现按消息区域高度缩小间距与头像，在很小的空间隐藏装饰内容；输入和消息行为不变。修改后的 53 项 Console 界面回归及 Android Release、lint 通过，lint 仍为 0 错误、12 警告，日志为 `/tmp/hanppie-empty-state-desktop-2026-10-03.log` 和 `/tmp/hanppie-empty-state-android-2026-10-03.log`。XCTest 附件改用 `XCUIScreen.main.screenshot()`，避免应用截图在横屏下产生错误裁剪；新空态的 iPhone 与 iPad 键盘回归各 1 项通过、0 失败、0 跳过，日志为 `/tmp/hanppie-ios-empty-state-2026-10-03.log`；两端全屏截图确认输入栏及发送按钮可见，iPad 空态标题完整显示。测试创建的模拟器均已关闭并删除。
 
 Xcode 27 的结果还包含线程优先级诊断和 iPad 横屏配置的未来策略提醒；这些不是测试失败，也不构成真机性能或未来系统兼容性结论。工作流保留 xcresult 的日志、录屏与截图，关闭耗时的设备全量 sysdiagnose 收集。
 

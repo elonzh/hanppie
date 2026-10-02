@@ -4,14 +4,14 @@ final class WorkbenchTests: XCTestCase {
     private var app: XCUIApplication!
     override func setUpWithError() throws {
         continueAfterFailure = false
-        XCUIDevice.shared.orientation = .landscapeLeft
         app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
+        XCUIDevice.shared.orientation = .landscapeLeft
     }
     override func tearDownWithError() throws {
         if (testRun?.totalFailureCount ?? 0) > 0 {
-            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
             screenshot.name = "Failure screen"; screenshot.lifetime = .keepAlways; add(screenshot)
             let hierarchy = XCTAttachment(string: app.debugDescription)
             hierarchy.name = "Failure accessibility hierarchy"; hierarchy.lifetime = .keepAlways; add(hierarchy)
@@ -22,16 +22,22 @@ final class WorkbenchTests: XCTestCase {
         var previousFrame = CGRect.null
         var stableSince = ProcessInfo.processInfo.systemUptime
         let ready = expectation(for: NSPredicate { _, _ in
-            guard element.exists && element.isHittable else { return false }
-            let frame = element.frame
+            guard let snapshot = try? element.snapshot() else { return false }
+            let frame = snapshot.frame
+            guard snapshot.isEnabled && !frame.isEmpty &&
+                frame.origin.x.isFinite && frame.origin.y.isFinite &&
+                frame.width.isFinite && frame.height.isFinite else {
+                previousFrame = .null
+                return false
+            }
             if frame != previousFrame {
                 previousFrame = frame
                 stableSince = ProcessInfo.processInfo.systemUptime
                 return false
             }
-            return ProcessInfo.processInfo.systemUptime - stableSince >= 0.35
+            return ProcessInfo.processInfo.systemUptime - stableSince >= 0.35 && element.isHittable
         }, evaluatedWith: element)
-        wait(for: [ready], timeout: 10)
+        wait(for: [ready], timeout: 30)
         element.tap()
     }
     private func navigate(_ index: Int) {
@@ -55,14 +61,18 @@ final class WorkbenchTests: XCTestCase {
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
         let keyboard = app.keyboards.firstMatch
         let aboveKeyboard = expectation(for: NSPredicate { _, _ in
-            !keyboard.frame.isEmpty && input.frame.maxY <= keyboard.frame.minY + 2
+            !keyboard.frame.isEmpty && self.app.frame.contains(input.frame) &&
+                input.frame.maxY <= keyboard.frame.minY + 2
         }, evaluatedWith: app)
         wait(for: [aboveKeyboard], timeout: 10)
+        XCTAssertTrue(app.frame.contains(input.frame))
         XCTAssertLessThanOrEqual(input.frame.maxY, app.keyboards.firstMatch.frame.minY + 2)
         XCTAssertEqual(input.value as? String, "Review before sending")
         XCTAssertTrue(app.buttons["Send"].isHittable)
         XCTAssertGreaterThanOrEqual(input.frame.height, 48)
         XCTAssertGreaterThan(app.frame.width, app.frame.height)
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = "Landscape keyboard"; attachment.lifetime = .keepAlways; add(attachment)
     }
     func testOfflineNavigationAndSettingsPersistAcrossLaunch() throws {
         let settings = app.buttons["navigate-4"]
@@ -87,7 +97,7 @@ final class WorkbenchTests: XCTestCase {
         selectLanguage("en")
         XCTAssertTrue(app.staticTexts["Language"].waitForExistence(timeout: 10))
         XCTAssertGreaterThan(app.frame.width, app.frame.height)
-        let attachment = XCTAttachment(screenshot: app.screenshot())
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = "Landscape workbench"; attachment.lifetime = .keepAlways; add(attachment)
     }
 }

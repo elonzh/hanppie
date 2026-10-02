@@ -243,15 +243,23 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
             ComposerIcon(tr(Res.string.conversations), WorkbenchGlyph.CHAT,
                 enabled = state.ready) { historyOpen = true }
         }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val emptyStateHeight = maxHeight
+            val compactEmptyState = emptyStateHeight < 280.dp
             LazyColumn(Modifier.fillMaxSize().nestedScroll(userScroll).padding(end = 12.dp).testTag("chat-messages"), state = list,
                 verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
-                if (state.lines.isEmpty()) item {
-                    Column(Modifier.fillMaxWidth().padding(top = 48.dp, bottom = 32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                        androidx.compose.foundation.Image(org.jetbrains.compose.resources.painterResource(HanppieBrandAssets.avatar),
-                            null, Modifier.size(112.dp))
-                        Text(tr(Res.string.what_would_you_like_to_do), fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+                if (state.lines.isEmpty() && emptyStateHeight >= 96.dp) item {
+                    Column(Modifier.fillMaxWidth().padding(
+                        top = if (compactEmptyState) 8.dp else 48.dp,
+                        bottom = if (compactEmptyState) 8.dp else 32.dp,
+                    ), horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(if (compactEmptyState) 8.dp else 20.dp)) {
+                        if (emptyStateHeight >= 160.dp) {
+                            androidx.compose.foundation.Image(org.jetbrains.compose.resources.painterResource(HanppieBrandAssets.avatar),
+                                null, Modifier.size(if (compactEmptyState) 64.dp else 112.dp))
+                        }
+                        Text(tr(Res.string.what_would_you_like_to_do),
+                            fontSize = if (compactEmptyState) 20.sp else 24.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
                 items(state.lines) { line ->
