@@ -9,12 +9,12 @@
 | 层级 | 操作 | 结果 |
 | --- | --- | --- |
 | 机器人共享契约 | `:packages:robot-core:desktopTest` | 63 项，58 通过、5 项需机器人环境而跳过；0 失败 |
-| 共享 UI / 持久化回归 | `:shared:jvmTest` | 首轮完整回归 271 项，261 通过、10 项环境限定而跳过；本次短窗口影响面 66 项通过；均为 0 失败 |
+| 共享 UI / 持久化回归 | `:shared:jvmTest` | 10 月 3 日发布命令完整复核 274 项，264 通过、10 项环境限定而跳过；本次短窗口影响面 66 项通过；均为 0 失败 |
 | Python | Ruff 格式、静态检查、pytest | 34 项通过，10 月 3 日复核覆盖率 80.25% |
 | 桌面分发 | `:desktopApp:packageDmg` | 通过 |
 | Android 分发 | `:androidApp:assembleRelease :androidApp:lintRelease` | 10 月 3 日通过；APK 版本 `1.0.0`、build `1`，lint 0 错误、12 警告 |
 | iOS 原生契约 | `:packages:robot-core:iosSimulatorArm64Test` | 10 月 3 日在 iOS 27.0 模拟器运行，32 项通过、0 失败、0 跳过 |
-| iOS 应用、媒体单元测试及 UI 测试 | Xcode `test`，arm64 Simulator | 共享布局修改后的完整回归：iPhone 16、iPad Pro 11-inch (M4) 各 7 项通过、0 失败、0 跳过；后续语言初始化修复的证据见下文 |
+| iOS 应用、媒体单元测试及 UI 测试 | Xcode `test`，arm64 Simulator | 本机共享布局完整回归及语言修复后的云端完整回归：iPhone 16、iPad Pro 11-inch (M4) 各 7 项通过、0 失败、0 跳过 |
 | iOS 设备归档 | Xcode Release `archive`，关闭代码签名 | 通过；归档含共享资源、模型及隐私清单 |
 | Apple Opus 编解码 | 本机 AVAudioConverter 往返 1 秒测试音频 | 51 个 Opus 包、48,840 个解码采样帧；属于 macOS 编解码证据 |
 | 发布定义 | Actionlint、ShellCheck、Bash 语法及版本/CHANGELOG 一致性检查 | 通过 |
@@ -69,11 +69,27 @@ Xcode 27 云端结果（[37053494527](https://github.com/elonzh/hanppie/actions/
 
 该轮 iPad 聊天测试在首次导航稳定等待超时，尚未进入键盘断言；快照中导航坐标有效，单轮辅助功能快照约耗时 15 秒，30 秒内只有两轮检查。等待上限改为 60 秒，仍要求有效坐标、启用、至少 0.35 秒稳定和可点击，再执行真实点击。另一项语言测试已进入设置，但启动参数指定英文时实际显示中文；截图确认设置入口及表单可见。检查发现旧语言目录的并发初始化会交错覆盖和恢复 Foundation 参数域，而宿主可能在后台诊断启动后才读取系统语言。本机 macOS Foundation 的受控双线程实验复现了错误恢复：初始英文最终变为中文；顺序预加载目录后的 32 次并发读取保持英文。此实验是 Foundation 并发机制证据，不能替代 iOS 应用验证。
 
-iOS 宿主现先保存系统语言，再预加载两个语言目录，随后启动模型后台任务；目录通过 Kotlin 同步 lazy 一次性发布不可变映射，后续读取与语言切换不再覆盖 Foundation 参数域。UI 回归保留中英文切换及重启保存断言，并增加切回跟随系统后显示英文的检查。修改后的本机 iPhone/iPad 聊天键盘与导航语言定向复核各 2 项通过、0 失败、0 跳过，两份 xcresult 均为 Passed，脚本正常退出；日志为 `/tmp/hanppie-ios-locale-navigation-2026-10-03.log`，结果位于未提交的 `build/ios-locale-navigation-verification/`。测试创建的模拟器已关闭并删除，新提交仍须通过云端完整验证。
+iOS 宿主现先保存系统语言，再预加载两个语言目录，随后启动模型后台任务；目录通过 Kotlin 同步 lazy 一次性发布不可变映射，后续读取与语言切换不再覆盖 Foundation 参数域。UI 回归保留中英文切换及重启保存断言，并增加切回跟随系统后显示英文的检查。修改后的本机 iPhone/iPad 聊天键盘与导航语言定向复核各 2 项通过、0 失败、0 跳过，两份 xcresult 均为 Passed，脚本正常退出；日志为 `/tmp/hanppie-ios-locale-navigation-2026-10-03.log`，结果位于未提交的 `build/ios-locale-navigation-verification/`。测试创建的模拟器已关闭并删除，云端完整结果见下文。
+
+语言目录与导航等待修复后的云端 iOS 工作流（[37078492228](https://github.com/elonzh/hanppie/actions/runs/37078492228)，提交 `0ace7e0`）全部通过。已下载结果包核对原生契约 32 项、iPhone 7 项、iPad 7 项全部通过、0 失败、0 跳过；两份 xcresult 均为 Passed。设备归档成功，并核对版本 `1.0.0`、build `1`、最低 iOS `18.5`、ARM64 程序、4 个有效 GLB 模型和隐私清单，无签名或描述文件。日志为 `/tmp/hanppie-ci-0ace7e0-ios-test.log` 和 `/tmp/hanppie-ci-0ace7e0-ios-archive.log`。
 
 Xcode 27 的结果还包含线程优先级诊断和 iPad 横屏配置的未来策略提醒；这些不是测试失败，也不构成真机性能或未来系统兼容性结论。工作流保留 xcresult 的日志与截图，关闭耗时的设备全量 sysdiagnose 收集，截图使用完整屏幕范围。新增键盘覆盖后，云端模拟器任务限时调整为 75 分钟，保留每项原有等待和断言。
 
-GitHub iOS 工作流使用 runner 已安装的模拟器运行时执行同一测试脚本。首版发布必须等待平台检查成功；本记录将在实际发布后补充流水线链接与结果。
+GitHub iOS 工作流使用 runner 已安装的模拟器运行时执行同一测试脚本。全部检查通过后，已将验证提交 `0ace7e0` 标记并推送为 `v1.0.0`，触发[首版发布流水线](https://github.com/elonzh/hanppie/actions/runs/37082236560)。该流水线第二次尝试全部成功，已于 10 月 3 日 09:30（Asia/Shanghai）发布 [v1.0.0](https://github.com/elonzh/hanppie/releases/tag/v1.0.0)，不是草稿或预发布。
+
+发布首轮的 Android APK 与 Windows MSI 构建成功；macOS 的既有 UDP 回环集成用例 `loopbackHandshakeSetupTelemetryAndClose` 失败，机器人契约为 63 项、1 失败、5 跳过，尚未生成 DMG。同一源码的本机该用例定向复核 1 项通过、0 失败、0 跳过，日志为 `/tmp/hanppie-release-loopback-local.log`；随后重编译并复核同一整组发布命令，机器人契约 63 项、共享测试 274 项均为 0 失败，分别有 5 / 10 项环境限定跳过，DMG 打包成功，日志为 `/tmp/hanppie-release-macos-local-full.log`。没有修改实现或断言。首轮云端日志只给出测试方法的断言异常，未保存完整失败报告，尚不能确定具体断言原因。GitHub API 不允许在同一发布仍有任务运行时重跑单个任务；首轮其余任务结束后，仅重跑失败的 macOS 任务及依赖的发布任务，保留其他成功结果和原提交、标签。云端 macOS 的机器人契约、共享 JVM 测试及 DMG 打包正常通过，日志为 `/tmp/hanppie-release-v1-macos-retry.log`；发布任务随后成功。
+
+发布内的 iOS 结果包已下载核对：原生契约 32 项、iPhone 7 项、iPad 7 项全部通过、0 失败、0 跳过，两份 xcresult 均为 Passed。日志为 `/tmp/hanppie-release-v1-ios-test.log`。Android Release 构建与 lint、Windows MSI 打包、版本与 CHANGELOG 校验也通过。
+
+最终从 Release 下载全部五个文件，四个客户端文件的 `SHA256SUMS.txt` 校验通过；包括校验文件在内的五个文件均与 GitHub API 给出的 SHA-256 摘要和大小一致。Release 的目标提交为 `0ace7e0`。分发平台与安装要求以 [README](../README.md#安装) 为准。
+
+| 制品 | 发布后核对 |
+| --- | --- |
+| `Hanppie-android.apk` | APK 元数据为版本 `1.0.0`、build `1` |
+| `Hanppie-macos.dmg` | 磁盘校验有效；只读挂载核对应用版本 `1.0.0`、arm64 启动程序，随后卸载 |
+| `Hanppie-windows.msi` | 构建日志输出 `Hanppie-1.0.0.msi`，下载文件识别为 x64 MSI；未在 Windows 手动安装运行 |
+| `Hanppie-ios-unsigned.xcarchive.zip` | 版本 `1.0.0`、build `1`、最低 iOS `18.5`、ARM64 程序、4 个有效 GLB 模型和隐私清单，无签名或描述文件 |
+| `SHA256SUMS.txt` | 四个客户端文件校验通过，本文件与 GitHub 摘要一致 |
 
 归档使用 `macos-26-intel`，其标准 runner 提供 14 GB 内存，默认 Xcode 26.6。工具链和容量依据 [GitHub runner 文档](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax) 与 [macOS 26 镜像清单](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-Readme.md)。未在本机改变 Xcode 选择。
 

@@ -34,6 +34,8 @@ Hanppie 是一个面向 DJI RoboMaster 系列机器人的开源保存与电脑�
 
 从 [GitHub Releases](https://github.com/elonzh/hanppie/releases) 获取 APK、macOS DMG、Windows MSI 和 iOS 未签名归档；使用同页 `SHA256SUMS.txt` 校验下载文件。更新内容见 [CHANGELOG](./CHANGELOG.md)。
 
+`v1.0.0` 的 macOS DMG 为 Apple Silicon（arm64）包，Windows MSI 为 x64 包。
+
 ### iPhone / iPad
 
 最低 iOS 18.5；应用按左右横屏使用。GitHub 的 `Hanppie-ios-unsigned.xcarchive.zip` 需要签名，不能直接安装。开发者安装 JDK 25、完整 Xcode 和 Git LFS 后打开 `iosApp/Hanppie.xcodeproj`，选择 `Hanppie` scheme 与目标设备；设置自己的 Apple Team 和 Bundle ID，配置包含 multicast 能力的描述文件，再运行。
