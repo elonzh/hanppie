@@ -1,301 +1,68 @@
-# Hanppie 对话智能体产品设计
+# Hanppie 智能体产品设计
 
-> 状态：产品智能体设计；P0 工具边界已实施，增强策略待续
-> 日期：2026-09-13
-> 范围：对话智能体的职责、工具、策略、交互闭环与安全边界
-> 基础运行时：见 [智能体运行时演进方案](./agent-runtime-plan.md)
-> 通用对话体验：见 [对话产品需求](./conversation-product-requirements.md)
-> 当前能力与安全事实：见 [Hanppie 技术架构](./architecture.md)
+本文维护对话智能体的职责、授权与交互规则。当前工具实现和设备能力见[技术架构](./architecture.md)，存储与恢复契约见[运行时设计](./agent-runtime-plan.md)，通用交互见[对话体验](./conversation-product-requirements.md)。
 
-## 1. 产品定位
+## 职责
 
-Hanppie 对话智能体是当前已选择机器人的解释、观察和控制助手。它应当帮助用户：
+智能体解释当前机器人状态，帮助用户编写和管理 Lab 脚本，在批准后执行，并根据实际证据说明结果。普通知识问答直接回答；涉及设备事实时读取状态，不用旧消息猜测。
 
-- 理解机器人当前连接、能力、脚本和遥测状态；
-- 把自然语言意图转成可审查、有限时长、可停止的机器人程序；
-- 在明确授权后执行，并准确区分命令发送、协议确认、遥测变化和物理效果；
-- 对机器人知识、使用方式和当前对话中的结果进行解释；
-- 在缺少模型能力、设备连接、可靠状态或用户授权时停止推进并给出恢复入口。
+模型只能使用注册工具，不能自行连接或切换设备、修改设置、访问任意文件、执行主机命令、操作 FTP/ADB 或升级固件。停止能力不依赖模型规划。
 
-它不是设备管理后台、通用主机编程助手或无人值守机器人控制器。模型不能自行连接/切换设备、修改模型设置、操作 FTP/ADB、升级固件、访问任意文件或执行主机命令。
-
-## 2. 产品智能体与基础运行时的边界
+## 任务流程
 
 ```mermaid
 flowchart LR
-    USER[用户意图] --> UX[对话产品体验]
-    UX --> AGENT[Hanppie Agent 策略与提示词]
-    AGENT --> KOOG[Koog AIAgent 与 ToolRegistry]
-    KOOG --> POLICY[工具策略与审批]
-    POLICY --> ROBOT[robot-core 当前会话]
-
-    RUNTIME[事件、恢复、上下文、模型配置] --> KOOG
-    CAP[当前能力与安全事实] --> AGENT
-    CAP --> POLICY
+    REQUEST[用户请求] --> MODEL[模型理解任务]
+    MODEL -->|知识问答| ANSWER[直接回答]
+    MODEL -->|设备或脚本事实| READ[查询状态、技能或脚本]
+    READ --> MODEL
+    MODEL -->|编写或修改| SAVE[保存完整脚本]
+    SAVE --> REVIEW[展示源码并请求批准]
+    REVIEW -->|批准| EXECUTE[执行并结束本次 run]
+    REVIEW -->|拒绝| END[记录决定并结束]
+    REQUEST -->|明确停止| STOP[本地停止入口]
 ```
 
-- 基础运行时负责模型调用、事件、恢复、上下文、超时和工具生命周期，不理解“观察附近”或“向前移动”的产品意图。
-- 产品智能体负责身份、提示词、工具集合、风险策略和交互流程，不自行实现 JSONL、SQLite 或供应商协议。
-- `robot-core` 是设备能力和执行结果的来源；模型描述与工具文案不能覆盖它的判断。
-- UI 负责让用户看见并确认，不能仅靠模型输出中的“已确认”文字绕过运行时审批。
+工具串行执行，只读查询按任务需要调用。机器人副作用工具返回后结束本次 run，不用工具循环等待脚本完成。方向、目标、时长或风险不明确时先澄清；结果未知时不能自动覆盖、重试或继续动作。
 
-## 3. 智能体运行策略
+脚本任务从注册技能目录读取相应文档，Lab API 与工作流以 [lab-python 技能](../shared/src/commonMain/composeResources/files/skills/lab-python/SKILL.md) 为准。修改已有脚本先读取真实源码；保存与重命名按用户要求执行，保存不上传也不运行。
 
-第一阶段使用一个 graph-based Koog `AIAgent`。策略图显式区分首次模型调用、串行工具执行和携带工具结果的后续模型调用；不在 UI 中维护函数式循环，也不引入 planner/executor 多智能体或隐藏的子任务树。
+## 工具权限
 
-```mermaid
-flowchart LR
-    START([开始 run]) --> INITIAL[首次模型调用]
-    INITIAL -->|无工具调用| FINISH([完成])
-    INITIAL -->|有工具调用| TOOLS[串行执行 class-based tools]
-    TOOLS --> TERMINAL{机器人副作用工具?}
-    TERMINAL -->|是| FINISH
-    TERMINAL -->|否| FOLLOWUP[携带 Tool Results 调用模型]
-    FOLLOWUP -->|无工具调用| FINISH
-    FOLLOWUP -->|有工具调用| TOOLS
-```
-
-每次 agent run 遵循这些规则：
-
-1. 概念解释、使用帮助等不依赖实时设备的问题直接回答，不调用工具凑过程。
-2. 涉及当前设备事实时先调用 `robot_status`；模型不得用旧消息猜测连接、型号或脚本状态。
-3. 根据系统提示自动生成的 `available_skills` 选择技能，使用 `read_skill(name)` 读取入口，需要附属文档时传入相对 `path`；Lab 脚本相关任务读取完整的 lab-python 技能；具体工作流以技能为权威来源，不能从模型记忆或 PC SDK 猜测接口。
-4. 修改已有脚本前先用 `read_lab_script` 获取真实源码；`save_lab_script` 只保存，不上传、不运行，不能把保存结果表述为执行结果。
-5. 动作意图不清、目标不明、持续时间缺失或可能伤人/损物时先追问，不能擅自补齐关键参数。
-6. 除停止外，执行前必须生成完整有限程序并进入审批；拒绝仍形成 Koog `MessagePart.Tool.Result`，并与执行或停止结果一样直接结束当前 run。
-7. 永久删除脚本只在用户明确要求时调用，并由界面再次确认；保存和重命名按用户明确指令执行，不增加无意义确认。
-8. 工具串行执行。只读工具可以按任务需要查询多个 API 分类或多个脚本；机器人副作用工具返回后立即结束 run。每个 run 最多发起 8 次模型请求，达到上限按运行失败处理，不能把工具原始结果当作成功答复，也不能用工具循环充当状态订阅。
-9. 最终回复只总结已经获得的证据，不把“脚本已保存”写成“脚本已运行”，也不把“脚本启动”写成“动作已经完成”。
-
-## 4. 工具设计
-
-### 4.1 P0 工具集
-
-P0 保留粗粒度设备工具，同时提供通用技能读取和脚本库管理工具。八个工具都从 UI 内联注册移入 `agent/tools`，实现为具名 class-based Koog 工具（`Tool` / `ToolBase`）。应用 composition root 构造工具实现并组合为一个 Koog `ToolRegistry`，`ChatAgent` 接收该 registry 和同一技能来源生成的提示，不再逐项声明工具函数或实现平行的 Environment 接口。审批、执行开始和超时作为 run-scoped Koog `AIAgentEnvironment` feature 统一包围工具分派。每个工具直接声明可序列化的 `Args` 和 `Result`，不使用把业务结果拼成自然语言的 `SimpleTool`。模型调用、审批、执行开始与 Koog `MessagePart.Tool.Result` 沿用同一个 `toolCallId`，不增加平行 ToolCall/ToolResult DTO。未完成机器人执行在取消或重启时生成 `isError=true` 的结果未知 Tool Result，不会自动重试。不为底盘、云台、灯光、音效和发射分别增加模型工具。
-
-| 工具 | 用途 | 自动执行 | 核心约束 |
-| --- | --- | --- | --- |
-| `robot_status` | 读取当前连接、能力、可信遥测、脚本状态及最近脚本消息 | 是 | 只读；不连接新设备；返回值必须标明未知或不可信字段 |
-| `read_skill` | 按技能名称和可选相对路径读取文档 | 是 | 目录自动注入提示，正文按需读取；只允许已注册技能 |
-| `list_lab_scripts` | 列出用户保存的脚本 | 是 | 返回脚本 ID、名称、更新时间和源码长度 |
-| `read_lab_script` | 按 ID 读取保存脚本 | 是 | 修改或替换已有脚本前调用；返回脚本 ID 与原始源码 |
-| `save_lab_script` | 创建、替换或重命名用户脚本 | 用户明确要求时 | 原子更新；必须是无 import 的 Python 3.6 `def start()` 完整源码；只保存，不运行 |
-| `delete_lab_script` | 永久删除用户保存的脚本 | 否 | 用户明确要求后再显示界面确认；按 ID 删除，确认界面显示名称 |
-| `execute_lab_python` | 按脚本库 ID 执行已保存的 Lab 程序及关联音频 | 否 | 每次都审批；限制长度与语法；有限时长；异常路径停止；上传/启动不等于完成 |
-| `stop_lab` | 停止当前 Lab 程序 | 用户明确要求停止时可直接执行 | 不等待模型规划更复杂动作；返回“命令已发送”或明确 ACK，不伪造物理停止 |
-
-结构化契约由各 Tool 内部的 `@Serializable Args/Result` 唯一定义：
-
-| 工具 | Args | Result |
-| --- | --- | --- |
-| `robot_status` | `{}` | `connected`、`address`、电量、信号，以及带运行标识、阶段、时间和最近消息的 `script` |
-| `read_skill` | `name`、`path`（默认 `SKILL.md`） | `content` |
-| `list_lab_scripts` | `{}` | `scripts[{id,name,sourceLength,updatedAtEpochMillis}]` |
-| `read_lab_script` | `scriptId` | `status: FOUND` 和脚本详情（`id`、`name`、`source`、创建与更新时间）；不存在时为 `status: NOT_FOUND` 和请求的 `id` |
-| `save_lab_script` | 可选 `scriptId`、`name`、`source` | 脚本 ID、最终名称、是否新建、源码长度、更新时间 |
-| `delete_lab_script` | `scriptId` | 脚本 ID、最终名称与 `DELETED/USER_REJECTED` 状态 |
-| `execute_lab_python` | `scriptId` | `START_COMMAND_SENT/USER_REJECTED` 状态及可选 `runId` |
-| `stop_lab` | `{}` | `STOP_COMMAND_SENT` 状态；仅证明停止命令已发送，不代表机内停止已确认 |
-
-所有工具参数和结果使用 Koog Tool 的类型化序列化，原始事件继续保存 `MessagePart.Tool.Call/Result`。其中 Call 的 `args` 与 Result 的 `output` 是供应商协议承载的 JSON 文本，不是应用业务模型；运行时和应用适配器直接使用工具类声明的 `Args`/`Result`，界面按 JSON 对象、数组和标量分层展示。读取、更新、删除和执行统一使用工具结果返回的脚本 ID；名称用于展示和编辑。保存时不传 ID 创建，传入 ID 更新，未知 ID 直接失败。技能机制与安全边界见 [架构说明](architecture.md)，具体脚本工作流与 API 由 [lab-python 技能](../shared/src/commonMain/composeResources/files/skills/lab-python/SKILL.md) 维护，系统提示自动提供技能元数据目录。Hanppie 只增加 Koog 没有的审批事实和产品 UI 状态。
-
-Tool 抛出的异常不伪造成业务 `Result`：Koog 仍以 `MessagePart.Tool.Result(isError=true)` 记录失败，run 边界保存原始异常与 traceback。`USER_REJECTED` 属于已完成的审批决定，才进入对应的类型化结果。
-
-### 4.2 P1 工具
-
-| 工具 | 用途 | 引入条件 |
-| --- | --- | --- |
-| `observe_camera` | 获取当前前向相机的一帧，以 Koog attachment 交给支持图像输入的模型 | KMP 客户端已能稳定获取完整帧、模型确认支持图像输入、用户已接受图像出境提示 |
-
-普通观察只取得当前前向画面，不能描述为 360 度环境。需要转动底盘或云台的“环顾”必须拆成经审批的动作与多次观察，不把拍照工具暗中升级为机械控制工具。
-
-### 4.3 明确不提供的工具
-
-- 自动发现后连接机器人或切换当前目标；
-- 任意主机 shell/Python、文件系统或网络访问；
-- FTP/ADB、固件升级、系统分区或恢复内容修改；
-- 绕过审批的通用 DUSS、底盘、云台或发射直通工具；
-- 修改 API Key、模型配置、对话历史或安全策略；
-- 以模型判断替代本地急停、租约、watchdog 或权限门。
-
-## 5. 风险与审批
-
-### 5.1 风险分级
-
-| 级别 | 示例 | 策略 |
-| --- | --- | --- |
-| R0 只读 | 状态、能力、脚本消息 | 可自动执行，仍记录调用和结果 |
-| R1 可见状态变化 | LED、音效等 | 第一阶段仍随完整 Lab 程序统一审批 |
-| R2 机械动作 | 底盘、云台 | 显示方向、速度、时长、停止保证和完整源码后确认 |
-| R3 高风险动作 | 红外、水弹等 | 每次单独强确认，不接受“以后都允许” |
-| Emergency | 停止当前脚本/运动 | 不要求批准；优先走本地快速路径 |
-
-风险由本地程序分析与实际能力共同判定，不能采用模型自报的风险等级。无法解析、持续时间无上限、缺少 `finally` 停止或使用未允许接口的程序应阻止执行，不只是提高警告颜色。
-
-### 5.2 审批卡片
-
-审批卡片至少显示：
-
-- 用户原始意图；
-- 本地识别出的设备影响、机械方向、速度、时长和高风险能力；
-- 完整脚本，可复制但不能在审批卡片内静默改写；
-- 当前机器人与运行状态；
-- “同意并执行”和“拒绝”按钮；
-- “取消对话不会停止已启动脚本”的明确说明。
-
-用户修改脚本后必须形成新的工具调用和审批，不允许沿用旧批准。
-
-## 6. 交互流程
-
-### 6.1 统一决策流程
-
-```mermaid
-flowchart TD
-    INPUT[用户发送消息] --> FAST{本地停止意图?}
-    FAST -->|是| STOP[立即执行安全停止]
-    STOP --> STOP_RESULT[补记用户消息与停止事件并展示]
-    FAST -->|否| SAVE[持久化 Message.User]
-    SAVE --> MODEL[Koog AIAgent 生成]
-    MODEL --> CALL{产生工具调用?}
-    CALL -->|否| ANSWER[持久化终态并展示结果]
-    CALL -->|是| POLICY{本地策略判定}
-    POLICY -->|拒绝| DENY[形成拒绝 Tool.Result]
-    POLICY -->|只读可执行| EXECUTE[持久化 started 后执行]
-    POLICY -->|需要审批| APPROVAL[展示审批卡片]
-    APPROVAL -->|拒绝| DENY
-    APPROVAL -->|同意| EXECUTE
-    EXECUTE --> RESULT[持久化 Tool.Result]
-    DENY --> ANSWER
-    RESULT --> UNKNOWN{结果未知?}
-    UNKNOWN -->|是| ATTENTION[停止循环并要求检查机器人]
-    UNKNOWN -->|否| ANSWER
-```
-
-### 6.2 动作请求时序
-
-```mermaid
-sequenceDiagram
-    actor U as 用户
-    participant UI as 对话 UI
-    participant R as Runtime
-    participant A as Koog AIAgent
-    participant T as Class-based Tools
-    participant B as robot-core
-
-    U->>UI: “向前移动 1 秒”
-    UI->>R: send
-    R->>R: 持久化 Message.User
-    R->>A: 运行当前 Prompt 与 ToolRegistry
-    A->>T: read_skill(name=lab-python)
-    T-->>A: 已核对入口、签名与参数范围
-    A->>T: robot_status
-    T->>B: 读取当前会话与状态
-    B-->>T: 状态快照
-    T-->>A: MessagePart.Tool.Result
-    A->>T: execute_lab_python
-    T-->>UI: 审批卡片
-    U->>UI: 同意
-    UI->>R: ToolApprovalResolvedEvent
-    R->>R: 持久化 ToolCallStartingEvent
-    R->>T: execute
-    T->>B: 上传脚本并发送启动命令
-    B-->>T: 命令发送结果
-    T-->>R: MessagePart.Tool.Result（等待 STARTED）并结束 run
-    B-->>UI: STARTED / 10 秒后状态未知
-    R-->>UI: 区分命令、遥测与物理证据
-```
-
-### 6.3 脚本管理时序
-
-```mermaid
-sequenceDiagram
-    actor U as 用户
-    participant A as Koog AIAgent
-    participant C as SkillLibrary
-    participant L as 脚本库
-    participant UI as 对话 UI
-
-    U->>A: “把巡检脚本改为同时输出进度”
-    A->>C: read_skill(name=lab-python)
-    C-->>A: 已核对签名与运行时约束
-    A->>L: read_lab_script(巡检脚本)
-    L-->>A: 原始源码
-    A->>L: save_lab_script(巡检脚本, 新源码)
-    L-->>A: 已原子保存，未运行
-    A-->>UI: 展示带 Python 高亮的修改结果并明确尚未运行
-```
-
-### 6.4 常见场景
-
-| 场景 | 期望行为 |
+| 工具 | 用途与约束 |
 | --- | --- |
-| “怎么让 S1 转弯？” | 作为知识问题回答，可给示例；不因出现动作词就执行 |
-| “写一个巡检脚本并保存” | 查询相关 API → 生成完整 Python 3.6 脚本 → 保存到脚本库 → 明确尚未运行 |
-| “修改我的巡检脚本” | 查询相关 API → 从列表取得 ID → 按 ID 读取现有源码 → 展示修改 → 原子替换，不丢失脚本 ID |
-| “删除巡检脚本” | 从列表取得 ID → 以名称展示删除确认 → 同意后删除；拒绝时脚本库不变 |
-| “让它左转一秒” | 读取状态 → 生成有限脚本 → 展示审批 → 执行 → 汇报证据 |
-| “继续” | 只有上下文中存在唯一明确的待续意图时才继续；不能重跑结果未知的工具 |
-| “停下” | 本地快速停止，不等待模型；随后把结果写回对话 |
-| “看看前面有什么” | 能力和图像出境条件满足后调用 `observe_camera`；否则解释缺失条件 |
-| 未连接机器人时要求动作 | 不自动连接；提供前往设备页的恢复入口并保留草稿 |
-| 已有脚本状态未知 | 先要求用户检查/停止；不得覆盖或自动重试 |
+| `robot_status` | 只读当前连接、遥测与脚本状态，标明未知字段，不连接新设备 |
+| `read_skill` | 按名称与相对路径读取已注册技能，禁止越出技能目录 |
+| `list_lab_scripts` / `read_lab_script` | 列出或读取本机脚本；名称用于展示，稳定 ID 用于操作 |
+| `save_lab_script` | 创建、更新或重命名完整 Lab 源码，只保存到本机 |
+| `delete_lab_script` | 用户明确要求后，由界面确认永久删除 |
+| `execute_lab_python` | 按 ID 执行已保存脚本，每次审批，上传与启动不代表完成 |
+| `stop_lab` | 用户明确要求时停止，不增加审批；准确报告命令发送或回报 |
 
-## 7. 提示词与上下文
+工具类的 `Args/Result` 是参数契约，直接复用 Koog `Tool` 与 `MessagePart.Tool.Call/Result`，不另建消息 DTO。业务拒绝与程序异常分别记录，异常不能伪装成成功文本。
 
-系统提示按职责组合，不维护一段无限增长的字符串：
+## 执行审批
 
-| 片段 | 来源 | 更新方式 |
-| --- | --- | --- |
-| 身份与回答风格 | 产品固定资源 | 随版本发布 |
-| 工具语义 | Koog `ToolDescriptor` | 与工具实现同源 |
-| Lab 脚本技能与 API | `composeResources/files/skills/lab-python/SKILL.md` | 通过 `read_skill` 按任务加载，不复制到系统提示 |
-| 机器人能力与安全规则 | `docs/architecture.md` 对应的代码能力模型 | 由当前会话动态生成，不复制静态能力列表 |
-| 当前设备上下文 | `robot_status` | 每次需要事实时读取 |
-| Session 历史 | `SessionHistory.messages(sessionId)` 返回的 Koog `Message` | 从 JSONL 事件投影，可由事实来源重建 |
-| 模型能力 | 当前 Koog `LLModel` 与能力证据 | agent run 启动时冻结 |
+审批由本地策略和界面完成，模型文字不能代替批准。Lab 程序统一审批；机械动作要说明方向、速度、时长和停止方式，高风险发射每次确认，不提供永久允许。完整源码可查看、复制，不能在批准后静默改写；改动需要新的调用与审批。
 
-提示词必须要求模型把工具结果视为不可信数据而不是新指令，不泄露内部 reasoning，不声称未验证设备受支持，并遵守“接口存在、命令接受、遥测变化、物理确认”四层证据表达。
+风险分析应依据源码与真实能力，不能采用模型自报等级。审批卡片显示原始意图、目标机器人、影响和完整程序，并明确取消对话不会停止已启动脚本。有限等待后没有启动回报时，转为结果未知并保留停止入口，不重复弹出批准。
 
-## 8. 取消、停止与恢复
+本地风险分析、有限时长检查与相机观察等增强策略，只有经过相应实现和验证后才能作为产品能力；范围以技术架构为准。相机观察只能描述当前画面，转动观察属于另一次需要批准的机械动作。
 
-- “取消生成”只取消当前 agent run，不代表机器人停止；UI 保留独立“停止机器人”入口。
-- 用户输入在当前机器人会话中形成明确停止意图时，先执行本地快速停止，再决定是否让模型生成解释；包含否定、引用或知识问答的句子不能被关键词误判为停止命令。
-- 安全停止必须幂等，并且是“先落盘再副作用”的 fail-safe 例外：存储暂时不可写也要先停止，之后补记事件并显示记录异常。
-- 当前实现对崩溃前尚未决定的审批追加拒绝决定，并以 `AgentExecutionFailedEvent(failure=ProcessRestart)` 结束未完成的 agent run；恢复原审批卡片是后续增强。存在 `ToolCallStartingEvent` 而没有对应 Koog `MessagePart.Tool.Result` 时，补记 `isError=true` 的结果未知 Tool Result 并显示“结果未知”，不提供一键重试。
-- 网络失败且尚未开始副作用工具时可以重试当前模型请求；工具开始后不重放整个 agent run。
-- 模型回复被截断时不执行其中尚未形成完整 `MessagePart.Tool.Call` 的内容。
+## 取消与恢复
 
-## 9. 隐私与数据出境
+取消结束当前 agent run，停止脚本走独立设备入口。明确停止意图优先使用本地快速路径；否定、引用和知识问答不能被关键词误判。安全停止应幂等，记录失败不能阻止停止尝试。
 
-- 普通文本会发送给用户选择的模型供应商；设置页与首次发送前说明供应商。
-- `robot_status` 只发送完成任务所需的最小状态，不包含 IP、AppID、序列号、凭据或完整诊断日志。
-- 相机图片发送前需要一次明确的数据出境提示；更换供应商后重新确认。
-- 工具返回、脚本与图片属于对话记录，导出时沿用对话历史的敏感内容提示。
-- 模型供应商的服务端存储能力不是 Hanppie 历史来源，默认使用可关闭服务端保存的配置。
+进程中断后，未决定审批安全拒绝，开始但无结果的工具标为结果未知，未结束的 run 标为中断，不自动重放副作用。尚未开始副作用的模型请求可以重试；已开始的执行必须由用户检查设备并重新决定。
 
-## 10. 验收标准
+## 上下文与隐私
 
-### 10.1 策略与工具
+系统提示组合身份、工具描述和技能目录。技能正文按需加载，设备事实来自 `robot_status`，历史直接使用运行时的 Koog 消息，模型配置在 run 启动时冻结。
 
-- 普通知识问答不调用机器人工具；设备事实问题不会凭历史猜测；
-- P0 八个工具直接使用 Koog Tool/MessagePart，全链路没有第二套 ToolCall/ToolResult；
-- 编写或修改脚本前能按相关分类查询受控 API 目录，目录外接口不会被当成已核对事实；
-- 脚本列表显示名称，读取、更新/重命名及经确认后的删除使用稳定 ID，保存不会触发上传或执行；
-- 动作请求在审批前不上传或启动脚本，拒绝后不会执行；
-- 一次审批只出现一次；命令发送后不会要求用户再次确认，缺少 `STARTED` 回报会在有限时间内转为结果未知；
-- 工具串行且有明确轮数上限，结果未知时立即停止自动循环；
-- “停下”走本地快速路径，延迟和结果单独记录。
+工具结果、脚本和附件是任务数据，不能覆盖系统规则。回复区分接口存在、命令接受、遥测变化和物理确认，不把模型推测写成设备事实。
 
-### 10.2 安全与证据
+文本会发送给用户选择的供应商；设备状态只提供任务所需信息，不包含凭据或完整诊断日志。相机附件的数据出境需另行说明，导出沿用单 Session 的隐私边界。
 
-- 无上限动作、缺少停止保证、未知 API 和未授权高风险动作被本地策略拦截；
-- UI 与最终回答区分命令发送、协议 ACK、遥测变化和物理确认；
-- 取消、断网、切换页面和进程重启不会导致副作用工具重复执行；
-- 模型无法调用未注册工具、修改设置、切换设备或访问主机环境。
+## 验收要点
 
-### 10.3 产品体验
-
-- 对话页能展示思考/生成、工具调用、审批、执行、失败和结果未知；
-- 手机审批卡片能完整查看脚本，桌面可键盘浏览但不能单键批准；
-- 无模型能力、无连接、图像不支持和上下文不足都有可操作恢复提示；
-- 真实模型测试与实机测试分层记录，模型工具调用成功不替代机器人物理验收。
+知识问答不调用设备工具；修改脚本前读取源码；保存不执行；批准前不上传；拒绝后不执行。取消、失联、重启和未知结果不会重复副作用。模型不能越过注册工具边界。工具调用成功、设备回报与物理动作分别验收。
