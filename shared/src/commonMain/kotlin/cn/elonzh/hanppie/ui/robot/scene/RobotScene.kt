@@ -4,28 +4,83 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.layout.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.key.*
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.*
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
-import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.resources.Res
+import cn.elonzh.hanppie.resources.scene_accessibility
+import cn.elonzh.hanppie.resources.scene_loading
+import cn.elonzh.hanppie.resources.scene_pose_live
+import cn.elonzh.hanppie.resources.scene_pose_stale
+import cn.elonzh.hanppie.resources.scene_pose_waiting
+import cn.elonzh.hanppie.resources.scene_preview
+import cn.elonzh.hanppie.resources.scene_retry
+import cn.elonzh.hanppie.resources.scene_rotate_left
+import cn.elonzh.hanppie.resources.scene_rotate_right
+import cn.elonzh.hanppie.resources.scene_static
+import cn.elonzh.hanppie.resources.scene_unavailable
+import cn.elonzh.hanppie.resources.scene_zoom_in
+import cn.elonzh.hanppie.resources.scene_zoom_out
 import cn.elonzh.hanppie.ui.i18n.tr
 import io.github.erkko68.filament.Engine
 import io.github.erkko68.filament.Filament
-import io.github.erkko68.filament.compose.*
-import io.github.erkko68.filament.compose.scene.*
+import io.github.erkko68.filament.compose.FilamentView
+import io.github.erkko68.filament.compose.rememberFilamentScene
+import io.github.erkko68.filament.compose.scene.AmbientOcclusion
+import io.github.erkko68.filament.compose.scene.AntiAliasing
+import io.github.erkko68.filament.compose.scene.Direction
+import io.github.erkko68.filament.compose.scene.DirectionalLight
+import io.github.erkko68.filament.compose.scene.GltfInstance
+import io.github.erkko68.filament.compose.scene.LightIntensity
+import io.github.erkko68.filament.compose.scene.LinearColor
+import io.github.erkko68.filament.compose.scene.PointLight
+import io.github.erkko68.filament.compose.scene.Position
+import io.github.erkko68.filament.compose.scene.PostProcessing
+import io.github.erkko68.filament.compose.scene.Projection
+import io.github.erkko68.filament.compose.scene.Rotation
+import io.github.erkko68.filament.compose.scene.ShadowConfig
+import io.github.erkko68.filament.compose.scene.Shadows
+import io.github.erkko68.filament.compose.scene.rememberCameraState
+import io.github.erkko68.filament.compose.scene.rememberGltfAsset
+import io.github.erkko68.filament.compose.scene.rememberKTXEnvironment
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
-import kotlin.math.*
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.exp
+import kotlin.math.sin
 
 /** The GPU surface is replaceable in layout tests; the dedicated render tests use the real engine. */
 internal typealias SceneRenderer = @Composable (RobotSceneState, Float, Float, Float, Float, () -> Unit, () -> Unit) -> Unit
@@ -135,7 +190,7 @@ private fun RobotSceneRenderer(
         LaunchedEffect(Unit) { onError() }
         return
     }
-    DisposableEffect(engine) { onDispose { engine.destroy() } }
+    DisposableEffect(engine) { onDispose { engine.close() } }
     val camera = rememberCameraState(initialTarget = Position(0f, 0.48f, 0f),
         initialProjection = Projection.Perspective(fovDegrees = 35.0, near = 0.05, far = 180.0))
     var targetYaw by remember { mutableFloatStateOf(state.yaw) }
@@ -169,8 +224,17 @@ private fun RobotSceneRenderer(
     }
     val scene = rememberFilamentScene(engine = engine, indirectLightState = environment.indirectLightState) {
         GltfInstance(asset = workshop, castShadows = true, onCreate = { workshopReady = true })
+        // Keep soft PCSS shadows without light-space perspective warping.
         DirectionalLight(direction = Direction(-0.5f, -1f, -0.6f),
-            intensity = LightIntensity.LuminousPower(65_000f), shadow = ShadowConfig(mapSize = 2048, normalBias = 0.005f, shadowFar = 8f, bulbRadius = 1.5f))
+            intensity = LightIntensity.LuminousPower(65_000f),
+            shadow = ShadowConfig(
+                mapSize = 2048,
+                normalBias = 0.005f,
+                shadowFar = 8f,
+                lispsm = false,
+                bulbRadius = 1.5f
+            )
+        )
         PointLight(position = Position(2f, 1.5f, 2f), color = LinearColor(.85f, .92f, 1f),
             intensity = LightIntensity.LuminousPower(12_000f), falloff = 8f)
         key(state.appearance) {
