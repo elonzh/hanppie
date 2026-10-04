@@ -305,9 +305,10 @@ class AppModel:
         for tid, scale, position in (
             (19537, 0.38, (-0.8, 0.0, -3.8)),
             (19971, 0.25, (-2.3, 0.0, -1.5)),
-            (20345, 0.45, (-2.5, 0.16, -1.4)),
-            (20345, 0.32, (-2.2, 0.83, -1.5)),
-            (20345, 0.38, (-1.6, 0.0, -2.1)),
+            # Group the cartons on the pallet, with the upper carton fully supported.
+            (20345, 0.45, (-2.5, 0.1565, -1.4)),
+            (20345, 0.32, (-2.5, 0.8315, -1.4)),
+            (20345, 0.32, (-1.96, 0.1565, -1.9)),
         ):
             parts = display_sources[tid]
             bounds = np.array([mesh.bounds for _, mesh in parts])
