@@ -415,7 +415,7 @@
     <string name="robot_appid_does_not_match_the_target">Robot AppID does not match the target</string>
     <string name="session_closed">Session closed</string>
     <string name="no_robot_data_for_5_seconds_connection_lost">No robot data for 5 seconds; connection lost</string>
-    <string name="cannot_start_ffmpeg_install_it_or_set_hanppie_ffmpeg">Cannot start FFmpeg. Install it or set HANPPIE_FFMPEG: %1$s</string>
+    <string name="cannot_start_media_component">Cannot start the media component. Reinstall Hanppie: %1$s</string>
     <string name="media_error_value">Media error: %1$s</string>
     <string name="video_error_value">Video error: %1$s</string>
     <string name="audio_error_value">Audio error: %1$s</string>

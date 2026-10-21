@@ -415,7 +415,7 @@
     <string name="robot_appid_does_not_match_the_target">机器人 AppID 与目标不一致</string>
     <string name="session_closed">会话已关闭</string>
     <string name="no_robot_data_for_5_seconds_connection_lost">5 秒未收到机器人数据，连接已失效</string>
-    <string name="cannot_start_ffmpeg_install_it_or_set_hanppie_ffmpeg">无法启动 FFmpeg；请安装或设置 HANPPIE_FFMPEG：%1$s</string>
+    <string name="cannot_start_media_component">无法启动音视频组件，请重新安装 Hanppie：%1$s</string>
     <string name="media_error_value">媒体错误：%1$s</string>
     <string name="video_error_value">视频错误：%1$s</string>
     <string name="audio_error_value">音频错误：%1$s</string>

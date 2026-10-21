@@ -2,11 +2,14 @@
 
 # Hanppie（憨皮）
 
-[简体中文](./README.md) | [English](./README_EN.md)
+[![English](https://img.shields.io/badge/English-DF6B38?style=flat&logo=googletranslate&logoColor=white)](./README.en.md)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-DF6B38?style=flat)](./LICENSE)
+[![macOS、Windows、Android、iOS](https://img.shields.io/badge/Platforms-macOS%20%C2%B7%20Windows%20%C2%B7%20Android%20%C2%B7%20iOS-DF6B38?style=flat)](#安装)
+[![产品官网](https://img.shields.io/badge/%E5%AE%98%E7%BD%91-Hanppie-DF6B38?style=flat)](https://elonzh.cn/toys/hanppie)
+[![下载 Hanppie](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-Hanppie-DF6B38?style=flat)](https://github.com/elonzh/hanppie/releases/latest)
+[![更新记录](https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E8%AE%B0%E5%BD%95-DF6B38?style=flat)](./CHANGELOG.md)
 
 RoboMaster 开源工作台。在电脑、手机和平板上驾驶机器人、编写 Python 脚本，也可以让 AI 帮你编程。
-
-[官网](https://elonzh.cn/toys/hanppie) · [下载](https://github.com/elonzh/hanppie/releases/latest) · [更新记录](./CHANGELOG.md)
 
 ![Hanppie](./assets/brand/graphite-orange/github/social-preview.png)
 
@@ -20,8 +23,6 @@ RoboMaster 开源工作台。在电脑、手机和平板上驾驶机器人、编
 | Windows | 运行 x64 MSI 安装包 |
 | Android | 安装 APK，最低 Android 8.0 |
 | iPhone / iPad | 最低 iOS 18.5；提供源码与未签名归档，需要使用 Xcode 签名安装，见[开发指南](./docs/development.md#ios) |
-
-桌面音视频需要另行安装支持 H.264、Opus 的 [FFmpeg](https://ffmpeg.org/download.html)，并将 `ffmpeg` 加入应用进程的 PATH，或用 `HANPPIE_FFMPEG` 指定可执行文件路径。Android 与 iOS 使用原生媒体能力。应用按横屏使用。
 
 ## 连接机器人
 
@@ -62,4 +63,4 @@ uv sync
 
 实机验证范围见技术架构的[能力矩阵](./docs/architecture.md#110-当前能力矩阵)。Hanppie 是独立项目，不隶属于 DJI。
 
-自有代码采用 [Apache License 2.0](./LICENSE)；DJI SDK 派生代码的来源与许可证见 [UPSTREAM.md](./src/robomaster/UPSTREAM.md)。
+自有代码采用 [Apache License 2.0](./LICENSE)；内置 FFmpeg 的来源与许可证见[第三方说明](./third-party/ffmpeg/NOTICE.md)，DJI SDK 派生代码见 [UPSTREAM.md](./src/robomaster/UPSTREAM.md)。

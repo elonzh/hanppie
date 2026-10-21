@@ -125,6 +125,13 @@ flowchart TD
 
 桌面 FFmpeg 在后台线程创建和关闭，首张完整可用帧即可就绪。损坏包、受损帧及其依赖帧被屏蔽，直到无解码错误的完整 I 帧恢复；期间保留上一张可用画面。Android 使用已渲染帧回调，过渡修订的验证范围见[主页验证记录](./home-scene-validation-2026-09-22.md)。该记录也维护传感器至 GPU 的实机证据，不扩大为全行程角度精度或全部传感器验收。
 
+桌面构建通过 `prepareDesktopFfmpeg` 获取固定版本、匹配宿主系统与架构的独立 FFmpeg 可执行文件，随
+Compose 应用资源和许可证一起打包。桌面模块统一为 `JavaExec` 启动任务（含 IDE 注入的 `hotRun`）配置资源准备依赖与
+`compose.application.resources.dir`，避免热重载入口遗漏资源。`ui/media/DesktopFfmpeg`
+统一解析资源路径，视频解码、录像、对讲、Lab 音频导入与试听共用此入口；源码运行与 JVM 测试使用同一构建产物。默认不依赖系统
+PATH，也不在运行时下载。`HANPPIE_FFMPEG`
+只用于显式覆盖路径。来源与许可证由[第三方说明](../third-party/ffmpeg/NOTICE.md)维护。
+
 布局遵循[横屏规范](../DESIGN.md#布局与自适应)。Android Activity 请求 `sensorLandscape`，targetSdk 36 使用 `PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY`；[Android 官方说明](https://developer.android.com/about/versions/17/changes/ff-restrictions-ignored)指出 targetSdk 37 起大屏会忽略方向限制，因此目标 SDK 升级需重新验证。桌面默认 1120×658、最小 740×480，普通窗口位置保存到 DataStore；最大化、全屏和最小化不覆盖普通位置，原屏幕不可用时交由系统定位。
 
 渲染资源随页面和宿主释放，加载失败保留连接操作与重试。布局测试替换 GPU 表面，真实场景检查用 `HANPPIE_GPU_TESTS=1`。Android 使用 OpenGL ES，iOS 使用 Metal 和非透明 UIKit 场景表面，桌面按目标系统选择 JNI 并通过 GPU 像素回读呈现；升级后的 iOS 渲染及性能结论仍需对应运行证据。

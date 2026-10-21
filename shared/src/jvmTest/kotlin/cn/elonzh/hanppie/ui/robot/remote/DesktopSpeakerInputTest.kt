@@ -16,6 +16,11 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
 class DesktopSpeakerInputTest {
+    @Test fun bundledFfmpegEncodesPushToTalkPcm() {
+        val packets = encodeDesktopSpeakerPcm(ByteArray(12_000 * 2))
+        assertTrue(packets.isNotEmpty(), "One second of PCM must produce Opus packets")
+    }
+
     @Test fun readinessFollowsFirstSamplesAndRetainsTheirPrefix() {
         val entered = java.util.concurrent.CountDownLatch(1)
         val allowRead = java.util.concurrent.CountDownLatch(1)

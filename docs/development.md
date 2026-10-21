@@ -22,7 +22,11 @@ git lfs pull
 ./gradlew :desktopApp:createDistributable
 ```
 
-Windows 使用 `gradlew.bat`。分发程序位于 `desktopApp/build/compose/binaries/main/app/`，包含 Java 运行时，不需要 Python。桌面音视频的 FFmpeg 配置见 [README](../README.md#安装)。
+Windows 使用 `gradlew.bat`。分发程序位于 `desktopApp/build/compose/binaries/main/app/`，包含 Java 运行时和 FFmpeg，不需要 Python 或系统 FFmpeg。首次运行或打包时，Gradle 从 Maven Central 获取当前平台的 FFmpeg，之后使用本地依赖缓存；应用运行时无需下载。
+
+桌面源码运行（包括 IDE 的 Compose Hot Reload `hotRun`）、测试和打包使用同一份 FFmpeg 资源。排障时可用
+`HANPPIE_FFMPEG` 指定其他可执行文件路径；自定义版本需要支持 H.264、libx264、Opus、libopus、AAC
+及现有媒体命令参数。分发来源与许可证见[第三方说明](../third-party/ffmpeg/NOTICE.md)。
 
 ## Android
 

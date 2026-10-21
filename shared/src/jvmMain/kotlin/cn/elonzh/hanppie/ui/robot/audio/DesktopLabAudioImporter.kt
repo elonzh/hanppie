@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.robot.audio
 
+import cn.elonzh.hanppie.ui.media.desktopFfmpegExecutable
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.ui.robot.remote.opusPacketsFromOgg
 import java.io.ByteArrayOutputStream
@@ -15,7 +16,7 @@ import kotlinx.coroutines.withContext
  * The executable is overridable through `HANPPIE_FFMPEG`, matching the host PTT encoder.
  */
 internal class DesktopLabAudioImporter(
-    private val executable: String = System.getenv("HANPPIE_FFMPEG") ?: "ffmpeg",
+    private val executable: String = desktopFfmpegExecutable(),
     private val timeoutMillis: Long = 60_000,
     private val processFactory: (List<String>) -> Process = { ProcessBuilder(it).start() },
 ) : LabAudioImporter {

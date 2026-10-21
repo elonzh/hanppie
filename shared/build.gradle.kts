@@ -117,6 +117,9 @@ compose.resources {
 
 // Filament and Skia load native code in the real GPU test suite.
 tasks.withType<Test>().configureEach {
+    inputs.files(rootProject.tasks.named("prepareDesktopFfmpeg"))
+        .withPropertyName("desktopFfmpeg").withPathSensitivity(PathSensitivity.RELATIVE)
+    systemProperty("compose.application.resources.dir", rootProject.layout.buildDirectory.dir("desktop-resources/common").get().asFile.absolutePath)
     jvmArgs("--enable-native-access=ALL-UNNAMED")
     inputs.property("gpuTests", providers.environmentVariable("HANPPIE_GPU_TESTS").orElse("0"))
     // Hardware evidence must come from this invocation, never an earlier cached run.

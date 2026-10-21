@@ -2,11 +2,14 @@
 
 # Hanppie
 
-[简体中文](./README.md) | [English](./README_EN.md)
+[![简体中文](https://img.shields.io/badge/%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-DF6B38?style=flat&logo=googletranslate&logoColor=white)](./README.md)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-DF6B38?style=flat)](./LICENSE)
+[![macOS, Windows, Android, iOS](https://img.shields.io/badge/Platforms-macOS%20%C2%B7%20Windows%20%C2%B7%20Android%20%C2%B7%20iOS-DF6B38?style=flat)](#installation)
+[![Website](https://img.shields.io/badge/Website-Hanppie-DF6B38?style=flat)](https://elonzh.cn/en/toys/hanppie)
+[![Download Hanppie](https://img.shields.io/badge/Download-Hanppie-DF6B38?style=flat)](https://github.com/elonzh/hanppie/releases/latest)
+[![Changelog](https://img.shields.io/badge/Changelog-DF6B38?style=flat)](./CHANGELOG.md)
 
 An open-source RoboMaster workbench. Drive your robot and write Python scripts on desktop, phone or tablet, with AI assistance when you need it.
-
-[Website](https://elonzh.cn/en/toys/hanppie) · [Download](https://github.com/elonzh/hanppie/releases/latest) · [Changelog](./CHANGELOG.md)
 
 ![Hanppie](./assets/brand/graphite-orange/github/social-preview.png)
 
@@ -20,8 +23,6 @@ Download the package for your platform from [GitHub Releases](https://github.com
 | Windows | Run the x64 MSI installer |
 | Android | Install the APK; Android 8.0 or later is required |
 | iPhone / iPad | iOS 18.5 or later; source and an unsigned archive are available. Sign and install with Xcode, following the [development guide](./docs/development.md#ios) (Chinese) |
-
-Desktop audio and video require [FFmpeg](https://ffmpeg.org/download.html) with H.264 and Opus support. Add `ffmpeg` to the application process PATH or set its executable path with `HANPPIE_FFMPEG`. Android and iOS use native media support. Use the app in landscape orientation.
 
 ## Connect a robot
 
@@ -62,4 +63,4 @@ Use `from hanppie import Robot` for native direct control, or the bundled `robom
 
 Hardware validation is recorded in the architecture's [capability matrix](./docs/architecture.md#110-当前能力矩阵). Hanppie is an independent project and is not affiliated with DJI.
 
-Hanppie's own code uses [Apache License 2.0](./LICENSE). See [UPSTREAM.md](./src/robomaster/UPSTREAM.md) for the origin and license of the DJI-derived SDK code.
+Hanppie's own code uses [Apache License 2.0](./LICENSE). See the [FFmpeg notice](./third-party/ffmpeg/NOTICE.md) for the bundled executable's origin and license, and [UPSTREAM.md](./src/robomaster/UPSTREAM.md) for the DJI-derived SDK code.

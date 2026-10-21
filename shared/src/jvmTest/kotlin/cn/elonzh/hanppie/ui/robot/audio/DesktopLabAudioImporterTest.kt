@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.robot.audio
 
+import cn.elonzh.hanppie.ui.media.desktopFfmpegExecutable
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.ui.robot.remote.OpusOgg
 import java.io.ByteArrayOutputStream
@@ -9,14 +10,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
-import org.junit.Assume
 
 class DesktopLabAudioImporterTest {
-    private val ffmpeg = System.getenv("HANPPIE_FFMPEG") ?: "ffmpeg"
-
-    private fun requireFfmpeg() = Assume.assumeTrue(
-        runCatching { ProcessBuilder(ffmpeg, "-version").start().waitFor() == 0 }.getOrDefault(false),
-    )
+    private val ffmpeg = desktopFfmpegExecutable()
 
     /** One second of 440 Hz, stereo 44.1 kHz, MP3: a container and shape the DSP does not accept as-is. */
     private fun sourceMp3(): ByteArray {
@@ -33,7 +29,6 @@ class DesktopLabAudioImporterTest {
     }
 
     @Test fun importsHostAudioIntoTheDspContainer() = runBlocking {
-        requireFfmpeg()
         val decoded = DesktopLabAudioImporter().decode("sample.mp3", sourceMp3())
         assertTrue(decoded.packets.isNotEmpty())
         assertTrue(decoded.durationMillis in 900..1_100, "时长 ${decoded.durationMillis} ms 超出预期")
@@ -45,7 +40,6 @@ class DesktopLabAudioImporterTest {
     }
 
     @Test fun rejectsEmptyAndUndecodableInput() = runBlocking {
-        requireFfmpeg()
         assertFailsWith<IllegalArgumentException> { DesktopLabAudioImporter().decode("empty", ByteArray(0)) }
         assertFailsWith<IllegalStateException> {
             DesktopLabAudioImporter().decode("noise.bin", ByteArray(4_096) { (it * 31).toByte() })

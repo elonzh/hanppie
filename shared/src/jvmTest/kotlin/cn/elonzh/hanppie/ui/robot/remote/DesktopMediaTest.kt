@@ -1,12 +1,12 @@
 package cn.elonzh.hanppie.ui.robot.remote
 
+import cn.elonzh.hanppie.ui.media.desktopFfmpegExecutable
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.test.*
-import org.junit.Assume
 import org.junit.Test
 
 class DesktopMediaTest {
@@ -56,11 +56,10 @@ class DesktopMediaTest {
     }
     @Test fun missingDecoderFailsClearly() {
         val error = assertFailsWith<IllegalStateException> { DesktopMedia(false,{}, {}, executable="hanppie-nonexistent-decoder") }
-        assertTrue(error.message!!.contains("HANPPIE_FFMPEG"))
+        assertTrue(error.message!!.contains("Hanppie"))
     }
     @Test fun realFfmpegDecodesBothStreamsAndCloses() {
-        val ffmpeg = System.getenv("HANPPIE_FFMPEG") ?: "ffmpeg"
-        Assume.assumeTrue(runCatching { ProcessBuilder(ffmpeg,"-version").start().waitFor() == 0 }.getOrDefault(false))
+        val ffmpeg = desktopFfmpegExecutable()
         val file = Files.createTempFile("hanppie-test-", ".h264").toFile()
         val recording = Files.createTempFile("hanppie-recording-", ".mp4").also { Files.deleteIfExists(it) }
         try {

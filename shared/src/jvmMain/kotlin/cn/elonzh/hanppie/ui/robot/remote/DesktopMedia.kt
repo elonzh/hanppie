@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.robot.remote
 
+import cn.elonzh.hanppie.ui.media.desktopFfmpegExecutable
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.media.VideoResolution
 import cn.elonzh.hanppie.ui.i18n.tr
@@ -22,7 +23,7 @@ internal class DesktopMedia(
     private val onStatus: (String) -> Unit,
     private val pcmSink: ((ByteArray, Int) -> Unit)? = null,
     private val playAudio: Boolean = pcmSink == null,
-    executable: String = System.getenv("HANPPIE_FFMPEG") ?: "ffmpeg",
+    executable: String = desktopFfmpegExecutable(),
     videoEnabled: Boolean = true,
     private val resolution: VideoResolution = VideoResolution.R720P,
 ) : AutoCloseable {
@@ -96,7 +97,7 @@ internal class DesktopMedia(
                     } catch (e: Exception) { if (active.get()) fail(e.message ?: tr(Res.string.audio_playback_failed)) }
                 }
             }
-        } catch (e: Exception) { close(); throw IllegalStateException(tr(Res.string.cannot_start_ffmpeg_install_it_or_set_hanppie_ffmpeg,e.message),e) }
+        } catch (e: Exception) { close(); throw IllegalStateException(tr(Res.string.cannot_start_media_component,e.message),e) }
     }
     private fun launch(executable: String, args: List<String>, diagnostics: ((String) -> Unit)? = null): Process {
         val process = ProcessBuilder(listOf(executable,"-hide_banner","-loglevel", if (diagnostics == null) "error" else "info", "-nostdin") + args).start()
@@ -148,7 +149,7 @@ internal fun saveDesktopPhoto(frame: ByteArray, resolution: VideoResolution = Vi
 
 /** Records already decoded frames, so recording can start at any displayed frame. */
 internal class DesktopVideoRecorder(
-    private val executable: String = System.getenv("HANPPIE_FFMPEG") ?: "ffmpeg",
+    private val executable: String = desktopFfmpegExecutable(),
     private val output: Path = desktopMediaPath("Movies", "mp4"),
     private val withAudio: Boolean = false,
     private val resolution: VideoResolution = VideoResolution.R720P,

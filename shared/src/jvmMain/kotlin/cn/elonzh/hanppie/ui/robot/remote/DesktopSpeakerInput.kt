@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.robot.remote
 
+import cn.elonzh.hanppie.ui.media.desktopFfmpegExecutable
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -9,7 +10,7 @@ import javax.sound.sampled.TargetDataLine
 import kotlin.concurrent.thread
 
 internal class DesktopSpeakerInput(
-    private val executable: String = System.getenv("HANPPIE_FFMPEG") ?: "ffmpeg",
+    private val executable: String = desktopFfmpegExecutable(),
     private val lineFactory: (AudioFormat) -> TargetDataLine = AudioSystem::getTargetDataLine,
     encoder: ((ByteArray) -> ByteArray)? = null,
     private val encoderTimeoutMillis: Long = 10_000,
@@ -47,7 +48,7 @@ internal class DesktopSpeakerInput(
 
 internal fun encodeDesktopSpeakerPcm(
     pcm: ByteArray,
-    executable: String = "ffmpeg",
+    executable: String = desktopFfmpegExecutable(),
     timeoutMillis: Long = 10_000,
     processFactory: (List<String>) -> Process = { ProcessBuilder(it).start() },
     onProcessChanged: (Process?) -> Unit = {},

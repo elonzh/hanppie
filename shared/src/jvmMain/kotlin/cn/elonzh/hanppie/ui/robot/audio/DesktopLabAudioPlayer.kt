@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.robot.audio
 
+import cn.elonzh.hanppie.ui.media.desktopFfmpegExecutable
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.ui.robot.remote.OpusOgg
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -17,7 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 private val desktopAudioLogger = KotlinLogging.logger {}
 
 internal class DesktopLabAudioPlayer(
-    private val executable: String = System.getenv("HANPPIE_FFMPEG") ?: "ffmpeg",
+    private val executable: String = desktopFfmpegExecutable(),
 ) : LabAudioPlayer {
     private val _state = MutableStateFlow(AudioPlaybackState())
     override val state: StateFlow<AudioPlaybackState> = _state
