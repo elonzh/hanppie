@@ -67,6 +67,7 @@ private val workbenchNavigationConfiguration = SavedStateConfiguration {
             subclass(ChatRoute.serializer())
             subclass(SettingsRoute.serializer())
             subclass(RobotAlbumRoute.serializer())
+            subclass(RobotWifiRoute.serializer())
             subclass(ConnectionGuideRoute.serializer())
             subclass(DirectConnectionGuideRoute.serializer())
             subclass(RouterConnectionGuideRoute.serializer())
@@ -106,6 +107,10 @@ internal fun Console(
     fun openAlbum() {
         focus.clearFocus(); keyboard?.hide(); onFileError(null)
         if (backStack.lastOrNull() != RobotAlbumRoute) backStack.add(RobotAlbumRoute)
+    }
+    fun openWifi() {
+        focus.clearFocus(); keyboard?.hide()
+        if (backStack.lastOrNull() != RobotWifiRoute) backStack.add(RobotWifiRoute)
     }
     fun navigate(index: Int) {
         focus.clearFocus()
@@ -151,6 +156,7 @@ internal fun Console(
         if (appId.isBlank()) appId = connectionPreferences.appId
     }
     fun goBack() {
+        if (backStack.lastOrNull() == RobotWifiRoute && model.robotWifi.state.value.busy) return
         if (backStack.size > 1) backStack.removeLastOrNull()
         else if (backStack.lastOrNull() != RobotRoute) backStack[0] = RobotRoute
     }
@@ -222,7 +228,7 @@ internal fun Console(
                         val compact = maxWidth < HanppieDesignTokens.CompactBreakpoint
                         val useNavigationRail = !compact || maxWidth > maxHeight
                         val shortWindow = maxHeight < 480.dp
-                        val workspacePage = route == ScriptRoute || route == ChatRoute || route == RobotAlbumRoute
+                        val workspacePage = route == ScriptRoute || route == ChatRoute || route == RobotAlbumRoute || route == RobotWifiRoute
                         val compressedHeight = maxHeight < 240.dp
                         val compressedChat = route == ChatRoute && compressedHeight
                         val compressedSettings = route == SettingsRoute && compressedHeight
@@ -251,7 +257,7 @@ internal fun Console(
                                     .padding(horizontal = if (route == RobotRoute) 0.dp else if (compact) HanppieDesignTokens.PagePaddingCompact
                                     else HanppieDesignTokens.PagePaddingExpanded)
                                     .padding(bottom = if (workspacePage && compressedHeight) 4.dp else if (workspacePage) HanppieDesignTokens.PagePaddingCompact else 0.dp)) {
-                                    if (routeTab != 1 && route != RobotRoute && route != RobotAlbumRoute && !isConnectionGuide && !compressedSettings) {
+                                    if (routeTab != 1 && route != RobotRoute && route != RobotAlbumRoute && route != RobotWifiRoute && !isConnectionGuide && !compressedSettings) {
                                         Row(Modifier.fillMaxWidth().height(if (compressedChat) 48.dp else 72.dp), verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.SpaceBetween) {
                                             Text(if (routeTab == 0) tr(Res.string.my_robot) else labels[routeTab],
@@ -289,7 +295,9 @@ internal fun Console(
                                                 if (document.value.busy) return@ChatPage
                                                 if (document.value.dirty) pendingChatScript = scriptId else openChatScript(scriptId)
                                             }, onSettings = { navigate(4) })
-                                        SettingsRoute -> SettingsPage(model, Modifier.weight(1f), onSpeechSettings, onAlbum = ::openAlbum)
+                                        SettingsRoute -> SettingsPage(model, Modifier.weight(1f), onSpeechSettings, onAlbum = ::openAlbum, onWifi = ::openWifi)
+                                        RobotWifiRoute -> cn.elonzh.hanppie.ui.robot.network.RobotWifiPage(model, Modifier.weight(1f),
+                                            ::goBack, onOpenWifiSettings)
                                         RobotAlbumRoute -> cn.elonzh.hanppie.ui.robot.album.RobotAlbumPage(model, Modifier.weight(1f),
                                             ::goBack, onRobotMediaOpen, onRobotMediaExport, fileError)
                                         RobotRoute -> cn.elonzh.hanppie.ui.robot.scene.RobotExperience(

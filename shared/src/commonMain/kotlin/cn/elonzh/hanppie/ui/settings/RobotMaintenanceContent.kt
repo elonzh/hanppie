@@ -16,7 +16,7 @@ import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-internal fun RobotMaintenanceContent(model: ConsoleController, onAlbum: (() -> Unit)? = null) {
+internal fun RobotMaintenanceContent(model: ConsoleController, onAlbum: (() -> Unit)? = null, onWifi: (() -> Unit)? = null) {
     val console by model.state.collectAsState()
     val state by model.robotCamera.state.collectAsState()
     val album by model.robotAlbum.state.collectAsState()
@@ -77,5 +77,8 @@ internal fun RobotMaintenanceContent(model: ConsoleController, onAlbum: (() -> U
                 Text(tr(Res.string.album_browse))
             }
         }
+    }
+    if (onWifi != null) Button(onWifi, Modifier.heightIn(min = 48.dp).testTag("settings-wifi-open")) {
+        Text(tr(Res.string.robot_wifi))
     }
 }

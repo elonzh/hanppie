@@ -84,6 +84,11 @@ object Protocol {
     const val CMD_GIMBAL_EXT_CTRL_ACCEL = 0x0c
 
     // Wi-Fi command IDs (cmdset 0x07)
+    const val CMD_WIFI_AP_GET_SSID = 0x07
+    const val CMD_WIFI_AP_SET_SSID = 0x08
+    const val CMD_WIFI_AP_SET_PASSWORD = 0x0d
+    const val CMD_WIFI_AP_GET_PASSWORD = 0x0e
+    const val CMD_WIFI_REBOOT = 0x15
     const val CMD_WIFI_AP_PUSH_RSSI = 0x09
     const val CMD_WIFI_AP_KEEPALIVE = 0x17
     const val CMD_WIFI_AP_SET_COUNTRY_CODE = 0x30

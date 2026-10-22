@@ -13,17 +13,9 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.unit.dp
-import cn.elonzh.hanppie.robot.files.RobotFileEntry
-import cn.elonzh.hanppie.robot.files.RobotFileKind
-import cn.elonzh.hanppie.robot.files.RobotFileService
-import cn.elonzh.hanppie.robot.lab.LabAudioClip
-import cn.elonzh.hanppie.robot.lab.LabUpload
 import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
-import cn.elonzh.hanppie.robot.product.RobotModel
-import cn.elonzh.hanppie.robot.product.RobotProduct
 import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
 import cn.elonzh.hanppie.robot.protocol.DussFrame
-import cn.elonzh.hanppie.robot.session.RobotLabSession
 import cn.elonzh.hanppie.robot.session.RobotRuntime
 import cn.elonzh.hanppie.robot.session.RobotSession
 import cn.elonzh.hanppie.robot.session.RobotTarget
@@ -36,11 +28,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import kotlinx.io.Sink
-import kotlinx.io.Source
 import org.junit.Rule
 import org.junit.Test
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
@@ -49,97 +38,7 @@ import kotlin.test.assertTrue
 class RemoteFireUiTest {
     @get:Rule val rule = createComposeRule()
 
-    private class FakeRobotSession : RobotSession {
-        override val album = object : cn.elonzh.hanppie.robot.media.album.RobotAlbumService {
-            override val busy = kotlinx.coroutines.flow.MutableStateFlow(false)
-            override suspend fun list(): List<cn.elonzh.hanppie.robot.media.album.RobotMediaEntry> = error("unused")
-            override suspend fun download(entry: cn.elonzh.hanppie.robot.media.album.RobotMediaEntry,
-                part: cn.elonzh.hanppie.robot.media.album.RobotMediaPart, destination: kotlinx.io.Sink,
-                onProgress: (Long, Long) -> Unit) { error("unused") }
-        }
-        val infraredCount = AtomicInteger(0)
-        val gelCount = AtomicInteger(0)
-        val driveCount = AtomicInteger(0)
-        val labStopCount = AtomicInteger(0)
-
-        override val camera = object : cn.elonzh.hanppie.robot.media.RobotCameraService {
-            override val state = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.media.CameraState(100))
-            override suspend fun formatStorage() { error("unused") }
-            override suspend fun takePhoto() { error("unused") }
-            override suspend fun setRecording(active: Boolean) { error("unused") }
-            override suspend fun getAntiFlicker(): Int = error("unused")
-            override suspend fun setAntiFlicker(mode: cn.elonzh.hanppie.robot.media.AntiFlicker): Int = error("unused")
-            override suspend fun getDate(): cn.elonzh.hanppie.robot.media.CameraDate? = error("unused")
-            override suspend fun syncClock(): cn.elonzh.hanppie.robot.media.CameraDate = error("unused")
-            override suspend fun setPhotoSize(size: cn.elonzh.hanppie.robot.media.CameraPhotoSize) = error("unused")
-            override suspend fun setTransmissionRate(rate: cn.elonzh.hanppie.robot.media.VideoTransmissionRate) = error("unused")
-            override suspend fun switchCamera(index: Int) = error("unused")
-            override suspend fun requestKeyFrame() = error("unused")
-            override suspend fun setZoom(hundredths: Int) {}
-        }
-        override val audio = object : cn.elonzh.hanppie.robot.media.RobotAudioService {
-            override val playback = kotlinx.coroutines.flow.MutableStateFlow<cn.elonzh.hanppie.robot.media.RobotSpeakerPlayback?>(null)
-            override suspend fun readSoundEnabled() = false
-            override suspend fun setAntiFeedback(enabled: Boolean) = error("unused")
-            override suspend fun read(): cn.elonzh.hanppie.robot.media.RobotAudioSettings = error("unused")
-            override suspend fun applyVolume(volume: Int): cn.elonzh.hanppie.robot.media.RobotAudioSettings = error("unused")
-            override suspend fun setLanguage(language: cn.elonzh.hanppie.robot.media.SpeakerLanguage): cn.elonzh.hanppie.robot.media.RobotAudioSettings = error("unused")
-        }
-        override val connected = true
-        override val product = RobotProduct(model = RobotModel.ROBOMASTER_S1)
-        override val tracking = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.tracking.TrackingState())
-        override fun startTracking() {}
-        override fun selectTrackingTarget(x: Float, y: Float) {}
-        override fun confirmTracking() {}
-        override fun stopTracking() {}
-        override val cameraYaw: Double? = null
-        override var onVideo: ((ByteArray) -> Unit)? = null
-        override var onAudio: ((ByteArray) -> Unit)? = null
-        override val lab: RobotLabSession = object : RobotLabSession {
-            override fun invalidateMode() {}
-            override suspend fun upload(source: String, title: String, audio: List<LabAudioClip>): LabUpload =
-                LabUpload("hash", "0123456789abcdef0123456789abcdef")
-            override suspend fun start(): String = "0123456789abcdef0123456789abcdef"
-            override suspend fun stop() { labStopCount.incrementAndGet() }
-            override suspend fun complete(runId: String): Boolean = true
-        }
-        override val files: RobotFileService = object : RobotFileService {
-            override suspend fun list(path: String): List<RobotFileEntry> = emptyList()
-            override suspend fun upload(directory: String, preferredName: String, source: Source): RobotFileEntry =
-                RobotFileEntry(path = "$directory/$preferredName", name = preferredName, kind = RobotFileKind.FILE, size = 0)
-            override suspend fun download(path: String, destination: Sink) {}
-            override suspend fun createDirectory(parent: String, name: String): RobotFileEntry =
-                RobotFileEntry(path = "$parent/$name", name = name, kind = RobotFileKind.DIRECTORY, size = 0)
-            override suspend fun rename(path: String, newName: String): String = "$path/$newName"
-            override suspend fun delete(entry: RobotFileEntry) {}
-            override fun close() {}
-        }
-
-        override suspend fun connect() {}
-        override fun safetyStop() {}
-        override suspend fun enterRemote() {}
-        override suspend fun exitRemote() {}
-        override fun drive(x: Double, y: Double, z: Double, pitch: Double, yaw: Double, cameraRelative: Boolean) {
-            driveCount.incrementAndGet()
-        }
-        override fun halt() {}
-        override fun fireInfrared() {
-            infraredCount.incrementAndGet()
-        }
-        override suspend fun fireGelOnce(onSent: (Int) -> Unit): Int {
-            val sequence = gelCount.incrementAndGet()
-            onSent(sequence)
-            delay(50)
-            return sequence
-        }
-        override suspend fun playSpeaker(encoded: ByteArray): Int = 0
-        override fun setLed(red: Int, green: Int, blue: Int, enabled: Boolean) {}
-        override fun setSpeakerVolume(volume: Int) {}
-        override fun media(start: Boolean, audio: Boolean, resolution: cn.elonzh.hanppie.robot.media.VideoResolution) {}
-        override fun close() {}
-    }
-
-    private class FakeRobotRuntime(val fakeSession: FakeRobotSession) : RobotRuntime {
+    private class FakeRobotRuntime(val fakeSession: RobotSessionFixture) : RobotRuntime {
         override suspend fun discover(timeoutMillis: Long): List<DiscoveredRobot> = emptyList()
         override suspend fun waitForRouterPairing(appId: String): RouterPairing = error("unused")
         override suspend fun acknowledgeRouterPairing(pairing: RouterPairing, appId: String) {}
@@ -153,7 +52,7 @@ class RemoteFireUiTest {
 
     @Test
     fun missingOnboardStartReportBecomesUnknownInsteadOfWaitingForever() = runBlocking {
-        val session = FakeRobotSession()
+        val session = RobotSessionFixture()
         val model = testConsoleModel(
             robotRuntime = FakeRobotRuntime(session),
             scriptStartConfirmationTimeoutMillis = 25,
@@ -184,7 +83,7 @@ class RemoteFireUiTest {
 
     @Test
     fun stopCommandKeepsTheRobotRunStateUnconfirmed() = runBlocking {
-        val session = FakeRobotSession()
+        val session = RobotSessionFixture()
         val model = testConsoleModel(robotRuntime = FakeRobotRuntime(session))
         try {
             model.connect("127.0.0.1", "12345678")
@@ -214,7 +113,7 @@ class RemoteFireUiTest {
 
     @Test
     fun infraredHoldFiresRepeatedlyAndStops() = runBlocking {
-        val session = FakeRobotSession()
+        val session = RobotSessionFixture()
         val runtime = FakeRobotRuntime(session)
         val model = testConsoleModel(robotRuntime = runtime)
         try {
@@ -243,7 +142,7 @@ class RemoteFireUiTest {
 
     @Test
     fun gelHoldFiresSequentiallyWithoutBlockingDrive() = runBlocking {
-        val session = FakeRobotSession()
+        val session = RobotSessionFixture()
         val runtime = FakeRobotRuntime(session)
         val model = testConsoleModel(robotRuntime = runtime)
         try {
@@ -283,7 +182,7 @@ class RemoteFireUiTest {
     @Test
     fun remotePageSpaceKeyHoldAndRelease() {
         Localization.initialize("zh", null)
-        val session = FakeRobotSession()
+        val session = RobotSessionFixture()
         val runtime = FakeRobotRuntime(session)
         val model = testConsoleModel(robotRuntime = runtime)
         try {
@@ -319,7 +218,7 @@ class RemoteFireUiTest {
     @Test
     fun remotePageFireButtonClickFiresSingleShot() {
         Localization.initialize("zh", null)
-        val session = FakeRobotSession()
+        val session = RobotSessionFixture()
         val runtime = FakeRobotRuntime(session)
         val model = testConsoleModel(robotRuntime = runtime)
         try {
@@ -354,7 +253,7 @@ class RemoteFireUiTest {
 
     @Test
     fun singleFireEmitsCorrespondingFireEvents() = runBlocking {
-        val session = FakeRobotSession()
+        val session = RobotSessionFixture()
         val runtime = FakeRobotRuntime(session)
         val model = testConsoleModel(robotRuntime = runtime)
         try {
@@ -395,7 +294,7 @@ class RemoteFireUiTest {
 
     @Test
     fun startFiringEmitsEventsAndUpdatesFiringState() = runBlocking {
-        val session = FakeRobotSession()
+        val session = RobotSessionFixture()
         val runtime = FakeRobotRuntime(session)
         val model = testConsoleModel(robotRuntime = runtime)
         try {
@@ -459,7 +358,7 @@ class RemoteFireUiTest {
     @Test
     fun scriptFailureRecordsErrorDetailsInRunLogAndConsoleLog() = runBlocking {
         var frameHandler: ((DussFrame) -> Unit)? = null
-        val session = FakeRobotSession()
+        val session = RobotSessionFixture()
         val runtime = object : RobotRuntime {
             override suspend fun discover(timeoutMillis: Long): List<DiscoveredRobot> = emptyList()
             override suspend fun waitForRouterPairing(appId: String): RouterPairing = error("unused")

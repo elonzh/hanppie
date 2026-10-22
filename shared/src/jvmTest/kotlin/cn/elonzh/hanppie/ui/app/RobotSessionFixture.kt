@@ -1,0 +1,107 @@
+package cn.elonzh.hanppie.ui.app
+
+import cn.elonzh.hanppie.robot.files.*
+import cn.elonzh.hanppie.robot.lab.*
+import cn.elonzh.hanppie.robot.product.*
+import cn.elonzh.hanppie.robot.session.*
+import kotlinx.coroutines.delay
+import kotlinx.io.Sink
+import kotlinx.io.Source
+import java.util.concurrent.atomic.AtomicInteger
+
+internal class RobotSessionFixture : RobotSession {
+    @Volatile var closed = false
+    override val album = object : cn.elonzh.hanppie.robot.media.album.RobotAlbumService {
+        override val busy = kotlinx.coroutines.flow.MutableStateFlow(false)
+        override suspend fun list(): List<cn.elonzh.hanppie.robot.media.album.RobotMediaEntry> = error("unused")
+        override suspend fun download(entry: cn.elonzh.hanppie.robot.media.album.RobotMediaEntry,
+            part: cn.elonzh.hanppie.robot.media.album.RobotMediaPart, destination: kotlinx.io.Sink,
+            onProgress: (Long, Long) -> Unit) { error("unused") }
+    }
+    val infraredCount = AtomicInteger(0)
+    val gelCount = AtomicInteger(0)
+    val driveCount = AtomicInteger(0)
+    val labStopCount = AtomicInteger(0)
+
+    override val camera = object : cn.elonzh.hanppie.robot.media.RobotCameraService {
+        override val state = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.media.CameraState(100))
+        override suspend fun formatStorage() { error("unused") }
+        override suspend fun takePhoto() { error("unused") }
+        override suspend fun setRecording(active: Boolean) { error("unused") }
+        override suspend fun getAntiFlicker(): Int = error("unused")
+        override suspend fun setAntiFlicker(mode: cn.elonzh.hanppie.robot.media.AntiFlicker): Int = error("unused")
+        override suspend fun getDate(): cn.elonzh.hanppie.robot.media.CameraDate? = error("unused")
+        override suspend fun syncClock(): cn.elonzh.hanppie.robot.media.CameraDate = error("unused")
+        override suspend fun setPhotoSize(size: cn.elonzh.hanppie.robot.media.CameraPhotoSize) = error("unused")
+        override suspend fun setTransmissionRate(rate: cn.elonzh.hanppie.robot.media.VideoTransmissionRate) = error("unused")
+        override suspend fun switchCamera(index: Int) = error("unused")
+        override suspend fun requestKeyFrame() = error("unused")
+        override suspend fun setZoom(hundredths: Int) {}
+    }
+    override var wifi: cn.elonzh.hanppie.robot.network.RobotWifiService = object : cn.elonzh.hanppie.robot.network.RobotWifiService {
+        override suspend fun read(): cn.elonzh.hanppie.robot.network.RobotWifiProfile = error("unused")
+        override suspend fun configure(credentials: cn.elonzh.hanppie.robot.network.RobotApCredentials,
+            onConfirmed: (cn.elonzh.hanppie.robot.network.WifiConfirmedField) -> Unit) = error("unused")
+        override suspend fun reboot() = error("unused")
+    }
+    override val audio = object : cn.elonzh.hanppie.robot.media.RobotAudioService {
+        override val playback = kotlinx.coroutines.flow.MutableStateFlow<cn.elonzh.hanppie.robot.media.RobotSpeakerPlayback?>(null)
+        override suspend fun readSoundEnabled() = false
+        override suspend fun setAntiFeedback(enabled: Boolean) = error("unused")
+        override suspend fun read(): cn.elonzh.hanppie.robot.media.RobotAudioSettings = error("unused")
+        override suspend fun applyVolume(volume: Int): cn.elonzh.hanppie.robot.media.RobotAudioSettings = error("unused")
+        override suspend fun setLanguage(language: cn.elonzh.hanppie.robot.media.SpeakerLanguage): cn.elonzh.hanppie.robot.media.RobotAudioSettings = error("unused")
+    }
+    override val connected = true
+    override val product = RobotProduct(model = RobotModel.ROBOMASTER_S1)
+    override val tracking = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.tracking.TrackingState())
+    override fun startTracking() {}
+    override fun selectTrackingTarget(x: Float, y: Float) {}
+    override fun confirmTracking() {}
+    override fun stopTracking() {}
+    override val cameraYaw: Double? = null
+    override var onVideo: ((ByteArray) -> Unit)? = null
+    override var onAudio: ((ByteArray) -> Unit)? = null
+    override val lab: RobotLabSession = object : RobotLabSession {
+        override fun invalidateMode() {}
+        override suspend fun upload(source: String, title: String, audio: List<LabAudioClip>): LabUpload =
+            LabUpload("hash", "0123456789abcdef0123456789abcdef")
+        override suspend fun start(): String = "0123456789abcdef0123456789abcdef"
+        override suspend fun stop() { labStopCount.incrementAndGet() }
+        override suspend fun complete(runId: String): Boolean = true
+    }
+    override val files: RobotFileService = object : RobotFileService {
+        override suspend fun list(path: String): List<RobotFileEntry> = emptyList()
+        override suspend fun upload(directory: String, preferredName: String, source: Source): RobotFileEntry =
+            RobotFileEntry(path = "$directory/$preferredName", name = preferredName, kind = RobotFileKind.FILE, size = 0)
+        override suspend fun download(path: String, destination: Sink) {}
+        override suspend fun createDirectory(parent: String, name: String): RobotFileEntry =
+            RobotFileEntry(path = "$parent/$name", name = name, kind = RobotFileKind.DIRECTORY, size = 0)
+        override suspend fun rename(path: String, newName: String): String = "$path/$newName"
+        override suspend fun delete(entry: RobotFileEntry) {}
+        override fun close() {}
+    }
+
+    override suspend fun connect() {}
+    override fun safetyStop() {}
+    override suspend fun enterRemote() {}
+    override suspend fun exitRemote() {}
+    override fun drive(x: Double, y: Double, z: Double, pitch: Double, yaw: Double, cameraRelative: Boolean) {
+        driveCount.incrementAndGet()
+    }
+    override fun halt() {}
+    override fun fireInfrared() {
+        infraredCount.incrementAndGet()
+    }
+    override suspend fun fireGelOnce(onSent: (Int) -> Unit): Int {
+        val sequence = gelCount.incrementAndGet()
+        onSent(sequence)
+        delay(50)
+        return sequence
+    }
+    override suspend fun playSpeaker(encoded: ByteArray): Int = 0
+    override fun setLed(red: Int, green: Int, blue: Int, enabled: Boolean) {}
+    override fun setSpeakerVolume(volume: Int) {}
+    override fun media(start: Boolean, audio: Boolean, resolution: cn.elonzh.hanppie.robot.media.VideoResolution) {}
+    override fun close() { closed = true }
+}

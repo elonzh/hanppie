@@ -1,5 +1,7 @@
 package cn.elonzh.hanppie.robot.session
 
+import cn.elonzh.hanppie.robot.network.RobotWifiService
+
 import cn.elonzh.hanppie.robot.tracking.TrackingState
 import kotlinx.coroutines.flow.StateFlow
 import cn.elonzh.hanppie.robot.files.RobotFileService
@@ -64,6 +66,7 @@ interface RobotSession : AutoCloseable {
     val lab: RobotLabSession
     val files: RobotFileService
     val audio: RobotAudioService
+    val wifi: RobotWifiService
     val album: cn.elonzh.hanppie.robot.media.album.RobotAlbumService
     val camera: cn.elonzh.hanppie.robot.media.RobotCameraService
 

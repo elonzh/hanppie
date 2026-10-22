@@ -325,6 +325,25 @@ Python 不是 DUSS 的组成部分。只要实现帧格式、CRC、地址、序�
 
 端口号必须连同传输协议、会话角色和服务状态理解；端口出现在配置中不表示原厂启动后一定监听。
 
+#### Wi-Fi AP 配置与无线重启
+
+固定 macOS 1.1.5/build 239 的 `RobomasterWiFiLink` 构造请求发往 Wi-Fi 节点 `0x07`，使用命令集 `07`、需要应答的属性。下表来自原生构造函数，不是从桥接 key ID 拆解。**原生代码**
+
+| 操作 | cmdset:id / 载荷 | 原生入口 |
+| --- | --- | --- |
+| 查询模式 | `07:39`，空 | GetMode `0x6e7030` |
+| 查询 SSID | `07:07`，空 | GetSSID `0x6e7550` |
+| 写 SSID | `07:08`，uint8 UTF-8 字节长度 + 内容，不含 NUL | SetSSID `0x6e7a10` |
+| 查询 AP 密码 | `07:0e`，空 | GetPassword `0x6e7fb0` |
+| 写 AP 密码 | `07:0d`，同 SSID 长度前缀 | SetPassword `0x6e8470` |
+| 无线重启 | `07:15`，空 | ActionReboot `0x6e9fc0` |
+
+模式响应为 retcode + uint8 mode；转换入口 `0x6ef5c0`，值读取于 `0x6ef60c`。`RobotService/DJI/DJIWiFiMode.cs` 定义 AP=0、Station=2，未知值不映射为 AP。字符串响应为 retcode + uint8 长度 + UTF-8 内容；SSID 转换 `0x6f0620`（长度 `0x6f066e`、内容从 +2、复制 `0x6f0691`），密码转换 `0x6f22e0`（长度 `0x6f232e`、内容从 +2、复制 `0x6f2351`）。转换按声明长度复制，不能要求响应绝无附加字节。Hanppie 对不足长度、无效 UTF-8 和嵌入 NUL 拒绝解析。**原生/当前代码**
+
+`Module.Setting.View/WifiInfoView.cs:OnOK` 限制 SSID 为 1–32 个 ASCII 字母、数字、下划线或横线，密码为 8–16 个 C# 字符；没有在该界面对密码作 ASCII 限制。Kotlin 按相同 UTF-16 长度检查密码，另拒绝控制字符和无效 Unicode；固件是否接受所有有效 Unicode 密码尚未验证。官方 Step1 分别发送名称与密码，Step2 单独发送重启，不存在据此可确认的原子提交或自动回滚契约。**客户端代码 / 待验证**
+
+本轮没有设备，原生静态构造、合成向量和 UDP 回环均不证明固件接受命令。设置何时生效、两字段只部分确认、重启先断线后应答、改密后的 IP/DHCP、设备身份、各模式可达性和国家代码/信道影响均待实机。静态片段保存在忽略目录 `native-Wifi-ApConfiguration.txt`、`native-Wifi-Reboot.txt` 和三个 `native-Wifi-*Reply.txt`，位于 `.hanppie/validation/2026-10-22-official-gap/`；离线验证与逐项设备检查见[实施台账 N01](./official-app-capability-implementation.md#n01-验证入口与设备待验)。
+
 ### 5.3 RoboMaster App 与 Lab 程序机制
 
 RoboMaster App 提供手机和 macOS 客户端，Lab 是该应用中的程序功能；两者不共同构成一套名为“App/Lab”的协议。实际链路由以下机制组成：

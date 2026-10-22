@@ -1,5 +1,7 @@
 package cn.elonzh.hanppie.ui.app
 
+import cn.elonzh.hanppie.ui.robot.network.RobotWifiController
+
 import cn.elonzh.hanppie.agent.provider.ModelCatalogState
 import cn.elonzh.hanppie.agent.provider.ModelTestState
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
@@ -45,6 +47,7 @@ internal interface ConsoleController : AutoCloseable {
     val cameraZoom: cn.elonzh.hanppie.ui.robot.remote.CameraZoomController
     val robotCamera: cn.elonzh.hanppie.ui.robot.camera.RobotCameraController
     val robotAlbum: cn.elonzh.hanppie.ui.robot.album.RobotAlbumController
+    val robotWifi: RobotWifiController
     val chat: ChatAgent
     val foregroundState: MutableStateFlow<Boolean>
     val tracking: StateFlow<TrackingState>

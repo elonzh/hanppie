@@ -27,6 +27,9 @@ internal data object SettingsRoute : WorkbenchRoute { override val topLevelIndex
 internal data object RobotAlbumRoute : WorkbenchRoute { override val topLevelIndex = 0 }
 
 @Serializable
+internal data object RobotWifiRoute : WorkbenchRoute { override val topLevelIndex = 4 }
+
+@Serializable
 internal data object ConnectionGuideRoute : WorkbenchRoute { override val topLevelIndex = 0 }
 
 @Serializable

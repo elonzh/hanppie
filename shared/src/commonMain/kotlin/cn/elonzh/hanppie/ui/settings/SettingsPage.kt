@@ -38,7 +38,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
 internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifier, onSpeechSettings: (() -> Unit)? = null,
-    onAlbum: (() -> Unit)? = null) {
+    onAlbum: (() -> Unit)? = null, onWifi: (() -> Unit)? = null) {
     val media by model.mediaSettings.collectAsState()
     val control by model.controlSettings.collectAsState()
     val chat by model.chat.state.collectAsState()
@@ -149,7 +149,7 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                                 SettingsCategory.GENERAL -> GeneralSettingsContent(model, onSpeechSettings)
                                 SettingsCategory.MODEL -> ModelSettingsContent(model)
                                 SettingsCategory.MEDIA -> MediaSettingsContent(model)
-                                SettingsCategory.ROBOT -> RobotMaintenanceContent(model, onAlbum)
+                                SettingsCategory.ROBOT -> RobotMaintenanceContent(model, onAlbum, onWifi)
                                 SettingsCategory.CONTROL -> ControlSettingsContent(model)
                                 SettingsCategory.LIGHTS -> LightsSettingsContent(model)
                                 SettingsCategory.SHORTCUTS -> ShortcutsSettingsContent(model, capturing) { capturing = it; shortcutFocus.requestFocus() }
