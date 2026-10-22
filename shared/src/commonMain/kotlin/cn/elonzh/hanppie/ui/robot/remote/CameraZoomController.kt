@@ -2,10 +2,8 @@ package cn.elonzh.hanppie.ui.robot.remote
 
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.media.RobotCameraService
-import cn.elonzh.hanppie.robot.session.RequestProblem
-import cn.elonzh.hanppie.robot.session.RobotRequestException
 import cn.elonzh.hanppie.ui.i18n.UiText
-import cn.elonzh.hanppie.ui.i18n.uiText
+import cn.elonzh.hanppie.ui.robot.device.robotRequestMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -40,13 +38,7 @@ internal class CameraZoomController(private val scope: CoroutineScope) {
                 if (service === current) state.update { it.copy(busy = false) }
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) {
-                if (service === current) state.update { it.copy(busy = false, error = uiText(when ((error as? RobotRequestException)?.problem) {
-                    RequestProblem.TIMED_OUT -> Res.string.robot_settings_timed_out
-                    RequestProblem.REJECTED -> Res.string.robot_settings_rejected
-                    RequestProblem.INVALID_RESPONSE -> Res.string.robot_settings_invalid_response
-                    RequestProblem.NOT_APPLIED -> Res.string.robot_settings_not_applied
-                    else -> Res.string.camera_zoom_failed
-                })) }
+                if (service === current) state.update { it.copy(busy = false, error = robotRequestMessage(error, Res.string.camera_zoom_failed)) }
             }
         }
     }

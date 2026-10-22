@@ -673,4 +673,19 @@
     <string name="camera_zoom_waiting">Waiting for camera</string>
     <string name="camera_zoom_value">Zoom %1$s×</string>
     <string name="camera_zoom_tracking_unavailable">Return to 1× zoom to start tracking</string>
+    <string name="robot_camera_settings">Onboard camera</string>
+    <string name="camera_settings_connect_first">Connect the robot to set anti-flicker and its camera clock.</string>
+    <string name="camera_settings_failed">Camera settings were not confirmed. Check the connection, then refresh.</string>
+    <string name="camera_anti_flicker">Anti-flicker</string>
+    <string name="camera_anti_flicker_auto">Auto</string>
+    <string name="camera_anti_flicker_50">50 Hz</string>
+    <string name="camera_anti_flicker_60">60 Hz</string>
+    <string name="camera_anti_flicker_reading">Checking anti-flicker settings…</string>
+    <string name="camera_date_value">Camera clock: %1$s</string>
+    <string name="camera_date_unset">Not set</string>
+    <string name="camera_date_reading">Checking the camera clock…</string>
+    <string name="camera_time_synced">Camera reports its clock is synchronized</string>
+    <string name="camera_time_unsynced">Camera reports its clock is not synchronized</string>
+    <string name="camera_time_unknown">Waiting for the camera synchronization status</string>
+    <string name="camera_sync_clock">Sync this device’s time</string>
 </resources>

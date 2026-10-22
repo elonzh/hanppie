@@ -4,10 +4,8 @@ import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.media.RobotAudioService
 import cn.elonzh.hanppie.robot.media.RobotAudioSettings
 import cn.elonzh.hanppie.robot.media.SpeakerLanguage
-import cn.elonzh.hanppie.robot.session.RequestProblem
-import cn.elonzh.hanppie.robot.session.RobotRequestException
 import cn.elonzh.hanppie.ui.i18n.UiText
-import cn.elonzh.hanppie.ui.i18n.uiText
+import cn.elonzh.hanppie.ui.robot.device.robotRequestMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -43,13 +41,7 @@ internal class RobotAudioController(private val scope: CoroutineScope) {
                 if (service === current && revision == expectedRevision) state.value = RobotAudioState(settings = settings)
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) {
-                if (service === current && revision == expectedRevision) state.value = RobotAudioState(error = uiText(when ((error as? RobotRequestException)?.problem) {
-                    RequestProblem.TIMED_OUT -> Res.string.robot_settings_timed_out
-                    RequestProblem.REJECTED -> Res.string.robot_settings_rejected
-                    RequestProblem.INVALID_RESPONSE -> Res.string.robot_settings_invalid_response
-                    RequestProblem.NOT_APPLIED -> Res.string.robot_settings_not_applied
-                    else -> Res.string.robot_settings_connection_failed
-                }))
+                if (service === current && revision == expectedRevision) state.value = RobotAudioState(error = robotRequestMessage(error, Res.string.robot_settings_connection_failed))
             }
         }
     }

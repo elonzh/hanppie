@@ -470,11 +470,28 @@ S1 会在 UDP `10607` 数据会话中输出 H.264 视频和 Opus 音频。本机
 
 原生 `RobomasterCameraAbstraction::SetDigitalZoomFactor`（`0x72d630`）构造相机节点 `0x01`、命令 `02:34` 的五字节载荷：`09 00 00` 加 little-endian uint16 倍率，100 表示 1 倍，400 表示 4 倍。现有 Hanppie 遥控初始化的 `0900006400` 与其 1 倍载荷一致。新变焦沿用这条现有发送路径，不替换握手、初始化或退出载荷。**代码**
 
-倍率来自原生相机简化状态 `02:e4`，并非一个已确认的独立 GetZoom 请求。`ObserverPushPack`（`0x72a650`，注册点 `0x72a756`）绑定该命令；`OnCameraSimpleStatusPush`（`0x72a930`）要求 payload 至少 26 字节，在 `0x72b398` 读取偏移 8 的 little-endian uint16，写入 `RMCameraParamDigitalZoomFactor`。Hanppie 当前仅解释该推送中的倍率字段，过滤来源相机节点、目的 App 节点和非响应属性。**代码 / 待实机确认**
+倍率来自原生相机简化状态 `02:e4`，并非一个已确认的独立 GetZoom 请求。`ObserverPushPack`（`0x72a650`，注册点 `0x72a756`）绑定该命令；`OnCameraSimpleStatusPush`（`0x72a930`）要求 payload 至少 26 字节，在 `0x72b398` 读取偏移 8 的 little-endian uint16，写入 `RMCameraParamDigitalZoomFactor`。Hanppie 当前解释该推送中的倍率和下述时钟同步字段，过滤来源相机节点、目的 App 节点和非响应属性。**代码 / 待实机确认**
 
 官方 `ViewSinglePlayer.StateZoom` 在进入/退出时分别请求 400/100，变焦状态关闭跟随入口，跟随状态隐藏变焦入口；`SystemSinglePlayer` 进入和退出单人操控时均恢复 100。官方 `RealController.LerpCameraDigitalZoom` 通过连续设置值实现过渡；Hanppie 当前直接请求端点，不复现这段逐帧插值。**代码**
 
 本轮未连接设备：`02:e4` 实际发送频率、推送属性、倍率接受范围、录像/识别模式限制、返回时延与图像倍率均待实机确认。局部反汇编保留在 `.hanppie/validation/2026-10-22-official-gap/native-Camera-SetDigitalZoomFactor.txt`、`native-Camera-ObserverCameraStatus.txt` 与 `native-Camera-OnCameraSimpleStatusPush.txt`；原生包编码器对请求字段的映射见同目录 `native-EncodeRequest.txt`。不能把模拟状态推送当成相机已变焦的证据。
+
+#### 相机抗闪烁与时钟
+
+固定版本 `RobomasterCameraAbstraction` 提供以下相机节点 `0x01` 的请求。抗闪烁的读取响应在 `retcode` 后按有符号单字节解码；官方枚举 `0` 自动、`1` 60 Hz、`2` 50 Hz，设置页只提供后两种频率。Hanppie UI 按该设置页提供 50/60 Hz，读取到自动或未知值时如实显示，不默认改成某个频率。**代码**
+
+| 操作 | cmdset:id | Payload / 响应字段 | 原生地址 |
+| --- | --- | --- | --- |
+| 读取抗闪烁 | `02:47` | 空请求；响应 `retcode + int8` | GetAntiFlicker `0x72f550`；转换 `0x73815b` |
+| 设置抗闪烁 | `02:46` | 一字节枚举值 | SetAntiFlicker `0x72edd0` |
+| 读取相机日期 | `02:55` | 空请求；响应前缀为 retcode、年内数、世纪、月、日、时、分、秒 | GetCameraDate `0x72fbe0`；转换 `0x738c70` |
+| 设置相机日期 | `02:54` | 9 字节：uint16 年份 LE、月、日、时、分、秒、两个零字节 | SetCameraDate `0x730270`，构造 `0x7302e3..0x730380` |
+
+读取与写入的年份表示不同：读取转换器在 `0x738ce2..0x738ced` 计算 `response[1] + response[2] * 100`，写入在 `0x730307..0x73030b` 放入完整 uint16 年份。例如 2026 年写入年份字节 `ea 07`，读取年份前缀为 `1a 14`。读取至少需要上述 8 字节前缀；其余未解释字节不参与日期构造。全部日历字段为零在当前应用中显示为未设置，真实固件未初始化值仍待验证。**代码 / 待验证**
+
+`02:e4` 的同步状态由原生 `OnCameraSimpleStatusPush` 在 `0x72bdab..0x72bdb1` 读取偏移 5 并测试掩码 `0xc0`；任一位非零即上报已同步。`Module.Setting.System/SystemSetting.OnCameraIsTimeSynced` 仅在设备报告未同步时写入 `DateTime.Now` 的六个本地日期字段，没有时区载荷。Hanppie 因此使用本机本地时间，不把其当作 UTC；状态缺失时也不臆测为未同步。**代码**
+
+本次没有实机证据确认响应长度、年份格式、时钟步进/写入时延、夏令时切换及抗闪烁画面效果。局部反汇编仍放在 `.hanppie/validation/2026-10-22-official-gap/native-Camera-*AntiFlicker.txt`、`*CameraDate.txt` 和 `native-Camera-GetDateReplyValidation.txt`；测试和设备待验项见[实施台账 A03](./official-app-capability-implementation.md#a03-验证入口与设备待验)。
 
 #### 机器人音频配置
 

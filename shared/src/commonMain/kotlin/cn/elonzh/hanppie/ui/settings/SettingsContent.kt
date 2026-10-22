@@ -267,6 +267,7 @@ internal fun MediaSettingsContent(model: ConsoleController) {
         model.mediaSettings.value = media.copy(videoResolution = VideoResolution.valueOf(id))
     }
 
+    CameraSettingsContent(model.cameraSettings, robot.connected, enabled)
     Text(tr(Res.string.speaker_volume), fontSize = 15.sp)
     Card(
         modifier = Modifier.fillMaxWidth().testTag("speaker-volume-card"),

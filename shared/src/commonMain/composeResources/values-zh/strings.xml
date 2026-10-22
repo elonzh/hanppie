@@ -673,4 +673,19 @@
     <string name="camera_zoom_waiting">等待相机状态</string>
     <string name="camera_zoom_value">变焦 %1$s×</string>
     <string name="camera_zoom_tracking_unavailable">恢复 1 倍变焦后可跟随</string>
+    <string name="robot_camera_settings">机器人相机</string>
+    <string name="camera_settings_connect_first">连接机器人后可设置抗闪烁和相机日期</string>
+    <string name="camera_settings_failed">相机设置未确认，请检查连接后刷新</string>
+    <string name="camera_anti_flicker">抗闪烁频率</string>
+    <string name="camera_anti_flicker_auto">自动</string>
+    <string name="camera_anti_flicker_50">50 Hz</string>
+    <string name="camera_anti_flicker_60">60 Hz</string>
+    <string name="camera_anti_flicker_reading">正在确认抗闪烁设置…</string>
+    <string name="camera_date_value">相机日期：%1$s</string>
+    <string name="camera_date_unset">未设置</string>
+    <string name="camera_date_reading">正在确认相机日期…</string>
+    <string name="camera_time_synced">相机报告已同步</string>
+    <string name="camera_time_unsynced">相机报告尚未同步</string>
+    <string name="camera_time_unknown">尚未收到相机同步状态</string>
+    <string name="camera_sync_clock">同步本机时间</string>
 </resources>

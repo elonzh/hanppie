@@ -30,6 +30,10 @@ import kotlin.test.*
 private class CameraFixture : RobotCameraService {
     override val state = MutableStateFlow(CameraState(100))
     var fail = false
+    override suspend fun getAntiFlicker(): Int = error("unused")
+    override suspend fun setAntiFlicker(mode: AntiFlicker): Int = error("unused")
+    override suspend fun getDate(): CameraDate? = error("unused")
+    override suspend fun syncClock(): CameraDate = error("unused")
     override suspend fun setZoom(hundredths: Int) {
         if (fail) throw RobotRequestException(RequestProblem.REJECTED)
         state.value = CameraState(hundredths, state.value.revision + 1)

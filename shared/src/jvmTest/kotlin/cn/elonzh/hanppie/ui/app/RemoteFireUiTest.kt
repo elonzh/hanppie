@@ -57,6 +57,10 @@ class RemoteFireUiTest {
 
         override val camera = object : cn.elonzh.hanppie.robot.media.RobotCameraService {
             override val state = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.media.CameraState(100))
+            override suspend fun getAntiFlicker(): Int = error("unused")
+            override suspend fun setAntiFlicker(mode: cn.elonzh.hanppie.robot.media.AntiFlicker): Int = error("unused")
+            override suspend fun getDate(): cn.elonzh.hanppie.robot.media.CameraDate? = error("unused")
+            override suspend fun syncClock(): cn.elonzh.hanppie.robot.media.CameraDate = error("unused")
             override suspend fun setZoom(hundredths: Int) {}
         }
         override val audio = object : cn.elonzh.hanppie.robot.media.RobotAudioService {
