@@ -49,6 +49,7 @@ internal interface ConsoleController : AutoCloseable {
     val robotAlbum: cn.elonzh.hanppie.ui.robot.album.RobotAlbumController
     val robotWifi: RobotWifiController
     val robotSdr: cn.elonzh.hanppie.ui.robot.network.RobotSdrController
+    val robotHealth: cn.elonzh.hanppie.ui.robot.device.RobotHealthController
     val chat: ChatAgent
     val foregroundState: MutableStateFlow<Boolean>
     val tracking: StateFlow<TrackingState>

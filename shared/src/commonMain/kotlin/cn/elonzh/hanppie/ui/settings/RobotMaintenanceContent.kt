@@ -43,6 +43,7 @@ internal fun RobotMaintenanceContent(model: ConsoleController, onAlbum: (() -> U
             }
         }
     }
+    cn.elonzh.hanppie.ui.robot.device.RobotHealthContent(model)
     Text(tr(Res.string.camera_storage), fontSize = 15.sp)
     Card(Modifier.fillMaxWidth().testTag("camera-storage"),
         colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer)) {

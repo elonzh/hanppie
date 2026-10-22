@@ -93,7 +93,7 @@ object Telemetry {
         fun float(offset: Int): Float = Float.fromBits(
             payload.u8(offset) or (payload.u8(offset + 1) shl 8) or
                 (payload.u8(offset + 2) shl 16) or (payload.u8(offset + 3) shl 24))
-        return MotionTelemetry(payload.u8(10).takeIf { it <= 100 }, float(12),
+        return MotionTelemetry(decodeBattery(payload, 2).percent, float(12),
             (26..58 step 4).map(::float))
     }
 

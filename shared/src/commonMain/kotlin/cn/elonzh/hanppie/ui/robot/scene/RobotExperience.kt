@@ -28,6 +28,7 @@ internal fun RobotExperience(
     onPushToTalkStart: (() -> Unit)? = null, onPushToTalkStop: (() -> Unit)? = null,
     video: @Composable (RemoteMediaController) -> Unit = { RobotVideo(model, it, Modifier.fillMaxSize()) },
     onAlbum: (() -> Unit)? = null,
+    onHealth: (() -> Unit)? = null,
 ) {
     var requested by remember { mutableStateOf(false) }
     var active by remember { mutableStateOf(false) }
@@ -111,7 +112,7 @@ internal fun RobotExperience(
                 RemotePage(model, onBack = exit, onPushToTalkStart = onPushToTalkStart,
                     onPushToTalkStop = onPushToTalkStop, mediaControls = media, videoContent = {},
                     inputEnabled = interactive && foreground && currentReady, manageSession = false,
-                    onAlbum = onAlbum,
+                    onAlbum = onAlbum, onHealth = onHealth,
                     navigationEnabled = interactive && foreground)
             }
         }
@@ -119,7 +120,7 @@ internal fun RobotExperience(
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = (1f - travel.value * 3f).coerceIn(0f, 1f) }) {
                 DevicePage(model, state, compact, Modifier.fillMaxSize(),
                     { if (!active && state.connected) requested = true }, onConnectionDetails, showScene = false, preparing = requested && !interactive,
-                    onNavigate = onNavigate)
+                    onNavigate = onNavigate, onHealth = onHealth)
             }
         }
         if (active && (!interactive || !foreground)) {

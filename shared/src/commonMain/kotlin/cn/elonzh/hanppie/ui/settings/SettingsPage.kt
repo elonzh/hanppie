@@ -38,7 +38,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
 internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifier, onSpeechSettings: (() -> Unit)? = null,
-    onAlbum: (() -> Unit)? = null, onWifi: (() -> Unit)? = null) {
+    onAlbum: (() -> Unit)? = null, onWifi: (() -> Unit)? = null, showRobotMaintenance: Boolean = false) {
     val media by model.mediaSettings.collectAsState()
     val control by model.controlSettings.collectAsState()
     val chat by model.chat.state.collectAsState()
@@ -46,7 +46,8 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
     val settingsMessage by model.settingsMessage.collectAsState()
     val appearance = LocalAppearance.current
     var capturing by remember { mutableStateOf<ControlAction?>(null) }
-    var selectedCategory by rememberSaveable { mutableStateOf<SettingsCategory?>(null) }
+    var selectedCategory by rememberSaveable(showRobotMaintenance) { mutableStateOf<SettingsCategory?>(if (showRobotMaintenance) SettingsCategory.ROBOT else null) }
+    LaunchedEffect(showRobotMaintenance) { if (showRobotMaintenance) selectedCategory = SettingsCategory.ROBOT }
     var confirmDefaults by remember { mutableStateOf(false) }
     val shortcutFocus = remember { FocusRequester() }
     val buildInfo = remember { cn.elonzh.hanppie.ui.app.getPlatformBuildInfo() }

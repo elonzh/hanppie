@@ -112,11 +112,17 @@ internal fun Console(
         focus.clearFocus(); keyboard?.hide()
         if (backStack.lastOrNull() != RobotWifiRoute) backStack.add(RobotWifiRoute)
     }
+    var showRobotMaintenance by rememberSaveable { mutableStateOf(false) }
     fun navigate(index: Int) {
+        showRobotMaintenance = false
         focus.clearFocus()
         keyboard?.hide()
         while (backStack.size > 1) backStack.removeLastOrNull()
         backStack[0] = workbenchRoute(index)
+    }
+    fun openHealth() {
+        model.haltRemote()
+        navigate(4); showRobotMaintenance = true
     }
     var chatScriptError by remember { mutableStateOf<String?>(null) }
     var pendingChatScript by remember { mutableStateOf<String?>(null) }
@@ -295,7 +301,8 @@ internal fun Console(
                                                 if (document.value.busy) return@ChatPage
                                                 if (document.value.dirty) pendingChatScript = scriptId else openChatScript(scriptId)
                                             }, onSettings = { navigate(4) })
-                                        SettingsRoute -> SettingsPage(model, Modifier.weight(1f), onSpeechSettings, onAlbum = ::openAlbum, onWifi = ::openWifi)
+                                        SettingsRoute -> SettingsPage(model, Modifier.weight(1f), onSpeechSettings, onAlbum = ::openAlbum, onWifi = ::openWifi,
+                                            showRobotMaintenance = showRobotMaintenance)
                                         RobotWifiRoute -> cn.elonzh.hanppie.ui.robot.network.RobotWifiPage(model, Modifier.weight(1f),
                                             ::goBack, onOpenWifiSettings)
                                         RobotAlbumRoute -> cn.elonzh.hanppie.ui.robot.album.RobotAlbumPage(model, Modifier.weight(1f),
@@ -303,7 +310,7 @@ internal fun Console(
                                         RobotRoute -> cn.elonzh.hanppie.ui.robot.scene.RobotExperience(
                                             model, state, compact, Modifier.weight(1f),
                                             { connectionDetails = true }, ::navigate, onCockpitChanged,
-                                            onPushToTalkStart, onPushToTalkStop, onAlbum = ::openAlbum)
+                                            onPushToTalkStart, onPushToTalkStop, onAlbum = ::openAlbum, onHealth = ::openHealth)
                                         ScriptRoute -> ScriptPage(model, document, compact, onImport, onExport,
                                             fileError, onFileError, onConnectionDetails = { connectionDetails = true },
                                             onImportAudio = onImportAudio,

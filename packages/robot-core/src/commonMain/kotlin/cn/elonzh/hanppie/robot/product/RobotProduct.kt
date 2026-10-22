@@ -52,7 +52,7 @@ enum class RobotComponent(val deviceId: Int) {
     }
 }
 
-/** One advertised device and its opaque vendor-defined 16-bit detail values. */
+/** One advertised device and its native 16-bit exception words; raw values remain available. */
 data class WorkingRobotDevice(val deviceId: Int, val details: List<Int>) {
     val component: RobotComponent? get() = RobotComponent.fromDeviceId(deviceId)
 }

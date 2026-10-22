@@ -413,7 +413,7 @@ RoboMaster App 提供手机和 macOS 客户端，Lab 是该应用中的程序功
 
 AppID 是 RoboMaster App 日志中十进制标识按 8 字节小端序解释得到的 ASCII 值；设备实际值属于本地标识，不写入公开仓库。session、tick 以及 direct/control 序列属于每次 UDP `10607` 连接的动态状态，不能固定重放一次抓包的头部。**代码/实测**
 
-RoboMaster macOS `1.1.5`（build `239`）没有从 24 字节身份广播中读取型号。未连接时的 S1/EP 选择器写入最近选择，仅服务于连接前界面；连接后选择器禁用，`RoboMasterProductManager::fetchProductInfo()` 发送 `cmdset=0x3F`、`cmdid=0xFE`、payload `00` 的产品信息查询。Hanppie 已有 App 会话抓包中的对应请求路由为 sender `0x02` → receiver `0x28`、attr `0x40`；原厂回调从响应 payload 的第 2 个字节读取产品码，`DJIProductType` 定义 `1` 为 `RoboMaster_S1`、`2` 为 `RoboMaster_S1_EDU`，后者在原厂产品界面显示为 EP。S1 实机返回 attr `0xC0`、payload `00 01`，与 S1 产品码吻合。原厂另监听内部 full-command 键 `0x403F0012` 的系统 working-devices push；该键不能直接当作 DUSS attr，S1 实机线上的帧为 attr `0x00`、`0x3F/0x12`。payload 第 1 字节是设备数，随后每项由 16 位设备 ID、附加值数量和对应数量的 16 位原始值组成；原厂组件列表逻辑只用数量跨过这些字节，当前证据不足以命名其具体语义。本次 S1 报告 16 个 working devices，覆盖图传、相机、底盘、电池、4 个 ESC、云台、水弹发射器和 6 块装甲；原厂枚举还包含舵机、机械臂、机械爪、TOF、传感器转接模块和红外发射器。产品型号与在线组件分别发布为 `DJIProductType` 和 `DJIRobomasterSystemWorkingDevices`，因此型号不是组件能力表。**客户端静态分析/S1 实机**
+RoboMaster macOS `1.1.5`（build `239`）没有从 24 字节身份广播中读取型号。未连接时的 S1/EP 选择器写入最近选择，仅服务于连接前界面；连接后选择器禁用，`RoboMasterProductManager::fetchProductInfo()` 发送 `cmdset=0x3F`、`cmdid=0xFE`、payload `00` 的产品信息查询。Hanppie 已有 App 会话抓包中的对应请求路由为 sender `0x02` → receiver `0x28`、attr `0x40`；原厂回调从响应 payload 的第 2 个字节读取产品码，`DJIProductType` 定义 `1` 为 `RoboMaster_S1`、`2` 为 `RoboMaster_S1_EDU`，后者在原厂产品界面显示为 EP。S1 实机返回 attr `0xC0`、payload `00 01`，与 S1 产品码吻合。原厂另监听内部 full-command 键 `0x403F0012` 的系统 working-devices push；该键不能直接当作 DUSS attr，S1 实机线上的帧为 attr `0x00`、`0x3F/0x12`。payload 第 1 字节是设备数，随后每项由 16 位设备 ID、附加值数量和对应数量的 16 位原始值组成；原厂组件列表逻辑只用数量跨过这些字节；完整原生回调进一步确认它们为异常字，解释见[模块健康与电池报告](#模块健康与电池报告)。本次 S1 报告 16 个 working devices，覆盖图传、相机、底盘、电池、4 个 ESC、云台、水弹发射器和 6 块装甲；原厂枚举还包含舵机、机械臂、机械爪、TOF、传感器转接模块和红外发射器。产品型号与在线组件分别发布为 `DJIProductType` 和 `DJIRobomasterSystemWorkingDevices`，因此型号不是组件能力表。**客户端静态分析/S1 实机**
 
 #### 5.3.1 DSP 程序容器
 
@@ -521,6 +521,31 @@ SDK `EscSubject` 的 `<hhhhhhhhIIIIBBBB`：四项有符号 RPM、四项编码器
 **内部调试控制路径：** `ViewChassis.sendSpeedAndFollow` 用两个不同 key 选择速度和跟随处理。`DJIRobomasterChassisControlProcessor::OnTimerTicked` 的速度分支构造 `3f:21` 的三个 float、共 12 字节载荷，与当前 Kotlin 底盘速度路径相互印证；跟随分支构造 `3f:22` 的 `(x,y,0)` float 载荷，并调用 `SendGimbalYaw`。这只证明该客户端存在上述发送路径，未确认其在当前 S1 固件上的完整模式前置条件、参考系和失联行为。Hanppie 没有启用这个原生跟随分支。**代码**
 
 可复现的输入指纹、反汇编地址和本次验证记录见 [macOS App 静态分析记录](s1-app-static-analysis-2026-09-08.md)。本地提取对象索引位于 `.hanppie/app-analysis/2026-09-08/report.md`；原始分析材料仍保留在该目录，首页使用的转换模型及来源说明见 [展示素材](../assets/robot-scene/README.md)。
+
+#### 模块健康与电池报告
+
+固定 macOS 1.1.5/build 239 的 `RobomasterSystemAbstraction::OnDeviceStatusPush`（`0x694f10`）同时生成 WorkingDevices 和 Exceptions，而不是两个独立报文。现有 `3f:12` 布局仍为数量 + 各组 `(uint16LE deviceId, uint8 count, count 个 uint16LE 状态字)`；原生在 `0x695159` 左移 deviceId 16 位，`0x6951a1/0x6951a6` 逐项读取状态字并按位合并，发布完整 32 位异常码。此前组件清单仅跳过的附加字节因此可命名为异常字；解析继续复用 `RobotProductProtocol`，保留原始值和未知模块。**原生/当前代码**
+
+`COMMON/MessageEntity.cs` 是实际设置页和消息中心使用的解释路径：高 16 位为上报模块，低 16 位中 bit14–15 为级别（0 信息、1 提示、2 警告、3 错误），bit8–13 为子设备，低 8 位为消息号。`ViewSettingDevice.ProcessMessagelist` 将底盘异常的子设备 2 关联电池、5 关联云台、11–14 关联四轮电机；这不改变上报模块 ID。**客户端代码**
+
+`StreamingAssets/Language.csv` 含 106 个唯一 `exception_0x...` 身份；`MessageTable` 另定义底盘传感器、四轮电机和电池的 11 组消息区间。Hanppie 对这些身份和区间使用自有中英文解释，覆盖温度、过流、通信/传感器/电机异常、云台受阻、射速/热保护、装甲、激活只读提示及网络事件，未知值保留十六进制码，不拼凑故障含义。原生消息中心/设置页有若干黑名单和型号分支；Hanppie 保留所有原始记录，以严重度和可展开信息层呈现，不复制其云端统计或固定型号过滤。**客户端/当前代码**
+
+电池原生 `StartListening`（`0x712b10`）使用 UID `0x000200096862229f`（`0x712b6d`）。回调 `0x7144b0` 验证该 UID，随后分别读取 body 的 uint16@0 电压原始值（`0x714531`）、int16@2 温度（`0x714719`）、int32@4 电流（`0x714628`）和 uint8@8 电量（`0x71481e`）；没有在这些转换中缩放单位。仓库恢复 SDK 的 `BatterySubject.decode` 同样使用 `<HhiBB`，末字节的语义不用于本功能。**原生/恢复 SDK 代码**
+
+现有连接初始化已将该 UID 放在 5 UID、消息 ID=1、1 Hz 组合订阅的第一项，本轮没有新增订阅或修改初始化报文；当前组合 `48:08` 载荷长度为 62：
+
+| 载荷偏移 | 类型 | 当前解释 |
+| --- | --- | --- |
+| 0 / 1 | uint8 / uint8 | 周期模式 0 / 消息 ID 1 |
+| 2 | uint16LE | 电压原始值，物理单位待验 |
+| 4 | int16LE | 温度原始值，比例/物理单位待验 |
+| 6 | int32LE | 电流原始值，比例/符号方向待验 |
+| 10 | uint8 | 电量百分比；范围外为未知 |
+| 11 | uint8 | 未用于当前电池展示，不推断充电状态 |
+
+健康解析检查 CRC、目的/属性、模块源节点 `0x28` 或组合遥测源节点 `0x09`，以及组合模式/ID/精确长度；畸形模块组不会部分发布。模块报告没有已确认周期，客户端保留最后一份并显示年龄；电池按当前 1 Hz 流在 3 秒无更新后失效。二者均只在当前连接内有效。异常解释与实时状态变化、真实来源/属性、报告频率及电池量纲仍待设备验证；合成向量和 UDP 回环不能证明物理故障或恢复。**当前代码 / 待实机验证**
+
+机械臂专用 `DJIRobomasterArmBlockedFlag`/位置/限位属于另一个 UID `0x0002000926abd64d`，当前未接入；已恢复的启停入口留作 E01 的统一订阅依据，不用未知首字节猜测阻塞位。原生片段保留为忽略目录 `.hanppie/validation/2026-10-22-official-gap/H01-native-*`，离线结果与各待验状态见[实施台账 H01](./official-app-capability-implementation.md#h01-验证入口与设备待验)。
 
 #### 对象追踪跟随
 

@@ -34,7 +34,7 @@ import top.yukonga.miuix.kmp.basic.Text
 internal fun DevicePage(model: ConsoleController, state: ConsoleState, compact: Boolean, modifier: Modifier,
     onRemote: () -> Unit, onConnectionDetails: () -> Unit = {},
     showScene: Boolean = true, preparing: Boolean = false,
-    onNavigate: (Int) -> Unit = {}) {
+    onNavigate: (Int) -> Unit = {}, onHealth: (() -> Unit)? = null) {
     val preferences by model.connectionPreferences.collectAsState()
     val connectionMode = preferences.robots.firstOrNull { it.ip == state.connectedAddress }?.mode ?: cn.elonzh.hanppie.ui.settings.ConnectionMode.UNKNOWN
     var now by remember { mutableLongStateOf(Clock.System.now().toEpochMilliseconds()) }
@@ -55,6 +55,7 @@ internal fun DevicePage(model: ConsoleController, state: ConsoleState, compact: 
             }
             Spacer(Modifier.weight(1f))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (state.connected && onHealth != null) RobotHealthAlertButton(model, onHealth)
                 ConnectionStatusChip(state, Color.White.copy(alpha = .78f), sceneStyle = true, connectionMode = connectionMode, onClick = onConnectionDetails)
                 HomeLink(tr(Res.string.settings), WorkbenchGlyph.SETTINGS, Modifier.testTag("navigate-4"), iconOnly = true) { onNavigate(4) }
             }

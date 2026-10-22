@@ -125,6 +125,7 @@ internal fun RemotePage(
     navigationEnabled: Boolean = inputEnabled,
     manageSession: Boolean = true,
     onAlbum: (() -> Unit)? = null,
+    onHealth: (() -> Unit)? = null,
 ) {
     RemoteOrientation(onBack)
     var keyboardHints by remember { mutableStateOf(false) }
@@ -132,6 +133,7 @@ internal fun RemotePage(
     val connected by model.state.collectAsState()
     val remoteEnabled by model.remoteEnabled.collectAsState()
     val tracking by model.tracking.collectAsState()
+    val health by model.robotHealth.state.collectAsState()
     val zoom by model.cameraZoom.state.collectAsState()
     val manualActionsEnabled = !tracking.blocksManualControl
     val videoFrame = model.videoFrames.image(connected.connectedAddress)
@@ -286,8 +288,11 @@ internal fun RemotePage(
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             onBack?.let { back -> HudIconButton(tr(Res.string.back_to_console), WorkbenchGlyph.BACK, enabled = navigationEnabled && foreground, action = back) }
             if (connected.canStop) HudIconButton(tr(Res.string.stop_script), WorkbenchGlyph.STOP, enabled = inputEnabled && foreground, action = model::stop)
+            if (connected.connected && onHealth != null && navigationEnabled && foreground)
+                cn.elonzh.hanppie.ui.robot.device.RobotHealthAlertButton(model, onHealth)
         }
-        val leftHudWidth = (if (onBack != null) 48 else 0) + (if (connected.canStop) 56 else 0)
+        val leftHudWidth = (if (onBack != null) 48 else 0) + (if (connected.canStop) 56 else 0) +
+            (if (connected.connected && onHealth != null && navigationEnabled && foreground && health.issues.any { it.severity >= 2 }) 80 else 0)
         val mediaHudWidth = 216
         val hudOffset = if (compactHud) ((leftHudWidth - mediaHudWidth) / 2).dp else 0.dp
         Card(Modifier.align(Alignment.TopCenter).offset(x = hudOffset)

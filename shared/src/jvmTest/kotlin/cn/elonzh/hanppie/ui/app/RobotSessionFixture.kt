@@ -10,6 +10,7 @@ import kotlinx.io.Source
 import java.util.concurrent.atomic.AtomicInteger
 
 internal class RobotSessionFixture : RobotSession {
+    override val health = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.telemetry.RobotHealth())
     @Volatile var closed = false
     override val album = object : cn.elonzh.hanppie.robot.media.album.RobotAlbumService {
         override val busy = kotlinx.coroutines.flow.MutableStateFlow(false)
