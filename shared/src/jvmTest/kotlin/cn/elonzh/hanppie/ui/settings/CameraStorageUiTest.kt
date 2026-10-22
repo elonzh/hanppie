@@ -28,6 +28,8 @@ private class StorageFixture : RobotCameraService {
     override val state = MutableStateFlow(CameraState(100, timeSynced = true, storage = card))
     var formats = 0
     var formatError: RequestProblem? = null
+    override suspend fun takePhoto() { error("unused") }
+    override suspend fun setRecording(active: Boolean) { error("unused") }
     override suspend fun formatStorage() {
         formats++
         formatError?.let { throw RobotRequestException(it) }
@@ -47,7 +49,7 @@ class CameraStorageUiTest {
         val model = testConsoleModel()
         val camera = StorageFixture()
         model.state.value = model.state.value.copy(connected = true)
-        model.cameraSettings.attach(camera)
+        model.robotCamera.attach(camera)
         try {
             rule.setContent { TestWorkbenchTheme { SettingsPage(model) } }
             rule.onNodeWithTag("settings-category-robot").performScrollTo().performClick()
@@ -69,7 +71,7 @@ class CameraStorageUiTest {
             waitForStatus("未插入存储卡")
             rule.onNodeWithTag("camera-storage-space").assertDoesNotExist()
             rule.onNodeWithTag("camera-storage-status").assertTextEquals("未插入存储卡")
-            rule.runOnIdle { model.cameraSettings.clear(); model.state.value = model.state.value.copy(connected = false) }
+            rule.runOnIdle { model.robotCamera.clear(); model.state.value = model.state.value.copy(connected = false) }
             waitForStatus("连接机器人后可查看存储卡并格式化")
             rule.onNodeWithTag("camera-storage-format").assertDoesNotExist()
             rule.onNodeWithTag("camera-storage-format-result").assertDoesNotExist()
@@ -81,7 +83,7 @@ class CameraStorageUiTest {
         val model = testConsoleModel()
         val camera = StorageFixture()
         model.state.value = model.state.value.copy(connected = true)
-        model.cameraSettings.attach(camera)
+        model.robotCamera.attach(camera)
         try {
             rule.setContent { TestWorkbenchTheme { SettingsPage(model) } }
             rule.onNodeWithTag("settings-category-robot").performScrollTo().performClick()
@@ -97,7 +99,7 @@ class CameraStorageUiTest {
             rule.runOnIdle { camera.state.value = camera.state.value.copy(storage = camera.card) }
             waitForStatus("存储卡可用")
             rule.onNodeWithTag("camera-storage-format").performClick()
-            rule.runOnIdle { model.cameraSettings.attach(camera) }
+            rule.runOnIdle { model.robotCamera.attach(camera) }
             waitForConfirmationToClose()
             rule.runOnIdle { assertEquals(0, camera.formats); camera.formatError = RequestProblem.TIMED_OUT }
             rule.onNodeWithTag("camera-storage-format").performClick()
@@ -139,7 +141,7 @@ class CameraStorageLayoutTest {
             Localization.initialize(language, null)
             val model = testConsoleModel()
             model.state.value = model.state.value.copy(connected = true)
-            model.cameraSettings.attach(StorageFixture())
+            model.robotCamera.attach(StorageFixture())
             try {
                 setContent { TestWorkbenchTheme {
                     CompositionLocalProvider(LocalDensity provides Density(1f, fontScale)) {

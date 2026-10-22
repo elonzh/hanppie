@@ -512,6 +512,21 @@ S1 会在 UDP `10607` 数据会话中输出 H.264 视频和 Opus 音频。本机
 
 上述内容来自固定版本静态分析，本轮没有 SD 卡实机证据。局部反汇编在 `.hanppie/validation/2026-10-22-official-gap/native-Camera-OnCameraSimpleStatusPush.txt`、`native-Camera-ActionFormatSDCard.txt` 和 `native-Camera-GetIsSDCardError.txt`。真实状态码、容量量纲、格式化应答与推送顺序、失败恢复和文件删除结果见[实施台账 A04 待验](./official-app-capability-implementation.md#a04-验证入口与设备待验)。
 
+#### 机器人 SD 拍照与录像
+
+官方 `Base.CONTROL.RealController.TakePhoto` 先读取缓存的 `DJICameraMode`，必要时切到模式 0，再调用本地相册控制器的 `StartTakePhoto`；该名称不代表只截取终端图像：原生 `DJIRobomasterAlbumEventHandler::StartTakePhoto`（`0x3f540`，构造在 `0x3f560..0x3f61b`）实际发出相机 `02:01 / 01`。录像先启动终端 `GetLocalAlbumController().StartRecording()`，再切换到模式 1 并发送原生开始录像；停止调用原生停止录像并在回调中结束本地相册录制。因此官方拍录入口存在机内和终端相册两条路径，不能将方法名或 App 动画当作文件落盘证据。**代码**
+
+| 操作 | 相机节点 `0x01` 的请求 | 原生构造依据 |
+| --- | --- | --- |
+| 设置工作模式 | `02:10`，一字节：0 拍照 / 1 录像 | SetWorkMode `0x72ceb0`；命令与长度 `0x72cf76..0x72cf95`；模式值来自上述 C# 调用 |
+| 拍照 | `02:01`，`01` | ActionStartTakePhoto `0x731690`；载荷 `0x7316b9`，命令/长度 `0x731707..0x731726` |
+| 开始录像 | `02:02`，`01` | ActionStartRecordVideo `0x731bd0`；载荷 `0x731bf9`，命令 `0x731c8e` |
+| 停止录像 | `02:02`，`00` | ActionStopRecordVideo `0x732110`；载荷 `0x732139`，命令 `0x73218e` |
+
+工作模式来自同一条 `02:e4` 状态：`OnCameraSimpleStatusPush` 在 `0x72a9b1..0x72a9b5` 读取 uint16 @ 5 的低两位，发布为 `RMCameraParamMode`；没有据此臆造一个独立 GetMode 线协议。拍照/录像占用与录像时长沿用上节的状态字段。**代码**
+
+静态证据保留于 `.hanppie/validation/2026-10-22-official-gap/native-Camera-SetWorkMode.txt`、`native-Camera-ActionStartTakePhoto.txt`、`native-Camera-ActionStartRecordVideo.txt`、`native-Camera-ActionStopRecordVideo.txt` 和 `native-Album-StartCapture.txt`。没有实机确认模式切换的时延、对推流/变焦/跟随的影响、实际照片和视频文件、停止后的文件收尾或多客户端行为；设备清单见[实施台账 A05](./official-app-capability-implementation.md#a05-验证入口与设备待验)。
+
 #### 机器人音频配置
 
 固定版本 `RobomasterSystemAbstraction` 的原生请求构造函数给出以下配置通道。查询请求无 payload，写入为一字节；成功读取响应为 `retcode + uint8 value`。音量有效范围为 0–100；旧实机音量读写闭环见后文[血量、对局与命中受理](#血量对局与命中受理2026-09-19-实机)。**代码 / 历史实测**

@@ -713,4 +713,15 @@
     <string name="camera_storage_state_changed">Storage card status changed. The format request was not sent.</string>
     <string name="camera_storage_format_rejected">The robot rejected the format request. Check the storage card status.</string>
     <string name="camera_storage_format_uncertain">The format request outcome is unknown. Check the storage card status first.</string>
+    <string name="camera_capture_entry">SD capture</string>
+    <string name="camera_capture_title">Onboard SD capture</string>
+    <string name="camera_capture_destination">Photos and videos are saved on the robot’s SD card.</string>
+    <string name="camera_capture_pending">Confirming capture request…</string>
+    <string name="camera_capture_photo_ack">Photo request acknowledged</string>
+    <string name="camera_capture_recording_started">Onboard recording confirmed</string>
+    <string name="camera_capture_recording_stopped">Onboard recording stopped</string>
+    <string name="camera_capture_recording_badge">SD · %1$d s</string>
+    <string name="camera_capture_unavailable">Storage is unavailable or busy. No capture request was sent.</string>
+    <string name="camera_capture_rejected">The robot rejected the capture request. Check storage card status.</string>
+    <string name="camera_capture_uncertain">Capture outcome is unknown. Check the current status and stop recording if needed.</string>
 </resources>

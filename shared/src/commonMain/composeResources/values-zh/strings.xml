@@ -713,4 +713,15 @@
     <string name="camera_storage_state_changed">存储卡状态已变化，未发送格式化请求。</string>
     <string name="camera_storage_format_rejected">机器人拒绝了格式化请求，请检查存储卡状态。</string>
     <string name="camera_storage_format_uncertain">未确认格式化请求的结果，请先检查存储卡状态。</string>
+    <string name="camera_capture_entry">SD 卡拍录</string>
+    <string name="camera_capture_title">机器人 SD 卡拍录</string>
+    <string name="camera_capture_destination">照片和视频保存在机器人 SD 卡。</string>
+    <string name="camera_capture_pending">正在确认拍录请求…</string>
+    <string name="camera_capture_photo_ack">拍照请求已确认</string>
+    <string name="camera_capture_recording_started">已确认机器人开始录像</string>
+    <string name="camera_capture_recording_stopped">已确认机器人停止录像</string>
+    <string name="camera_capture_recording_badge">SD · %1$d 秒</string>
+    <string name="camera_capture_unavailable">存储卡不可用或正忙，未发送拍录请求。</string>
+    <string name="camera_capture_rejected">机器人拒绝了拍录请求，请检查存储卡状态。</string>
+    <string name="camera_capture_uncertain">拍录结果未确认，请检查当前状态；需要时停止录像。</string>
 </resources>

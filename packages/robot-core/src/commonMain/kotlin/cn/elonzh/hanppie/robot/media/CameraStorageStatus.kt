@@ -19,6 +19,7 @@ data class CameraStorageStatus(
     val full: Boolean get() = stateCode == 8
     val hasError: Boolean get() = when (stateCode) { 2, 3, 4, 6, 10, 11 -> true; else -> false }
     val canFormat: Boolean get() = inserted && !formatting && !recording && !shooting
+    val canCapture: Boolean get() = canFormat && !full && !hasError
 
     companion object {
         internal fun decode(p: ByteArray): CameraStorageStatus {

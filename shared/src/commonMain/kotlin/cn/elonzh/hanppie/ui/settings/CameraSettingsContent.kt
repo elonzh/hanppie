@@ -10,13 +10,13 @@ import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.media.AntiFlicker
 import cn.elonzh.hanppie.robot.media.CameraDate
 import cn.elonzh.hanppie.ui.i18n.tr
-import cn.elonzh.hanppie.ui.robot.camera.CameraSetting
-import cn.elonzh.hanppie.ui.robot.camera.CameraSettingsController
+import cn.elonzh.hanppie.ui.robot.camera.CameraRequest
+import cn.elonzh.hanppie.ui.robot.camera.RobotCameraController
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-internal fun CameraSettingsContent(controller: CameraSettingsController, connected: Boolean, enabled: Boolean) {
+internal fun CameraSettingsContent(controller: RobotCameraController, connected: Boolean, enabled: Boolean) {
     val state by controller.state.collectAsState()
     LaunchedEffect(controller, connected) { if (connected) controller.refresh() }
     Text(tr(Res.string.robot_camera_settings), fontSize = 15.sp)
@@ -26,7 +26,7 @@ internal fun CameraSettingsContent(controller: CameraSettingsController, connect
             if (!connected) Text(tr(Res.string.camera_settings_connect_first), fontSize = 14.sp)
             else {
                 when (val setting = state.antiFlicker) {
-                    is CameraSetting.Value -> SettingsDropdown(tr(Res.string.camera_anti_flicker), "camera-anti-flicker",
+                    is CameraRequest.Value -> SettingsDropdown(tr(Res.string.camera_anti_flicker), "camera-anti-flicker",
                         when (val mode = AntiFlicker.fromWire(setting.value)) {
                             AntiFlicker.AUTO -> tr(Res.string.camera_anti_flicker_auto)
                             null -> tr(Res.string.unknown)
@@ -34,15 +34,15 @@ internal fun CameraSettingsContent(controller: CameraSettingsController, connect
                         }, listOf(AntiFlicker.HZ_50.name to tr(Res.string.camera_anti_flicker_50),
                             AntiFlicker.HZ_60.name to tr(Res.string.camera_anti_flicker_60)),
                         enabled = enabled) { controller.setAntiFlicker(AntiFlicker.valueOf(it)) }
-                    is CameraSetting.Failed -> Text(setting.message.resolve(), Modifier.testTag("camera-anti-error"),
+                    is CameraRequest.Failed -> Text(setting.message.resolve(), Modifier.testTag("camera-anti-error"),
                         fontSize = 14.sp, color = MiuixTheme.colorScheme.error)
                     else -> Text(tr(Res.string.camera_anti_flicker_reading), Modifier.testTag("camera-anti-busy"), fontSize = 14.sp)
                 }
                 when (val setting = state.date) {
-                    is CameraSetting.Value -> Text(tr(Res.string.camera_date_value,
+                    is CameraRequest.Value -> Text(tr(Res.string.camera_date_value,
                         setting.value?.display() ?: tr(Res.string.camera_date_unset)),
                         Modifier.testTag("camera-date-value"), fontSize = 14.sp)
-                    is CameraSetting.Failed -> Text(setting.message.resolve(), Modifier.testTag("camera-date-error"),
+                    is CameraRequest.Failed -> Text(setting.message.resolve(), Modifier.testTag("camera-date-error"),
                         fontSize = 14.sp, color = MiuixTheme.colorScheme.error)
                     else -> Text(tr(Res.string.camera_date_reading), Modifier.testTag("camera-date-busy"), fontSize = 14.sp)
                 }
@@ -52,10 +52,10 @@ internal fun CameraSettingsContent(controller: CameraSettingsController, connect
                     null -> Res.string.camera_time_unknown
                 }), Modifier.testTag("camera-time-status"), fontSize = 13.sp,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                Button(controller::syncClock, enabled = enabled && state.date != CameraSetting.Loading,
+                Button(controller::syncClock, enabled = enabled && state.date != CameraRequest.Loading,
                     modifier = Modifier.heightIn(min = 48.dp).testTag("camera-sync-clock")) { Text(tr(Res.string.camera_sync_clock)) }
                 Button(controller::refresh,
-                    enabled = enabled && state.date != CameraSetting.Loading && state.antiFlicker != CameraSetting.Loading,
+                    enabled = enabled && state.date != CameraRequest.Loading && state.antiFlicker != CameraRequest.Loading,
                     modifier = Modifier.heightIn(min = 48.dp).testTag("camera-settings-refresh")) { Text(tr(Res.string.refresh)) }
             }
         }

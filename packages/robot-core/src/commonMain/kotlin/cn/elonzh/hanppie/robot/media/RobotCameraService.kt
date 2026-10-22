@@ -16,7 +16,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Mutex
 
 data class CameraState(val zoomHundredths: Int? = null, val revision: Long = 0, val timeSynced: Boolean? = null,
-    val storage: CameraStorageStatus? = null)
+    val storage: CameraStorageStatus? = null, val workMode: Int? = null)
 
 interface RobotCameraService {
     val state: StateFlow<CameraState>
@@ -27,6 +27,10 @@ interface RobotCameraService {
     suspend fun syncClock(): CameraDate
     /** Returns after the command reply, not after physical media erasure has been independently verified. */
     suspend fun formatStorage()
+    /** Acknowledged photo request and a new status; does not verify a saved file. */
+    suspend fun takePhoto()
+    /** Waits for the command reply and a new matching recording status. */
+    suspend fun setRecording(active: Boolean)
 }
 
 /** Native camera status and configuration requests, owned by the App connection. */
@@ -47,7 +51,7 @@ internal class CameraCommands(
         val zoom = frame.payload.u16(8)
         lastReceived = nowMillis()
         mutableState.value = CameraState(zoom.takeIf { it in 100..400 }, state.value.revision + 1,
-            frame.payload.u16(5) and 0xc0 != 0, CameraStorageStatus.decode(frame.payload))
+            frame.payload.u16(5) and 0xc0 != 0, CameraStorageStatus.decode(frame.payload), frame.payload.u16(5) and 3)
     }
 
     fun expire() {
@@ -63,10 +67,14 @@ internal class CameraCommands(
         val before = state.value.revision
         val payload = byteArrayOf(9, 0, 0, 0, 0).apply { put16(3, hundredths) }
         request(Protocol.HOST_CAMERA, Protocol.CMDSET_CAMERA, Protocol.CMD_SET_ZOOM_PARAM, payload)
+        awaitStatus(before) { it.zoomHundredths == hundredths }
+    }
+
+    private suspend fun awaitStatus(after: Long, matches: (CameraState) -> Boolean) {
         val confirmed = withTimeoutOrNull(1_500) {
             state.first {
                 if (closed) throw RobotRequestException(RequestProblem.DISCONNECTED)
-                it.revision > before && it.zoomHundredths == hundredths
+                it.revision > after && nowMillis() - lastReceived < 1_500 && matches(it)
             }
         }
         if (confirmed == null) throw RobotRequestException(RequestProblem.NOT_APPLIED)
@@ -110,13 +118,46 @@ internal class CameraCommands(
         return actual
     }
 
-    override suspend fun formatStorage() {
+    private suspend fun storageTask(action: suspend () -> Unit) {
         check(storageOperation.tryLock()) { "存储卡操作正在进行" }
         try {
             if (closed) throw RobotRequestException(RequestProblem.DISCONNECTED)
-            check(nowMillis() - lastReceived < 1_500 && state.value.storage?.canFormat == true) { "存储卡状态已变化，不能格式化" }
-            command(0x72, byteArrayOf(0))
+            action()
         } finally { storageOperation.unlock() }
+    }
+
+    private fun freshStorage(): CameraStorageStatus {
+        check(nowMillis() - lastReceived < 1_500) { "存储卡状态已过期" }
+        return checkNotNull(state.value.storage) { "没有存储卡状态" }
+    }
+
+    override suspend fun formatStorage() = storageTask {
+        check(freshStorage().canFormat) { "存储卡状态已变化，不能格式化" }
+        command(0x72, byteArrayOf(0))
+    }
+
+    private suspend fun prepareCapture(mode: Int) {
+        check(freshStorage().canCapture) { "存储卡不可拍录" }
+        if (state.value.workMode != mode) {
+            val before = state.value.revision
+            command(0x10, byteArrayOf(mode.toByte()))
+            awaitStatus(before) { it.workMode == mode }
+        }
+        check(freshStorage().canCapture) { "切换模式后存储卡不可拍录" }
+    }
+
+    override suspend fun takePhoto() = storageTask {
+        prepareCapture(0)
+        val before = state.value.revision
+        command(0x01, byteArrayOf(1))
+        awaitStatus(before) { it.storage != null && it.workMode == 0 }
+    }
+
+    override suspend fun setRecording(active: Boolean) = storageTask {
+        if (active) prepareCapture(1)
+        val before = state.value.revision
+        command(0x02, byteArrayOf(if (active) 1 else 0))
+        awaitStatus(before) { it.storage?.recording == active }
     }
 
     fun close() {

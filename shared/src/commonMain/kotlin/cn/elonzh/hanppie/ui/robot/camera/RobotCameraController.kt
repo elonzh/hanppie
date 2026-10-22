@@ -18,31 +18,36 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 
-internal sealed interface CameraSetting<out T> {
-    data object Idle : CameraSetting<Nothing>
-    data object Loading : CameraSetting<Nothing>
-    data class Value<T>(val value: T) : CameraSetting<T>
-    data class Failed(val message: UiText) : CameraSetting<Nothing>
+internal sealed interface CameraRequest<out T> {
+    data object Idle : CameraRequest<Nothing>
+    data object Loading : CameraRequest<Nothing>
+    data class Value<T>(val value: T) : CameraRequest<T>
+    data class Failed(val message: UiText) : CameraRequest<Nothing>
 }
 
-internal data class CameraSettingsState(
+internal enum class CaptureAction { PHOTO, START_RECORDING, STOP_RECORDING }
+
+internal data class RobotCameraUiState(
     val connection: Long = 0,
-    val antiFlicker: CameraSetting<Int> = CameraSetting.Idle,
-    val date: CameraSetting<CameraDate?> = CameraSetting.Idle,
+    val antiFlicker: CameraRequest<Int> = CameraRequest.Idle,
+    val date: CameraRequest<CameraDate?> = CameraRequest.Idle,
     val timeSynced: Boolean? = null,
     val storage: CameraStorageStatus? = null,
-    val formatRequest: CameraSetting<Unit> = CameraSetting.Idle,
-)
+    val formatRequest: CameraRequest<Unit> = CameraRequest.Idle,
+    val capture: CameraRequest<CaptureAction> = CameraRequest.Idle,
+) {
+    val storageBusy: Boolean get() = formatRequest == CameraRequest.Loading || capture == CameraRequest.Loading
+}
 
-/** Per-connection native settings; clock synchronization is attempted once on a fresh unsynced status. */
-internal class CameraSettingsController(private val scope: CoroutineScope) {
+/** Per-connection camera settings and storage tasks. The robot owns persistent media and recording state. */
+internal class RobotCameraController(private val scope: CoroutineScope) {
     private class Binding(val id: Long, val service: RobotCameraService, val scope: CoroutineScope) {
         val antiFlicker = Mutex()
         val clock = Mutex()
         val storage = Mutex()
         var autoSyncAttempted = false
     }
-    val state = MutableStateFlow(CameraSettingsState())
+    val state = MutableStateFlow(RobotCameraUiState())
     private val revision = AtomicLong(0)
     private var binding: Binding? = null
 
@@ -51,7 +56,7 @@ internal class CameraSettingsController(private val scope: CoroutineScope) {
         val current = Binding(revision.addAndFetch(1), service,
             CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job])))
         binding = current
-        state.value = CameraSettingsState(connection = current.id)
+        state.value = RobotCameraUiState(connection = current.id)
         current.scope.launch {
             service.state.collect { status ->
                 update(current) { it.copy(timeSynced = status.timeSynced, storage = status.storage) }
@@ -86,23 +91,40 @@ internal class CameraSettingsController(private val scope: CoroutineScope) {
             }) }) { it.formatStorage() }
     }
 
-    private fun update(current: Binding, transform: (CameraSettingsState) -> CameraSettingsState) {
+    fun capture(action: CaptureAction) {
+        val current = binding ?: return
+        work(current, current.storage, { old, value -> old.copy(capture = value) },
+            errorMessage = { error -> uiText(when {
+                error is IllegalStateException -> Res.string.camera_capture_unavailable
+                error is RobotRequestException && error.problem == RequestProblem.REJECTED -> Res.string.camera_capture_rejected
+                else -> Res.string.camera_capture_uncertain
+            }) }) { service ->
+            when (action) {
+                CaptureAction.PHOTO -> service.takePhoto()
+                CaptureAction.START_RECORDING -> service.setRecording(true)
+                CaptureAction.STOP_RECORDING -> service.setRecording(false)
+            }
+            action
+        }
+    }
+
+    private fun update(current: Binding, transform: (RobotCameraUiState) -> RobotCameraUiState) {
         state.update { if (it.connection == current.id) transform(it) else it }
     }
 
     private fun <T> work(current: Binding, mutex: Mutex,
-        set: (CameraSettingsState, CameraSetting<T>) -> CameraSettingsState,
+        set: (RobotCameraUiState, CameraRequest<T>) -> RobotCameraUiState,
         errorMessage: (Exception) -> UiText = { robotRequestMessage(it, Res.string.camera_settings_failed) },
         action: suspend (RobotCameraService) -> T,
     ): Boolean {
         if (binding !== current || !current.scope.isActive || !mutex.tryLock()) return false
-        update(current) { set(it, CameraSetting.Loading) }
+        update(current) { set(it, CameraRequest.Loading) }
         current.scope.launch(start = CoroutineStart.UNDISPATCHED) {
             try {
                 val result = action(current.service)
-                update(current) { set(it, CameraSetting.Value(result)) }
+                update(current) { set(it, CameraRequest.Value(result)) }
             } catch (error: CancellationException) { throw error }
-            catch (error: Exception) { update(current) { set(it, CameraSetting.Failed(errorMessage(error))) } }
+            catch (error: Exception) { update(current) { set(it, CameraRequest.Failed(errorMessage(error))) } }
             finally { mutex.unlock() }
         }
         return true
@@ -111,7 +133,7 @@ internal class CameraSettingsController(private val scope: CoroutineScope) {
     fun clear() {
         val old = binding
         binding = null
-        state.value = CameraSettingsState(connection = revision.addAndFetch(1))
+        state.value = RobotCameraUiState(connection = revision.addAndFetch(1))
         old?.scope?.cancel()
     }
 }

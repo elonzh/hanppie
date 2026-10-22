@@ -29,6 +29,8 @@ private class CameraConfigurationFixture : RobotCameraService {
     var dateError = false
     var date = CameraDate(2020, 1, 1, 0, 0, 0)
     override suspend fun setZoom(hundredths: Int) = error("unused")
+    override suspend fun takePhoto() { error("unused") }
+    override suspend fun setRecording(active: Boolean) { error("unused") }
     override suspend fun formatStorage() { error("unused") }
     override suspend fun getAntiFlicker(): Int = antiFlicker
     override suspend fun setAntiFlicker(mode: AntiFlicker): Int { antiFlicker = mode.wireValue; return antiFlicker }
@@ -49,7 +51,7 @@ class CameraSettingsUiTest {
         val model = testConsoleModel()
         val camera = CameraConfigurationFixture()
         model.state.value = model.state.value.copy(connected = true)
-        model.cameraSettings.attach(camera)
+        model.robotCamera.attach(camera)
         try {
             rule.setContent { TestWorkbenchTheme { SettingsPage(model) } }
             rule.onNodeWithTag("settings-category-media").performScrollTo().performClick()
@@ -78,7 +80,7 @@ class CameraSettingsUiTest {
             rule.onNodeWithTag("camera-anti-flicker-selector").performScrollTo().assertTextContains("自动", substring = true).performClick()
             rule.onNodeWithContentDescription("camera-anti-flicker-AUTO").assertDoesNotExist()
             rule.onNodeWithContentDescription("camera-anti-flicker-HZ_50").performClick()
-            rule.runOnIdle { model.cameraSettings.clear(); model.state.value = model.state.value.copy(connected = false) }
+            rule.runOnIdle { model.robotCamera.clear(); model.state.value = model.state.value.copy(connected = false) }
             rule.onNodeWithTag("camera-sync-clock").assertDoesNotExist()
             rule.onNodeWithTag("camera-anti-flicker-selector").assertDoesNotExist()
         } finally { model.close() }
@@ -97,7 +99,7 @@ class CameraSettingsLayoutTest {
             Localization.initialize(language, null)
             val model = testConsoleModel()
             model.state.value = model.state.value.copy(connected = true)
-            model.cameraSettings.attach(CameraConfigurationFixture())
+            model.robotCamera.attach(CameraConfigurationFixture())
             try {
                 setContent { TestWorkbenchTheme {
                     CompositionLocalProvider(LocalDensity provides Density(1f, fontScale)) {

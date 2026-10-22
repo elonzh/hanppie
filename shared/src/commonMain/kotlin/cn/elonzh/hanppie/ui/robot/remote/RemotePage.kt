@@ -320,6 +320,13 @@ internal fun RemotePage(
         if (manualActionsEnabled) CameraZoomControls(zoom, enabled && videoFresh && !connected.busy,
             Modifier.align(Alignment.TopEnd).padding(top = 76.dp, end = HanppieDesignTokens.RemoteEdgePadding),
             model.cameraZoom::setZoom)
+        OnboardCaptureControls(model.robotCamera, connected.connected, inputEnabled && foreground,
+            (maxHeight - 180.dp).coerceAtLeast(80.dp),
+            Modifier.align(Alignment.TopStart).padding(top = 76.dp, start = HanppieDesignTokens.RemoteEdgePadding)) {
+            keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+            model.stopFiring(); model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
+            (onPushToTalkStop ?: model::endPushToTalk)()
+        }
         ObjectTrackingControls(tracking, enabled && videoFrame != null && videoFresh && !zoom.busy && (zoom.hundredths == null || zoom.hundredths == 100),
             Modifier.align(Alignment.TopCenter).padding(top = 76.dp),
             onStart = {

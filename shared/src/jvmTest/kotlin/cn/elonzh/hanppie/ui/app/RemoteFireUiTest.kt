@@ -58,6 +58,8 @@ class RemoteFireUiTest {
         override val camera = object : cn.elonzh.hanppie.robot.media.RobotCameraService {
             override val state = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.media.CameraState(100))
             override suspend fun formatStorage() { error("unused") }
+            override suspend fun takePhoto() { error("unused") }
+            override suspend fun setRecording(active: Boolean) { error("unused") }
             override suspend fun getAntiFlicker(): Int = error("unused")
             override suspend fun setAntiFlicker(mode: cn.elonzh.hanppie.robot.media.AntiFlicker): Int = error("unused")
             override suspend fun getDate(): cn.elonzh.hanppie.robot.media.CameraDate? = error("unused")

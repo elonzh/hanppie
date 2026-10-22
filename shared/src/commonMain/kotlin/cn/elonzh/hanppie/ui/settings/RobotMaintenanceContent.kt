@@ -10,16 +10,17 @@ import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.ui.app.ConsoleController
 import cn.elonzh.hanppie.ui.design.WorkbenchDialog
 import cn.elonzh.hanppie.ui.i18n.tr
-import cn.elonzh.hanppie.ui.robot.camera.CameraSetting
+import cn.elonzh.hanppie.ui.robot.camera.CameraRequest
+import cn.elonzh.hanppie.ui.robot.camera.cameraStorageStatusText
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 internal fun RobotMaintenanceContent(model: ConsoleController) {
     val console by model.state.collectAsState()
-    val state by model.cameraSettings.state.collectAsState()
+    val state by model.robotCamera.state.collectAsState()
     val storage = state.storage.takeIf { console.connected }
-    val canFormat = storage?.canFormat == true && state.formatRequest != CameraSetting.Loading
+    val canFormat = storage?.canFormat == true && !state.storageBusy
     var confirmConnection by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(state.connection, canFormat) {
         if (!canFormat || confirmConnection != state.connection) confirmConnection = null
@@ -33,7 +34,7 @@ internal fun RobotMaintenanceContent(model: ConsoleController) {
                 .testTag("camera-storage-format-cancel")) { Text(tr(Res.string.cancel)) }
             Button({
                 confirmConnection = null
-                model.cameraSettings.formatStorage()
+                model.robotCamera.formatStorage()
             }, Modifier.weight(1f).heightIn(min = 48.dp).testTag("camera-storage-format-confirm"),
                 colors = ButtonDefaults.buttonColors(color = MiuixTheme.colorScheme.errorContainer,
                     contentColor = MiuixTheme.colorScheme.onErrorContainer)) {
@@ -45,19 +46,7 @@ internal fun RobotMaintenanceContent(model: ConsoleController) {
     Card(Modifier.fillMaxWidth().testTag("camera-storage"),
         colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            val status = when {
-                !console.connected -> Res.string.camera_storage_connect_first
-                storage == null -> Res.string.camera_storage_waiting
-                !storage.inserted -> Res.string.camera_storage_absent
-                storage.formatting -> Res.string.camera_storage_formatting
-                storage.recording -> Res.string.camera_storage_recording
-                storage.shooting -> Res.string.camera_storage_shooting
-                storage.hasError -> Res.string.camera_storage_error
-                storage.full -> Res.string.camera_storage_full
-                storage.stateCode == 0 -> Res.string.camera_storage_ready
-                else -> Res.string.camera_storage_unknown
-            }
-            Text(tr(status), Modifier.testTag("camera-storage-status"), fontSize = 15.sp,
+            Text(tr(cameraStorageStatusText(console.connected, storage)), Modifier.testTag("camera-storage-status"), fontSize = 15.sp,
                 color = if (storage?.inserted == true && storage.hasError) MiuixTheme.colorScheme.error
                     else MiuixTheme.colorScheme.onSurface)
             if (storage?.inserted == true) {
@@ -73,13 +62,13 @@ internal fun RobotMaintenanceContent(model: ConsoleController) {
                     Text(tr(Res.string.camera_storage_format))
                 }
                 when (val request = state.formatRequest) {
-                    CameraSetting.Loading -> Text(tr(Res.string.camera_storage_format_sending),
+                    CameraRequest.Loading -> Text(tr(Res.string.camera_storage_format_sending),
                         Modifier.testTag("camera-storage-format-result"), fontSize = 14.sp)
-                    is CameraSetting.Value -> Text(tr(Res.string.camera_storage_format_accepted),
+                    is CameraRequest.Value -> Text(tr(Res.string.camera_storage_format_accepted),
                         Modifier.testTag("camera-storage-format-result"), fontSize = 14.sp)
-                    is CameraSetting.Failed -> Text(request.message.resolve(),
+                    is CameraRequest.Failed -> Text(request.message.resolve(),
                         Modifier.testTag("camera-storage-format-result"), fontSize = 14.sp, color = MiuixTheme.colorScheme.error)
-                    CameraSetting.Idle -> Unit
+                    CameraRequest.Idle -> Unit
                 }
             }
         }
