@@ -997,4 +997,27 @@
     <string name="module_armor_head_left">Left gimbal armor</string>
     <string name="module_armor_head_right">Right gimbal armor</string>
     <string name="module_unknown">Unknown module 0x%1$s</string>
+    <string name="robot_info_title">Device information</string>
+    <string name="robot_info_connect">Connect a robot to view device information</string>
+    <string name="robot_info_usage_waiting">Waiting for robot mileage and driving time…</string>
+    <string name="robot_info_mileage">Total mileage: %1$s m</string>
+    <string name="robot_info_driving_time">Total driving time: %1$s s</string>
+    <string name="robot_info_usage_age">Robot counters: %1$s s ago</string>
+    <string name="robot_info_show">View versions and activation</string>
+    <string name="robot_info_hide">Hide versions and activation</string>
+    <string name="robot_info_query_all">Query all</string>
+    <string name="robot_info_query">Query</string>
+    <string name="robot_info_unread">Not queried</string>
+    <string name="robot_info_reading">Querying…</string>
+    <string name="robot_info_activation">Activation status</string>
+    <string name="robot_info_activated">Activated</string>
+    <string name="robot_info_not_activated">Not activated</string>
+    <string name="robot_info_system">Main system</string>
+    <string name="robot_info_can">System CAN</string>
+    <string name="robot_info_runtime">Program runtime</string>
+    <string name="robot_info_gimbal_motor">Gimbal motor controller</string>
+    <string name="robot_info_vision">Vision system</string>
+    <string name="robot_info_perception">Perception system</string>
+    <string name="robot_info_failed">Could not read. Query again to retry.</string>
+    <string name="robot_info_rejected">The robot did not accept this query. Check its connection and retry.</string>
 </resources>

@@ -65,6 +65,8 @@ class AppSession(private val target: RobotTarget,
     val audio: cn.elonzh.hanppie.robot.media.RobotAudioService get() = audioCommands
     private val wifiCommands = WifiCommands(request = ::request)
     private val healthStore = cn.elonzh.hanppie.robot.telemetry.RobotHealthStore()
+    private val informationCommands = cn.elonzh.hanppie.robot.product.InformationCommands(::request)
+    val information: cn.elonzh.hanppie.robot.product.RobotInformationService get() = informationCommands
     val health get() = healthStore.state
     private val sdrCommands = cn.elonzh.hanppie.robot.network.SdrCommands(::request)
     val sdr: cn.elonzh.hanppie.robot.network.RobotSdrService = object : cn.elonzh.hanppie.robot.network.RobotSdrService by sdrCommands {
@@ -514,6 +516,7 @@ class AppSession(private val target: RobotTarget,
         audioCommands.close()
         wifiCommands.close()
         healthStore.close()
+        informationCommands.close()
         sdrCommands.close()
         cameraCommands.close()
         albumCommands.close()
@@ -526,6 +529,7 @@ class AppSession(private val target: RobotTarget,
         audioCommands.expire()
         wifiCommands.expire()
         healthStore.expire()
+        informationCommands.updateAge()
         val seq = sequence
         sequence = (sequence + 1) and 65535
         val fresh = remote && robotNanoTime() < inputDeadline
@@ -585,6 +589,7 @@ class AppSession(private val target: RobotTarget,
                                 audioCommands.receive(frame)
                                 wifiCommands.receive(frame)
                                 healthStore.receive(frame)
+                                informationCommands.receive(frame)
                                 albumCommands.receive(frame)
                                 if (cameraCommands.state.value.revision != revision &&
                                     cameraCommands.state.value.storage?.let { !it.inserted || it.formatting || it.hasError } == true)

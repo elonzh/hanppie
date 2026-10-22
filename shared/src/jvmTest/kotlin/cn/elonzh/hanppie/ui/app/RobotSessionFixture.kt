@@ -11,6 +11,11 @@ import java.util.concurrent.atomic.AtomicInteger
 
 internal class RobotSessionFixture : RobotSession {
     override val health = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.telemetry.RobotHealth())
+    override var information: cn.elonzh.hanppie.robot.product.RobotInformationService = object : cn.elonzh.hanppie.robot.product.RobotInformationService {
+        override val usage = kotlinx.coroutines.flow.MutableStateFlow<cn.elonzh.hanppie.robot.product.RobotUsage?>(null)
+        override suspend fun readFirmware(target: cn.elonzh.hanppie.robot.product.RobotVersionTarget): String = error("unused")
+        override suspend fun readActivated(): Boolean = error("unused")
+    }
     @Volatile var closed = false
     override val album = object : cn.elonzh.hanppie.robot.media.album.RobotAlbumService {
         override val busy = kotlinx.coroutines.flow.MutableStateFlow(false)
