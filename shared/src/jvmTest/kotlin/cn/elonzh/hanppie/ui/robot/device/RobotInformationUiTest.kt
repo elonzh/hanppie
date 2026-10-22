@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.robot.device
 
+import cn.elonzh.hanppie.robot.telemetry.RobotSystemStatus
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -54,8 +55,8 @@ class RobotInformationUiTest {
             rule.onNodeWithTag("robot-info-cancel").performScrollTo().performClick()
             rule.waitUntil(3000) { !model.robotInformation.state.value.busy }
             assertTrue(model.robotInformation.state.value.versions.values.all { it == InformationValue.Unread })
-            rule.runOnIdle { service.usage.value = RobotUsage(null, 0, 123) }
-            rule.waitUntil(3000) { model.robotInformation.state.value.usage == RobotUsage(null, 0, 123) }
+            rule.runOnIdle { service.systemStatus.value = RobotSystemStatus(null, 0, false, 123) }
+            rule.waitUntil(3000) { model.robotInformation.state.value.usage == RobotSystemStatus(null, 0, false, 123) }
             rule.waitForIdle()
             rule.onNodeWithTag("robot-info-mileage").performScrollTo().assertTextEquals("累计里程：— 米")
             rule.onNodeWithTag("robot-info-driving").performScrollTo().assertTextEquals("累计驾驶时长：0 秒")
@@ -77,7 +78,7 @@ class RobotInformationLayoutTest {
         runDesktopComposeUiTest(width = width, height = height) {
             Localization.initialize(language, null)
             val model = testConsoleModel(); val service = InformationFixture()
-            service.usage.value = RobotUsage(1234567, 987654, 123)
+            service.systemStatus.value = RobotSystemStatus(1234567, 987654, false, 123)
             service.version = { if (it == RobotVersionTarget.SYSTEM_CAN) throw RobotRequestException(RequestProblem.TIMED_OUT) else "01.02.03.04" }
             service.activation = { false }
             model.state.value = model.state.value.copy(connected = true, robotProduct = RobotProduct(model = RobotModel.ROBOMASTER_S1))

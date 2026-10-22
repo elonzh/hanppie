@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.app
 
+import cn.elonzh.hanppie.robot.telemetry.RobotSystemStatus
 import cn.elonzh.hanppie.robot.files.*
 import cn.elonzh.hanppie.robot.lab.*
 import cn.elonzh.hanppie.robot.product.*
@@ -12,9 +13,14 @@ import java.util.concurrent.atomic.AtomicInteger
 internal class RobotSessionFixture : RobotSession {
     override val health = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.telemetry.RobotHealth())
     override var information: cn.elonzh.hanppie.robot.product.RobotInformationService = object : cn.elonzh.hanppie.robot.product.RobotInformationService {
-        override val usage = kotlinx.coroutines.flow.MutableStateFlow<cn.elonzh.hanppie.robot.product.RobotUsage?>(null)
+        override val systemStatus = kotlinx.coroutines.flow.MutableStateFlow<RobotSystemStatus?>(null)
         override suspend fun readFirmware(target: cn.elonzh.hanppie.robot.product.RobotVersionTarget): String = error("unused")
         override suspend fun readActivated(): Boolean = error("unused")
+    }
+    override var power: RobotPowerService = object : RobotPowerService {
+        override suspend fun readPolicy(): LowPowerPolicy = error("unused")
+        override suspend fun setPolicy(policy: LowPowerPolicy, onDispatch: () -> Unit) = error("unused")
+        override suspend fun perform(action: RobotPowerAction, onDispatch: () -> Unit) = error("unused")
     }
     @Volatile var closed = false
     override val album = object : cn.elonzh.hanppie.robot.media.album.RobotAlbumService {
@@ -27,6 +33,8 @@ internal class RobotSessionFixture : RobotSession {
     val infraredCount = AtomicInteger(0)
     val gelCount = AtomicInteger(0)
     val driveCount = AtomicInteger(0)
+    val mediaStarts = AtomicInteger(0)
+    val mediaStops = AtomicInteger(0)
     val labStopCount = AtomicInteger(0)
 
     override val camera = object : cn.elonzh.hanppie.robot.media.RobotCameraService {
@@ -117,6 +125,8 @@ internal class RobotSessionFixture : RobotSession {
     override suspend fun playSpeaker(encoded: ByteArray): Int = 0
     override fun setLed(red: Int, green: Int, blue: Int, enabled: Boolean) {}
     override fun setSpeakerVolume(volume: Int) {}
-    override fun media(start: Boolean, audio: Boolean, resolution: cn.elonzh.hanppie.robot.media.VideoResolution) {}
+    override fun media(start: Boolean, audio: Boolean, resolution: cn.elonzh.hanppie.robot.media.VideoResolution) {
+        if (start) mediaStarts.incrementAndGet() else mediaStops.incrementAndGet()
+    }
     override fun close() { closed = true }
 }

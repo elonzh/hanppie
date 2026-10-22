@@ -1,6 +1,7 @@
 package cn.elonzh.hanppie.robot.product
 
 import cn.elonzh.hanppie.robot.protocol.*
+import cn.elonzh.hanppie.robot.telemetry.RobotSystemStatus
 import cn.elonzh.hanppie.robot.session.*
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -24,11 +25,8 @@ enum class RobotVersionTarget(val node: Int, val componentId: Int? = null, val d
     CLAW(0x3b, 0x031f), VISION(0xf1, 0x0100), PERCEPTION(0xc9, 0x0100),
 }
 
-/** Robot-reported counters, interpreted as metres/seconds by the native device view. */
-data class RobotUsage(val mileageMetres: Int?, val drivingSeconds: Int?, val reportAgeSeconds: Long = 0)
-
 interface RobotInformationService {
-    val usage: kotlinx.coroutines.flow.StateFlow<RobotUsage?>
+    val systemStatus: kotlinx.coroutines.flow.StateFlow<RobotSystemStatus?>
     suspend fun readFirmware(target: RobotVersionTarget): String
     /** Native read operation only. This service cannot activate a device or contact a server. */
     suspend fun readActivated(): Boolean
@@ -38,9 +36,9 @@ internal class InformationCommands(private val request: suspend (Int, Int, Int, 
     private val nowMillis: () -> Long = { robotNanoTime() / 1_000_000 }) : RobotInformationService {
     private val lock = RobotLock()
     private var closed = false
-    private var usageAt: Long? = null
-    private val mutableUsage = MutableStateFlow<RobotUsage?>(null)
-    override val usage = mutableUsage.asStateFlow()
+    private var statusAt: Long? = null
+    private val mutableStatus = MutableStateFlow<RobotSystemStatus?>(null)
+    override val systemStatus = mutableStatus.asStateFlow()
 
     private suspend fun command(node: Int, set: Int, id: Int, payload: ByteArray): ByteArray {
         currentCoroutineContext().ensureActive()
@@ -70,13 +68,13 @@ internal class InformationCommands(private val request: suspend (Int, Int, Int, 
         if (closed || !frame.valid || frame.sender != Protocol.HOST_SYSTEM || frame.receiver != Protocol.HOST_MOBILE ||
             frame.attr != Protocol.ATTR_NO_ACK || frame.set != Protocol.CMDSET_RM || frame.id != 3 || frame.payload.size < 12) return@withLock
         fun int(offset: Int) = (0..3).fold(0) { value, index -> value or (frame.payload.u8(offset + index) shl (index * 8)) }
-        usageAt = nowMillis()
-        mutableUsage.value = RobotUsage(int(4).takeIf { it >= 0 }, int(8).takeIf { it >= 0 })
+        statusAt = nowMillis()
+        mutableStatus.value = RobotSystemStatus(int(4).takeIf { it >= 0 }, int(8).takeIf { it >= 0 }, frame.payload.u8(0) and 1 != 0)
     }
     fun updateAge() = lock.withLock {
-        if (!closed) mutableUsage.value = usage.value?.copy(reportAgeSeconds = usageAt?.let { ((nowMillis() - it) / 1_000).coerceAtLeast(0) } ?: 0)
+        if (!closed) mutableStatus.value = systemStatus.value?.copy(reportAgeSeconds = statusAt?.let { ((nowMillis() - it) / 1_000).coerceAtLeast(0) } ?: 0)
     }
-    fun close() = lock.withLock { closed = true; mutableUsage.value = null }
+    fun close() = lock.withLock { closed = true; mutableStatus.value = null }
 }
 
 private fun invalid(): Nothing = throw RobotRequestException(RequestProblem.INVALID_RESPONSE)

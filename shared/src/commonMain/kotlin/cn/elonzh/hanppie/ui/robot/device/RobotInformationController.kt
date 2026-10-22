@@ -1,8 +1,10 @@
 package cn.elonzh.hanppie.ui.robot.device
 
 import cn.elonzh.hanppie.resources.*
+import kotlin.concurrent.Volatile
 import cn.elonzh.hanppie.robot.product.*
 import cn.elonzh.hanppie.robot.telemetry.RobotHealth
+import cn.elonzh.hanppie.robot.telemetry.RobotSystemStatus
 import cn.elonzh.hanppie.robot.session.RequestProblem
 import cn.elonzh.hanppie.robot.session.RobotRequestException
 import cn.elonzh.hanppie.ui.i18n.UiText
@@ -24,7 +26,7 @@ internal data class RobotInformationState(
     val connected: Boolean = false,
     val versions: Map<RobotVersionTarget, InformationValue<String>> = emptyMap(),
     val activation: InformationValue<Boolean> = InformationValue.Unread,
-    val usage: RobotUsage? = null,
+    val usage: RobotSystemStatus? = null,
 ) {
     val busy: Boolean get() = activation == InformationValue.Loading || versions.values.any { it == InformationValue.Loading }
 }
@@ -38,7 +40,7 @@ internal class RobotInformationController(private val scope: CoroutineScope) {
         val activation = Mutex()
     }
     val state = MutableStateFlow(RobotInformationState())
-    private var binding: Binding? = null
+    @Volatile private var binding: Binding? = null
 
     fun attach(service: RobotInformationService, health: StateFlow<RobotHealth>) {
         clear()
@@ -56,7 +58,7 @@ internal class RobotInformationController(private val scope: CoroutineScope) {
             }
         }
         current.scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            service.usage.collect { value -> update(current) { it.copy(usage = value) } }
+            service.systemStatus.collect { value -> update(current) { it.copy(usage = value) } }
         }
     }
 

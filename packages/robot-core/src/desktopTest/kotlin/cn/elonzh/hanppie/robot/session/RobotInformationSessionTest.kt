@@ -41,12 +41,12 @@ class RobotInformationSessionTest {
                 assertEquals("01.02.06.74", session.information.readFirmware(RobotVersionTarget.SYSTEM))
                 assertEquals("01.02.16.10", session.information.readFirmware(RobotVersionTarget.CAMERA))
                 assertTrue(session.information.readActivated())
-                withTimeout(2000) { session.information.usage.first { it != null } }
-                assertEquals(1000, session.information.usage.value?.mileageMetres)
+                withTimeout(2000) { session.information.systemStatus.first { it != null } }
+                assertEquals(1000, session.information.systemStatus.value?.mileageMetres)
                 // The existing connection setup already queries the system version once.
                 assertEquals(listOf("40/1/", "40/1/", "1/1/", "40/50/1100"), requests.map { "${it.receiver}/${it.id}/${it.payload.hex()}" })
                 assertTrue(requests.all { it.sender == 2 && it.attr == 0x40 })
-                session.close(); assertNull(session.information.usage.value)
+                session.close(); assertNull(session.information.systemStatus.value)
                 assertEquals(RequestProblem.DISCONNECTED,
                     assertFailsWith<RobotRequestException> { session.information.readActivated() }.problem)
             }

@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.robot.device
 
+import cn.elonzh.hanppie.robot.telemetry.RobotSystemStatus
 import cn.elonzh.hanppie.robot.product.*
 import cn.elonzh.hanppie.robot.session.*
 import cn.elonzh.hanppie.robot.telemetry.RobotHealth
@@ -8,7 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.test.*
 
 internal class InformationFixture : RobotInformationService {
-    override val usage = MutableStateFlow<RobotUsage?>(null)
+    override val systemStatus = MutableStateFlow<RobotSystemStatus?>(null)
     val reads = mutableListOf<RobotVersionTarget>()
     var version: suspend (RobotVersionTarget) -> String = { "01.02.03.04" }
     var activation: suspend () -> Boolean = { true }
@@ -28,13 +29,13 @@ class RobotInformationControllerTest {
             health.value = RobotHealth(modules = listOf(WorkingRobotDevice(0x104, emptyList()), WorkingRobotDevice(0xabcd, emptyList())))
             assertEquals(4, controller.state.value.versions.size)
             controller.refresh(); assertIs<InformationValue.Value<String>>(controller.state.value.versions[RobotVersionTarget.CAMERA])
-            first.usage.value = RobotUsage(0, 0); assertEquals(RobotUsage(0, 0), controller.state.value.usage)
+            first.systemStatus.value = RobotSystemStatus(0, 0, false); assertEquals(RobotSystemStatus(0, 0, false), controller.state.value.usage)
             health.value = RobotHealth(modules = emptyList()); assertFalse(RobotVersionTarget.CAMERA in controller.state.value.versions)
             val second = InformationFixture(); controller.attach(second, MutableStateFlow(RobotHealth()))
-            first.usage.value = RobotUsage(123, 456)
+            first.systemStatus.value = RobotSystemStatus(123, 456, false)
             assertNull(controller.state.value.usage); assertEquals(InformationValue.Unread, controller.state.value.activation)
             assertTrue(controller.state.value.versions.values.all { it == InformationValue.Unread })
-            controller.clear(); second.usage.value = RobotUsage(1, 2)
+            controller.clear(); second.systemStatus.value = RobotSystemStatus(1, 2, false)
             assertEquals(RobotInformationState(), controller.state.value)
             scope.cancel(); controller.attach(first, health); assertFalse(controller.state.value.connected)
         } finally { scope.cancel() }

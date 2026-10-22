@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.app
 
+import cn.elonzh.hanppie.robot.telemetry.RobotSystemStatus
 import cn.elonzh.hanppie.robot.product.*
 import cn.elonzh.hanppie.robot.protocol.*
 import cn.elonzh.hanppie.robot.session.*
@@ -24,14 +25,14 @@ class RobotInformationConnectionTest {
         try {
             model.connect("127.0.0.1", "12345678"); settled()
             assertTrue(model.robotInformation.state.value.connected)
-            services[0].usage.value = RobotUsage(100, 200)
+            services[0].systemStatus.value = RobotSystemStatus(100, 200, false)
             withTimeout(3000) { while (model.robotInformation.state.value.usage == null) delay(5) }
             model.robotInformation.refresh()
             withTimeout(3000) { while (model.robotInformation.state.value.busy) delay(5) }
             assertEquals(InformationValue.Value(true), model.robotInformation.state.value.activation)
             model.disconnect(); settled(); assertEquals(RobotInformationState(), model.robotInformation.state.value)
             model.connect("127.0.0.1", "12345678"); settled()
-            services[0].usage.value = RobotUsage(999, 999)
+            services[0].systemStatus.value = RobotSystemStatus(999, 999, false)
             assertNull(model.robotInformation.state.value.usage)
             assertEquals(InformationValue.Unread, model.robotInformation.state.value.activation)
         } finally { model.close() }

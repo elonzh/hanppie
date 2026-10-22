@@ -67,17 +67,31 @@ class AppSession(private val target: RobotTarget,
     private val healthStore = cn.elonzh.hanppie.robot.telemetry.RobotHealthStore()
     private val informationCommands = cn.elonzh.hanppie.robot.product.InformationCommands(::request)
     val information: cn.elonzh.hanppie.robot.product.RobotInformationService get() = informationCommands
+    private val powerCommands = cn.elonzh.hanppie.robot.product.PowerCommands(::request)
+    val power: cn.elonzh.hanppie.robot.product.RobotPowerService = object : cn.elonzh.hanppie.robot.product.RobotPowerService by powerCommands {
+        override suspend fun setPolicy(policy: cn.elonzh.hanppie.robot.product.LowPowerPolicy, onDispatch: () -> Unit) = powerChange { powerCommands.setPolicy(policy, onDispatch) }
+        override suspend fun perform(action: cn.elonzh.hanppie.robot.product.RobotPowerAction, onDispatch: () -> Unit) = powerChange {
+            txLock.withLock { powerTransition = true; media(false) }
+            try { powerCommands.perform(action, onDispatch) }
+            catch (error: RobotRequestException) {
+                if (error.problem == RequestProblem.REJECTED) txLock.withLock { powerTransition = false }
+                throw error
+            } finally {
+                if (action == cn.elonzh.hanppie.robot.product.RobotPowerAction.EXIT_STANDBY) txLock.withLock { powerTransition = false }
+            }
+        }
+    }
     val health get() = healthStore.state
     private val sdrCommands = cn.elonzh.hanppie.robot.network.SdrCommands(::request)
     val sdr: cn.elonzh.hanppie.robot.network.RobotSdrService = object : cn.elonzh.hanppie.robot.network.RobotSdrService by sdrCommands {
-        override suspend fun set(change: cn.elonzh.hanppie.robot.network.SdrChange, onDispatch: () -> Unit) = networkChange { sdrCommands.set(change, onDispatch) }
+        override suspend fun set(change: cn.elonzh.hanppie.robot.network.SdrChange, onDispatch: () -> Unit) = withIdleControl { sdrCommands.set(change, onDispatch) }
     }
     val wifi: RobotWifiService = object : RobotWifiService by wifiCommands {
         override suspend fun configure(credentials: RobotApCredentials,
-            onConfirmed: (WifiConfirmedField) -> Unit) = networkChange { wifiCommands.configure(credentials, onConfirmed) }
-        override suspend fun reboot() = networkChange { wifiCommands.reboot() }
-        override suspend fun setChannelMode(mode: cn.elonzh.hanppie.robot.network.WifiChannelMode, onDispatch: () -> Unit) = networkChange { wifiCommands.setChannelMode(mode, onDispatch) }
-        override suspend fun setChannel(channel: Int, onDispatch: () -> Unit) = networkChange { wifiCommands.setChannel(channel, onDispatch) }
+            onConfirmed: (WifiConfirmedField) -> Unit) = withIdleControl { wifiCommands.configure(credentials, onConfirmed) }
+        override suspend fun reboot() = withIdleControl { wifiCommands.reboot() }
+        override suspend fun setChannelMode(mode: cn.elonzh.hanppie.robot.network.WifiChannelMode, onDispatch: () -> Unit) = withIdleControl { wifiCommands.setChannelMode(mode, onDispatch) }
+        override suspend fun setChannel(channel: Int, onDispatch: () -> Unit) = withIdleControl { wifiCommands.setChannel(channel, onDispatch) }
     }
     private val storageAccess = Mutex()
     private val cameraCommands = CameraCommands(::request, storageAccess = storageAccess) { robotNanoTime() / 1_000_000 }
@@ -119,15 +133,24 @@ class AppSession(private val target: RobotTarget,
     @Volatile private var mode = Protocol.MODE_NORMAL
     @Volatile private var labRunning = false
     @Volatile private var remote = false
+    @Volatile private var powerTransition = false
     @Volatile var product: RobotProduct = RobotProduct()
         private set
     private val modeMutex = Mutex()
-    private suspend fun networkChange(action: suspend () -> Unit) {
+    private suspend fun withIdleControl(action: suspend () -> Unit) {
         check(modeMutex.tryLock()) { "请等待控制模式切换结束" }
         try {
-            txLock.withLock { check(connected && !remote && !labRunning && !tracking.value.blocksManualControl) { "请先退出遥控或停止脚本" } }
+            txLock.withLock { check(connected && !powerTransition && !remote && !labRunning && !tracking.value.blocksManualControl) { "请先退出遥控或停止脚本" } }
             action()
         } finally { modeMutex.unlock() }
+    }
+    private suspend fun powerChange(action: suspend () -> Unit) = withIdleControl {
+        txLock.withLock { check(robotNanoTime() - lastReceivedNanos < 500_000_000) { "数据已过期，请检查连接后重试" } }
+        check(storageAccess.tryLock()) { "请等待存储任务结束" }
+        try {
+            check(cameraCommands.state.value.storage?.let { !it.recording && !it.formatting } != false) { "请先停止机内拍录或格式化" }
+            action()
+        } finally { storageAccess.unlock() }
     }
     private var controlPayload = RemoteControl.velocity(0.0,0.0,0.0)
     private var gimbalPayload = RemoteControl.gimbalVelocity(0.0, 0.0)
@@ -168,7 +191,7 @@ class AppSession(private val target: RobotTarget,
 
     suspend fun enterRemote() = withContext(Dispatchers.IO) {
         modeMutex.withLock {
-        check(!labRunning) { "请先停止 Lab 脚本" }
+        check(!labRunning && !powerTransition) { "请先停止 Lab 脚本或完成电源操作" }
         if (!remote) {
             mode = Protocol.MODE_REMOTE
             for (c in remoteSetup + remoteEffects) {
@@ -295,7 +318,8 @@ class AppSession(private val target: RobotTarget,
         val clamped = volume.coerceIn(0, 100)
         send(Protocol.HOST_CAMERA, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SET_SPEAKER_VOLUME, byteArrayOf(clamped.toByte()))
     }
-    fun media(start: Boolean, audio: Boolean = false, resolution: VideoResolution = VideoResolution.R720P) {
+    fun media(start: Boolean, audio: Boolean = false, resolution: VideoResolution = VideoResolution.R720P) = txLock.withLock {
+        check(!start || !powerTransition) { "电源操作期间不能开启媒体流" }
         if (start) send(Protocol.HOST_CAMERA, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_CAMERA, Protocol.CMD_SET_VIDEO_FORMAT, resolution.payload)
         for (control in if (start) listOf(1, 2) else listOf(2, 1))
             send(Protocol.HOST_CAMERA, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_STREAM_CTRL, byteArrayOf(control.toByte(), if (start) 1 else 0, 0))
@@ -517,6 +541,7 @@ class AppSession(private val target: RobotTarget,
         wifiCommands.close()
         healthStore.close()
         informationCommands.close()
+        powerCommands.close()
         sdrCommands.close()
         cameraCommands.close()
         albumCommands.close()
@@ -562,7 +587,7 @@ class AppSession(private val target: RobotTarget,
         udp.send(data, destination, target.remotePort)
     }
 
-    override fun labMode(running: Boolean) { mode = Protocol.MODE_LAB; labRunning = running }
+    override fun labMode(running: Boolean) { check(!powerTransition) { "电源操作期间不能进入脚本模式" }; mode = Protocol.MODE_LAB; labRunning = running }
     fun normalMode() { mode = Protocol.MODE_NORMAL; labRunning = false }
 
     private fun receiveLoop() {

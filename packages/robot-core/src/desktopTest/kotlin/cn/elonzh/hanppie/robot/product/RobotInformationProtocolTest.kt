@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.robot.product
 
+import cn.elonzh.hanppie.robot.telemetry.RobotSystemStatus
 import cn.elonzh.hanppie.robot.protocol.*
 import cn.elonzh.hanppie.robot.session.*
 import kotlinx.coroutines.runBlocking
@@ -69,16 +70,20 @@ class RobotInformationProtocolTest {
         val frame = usageFrame("00000000e8030000100e0000")
         for (wrong in listOf(frame.copy(valid = false), frame.copy(sender = 9), frame.copy(receiver = 1),
             frame.copy(attr = 0x40), frame.copy(set = 0), frame.copy(id = 4), frame.copy(payload = ByteArray(11)))) {
-            commands.receive(wrong); assertNull(commands.usage.value)
+            commands.receive(wrong); assertNull(commands.systemStatus.value)
         }
-        commands.receive(frame); assertEquals(RobotUsage(1000, 3600), commands.usage.value)
+        commands.receive(frame); assertEquals(RobotSystemStatus(1000, 3600, false), commands.systemStatus.value)
         clock += 123_000; commands.updateAge()
-        assertEquals(RobotUsage(1000, 3600, 123), commands.usage.value)
+        assertEquals(RobotSystemStatus(1000, 3600, false, 123), commands.systemStatus.value)
         commands.receive(usageFrame("00000000ffffffff00000000"))
-        assertEquals(RobotUsage(null, 0), commands.usage.value)
+        assertEquals(RobotSystemStatus(null, 0, false), commands.systemStatus.value)
         commands.receive(usageFrame("000000000000000000000080aa"))
-        assertEquals(RobotUsage(0, null), commands.usage.value)
-        commands.close(); commands.receive(frame); commands.updateAge(); assertNull(commands.usage.value)
+        assertEquals(RobotSystemStatus(0, null, false), commands.systemStatus.value)
+        commands.receive(usageFrame("ff0000000000000000000000"))
+        assertEquals(true, commands.systemStatus.value?.lowPower)
+        commands.receive(usageFrame("fe0000000000000000000000"))
+        assertEquals(false, commands.systemStatus.value?.lowPower)
+        commands.close(); commands.receive(frame); commands.updateAge(); assertNull(commands.systemStatus.value)
     }
 }
 

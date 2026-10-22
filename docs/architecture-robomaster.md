@@ -571,11 +571,31 @@ SDK `EscSubject` 的 `<hhhhhhhhIIIIBBBB`：四项有符号 RPM、四项编码器
 
 `GetIsActivated`（`6a5ad0`）向 `28` 发送 `00:32`、载荷 `11 00`，长度 2 的复制见 `6a5b6e`；回调 `6c2db0` 读取应答的 `uint8@1 & 1`，应答至少 2 字节。Hanppie 仅实现此读取，未实现同族激活写入、账号/服务器流程或令牌；整个命令族的诊断载荷隐藏。**原生 / 当前代码**
 
-`OnSystemStatusPush`（`6932e0`）检查载荷至少 12 字节，读取 `int32LE@4` 累计里程（`69342b`）和 `int32LE@8` 累计驾驶时长（`693535`）。对应 observer `692a40` 在 `692b46` 注册 full-command `0x403f0003`，对应 `3f:03`；该内部 key 不等于线上的 attr。`ViewSettingDevice` 按米转公里、秒转分钟/小时，提供客户端单位证据。`DJIUserGrowthManger` 先发布机器人原始计数，再另行累计正差值至账号；Hanppie 只接原始计数，不复制账号累加或云端上报。**原生 / 客户端**
+`OnSystemStatusPush`（`6932e0`）检查载荷至少 12 字节，读取 `uint8@0 & 1` 是否低功耗（`693344–693349`）、`int32LE@4` 累计里程（`69342b`）和 `int32LE@8` 累计驾驶时长（`693535`）。对应 observer `692a40` 在 `692b46` 注册 full-command `0x403f0003`，对应 `3f:03`；该内部 key 不等于线上的 attr。`ViewSettingDevice` 按米转公里、秒转分钟/小时，提供客户端单位证据。`DJIUserGrowthManger` 先发布机器人原始计数，再另行累计正差值至账号；Hanppie 只接原始计数，不复制账号累加或云端上报。**原生 / 客户端**
 
 当前解析要求 CRC 有效、`28 → 02`、attr0 的 `3f:03`，保留有年龄的连接内快照；计数负值为未知，不将未知置零，也不在主机上递增时长。该推送的实际来源、属性、发送条件/频率、计数持久性和物理比例仍待实机核对。各版本查询的可达性、返回格式和未激活设备行为同样未获得本次硬件证据。**当前代码 / 待实机验证**
 
 `DJIWiFiLinkFirmwareVersion` 仅有 key 声明，未找到对应版本 getter 或 C# 使用者；不据此增加可见查询。也没有独立机械臂版本 getter，控制器/舵机版本与机械臂的关系仍由后续扩展能力核对。程序运行时 getter 在上游名为 ScratchFirmwareVersion，此处只读取运行环境版本，不实现 Scratch 教学。原生片段在忽略目录 `H02-native-*`；离线结果、边界和待验清单见[实施台账 H02](./official-app-capability-implementation.md#h02-验证入口与设备待验)。
+
+
+#### 电源与编程节能
+
+固定客户端的编程节能配置、立即待机和电池电源属于不同原生构造，不是通用“重启”命令的参数替换。以下均由主机发出、需要响应；节点/载荷的实际设备接受情况尚待抓包。**原生静态证据**
+
+| 操作 | 目标 / 命令 | 请求载荷 | 原生依据 |
+| --- | --- | --- | --- |
+| 读取节能策略 | `09 / 3f:4b` | 空 | `GetLowPowerConsumption 6a6910`，节点 `6a6996` |
+| 写节能策略 | `09 / 3f:4a` | `uint8 enabled` + `uint16LE time` | `SetLowPowerConsumption 6a6180`，取 bool/u16 `6a61f3–6a61fd`，3 字节复制 `6a626f` |
+| 立即进入待机 | `09 / 3f:4c` | `01` | `ActionEnterLowPowerConsumption 6aada0`，`6aadc9` / `6aae36` |
+| 退出待机 | `09 / 3f:4c` | `00` | `ActionExitLowPowerConsumption 6ab2e0`，`6ab309` / `6ab376` |
+| 电池重启 | `0b / 00:0b` | 空 | `ActionReboot 713060`；构造空数据、`7130ca/7130d4` 定位命令/节点后直接发送，没有载荷复制 |
+| 电池关机 | `0b / 00:0b` | 14 字节，`00 02` + 12 个 `00` | `ActionShutdown 713570`；`7135f0/7135fb` 清零并置字段，`713610` 复制 14 字节 |
+
+策略应答至少 4 字节：回调 `6c4140` 从 `uint8@1 != 0` 读取 enable（`6c4194`），从 `uint16LE@2` 读取 time（`6c418b`）。尾部附加数据不影响这些字段。原生设置只取 time 的低 16 位；Hanppie 写前检查 `0..65535`，不截断负值或溢出。`ViewSettingSystem.OnSetPowerModeOnTime` 只提供 30/60/180/300 四个客户端时限，保留读取到的其他值；当前按秒呈现，实际比例、触发与持久性仍待设备验证。**原生 / 客户端 / 当前代码**
+
+`Language.csv` 的系统设置文案将其限定为 Lab 编程节能，而非全局闲置策略；它说明编程时可自动节能、运行程序或敲击装甲唤醒，但后两者的物理效果未由本次实现验证。`SystemLAB.start` 发送 `DJIAppPage.Lab`、`DJIAppScene.Coding`，`RealController.SendCurrState` 将其作为 `DJIRobomasterSystemAppStatus` 发往机器人；`CodeModuleWebViewController.OnRunBlock` 在上传前请求退出低功耗。Hanppie 保留已有 Lab 序列和上传前退出，不增加编辑器开关时的模式联动；该差异见实施台账 C14。**客户端 / 当前边界**
+
+当前低功耗报告与统计共用上一节的 `3f:03` 解析及年龄，不以策略 enable、请求 ACK 或主机计时推导设备已经休眠/唤醒。电池命令不能与 Wi-Fi 节点的 `07:15` 无线重启混用。真实待机、唤醒、整机重启/断电、电池电源返回、模式间联动和多客户端行为均待实机验收；模拟应答只证明当前主机流程。原生片段为忽略目录 `.hanppie/validation/2026-10-22-official-gap/H03-native-*`，离线结果和设备检查见[实施台账 H03](./official-app-capability-implementation.md#h03-验证入口与设备待验)。
 
 #### 对象追踪跟随
 

@@ -57,6 +57,7 @@ interface RobotSession : AutoCloseable {
     val product: RobotProduct
     val tracking: StateFlow<TrackingState>
     val health: StateFlow<cn.elonzh.hanppie.robot.telemetry.RobotHealth>
+    val power: cn.elonzh.hanppie.robot.product.RobotPowerService
     val information: cn.elonzh.hanppie.robot.product.RobotInformationService
     fun startTracking()
     fun selectTrackingTarget(x: Float, y: Float)
