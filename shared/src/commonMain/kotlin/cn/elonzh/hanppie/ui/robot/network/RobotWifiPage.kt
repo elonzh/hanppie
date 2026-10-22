@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -22,8 +23,9 @@ import cn.elonzh.hanppie.ui.i18n.tr
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-private enum class WifiAction { SAVE, REBOOT, END }
-private data class WifiConfirmation(val action: WifiAction, val connection: Long, val draft: WifiDraft?)
+private enum class WifiAction { SAVE, REBOOT, RADIO, END }
+private data class WifiConfirmation(val action: WifiAction, val connection: Long, val draft: WifiDraft?,
+    val target: WifiRadioTarget? = null, val radioSource: WifiRadioSettings? = null)
 
 @Composable
 internal fun RobotWifiPage(model: ConsoleController, modifier: Modifier = Modifier, onBack: () -> Unit,
@@ -40,25 +42,48 @@ internal fun RobotWifiPage(model: ConsoleController, modifier: Modifier = Modifi
         camera.storage?.recording != true && !chat.running && !talking && !talkBusy
     var confirmation by remember { mutableStateOf<WifiConfirmation?>(null) }
     var showPassword by remember(state.connection) { mutableStateOf(false) }
-    LaunchedEffect(state.connection) { if (state.connected && state.profile == null && !state.busy) controller.refresh() }
-    LaunchedEffect(state.connection, state.connected, state.busy, state.draft, canChange) {
+    var channels by rememberSaveable { mutableStateOf(false) }
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    DisposableEffect(controller, channels) {
+        controller.showChannels(channels)
+        onDispose { controller.showChannels(false) }
+    }
+    LaunchedEffect(state.connection, channels, state.profile?.modeCode) {
+        if (state.connected && !state.busy) {
+            if (state.profile == null) controller.refresh()
+            else if (channels && state.radio == null) controller.refreshRadio()
+        }
+    }
+    LaunchedEffect(state.connection, state.connected, state.busy, state.draft, state.radio, canChange) {
         confirmation?.let { before ->
             if (before.connection != state.connection || state.busy || before.action != WifiAction.END && (!state.connected || !canChange) ||
-                before.action == WifiAction.SAVE && before.draft != state.draft) confirmation = null
+                before.action == WifiAction.SAVE && before.draft != state.draft ||
+                before.action == WifiAction.RADIO && before.radioSource != state.radio) confirmation = null
         }
     }
     val action = confirmation?.action
     WorkbenchDialog(show = confirmation != null, onDismissRequest = { confirmation = null },
-        title = tr(when (action) { WifiAction.SAVE -> Res.string.wifi_apply_question; WifiAction.REBOOT -> Res.string.wifi_restart_question; else -> Res.string.wifi_end_question }),
-        summary = tr(when (action) { WifiAction.SAVE -> Res.string.wifi_apply_summary; WifiAction.REBOOT -> Res.string.wifi_restart_summary; else -> Res.string.wifi_end_summary })) {
+        title = tr(when (action) { WifiAction.SAVE -> Res.string.wifi_apply_question; WifiAction.REBOOT -> Res.string.wifi_restart_question; WifiAction.RADIO -> Res.string.wifi_channel_change_question; else -> Res.string.wifi_end_question }),
+        summary = tr(when (action) { WifiAction.SAVE -> Res.string.wifi_apply_summary; WifiAction.REBOOT -> Res.string.wifi_restart_summary; WifiAction.RADIO -> Res.string.wifi_channel_change_summary; else -> Res.string.wifi_end_summary })) {
+        confirmation?.target?.let { Text(tr(Res.string.wifi_channel_target, wifiRadioTargetText(it)), fontSize = 15.sp) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button({ confirmation = null }, Modifier.weight(1f).heightIn(min = 48.dp)) { Text(tr(Res.string.cancel)) }
             Button({
+                val target = confirmation?.target
                 confirmation = null
-                when (action) { WifiAction.SAVE -> controller.apply(); WifiAction.REBOOT -> controller.reboot(); else -> { controller.cancel(); onBack() } }
+                when (action) {
+                    WifiAction.SAVE -> controller.apply()
+                    WifiAction.REBOOT -> controller.reboot()
+                    WifiAction.RADIO -> target?.let { selected ->
+                        val channel = selected.channel
+                        if (channel == null) controller.setChannelMode(selected.mode) else controller.setChannel(channel)
+                    }
+                    else -> { controller.cancel(); onBack() }
+                }
             }, Modifier.weight(1f).heightIn(min = 48.dp).testTag("wifi-confirm"),
                 colors = if (action == WifiAction.END) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColorsPrimary()) {
-                Text(tr(when (action) { WifiAction.SAVE -> Res.string.wifi_apply; WifiAction.REBOOT -> Res.string.wifi_restart_only; else -> Res.string.wifi_finish }))
+                Text(tr(when (action) { WifiAction.SAVE -> Res.string.wifi_apply; WifiAction.REBOOT -> Res.string.wifi_restart_only; WifiAction.RADIO -> Res.string.wifi_channel_apply; else -> Res.string.wifi_finish }))
             }
         }
     }
@@ -73,7 +98,9 @@ internal fun RobotWifiPage(model: ConsoleController, modifier: Modifier = Modifi
             if (state.busy) item {
                 Text(tr(when (state.phase) {
                     WifiPhase.READING -> Res.string.wifi_reading; WifiPhase.SAVING -> Res.string.wifi_saving
-                    WifiPhase.REBOOTING -> Res.string.wifi_rebooting; else -> Res.string.wifi_reconnecting
+                    WifiPhase.REBOOTING -> Res.string.wifi_rebooting
+                    WifiPhase.RADIO_CHANGING -> Res.string.wifi_radio_changing
+                    else -> Res.string.wifi_reconnecting
                 }), Modifier.testTag("wifi-progress"), fontSize = 15.sp)
                 if (state.phase in setOf(WifiPhase.READING, WifiPhase.RECONNECTING))
                     Button(controller::stopWaiting, Modifier.heightIn(min = 48.dp).testTag("wifi-stop-waiting")) { Text(tr(Res.string.wifi_stop_waiting)) }
@@ -103,18 +130,28 @@ internal fun RobotWifiPage(model: ConsoleController, modifier: Modifier = Modifi
             } else if (state.phase == WifiPhase.VERIFIED) item {
                 Text(tr(Res.string.wifi_verified), Modifier.testTag("wifi-verified"), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 state.profile?.let { Text(tr(Res.string.wifi_current_name, it.ssid), fontSize = 15.sp) }
-                Button(controller::refresh, Modifier.heightIn(min = 48.dp).testTag("wifi-query")) { Text(tr(Res.string.wifi_query)) }
+                state.radio?.let { Text(tr(Res.string.wifi_current_channel, it.currentChannel), fontSize = 15.sp) }
+                Button({ if (channels) controller.refreshRadio() else controller.refresh() }, Modifier.heightIn(min = 48.dp).testTag("wifi-query")) { Text(tr(Res.string.wifi_query)) }
             } else if (state.connected) {
                 state.profile?.let { profile -> item {
                     Text(tr(Res.string.wifi_mode, tr(when (profile.modeCode) { 0 -> Res.string.direct_mode; 2 -> Res.string.router_mode; else -> Res.string.unknown })),
                         Modifier.testTag("wifi-mode"), fontSize = 15.sp)
                     Text(tr(Res.string.wifi_current_name, profile.ssid), fontSize = 14.sp)
                 } }
+                if (state.phase in setOf(WifiPhase.EDITING, WifiPhase.READING)) item {
+                    TabRow(listOf(tr(Res.string.wifi_network_tab), tr(Res.string.wifi_channels_tab)), if (channels) 1 else 0,
+                        { if (!state.busy) { focus.clearFocus(); keyboard?.hide(); channels = it == 1 } },
+                        modifier = Modifier.fillMaxWidth().testTag("wifi-tabs"), height = 48.dp)
+                }
+                if (channels && state.phase == WifiPhase.EDITING) item {
+                    WifiChannelControls(state, canChange, controller::refreshRadio,
+                        { confirmation = WifiConfirmation(WifiAction.RADIO, state.connection, null, it, state.radio) }, controller::retrySignals)
+                }
                 if (state.phase == WifiPhase.READY) item {
                     Text(tr(Res.string.wifi_ready), Modifier.testTag("wifi-ready"), fontSize = 15.sp)
                     Button({ state.draft?.let { controller.edit(it.ssid, it.password) } }, Modifier.heightIn(min = 48.dp).testTag("wifi-edit")) { Text(tr(Res.string.wifi_edit_again)) }
                 }
-                if (state.phase == WifiPhase.EDITING) {
+                if (state.phase == WifiPhase.EDITING && !channels) {
                     item { Button(controller::refresh, Modifier.heightIn(min = 48.dp).testTag("wifi-query")) { Text(tr(Res.string.wifi_query)) } }
                     if (!canChange) item { Text(tr(Res.string.wifi_task_active), fontSize = 14.sp) }
                     state.draft?.takeIf { state.profile?.accessPoint == true }?.let { draft -> item {
@@ -133,8 +170,8 @@ internal fun RobotWifiPage(model: ConsoleController, modifier: Modifier = Modifi
                         }
                     } }
                 }
-                if (state.phase == WifiPhase.READY || state.phase == WifiPhase.EDITING && state.recovery == null && state.profile != null &&
-                    (state.draft == null || state.draft == state.profile?.let { WifiDraft(it.ssid, it.password.orEmpty()) })) item {
+                if (!channels && (state.phase == WifiPhase.READY || state.phase == WifiPhase.EDITING && state.recovery == null && state.profile != null &&
+                    (state.draft == null || state.draft == state.profile?.let { WifiDraft(it.ssid, it.password.orEmpty()) }))) item {
                     Button({ confirmation = WifiConfirmation(WifiAction.REBOOT, state.connection, state.draft) },
                         Modifier.heightIn(min = 48.dp).testTag("wifi-reboot"), canChange) {
                         Text(tr(if (state.phase == WifiPhase.READY) Res.string.wifi_restart else Res.string.wifi_restart_only))
@@ -147,6 +184,7 @@ internal fun RobotWifiPage(model: ConsoleController, modifier: Modifier = Modifi
 
 @Composable
 private fun RecoveryProfiles(recovery: WifiRecovery) {
+    recovery.expectedRadio?.let { Text(tr(Res.string.wifi_channel_target, wifiRadioTargetText(it)), fontSize = 15.sp) }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val wide = maxWidth >= 720.dp * LocalDensity.current.fontScale
         if (wide && recovery.previous != recovery.expected) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {

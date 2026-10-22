@@ -1,9 +1,17 @@
 package cn.elonzh.hanppie.robot.network
 
 import cn.elonzh.hanppie.robot.protocol.Protocol
+import cn.elonzh.hanppie.robot.protocol.DussFrame
+import cn.elonzh.hanppie.robot.protocol.put16
+import cn.elonzh.hanppie.robot.protocol.u16
 import cn.elonzh.hanppie.robot.protocol.u8
 import cn.elonzh.hanppie.robot.session.RequestProblem
 import cn.elonzh.hanppie.robot.session.RobotRequestException
+import cn.elonzh.hanppie.robot.session.RobotLock
+import cn.elonzh.hanppie.robot.session.robotNanoTime
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -27,15 +35,27 @@ data class RobotWifiProfile(val modeCode: Int, val ssid: String, val password: S
 enum class WifiConfirmedField { SSID, PASSWORD }
 
 interface RobotWifiService {
+    val signals: StateFlow<WifiSignals>
     suspend fun read(): RobotWifiProfile
+    suspend fun readRadio(): WifiRadioSettings
+    /** These confirm a write acknowledgement only. The client must query the resulting configuration. */
+    suspend fun setChannelMode(mode: WifiChannelMode, onDispatch: () -> Unit)
+    suspend fun setChannel(channel: Int, onDispatch: () -> Unit)
+    suspend fun setSignalReports(enabled: Boolean)
     /** Reports each command acknowledgement separately; no atomic update or physical activation is implied. */
     suspend fun configure(credentials: RobotApCredentials, onConfirmed: (WifiConfirmedField) -> Unit)
     /** The connection can disappear before its acknowledgement arrives. Never retry automatically. */
     suspend fun reboot()
 }
 
-internal class WifiCommands(private val request: suspend (Int, Int, Int, ByteArray) -> ByteArray) : RobotWifiService {
+internal class WifiCommands(private val nowMillis: () -> Long = { robotNanoTime() / 1_000_000 },
+    private val request: suspend (Int, Int, Int, ByteArray) -> ByteArray) : RobotWifiService {
     private val access = Mutex()
+    private val signalLock = RobotLock()
+    private val mutableSignals = MutableStateFlow(WifiSignals())
+    override val signals = mutableSignals.asStateFlow()
+    private var channelSignalAt: Long? = null
+    private var interferenceAt: Long? = null
     @Volatile private var closed = false
 
     private suspend fun command(id: Int, payload: ByteArray = byteArrayOf()): ByteArray {
@@ -67,6 +87,55 @@ internal class WifiCommands(private val request: suspend (Int, Int, Int, ByteArr
 
     override suspend fun reboot() = task { command(Protocol.CMD_WIFI_REBOOT); Unit }
 
+    override suspend fun readRadio(): WifiRadioSettings = task { readRadioUnlocked() }
+
+    private suspend fun readRadioUnlocked(): WifiRadioSettings {
+        val mode = mode()
+        val (channel, available) = WifiChannelProtocol.channels(command(0x28))
+        val selection = command(0x17)
+        if (selection.size < 2) invalid()
+        return WifiRadioSettings(mode, selection.u8(1), channel, available)
+    }
+
+    override suspend fun setChannelMode(mode: WifiChannelMode, onDispatch: () -> Unit) = task {
+        check(mode() == 0) { "设备不在热点模式，请重新查询网络状态" }
+        onDispatch()
+        command(0x16, byteArrayOf(mode.code.toByte(), 0, 0, 0)); Unit
+    }
+
+    override suspend fun setChannel(channel: Int, onDispatch: () -> Unit) = task {
+        val actual = readRadioUnlocked()
+        check(actual.modeCode == 0 && actual.selectionCode == WifiChannelMode.MANUAL.code) { "请先查询并启用手动信道" }
+        check(channel in actual.selectableChannels) { "设备未报告可设置的此信道" }
+        onDispatch()
+        command(0x2b, ByteArray(3).apply { this[0] = WifiChannelProtocol.band(channel)!!.toByte(); put16(1, channel) }); Unit
+    }
+
+    override suspend fun setSignalReports(enabled: Boolean) { command(0x29, byteArrayOf(if (enabled) 1 else 0)) }
+
+    fun receive(frame: DussFrame) {
+        if (!frame.valid || frame.sender != Protocol.HOST_WIFI || frame.receiver != Protocol.HOST_MOBILE ||
+            frame.attr != Protocol.ATTR_NO_ACK || frame.set != Protocol.CMDSET_WIFI) return
+        signalLock.withLock {
+            if (closed) return@withLock
+            when (frame.id) {
+                0x2a -> WifiChannelProtocol.signals(frame.payload)?.let {
+                    channelSignalAt = nowMillis(); mutableSignals.value = signals.value.copy(channels = it)
+                }
+                0x3f -> if (frame.payload.size >= 2) {
+                    interferenceAt = nowMillis(); mutableSignals.value = signals.value.copy(interferenceCode = frame.payload.u16(0))
+                }
+            }
+        }
+    }
+
+    fun expire() = signalLock.withLock {
+        val now = nowMillis()
+        mutableSignals.value = signals.value.copy(
+            channels = signals.value.channels.takeUnless { channelSignalAt?.let { now - it >= 1_500 } == true },
+            interferenceCode = signals.value.interferenceCode.takeUnless { interferenceAt?.let { now - it >= 1_500 } == true })
+    }
+
     private suspend fun <T> task(action: suspend () -> T): T {
         check(access.tryLock()) { "网络请求正在进行" }
         try {
@@ -75,7 +144,7 @@ internal class WifiCommands(private val request: suspend (Int, Int, Int, ByteArr
         } finally { access.unlock() }
     }
 
-    fun close() { closed = true }
+    fun close() = signalLock.withLock { closed = true; mutableSignals.value = WifiSignals() }
 
     private fun encode(value: String): ByteArray {
         val bytes = value.encodeToByteArray(throwOnInvalidSequence = true)

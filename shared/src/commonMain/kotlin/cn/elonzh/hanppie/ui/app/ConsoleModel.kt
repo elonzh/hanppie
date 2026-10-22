@@ -5,6 +5,8 @@ package cn.elonzh.hanppie.ui.app
 import cn.elonzh.hanppie.robot.network.RobotWifiService
 import cn.elonzh.hanppie.robot.network.RobotWifiProfile
 import cn.elonzh.hanppie.ui.robot.network.RobotWifiController
+import cn.elonzh.hanppie.ui.robot.network.WifiVerification
+import cn.elonzh.hanppie.robot.network.WifiRadioTarget
 
 import ai.koog.agents.core.tools.ToolRegistry
 import cn.elonzh.hanppie.agent.provider.ModelConfigurationTester
@@ -736,7 +738,8 @@ internal class ConsoleModel(
         robot: DiscoveredRobot? = null,
         automaticProbe: Boolean = false,
         expectedWifi: RobotWifiProfile? = null,
-    ): RobotWifiProfile? {
+        expectedRadio: WifiRadioTarget? = null,
+    ): WifiVerification? {
         state.update { ConsoleState(busy = true, connecting = true,
             statusMessage = uiText(Res.string.connecting_to_value,target.ip), logs = it.logs, devices = it.devices) }
         val attemptTarget = if (automaticProbe) target.forAutomaticProbe() else target
@@ -746,10 +749,14 @@ internal class ConsoleModel(
             candidate.connect()
             candidate.safetyStop()
             val verifiedWifi = expectedWifi?.let { expected ->
-                candidate.wifi.read().also { actual ->
+                val actual = candidate.wifi.read().also { actual ->
                     check(actual.modeCode == expected.modeCode && actual.ssid == expected.ssid &&
                         (expected.password == null || actual.password == expected.password)) { tr(Res.string.wifi_verification_failed) }
                 }
+                val radio = expectedRadio?.let { target -> candidate.wifi.readRadio().also {
+                    check(target.matches(it)) { tr(Res.string.wifi_verification_failed) }
+                } }
+                WifiVerification(actual, radio)
             }
             runCatching { candidate.setSpeakerVolume(mediaSettings.value.speakerVolume) }
             currentCoroutineContext().ensureActive()
@@ -878,7 +885,7 @@ internal class ConsoleModel(
         if (session.load()?.wifi === source) closeConnection(preserveWifiRecovery = true)
     }
 
-    private suspend fun reconnectWifi(origin: RobotTarget, expected: RobotWifiProfile): RobotWifiProfile {
+    private suspend fun reconnectWifi(origin: RobotTarget, expected: RobotWifiProfile, radio: WifiRadioTarget?): WifiVerification {
         val snapshot = state.value
         check(acceptingWork.load() && session.load() == null && !chat.state.value.running && !snapshot.busy &&
             state.compareAndSet(snapshot, snapshot.copy(busy = true, connecting = true, error = null))) { tr(Res.string.wifi_task_active) }
@@ -887,7 +894,7 @@ internal class ConsoleModel(
             awaitConnectionPreferences(); prepareNetwork()
             return checkNotNull(connectTarget(origin, revision, when (expected.modeCode) {
                 0 -> ConnectionMode.DIRECT; 2 -> ConnectionMode.ROUTER; else -> ConnectionMode.UNKNOWN
-            }, expectedWifi = expected))
+            }, expectedWifi = expected, expectedRadio = radio))
         } finally {
             if (revision == connectionRevision.load()) state.update { it.copy(busy = false, connecting = false) }
         }

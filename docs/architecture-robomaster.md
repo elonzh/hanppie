@@ -344,6 +344,32 @@ Python 不是 DUSS 的组成部分。只要实现帧格式、CRC、地址、序�
 
 本轮没有设备，原生静态构造、合成向量和 UDP 回环均不证明固件接受命令。设置何时生效、两字段只部分确认、重启先断线后应答、改密后的 IP/DHCP、设备身份、各模式可达性和国家代码/信道影响均待实机。静态片段保存在忽略目录 `native-Wifi-ApConfiguration.txt`、`native-Wifi-Reboot.txt` 和三个 `native-Wifi-*Reply.txt`，位于 `.hanppie/validation/2026-10-22-official-gap/`；离线验证与逐项设备检查见[实施台账 N01](./official-app-capability-implementation.md#n01-验证入口与设备待验)。
 
+#### Wi-Fi 信道选择与干扰报告
+
+以下依据仍为固定 macOS 1.1.5/build 239 的原生构造与转换函数，目标为 Wi-Fi 节点 `0x07`、命令集 `07`；当前没有这些命令的设备抓包或固件接受证据。**原生代码 / 待实机验证**
+
+| 操作 | cmdset:id / 载荷 | 原生入口 |
+| --- | --- | --- |
+| 查询当前信道和列表 | `07:28`，空 | GetChannelInfo `0x6e62e0`；GetCurrentChannelNumber `0x6e67a0` 也使用此命令 |
+| 写手动信道 | `07:2b`，uint8 频段选择值 + uint16LE 信道 | SetCurrentChannelNumber `0x6e69c0` |
+| 写选择方式 | `07:16`，uint32LE，自动=0、手动=1 | SetChannelSelectionMode `0x6e8f70` |
+| 查询选择方式 | `07:17`，空；响应 retcode + uint8 选择方式 | GetChannelSelectionMode `0x6e95d0`；转换 `0x6f5b20`、字段读取 `0x6f5b6b` |
+| 开关信道报告 | `07:29`，单字节 0/1 | SetSNRPushEnabled `0x6e8a10` |
+| 信道报告推送 | `07:2a`，分组变长数据 | 观察器绑定 `0x6ebc86`；OnWiFiSNRPush `0x6e5db0` |
+| 干扰状态推送 | `07:3f`，uint16LE 状态 | 观察器绑定 `0x6ec236`；OnWiFiInterfereEventPush `0x6e60e0`，字段读取 `0x6e614a` |
+
+信道列表响应转换 `0x6ed610` 从偏移 5 读取 uint8 当前信道，从偏移 6 读取 uint32LE 分组数；组从偏移 10 开始，含不透明 uint32 元数据、uint32LE 数量和逐项 uint16LE 信道。原生将分组展平成列表，没有把组元数据解释为频段。客户端检查组数与长度界限，保留未知/重复信道；不能以静态编码表代替设备返回的可用列表。**原生/当前代码**
+
+手动写入的原生频段选择值取自两个静态表（辅助函数 `0x6d97e0/0x6d9870`，数据 `0x8ac7e4/0x8ac81c`）：1–14 编码为 0；34–64、100–128、132–144 的偶数及 149–165 的奇数编码为 1。它们只证明此版客户端的编码，不证明所在地允许、设备可用、特定型号支持或固件接受。Hanppie 写入还必须通过设备新返回的列表、AP 和手动模式检查。**原生/当前代码 / 待实机验证**
+
+SNR 转换要求物理载荷至少 18 字节；偏移 0 为 uint32LE 声明总长度，不能超过实长。偏移 4 开始逐组读取不透明 uint32、uint16LE 数量，再读取若干 `(int32LE channel, int32LE value)`。原生按剩余至少 14 字节继续，接受更短的不透明尾部；客户端同样允许尾部，但畸形后组不会发布部分结果。该转换没有可信的物理量单位说明，不能把负数直接标为 dBm 或复用 `07:09` 信号质量解释。干扰枚举见 `DJIWiFiInterfere`：0 正常、1 环境干扰、2 下行干扰、3 上行干扰、4 弱信号，未知值保留。**原生/客户端代码**
+
+官方 `Module.Setting.View/ViewSettingConnect.cs` 仅在 AP 模式显示信道管理；手动模式启用报告、自动模式和页面销毁关闭，手动选择信道前另行确认。Hanppie 增加写后回读和结果不明时显式重连核对，不据 ACK 宣称无线切换成功。既有 `CMD_WIFI_AP_KEEPALIVE` 的 `07:17` 与上述 getter 相同，本轮保持其周期发送行为及固定 JP 握手；动态国家代码冲突仍见实施台账 C02。**客户端/当前代码**
+
+原生请求结构中的属性字节不能直接当作线上加密位：`Encoder` 构造 `0x56ff40/0x56ff50` 将加密开关置 0，编码函数在 `0x570062` 检查此开关，默认清除线上低属性位。本轮沿用既有明文应答请求，未新增 AES 或假设桥接 full-command ID 的高位为线上属性。**原生/当前代码**
+
+静态片段保存于忽略目录 `.hanppie/validation/2026-10-22-official-gap/N02-native-*`。推送的真实节点/属性/频率、列表变化、报告量纲、切换时序和失联恢复均待实机；合成向量及 UDP 回环不替代这些证据，具体状态见[实施台账 N02](./official-app-capability-implementation.md#n02-验证入口与设备待验)。
+
 ### 5.3 RoboMaster App 与 Lab 程序机制
 
 RoboMaster App 提供手机和 macOS 客户端，Lab 是该应用中的程序功能；两者不共同构成一套名为“App/Lab”的协议。实际链路由以下机制组成：

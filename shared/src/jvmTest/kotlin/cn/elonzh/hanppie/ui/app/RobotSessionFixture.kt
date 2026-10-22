@@ -39,6 +39,11 @@ internal class RobotSessionFixture : RobotSession {
         override suspend fun setZoom(hundredths: Int) {}
     }
     override var wifi: cn.elonzh.hanppie.robot.network.RobotWifiService = object : cn.elonzh.hanppie.robot.network.RobotWifiService {
+        override val signals = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.network.WifiSignals())
+        override suspend fun readRadio(): cn.elonzh.hanppie.robot.network.WifiRadioSettings = error("unused")
+        override suspend fun setChannelMode(mode: cn.elonzh.hanppie.robot.network.WifiChannelMode, onDispatch: () -> Unit) = error("unused")
+        override suspend fun setChannel(channel: Int, onDispatch: () -> Unit) = error("unused")
+        override suspend fun setSignalReports(enabled: Boolean) = error("unused")
         override suspend fun read(): cn.elonzh.hanppie.robot.network.RobotWifiProfile = error("unused")
         override suspend fun configure(credentials: cn.elonzh.hanppie.robot.network.RobotApCredentials,
             onConfirmed: (cn.elonzh.hanppie.robot.network.WifiConfirmedField) -> Unit) = error("unused")

@@ -107,6 +107,46 @@ class RobotWifiUiTest {
             rule.onNodeWithTag("wifi-reboot").performScrollTo().assertIsEnabled()
         } finally { model.close() }
     }
+
+    @Test fun channelViewRequiresConfirmationVerifiesSettingsAndStopsReportsWhenLeaving() {
+        Localization.initialize("zh", null)
+        val service = WifiFixture()
+        val runtime = object : RobotRuntime {
+            override suspend fun discover(timeoutMillis: Long): List<DiscoveredRobot> = error("unused")
+            override suspend fun waitForRouterPairing(appId: String): RouterPairing = error("unused")
+            override suspend fun acknowledgeRouterPairing(pairing: RouterPairing, appId: String) = error("unused")
+            override fun open(target: RobotTarget, onFrame: (DussFrame) -> Unit, onLog: (String) -> Unit,
+                onLost: (RobotSession, String) -> Unit): RobotSession = RobotSessionFixture().apply { wifi = service }
+        }
+        val model = testConsoleModel(robotRuntime = runtime)
+        try {
+            model.connect("127.0.0.1", "12345678")
+            rule.setContent { TestWorkbenchTheme { RobotWifiPage(model, onBack = {}) } }
+            rule.waitUntil(5_000) { model.robotWifi.state.value.profile != null && !model.state.value.busy }
+            rule.onNodeWithText("信道与干扰").performScrollTo().performClick()
+            rule.waitUntil(3_000) { model.robotWifi.state.value.radio != null }
+            rule.onNodeWithTag("wifi-channel-149").performScrollTo().assertIsNotEnabled()
+            rule.onNodeWithTag("wifi-channel-mode-1").performScrollTo().performClick()
+            assertTrue(service.modeWrites.isEmpty())
+            rule.onNodeWithTag("wifi-confirm").performClick()
+            rule.waitUntil(3_000) { model.robotWifi.state.value.monitoring }
+            service.signals.value = WifiSignals(listOf(WifiChannelSignal(149, -72)), 1)
+            rule.waitUntil(3_000) { model.robotWifi.state.value.signals.interferenceCode == 1 }
+            rule.onNodeWithTag("wifi-channel-149").performScrollTo().performClick()
+            assertTrue(service.channelWrites.isEmpty())
+            rule.onNodeWithTag("wifi-confirm").performClick()
+            rule.waitUntil(3_000) { model.robotWifi.state.value.radio?.currentChannel == 149 }
+            rule.onNodeWithTag("wifi-radio-result").performScrollTo().assertIsDisplayed()
+            rule.onNodeWithText("网络信息").performScrollTo().performClick()
+            rule.waitUntil(3_000) { service.reportWrites.lastOrNull() == false }
+            rule.runOnIdle { service.profile = RobotWifiProfile(2, "router", null); service.radio = service.radio.copy(modeCode = 2); model.robotWifi.refresh() }
+            rule.waitUntil(3_000) { model.robotWifi.state.value.profile?.modeCode == 2 }
+            rule.onNodeWithText("信道与干扰").performScrollTo().performClick()
+            rule.onNodeWithTag("wifi-radio-query").performScrollTo().performClick()
+            rule.waitUntil(3_000) { model.robotWifi.state.value.radio?.modeCode == 2 }
+            rule.onNodeWithTag("wifi-channel-mode-1").assertDoesNotExist()
+        } finally { model.close() }
+    }
 }
 
 @OptIn(ExperimentalTestApi::class)
@@ -135,10 +175,23 @@ class RobotWifiLayoutTest {
                 onNodeWithTag("wifi-apply").performScrollTo().assertIsDisplayed().assertIsEnabled()
                 assertTrue(onNodeWithTag("wifi-apply").fetchSemanticsNode().boundsInRoot.height >= 48)
                 runOnIdle {
+                    service.radio = service.radio.copy(selectionCode = 1)
+                    model.robotWifi.state.value = model.robotWifi.state.value.copy(radio = service.radio)
+                    service.signals.value = WifiSignals(listOf(WifiChannelSignal(1, -90), WifiChannelSignal(6, -73),
+                        WifiChannelSignal(11, -82), WifiChannelSignal(36, -95), WifiChannelSignal(149, -67)), 2)
+                }
+                onNodeWithTag("wifi-body").performScrollToNode(hasTestTag("wifi-tabs"))
+                onNodeWithText(if (language == "zh") "信道与干扰" else "Channels and interference").performClick()
+                waitUntil(timeoutMillis = 3_000) { model.robotWifi.state.value.signals.channels != null }
+                onNodeWithTag("wifi-body").performScrollToNode(hasTestTag("wifi-channel-149"))
+                onNodeWithTag("wifi-channel-149").assertIsDisplayed().assertIsEnabled()
+                snapshot("wifi-channels-$width-$height-$language", onNodeWithTag("robot-wifi-page"))
+                runOnIdle {
                     model.robotWifi.state.value = RobotWifiState(phase = WifiPhase.NETWORK_REQUIRED,
                         confirmed = setOf(WifiConfirmedField.SSID), recovery = WifiRecovery(origin, service.profile,
                             RobotWifiProfile(0, "RMS1_New_Network", "secret_password"), true))
                     model.state.value = model.state.value.copy(connected = false)
+                    model.robotWifi.detach()
                 }
                 onNodeWithTag("wifi-body").performScrollToIndex(0)
                 snapshot("wifi-recovery-$width-$height-$language", onNodeWithTag("robot-wifi-page"))

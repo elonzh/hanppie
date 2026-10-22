@@ -43,6 +43,7 @@ RoboMaster 开源工作台。在电脑、手机和平板上驾驶机器人、编
 | 画面与拍摄 | 在“设置 → 音视频 → 画面与拍摄”查看设备当前格式、调整照片尺寸与传输码率，或请求恢复视频画面；设备报告多相机时可选择画面来源。[设备待验项](./docs/official-app-capability-implementation.md#a07-验证入口与设备待验) |
 | 存储卡维护 | 在“设置 → 机器人维护”查看机器人 SD 卡状态和容量，确认清空全部文件后可发送格式化请求；[设备待验项](./docs/official-app-capability-implementation.md#a04-验证入口与设备待验) |
 | 机器人 Wi-Fi | 在“设置 → 机器人维护 → 机器人 Wi-Fi”查询网络信息；AP 模式下可修改名称和密码，再单独确认无线重启。在系统中加入相应网络后，返回页面重新连接并核对配置。[设备待验项](./docs/official-app-capability-implementation.md#n01-验证入口与设备待验) |
+| 信道与干扰 | 在机器人 Wi-Fi 页切换至“信道与干扰”，查询当前信道和设备可用列表；AP 模式可确认自动/手动选择并设置手动信道。切换结果未确认时，检查系统网络后在原页重新连接核对。[设备待验项](./docs/official-app-capability-implementation.md#n02-验证入口与设备待验) |
 | 机器人 SD 拍录 | 驾驶舱左上方点击“SD 卡拍录”，可拍照、开始或停止机内录像；入口显示机内录像秒数，原主机拍录按钮保持独立。[设备待验项](./docs/official-app-capability-implementation.md#a05-验证入口与设备待验) |
 | 机器人媒体 | 在“SD 卡拍录”面板或“设置 → 机器人维护”点击“浏览媒体”，点选文件查看缩略图并下载；“已下载”中可打开、用系统播放器播放视频、导出或删除本地副本。[设备待验项](./docs/official-app-capability-implementation.md#a06-验证入口与设备待验) |
 | 机器人音频 | 在“设置 → 音视频”查询机器人音量、应用音量并回读确认，或更改机器人语音语言；与应用界面语言分别设置。当前设备验证边界见[实施台账](./docs/official-app-capability-implementation.md#a01-验证入口与设备待验) |

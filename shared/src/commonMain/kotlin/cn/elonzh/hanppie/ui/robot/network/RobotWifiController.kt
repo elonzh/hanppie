@@ -10,6 +10,10 @@ import cn.elonzh.hanppie.ui.i18n.uiText
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.concurrent.Volatile
 import kotlin.concurrent.atomics.AtomicLong
 
@@ -18,30 +22,75 @@ internal data class WifiDraft(val ssid: String, val password: String) {
     override fun toString() = "WifiDraft(<redacted>)"
 }
 
-internal enum class WifiPhase { IDLE, READING, EDITING, SAVING, READY, REBOOTING, NETWORK_REQUIRED, RECONNECTING, VERIFIED }
+internal enum class WifiPhase { IDLE, READING, EDITING, SAVING, READY, REBOOTING, RADIO_CHANGING, NETWORK_REQUIRED, RECONNECTING, VERIFIED }
 internal data class WifiRecovery(val origin: RobotTarget, val previous: RobotWifiProfile, val expected: RobotWifiProfile,
-    val configurationRequested: Boolean)
+    val configurationRequested: Boolean, val expectedRadio: WifiRadioTarget? = null)
+internal data class WifiVerification(val profile: RobotWifiProfile, val radio: WifiRadioSettings? = null)
 internal data class RobotWifiState(
     val connection: Long = 0, val connected: Boolean = false, val phase: WifiPhase = WifiPhase.IDLE,
     val profile: RobotWifiProfile? = null, val draft: WifiDraft? = null,
     val confirmed: Set<WifiConfirmedField> = emptySet(), val recovery: WifiRecovery? = null,
     val restartAcknowledged: Boolean = false, val error: UiText? = null,
+    val radio: WifiRadioSettings? = null, val signals: WifiSignals = WifiSignals(),
+    val monitoring: Boolean = false, val monitorError: UiText? = null, val radioMessage: UiText? = null,
 ) {
-    val busy: Boolean get() = phase in setOf(WifiPhase.READING, WifiPhase.SAVING, WifiPhase.REBOOTING, WifiPhase.RECONNECTING)
+    val busy: Boolean get() = phase in setOf(WifiPhase.READING, WifiPhase.SAVING, WifiPhase.REBOOTING, WifiPhase.RADIO_CHANGING, WifiPhase.RECONNECTING)
 }
 
 /** Connection-scoped queries; a user-initiated network handoff survives its own expected disconnect. */
 internal class RobotWifiController(private val scope: CoroutineScope,
     private val change: suspend (RobotWifiService, suspend () -> Unit) -> Unit,
     private val retire: (RobotWifiService) -> Unit,
-    private val reconnect: suspend (RobotTarget, RobotWifiProfile) -> RobotWifiProfile,
+    private val reconnect: suspend (RobotTarget, RobotWifiProfile, WifiRadioTarget?) -> WifiVerification,
 ) {
     private class Binding(val service: RobotWifiService, val origin: RobotTarget)
     val state = MutableStateFlow(RobotWifiState())
-    @Volatile private var binding: Binding? = null
+    private val bindings = MutableStateFlow<Binding?>(null)
+    private var binding: Binding?
+        get() = bindings.value
+        set(value) { bindings.value = value }
     @Volatile private var job: Job? = null
     private val version = AtomicLong(0)
     private val connections = AtomicLong(0)
+    private val channelViewVisible = MutableStateFlow(false)
+    private val monitorRevision = MutableStateFlow(0L)
+    private val monitoringJob = scope.launch {
+        bindings.collectLatest { current -> if (current != null) observeSignals(current) }
+    }
+
+    fun showChannels(visible: Boolean) { channelViewVisible.value = visible }
+    fun retrySignals() { monitorRevision.update { it + 1 } }
+
+    private suspend fun observeSignals(current: Binding) = coroutineScope {
+        val observer = launch {
+            current.service.signals.collect { value ->
+                if (binding === current) state.update { it.copy(signals = value) }
+            }
+        }
+        var mayBeEnabled = false
+        try {
+            combine(channelViewVisible, state.map { it.connected && it.profile?.accessPoint == true &&
+                it.radio?.modeCode == 0 && it.radio.selectionCode == 1 && it.recovery == null }.distinctUntilChanged(),
+                monitorRevision) { visible, allowed, revision -> (visible && allowed) to revision }
+                .distinctUntilChanged().collect { (wanted, _) ->
+                    if (!wanted && !mayBeEnabled) return@collect
+                    if (wanted) mayBeEnabled = true
+                    try {
+                        current.service.setSignalReports(wanted)
+                        currentCoroutineContext().ensureActive()
+                        if (!wanted) mayBeEnabled = false
+                        if (binding === current) state.update { it.copy(monitoring = wanted, monitorError = null) }
+                    } catch (error: CancellationException) { throw error }
+                    catch (_: Exception) { if (binding === current) state.update {
+                        it.copy(monitoring = false, monitorError = uiText(Res.string.wifi_monitor_failed)) } }
+                }
+        } finally {
+            observer.cancel()
+            if (mayBeEnabled) withContext(NonCancellable) {
+                withTimeoutOrNull(1_500) { runCatching { current.service.setSignalReports(false) } }
+            }
+        }
+    }
 
     fun attach(service: RobotWifiService, origin: RobotTarget) {
         val restoring = state.value.phase == WifiPhase.RECONNECTING && state.value.recovery != null
@@ -91,6 +140,63 @@ internal class RobotWifiController(private val scope: CoroutineScope,
         }
     }
 
+    fun refreshRadio() {
+        val current = binding ?: return
+        if (state.value.recovery != null) return
+        launch(WifiPhase.READING, current) { token ->
+            try {
+                val radio = current.service.readRadio()
+                currentCoroutineContext().ensureActive()
+                update(token) { it.copy(radio = radio, radioMessage = null, phase = WifiPhase.EDITING) }
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) { update(token) { it.copy(radio = null, phase = WifiPhase.EDITING,
+                error = uiText(Res.string.wifi_radio_read_failed)) } }
+        }
+    }
+
+    fun setChannelMode(mode: WifiChannelMode) = changeRadio(WifiRadioTarget(mode)) { service, dispatch -> service.setChannelMode(mode, dispatch) }
+    fun setChannel(channel: Int) {
+        val radio = state.value.radio ?: return
+        if (radio.selectionCode != 1 || channel !in radio.selectableChannels) return
+        changeRadio(WifiRadioTarget(WifiChannelMode.MANUAL, channel)) { service, dispatch -> service.setChannel(channel, dispatch) }
+    }
+
+    private fun changeRadio(target: WifiRadioTarget, write: suspend (RobotWifiService, () -> Unit) -> Unit) {
+        val current = binding ?: return
+        val before = state.value
+        val profile = before.profile?.takeIf { it.accessPoint } ?: return
+        if (before.recovery != null || before.radio?.modeCode != 0) return
+        launch(WifiPhase.RADIO_CHANGING, current) { token ->
+            var dispatched = false
+            var acknowledged = false
+            var actual: WifiRadioSettings? = null
+            try {
+                change(current.service) {
+                    write(current.service) {
+                        dispatched = true
+                        update(token) { it.copy(radioMessage = null, recovery = WifiRecovery(current.origin, profile, profile, false, target)) }
+                    }
+                    acknowledged = true
+                    val readback = current.service.readRadio()
+                    actual = readback
+                    if (!target.matches(readback)) throw RobotRequestException(RequestProblem.NOT_APPLIED)
+                }
+                currentCoroutineContext().ensureActive()
+                update(token) { it.copy(phase = WifiPhase.EDITING, radio = actual, recovery = null,
+                    radioMessage = uiText(Res.string.wifi_radio_verified)) }
+            } catch (error: CancellationException) { throw error }
+            catch (error: Exception) {
+                if (!dispatched || !acknowledged && error is RobotRequestException && error.problem == RequestProblem.REJECTED || actual != null) {
+                    update(token) { it.copy(phase = WifiPhase.EDITING, radio = actual ?: it.radio, recovery = null,
+                        error = uiText(if (actual == null) Res.string.wifi_radio_rejected else Res.string.wifi_radio_not_applied)) }
+                } else {
+                    update(token) { it.copy(phase = WifiPhase.NETWORK_REQUIRED, error = uiText(Res.string.wifi_radio_uncertain)) }
+                    if (version.load() == token) retire(current.service)
+                }
+            }
+        }
+    }
+
     fun reboot() {
         val current = binding ?: return
         val before = state.value
@@ -125,9 +231,10 @@ internal class RobotWifiController(private val scope: CoroutineScope,
         if (state.value.phase != WifiPhase.NETWORK_REQUIRED) return
         launch(WifiPhase.RECONNECTING) { token ->
             try {
-                val profile = reconnect(recovery.origin, recovery.expected)
+                val verified = reconnect(recovery.origin, recovery.expected, recovery.expectedRadio)
+                val profile = verified.profile
                 currentCoroutineContext().ensureActive()
-                update(token) { it.copy(phase = WifiPhase.VERIFIED, profile = profile, recovery = null,
+                update(token) { it.copy(phase = WifiPhase.VERIFIED, profile = profile, radio = verified.radio, recovery = null,
                     draft = profile.password?.let { secret -> WifiDraft(profile.ssid, secret) }, confirmed = emptySet()) }
             } catch (error: CancellationException) { throw error }
             catch (_: Exception) { update(token) { it.copy(phase = WifiPhase.NETWORK_REQUIRED, error = uiText(Res.string.wifi_reconnect_failed)) } }
@@ -157,13 +264,13 @@ internal class RobotWifiController(private val scope: CoroutineScope,
         val before = state.value
         if (preserveRecovery && before.recovery != null) {
             if (before.phase == WifiPhase.RECONNECTING) {
-                state.update { it.copy(connected = false, profile = null) }
+                state.update { it.copy(connected = false, profile = null, radio = null, signals = WifiSignals(), monitoring = false) }
                 return
             }
             if (before.phase != WifiPhase.NETWORK_REQUIRED) {
                 version.addAndFetch(1); job?.cancel(); job = null
             }
-            state.update { it.copy(connected = false, profile = null, phase = WifiPhase.NETWORK_REQUIRED,
+            state.update { it.copy(connected = false, profile = null, radio = null, signals = WifiSignals(), monitoring = false, phase = WifiPhase.NETWORK_REQUIRED,
                 error = if (before.phase == WifiPhase.NETWORK_REQUIRED) it.error else uiText(Res.string.wifi_connection_changed)) }
         } else cancel()
     }
@@ -174,5 +281,5 @@ internal class RobotWifiController(private val scope: CoroutineScope,
             phase = if (binding != null) WifiPhase.EDITING else WifiPhase.IDLE)
     }
 
-    fun close() { binding = null; cancel() }
+    fun close() { binding = null; cancel(); monitoringJob.cancel() }
 }

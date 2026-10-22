@@ -14,10 +14,10 @@ class RobotWifiControllerTest {
             val service = WifiFixture()
             var reconnects = 0
             lateinit var controller: RobotWifiController
-            controller = RobotWifiController(scope, { _, action -> action() }, { controller.detach() }, { target, expected ->
+            controller = RobotWifiController(scope, { _, action -> action() }, { controller.detach() }, { target, expected, _ ->
                 reconnects++; assertEquals(origin, target); assertEquals(service.profile, expected)
                 controller.attach(service, target)
-                service.read()
+                WifiVerification(service.read())
             })
             controller.attach(service, origin)
             assertEquals(0, service.reads)
@@ -44,7 +44,7 @@ class RobotWifiControllerTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         try {
             val service = WifiFixture().apply { saveError = RobotRequestException(RequestProblem.TIMED_OUT) }
-            val controller = RobotWifiController(scope, { _, action -> action() }, {}, { _, _ -> error("not connected") })
+            val controller = RobotWifiController(scope, { _, action -> action() }, {}, { _, _, _ -> error("not connected") })
             controller.attach(service, origin); controller.refresh()
             controller.edit("RMS1_New", "new_pass"); controller.apply()
             assertEquals(WifiPhase.EDITING, controller.state.value.phase)
@@ -67,7 +67,7 @@ class RobotWifiControllerTest {
         try {
             val service = WifiFixture()
             var retires = 0
-            val controller = RobotWifiController(scope, { _, action -> action() }, { retires++ }, { _, _ -> error("unused") })
+            val controller = RobotWifiController(scope, { _, action -> action() }, { retires++ }, { _, _, _ -> error("unused") })
             controller.attach(service, origin); controller.refresh()
             service.rebootError = RobotRequestException(RequestProblem.REJECTED, 2)
             controller.reboot(); assertEquals(WifiPhase.EDITING, controller.state.value.phase)
@@ -88,19 +88,20 @@ class RobotWifiControllerTest {
         val restoreGate = CompletableDeferred<Unit>()
         try {
             val service = WifiFixture().apply { readGate = gate }
-            val controller = RobotWifiController(scope, { _, action -> action() }, {}, { _, expected ->
-                withContext(NonCancellable) { restoreGate.await() }; expected
+            val controller = RobotWifiController(scope, { _, action -> action() }, {}, { _, expected, _ ->
+                withContext(NonCancellable) { restoreGate.await() }; WifiVerification(expected)
             })
+            val observers = scope.coroutineContext[Job]!!.children.toSet()
             controller.attach(service, origin); controller.refresh(); controller.refresh()
             assertEquals(1, service.reads)
             controller.stopWaiting(); controller.attach(service, origin)
-            gate.complete(Unit); scope.coroutineContext[Job]!!.children.toList().forEach { it.join() }
+            gate.complete(Unit); scope.coroutineContext[Job]!!.children.filterNot { it in observers }.toList().forEach { it.join() }
             assertNull(controller.state.value.profile)
             service.readGate = null; controller.refresh()
             controller.edit("RMS1_New", "new_pass"); controller.apply(); controller.reboot(); controller.detach()
             controller.reconnect(); assertEquals(WifiPhase.RECONNECTING, controller.state.value.phase)
             controller.stopWaiting(); controller.cancel()
-            restoreGate.complete(Unit); scope.coroutineContext[Job]!!.children.toList().forEach { it.join() }
+            restoreGate.complete(Unit); scope.coroutineContext[Job]!!.children.filterNot { it in observers }.toList().forEach { it.join() }
             assertEquals(WifiPhase.IDLE, controller.state.value.phase); assertNull(controller.state.value.recovery)
             scope.cancel(); controller.attach(service, origin); controller.refresh(); controller.apply(); controller.reboot()
             assertNull(controller.state.value.profile); assertEquals(1, service.writes.size); assertEquals(1, service.reboots)

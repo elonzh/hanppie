@@ -48,8 +48,10 @@ class WifiSessionTest {
                 assertTrue(requests.all { it.sender == 2 && it.attr == 0x40 })
                 session.enterRemote()
                 assertFailsWith<IllegalStateException> { session.wifi.reboot() }
+                assertFailsWith<IllegalStateException> { session.wifi.setChannelMode(WifiChannelMode.MANUAL) {} }
                 session.exitRemote(); session.labMode(true)
                 assertFailsWith<IllegalStateException> { session.wifi.configure(RobotApCredentials("test", "password")) {} }
+                assertFailsWith<IllegalStateException> { session.wifi.setChannel(6) {} }
                 session.normalMode(); drop.set(true)
                 val pending = async { runCatching { session.wifi.read() }.exceptionOrNull() }
                 withTimeout(2_000) { while (requests.size < 8) delay(10) }

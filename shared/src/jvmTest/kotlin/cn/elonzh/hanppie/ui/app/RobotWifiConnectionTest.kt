@@ -10,7 +10,7 @@ import kotlin.test.*
 
 class RobotWifiConnectionTest {
     @Test fun reconnectUsesTheOriginalTargetAndPublishesOnlyAfterConfigurationVerification(): Unit = runBlocking {
-        val services = List(4) { WifiFixture() }
+        val services = List(6) { WifiFixture() }
         val sessions = services.map { service -> RobotSessionFixture().apply { wifi = service } }
         val opened = mutableListOf<RobotTarget>()
         var discoveries = 0
@@ -67,6 +67,23 @@ class RobotWifiConnectionTest {
             val saved: ConnectionPreferences = store.loadConnection()
             assertTrue(saved.routerSsid.isEmpty()); assertTrue(saved.routerPassword.isEmpty())
             assertFalse(saved.toString().contains("new_pass")); assertNull(model.robotWifi.state.value.recovery)
+            model.robotWifi.refresh(); waitFor { model.robotWifi.state.value.phase == WifiPhase.EDITING }
+            model.robotWifi.refreshRadio(); waitFor { model.robotWifi.state.value.radio != null }
+            model.robotWifi.setChannelMode(WifiChannelMode.MANUAL)
+            waitFor { model.robotWifi.state.value.radio?.selectionCode == 1 }
+            services[3].radioWriteError = RobotRequestException(RequestProblem.TIMED_OUT)
+            model.robotWifi.setChannel(149)
+            waitFor { model.robotWifi.state.value.phase == WifiPhase.NETWORK_REQUIRED && !model.state.value.connected }
+            assertEquals(WifiRadioTarget(WifiChannelMode.MANUAL, 149), model.robotWifi.state.value.recovery?.expectedRadio)
+            services[4].profile = services[3].profile; services[4].radio = services[3].radio
+            model.robotWifi.reconnect()
+            waitFor { model.robotWifi.state.value.phase == WifiPhase.NETWORK_REQUIRED && !model.state.value.busy }
+            assertTrue(sessions[4].closed); assertFalse(model.state.value.connected)
+            services[5].profile = services[3].profile; services[5].radio = services[3].radio.copy(currentChannel = 149)
+            model.robotWifi.reconnect()
+            waitFor { model.robotWifi.state.value.phase == WifiPhase.VERIFIED && !model.state.value.busy }
+            assertTrue(model.state.value.connected); assertEquals(149, model.robotWifi.state.value.radio?.currentChannel)
+            assertEquals(List(6) { opened.first() }, opened); assertEquals(0, discoveries)
             model.disconnect(); waitFor { !model.state.value.connected && !model.state.value.busy }
             assertNull(model.robotWifi.state.value.draft); assertNull(model.robotWifi.state.value.profile)
         } finally { model.close() }

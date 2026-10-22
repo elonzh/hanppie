@@ -63,11 +63,13 @@ class AppSession(private val target: RobotTarget,
     private val pendingRequests = mutableMapOf<Int, PendingRequest>()
     private val audioCommands = SpeakerCommands(::request) { robotNanoTime() / 1_000_000 }
     val audio: cn.elonzh.hanppie.robot.media.RobotAudioService get() = audioCommands
-    private val wifiCommands = WifiCommands(::request)
+    private val wifiCommands = WifiCommands(request = ::request)
     val wifi: RobotWifiService = object : RobotWifiService by wifiCommands {
         override suspend fun configure(credentials: RobotApCredentials,
             onConfirmed: (WifiConfirmedField) -> Unit) = wifiChange { wifiCommands.configure(credentials, onConfirmed) }
         override suspend fun reboot() = wifiChange { wifiCommands.reboot() }
+        override suspend fun setChannelMode(mode: cn.elonzh.hanppie.robot.network.WifiChannelMode, onDispatch: () -> Unit) = wifiChange { wifiCommands.setChannelMode(mode, onDispatch) }
+        override suspend fun setChannel(channel: Int, onDispatch: () -> Unit) = wifiChange { wifiCommands.setChannel(channel, onDispatch) }
     }
     private val storageAccess = Mutex()
     private val cameraCommands = CameraCommands(::request, storageAccess = storageAccess) { robotNanoTime() / 1_000_000 }
@@ -514,6 +516,7 @@ class AppSession(private val target: RobotTarget,
     private fun sendNeutral(forceActuatorStop: Boolean = false) = txLock.withLock {
         cameraCommands.expire()
         audioCommands.expire()
+        wifiCommands.expire()
         val seq = sequence
         sequence = (sequence + 1) and 65535
         val fresh = remote && robotNanoTime() < inputDeadline
@@ -571,6 +574,7 @@ class AppSession(private val target: RobotTarget,
                                 val revision = cameraCommands.state.value.revision
                                 cameraCommands.receive(frame)
                                 audioCommands.receive(frame)
+                                wifiCommands.receive(frame)
                                 albumCommands.receive(frame)
                                 if (cameraCommands.state.value.revision != revision &&
                                     cameraCommands.state.value.storage?.let { !it.inserted || it.formatting || it.hasError } == true)
