@@ -55,6 +55,10 @@ class RemoteFireUiTest {
         val driveCount = AtomicInteger(0)
         val labStopCount = AtomicInteger(0)
 
+        override val camera = object : cn.elonzh.hanppie.robot.media.RobotCameraService {
+            override val state = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.media.CameraState(100))
+            override suspend fun setZoom(hundredths: Int) {}
+        }
         override val audio = object : cn.elonzh.hanppie.robot.media.RobotAudioService {
             override suspend fun read(): cn.elonzh.hanppie.robot.media.RobotAudioSettings = error("unused")
             override suspend fun applyVolume(volume: Int): cn.elonzh.hanppie.robot.media.RobotAudioSettings = error("unused")

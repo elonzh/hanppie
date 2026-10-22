@@ -1,5 +1,7 @@
 package cn.elonzh.hanppie.ui.robot.remote
 
+import cn.elonzh.hanppie.resources.camera_zoom_tracking_unavailable
+
 import cn.elonzh.hanppie.ui.robot.telemetry.signalQualityLabel
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -129,6 +131,7 @@ internal fun RemotePage(
     val connected by model.state.collectAsState()
     val remoteEnabled by model.remoteEnabled.collectAsState()
     val tracking by model.tracking.collectAsState()
+    val zoom by model.cameraZoom.state.collectAsState()
     val manualActionsEnabled = !tracking.blocksManualControl
     val videoFrame = model.videoFrames.image(connected.connectedAddress)
     var videoFresh by remember { mutableStateOf(false) }
@@ -314,13 +317,17 @@ internal fun RemotePage(
                 color = colors.onSurface, style = MiuixTheme.textStyles.subtitle)
             return@BoxWithConstraints
         }
-        ObjectTrackingControls(tracking, enabled && videoFrame != null && videoFresh,
+        if (manualActionsEnabled) CameraZoomControls(zoom, enabled && videoFresh && !connected.busy,
+            Modifier.align(Alignment.TopEnd).padding(top = 76.dp, end = HanppieDesignTokens.RemoteEdgePadding),
+            model.cameraZoom::setZoom)
+        ObjectTrackingControls(tracking, enabled && videoFrame != null && videoFresh && !zoom.busy && (zoom.hundredths == null || zoom.hundredths == 100),
             Modifier.align(Alignment.TopCenter).padding(top = 76.dp),
             onStart = {
                 keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
                 model.startObjectTracking(); focus.requestFocus()
             }, onConfirm = { model.confirmObjectTracking(); focus.requestFocus() },
-            onStop = { model.stopObjectTracking(); focus.requestFocus() })
+            onStop = { model.stopObjectTracking(); focus.requestFocus() },
+            unavailableReason = if ((zoom.hundredths ?: 100) > 100) Res.string.camera_zoom_tracking_unavailable else null)
         val touchInset = (maxWidth * .06f).coerceIn(32.dp, 80.dp)
         if (!keyboardHints) {
             Column(Modifier.align(Alignment.BottomStart).padding(start = touchInset, bottom = 32.dp).testTag("remote-touch-left"),

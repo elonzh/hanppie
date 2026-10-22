@@ -666,4 +666,11 @@
     <string name="speaker_language_ko">한국어</string>
     <string name="speaker_language_fr">Français</string>
     <string name="speaker_language_ru">Русский</string>
+    <string name="camera_zoom_failed">变焦尚未确认，请检查连接后重试</string>
+    <string name="camera_zoom_to_normal">恢复 1 倍变焦</string>
+    <string name="camera_zoom_to_four">切换到 4 倍变焦</string>
+    <string name="camera_zoom_changing">正在变焦…</string>
+    <string name="camera_zoom_waiting">等待相机状态</string>
+    <string name="camera_zoom_value">变焦 %1$s×</string>
+    <string name="camera_zoom_tracking_unavailable">恢复 1 倍变焦后可跟随</string>
 </resources>

@@ -4,6 +4,7 @@ import cn.elonzh.hanppie.robot.protocol.AppEnvelope
 import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.protocol.Protocol
 import cn.elonzh.hanppie.robot.protocol.u16
+import cn.elonzh.hanppie.robot.protocol.put16
 import cn.elonzh.hanppie.robot.tracking.TrackingPhase
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -23,6 +24,7 @@ class ObjectTrackingSessionTest {
             val alive = AtomicBoolean(true)
             val sent = CopyOnWriteArrayList<DussFrame>()
             val peer = thread(isDaemon = true) {
+                var zoom = 100
                 while (alive.get()) try {
                     val packet = DatagramPacket(ByteArray(65535), 65535)
                     robot.receive(packet)
@@ -30,6 +32,17 @@ class ObjectTrackingSessionTest {
                     val frames = Protocol.frames(bytes)
                     sent.addAll(frames)
                     robot.send(DatagramPacket(bytes, bytes.size, packet.socketAddress))
+                    if (bytes.size >= 12) {
+                        val envelope = AppEnvelope(bytes.u16(2), 80)
+                        for (f in frames.filter { it.receiver == 1 && it.set == 2 && it.id == 0x34 }) {
+                            zoom = f.payload.u16(3)
+                            val ack = envelope.direct(Protocol.duss(1, 2, 0xc0, 2, 0x34, byteArrayOf(0), f.sequence))
+                            robot.send(DatagramPacket(ack, ack.size, packet.socketAddress))
+                        }
+                        val status = envelope.direct(Protocol.duss(1, 2, 0, 2, 0xe4,
+                            ByteArray(26).apply { put16(8, zoom) }, 1))
+                        robot.send(DatagramPacket(status, status.size, packet.socketAddress))
+                    }
                     for (f in frames.filter { it.set == 0xa && it.receiver == 0xf1 }) {
                         val envelope = AppEnvelope(bytes.u16(2), 80)
                         fun reply(attr: Int, id: Int, payload: ByteArray) {
@@ -63,9 +76,14 @@ class ObjectTrackingSessionTest {
                     assertFalse(sent.drop(mark).any { it.set == 4 && it.id == 0xc || it.set == 0x3f && it.id in listOf(0x20, 0x21) },
                         "The remote ticker must not overwrite native tracking with zero speeds")
                     assertFailsWith<IllegalStateException> { session.fireInfrared() }
+                    assertFailsWith<IllegalStateException> { session.camera.setZoom(400) }
                     session.drive(.2, 0.0, 0.0, 0.0, 0.0)
                     waitFor(TrackingPhase.OFF)
                     assertTrue(sent.any { it.set == 0xa && it.id == 0xa7 && it.payload[2] == 0.toByte() })
+                    session.camera.setZoom(400)
+                    assertEquals(400, session.camera.state.value.zoomHundredths)
+                    assertFailsWith<IllegalStateException> { session.startTracking() }
+                    session.camera.setZoom(100)
                     follow()
                     operator.cancelAndJoin()
                     waitFor(TrackingPhase.OFF)

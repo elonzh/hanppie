@@ -64,6 +64,7 @@ interface RobotSession : AutoCloseable {
     val lab: RobotLabSession
     val files: RobotFileService
     val audio: RobotAudioService
+    val camera: cn.elonzh.hanppie.robot.media.RobotCameraService
 
     suspend fun connect()
     fun safetyStop()

@@ -42,6 +42,7 @@ internal interface ConsoleController : AutoCloseable {
     val scriptAudio: ScriptAudioLibrary
     val robotFiles: RobotFilesController
     val robotAudio: cn.elonzh.hanppie.ui.robot.audio.RobotAudioController
+    val cameraZoom: cn.elonzh.hanppie.ui.robot.remote.CameraZoomController
     val chat: ChatAgent
     val foregroundState: MutableStateFlow<Boolean>
     val tracking: StateFlow<TrackingState>

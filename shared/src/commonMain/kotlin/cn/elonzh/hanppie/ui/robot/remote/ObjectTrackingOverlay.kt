@@ -81,10 +81,11 @@ internal fun ObjectTrackingTargets(state: TrackingState, videoWidth: Int, videoH
 
 @Composable
 internal fun ObjectTrackingControls(state: TrackingState, enabled: Boolean, modifier: Modifier,
-    onStart: () -> Unit, onConfirm: () -> Unit, onStop: () -> Unit) {
+    onStart: () -> Unit, onConfirm: () -> Unit, onStop: () -> Unit,
+    unavailableReason: org.jetbrains.compose.resources.StringResource? = null) {
     val phase = state.phase
     val status = when (phase) {
-        TrackingPhase.OFF -> null
+        TrackingPhase.OFF -> unavailableReason
         TrackingPhase.STARTING -> Res.string.tracking_preparing
         TrackingPhase.SEARCHING -> Res.string.tracking_select_target
         TrackingPhase.SELECTING -> Res.string.tracking_selecting
@@ -108,17 +109,18 @@ internal fun ObjectTrackingControls(state: TrackingState, enabled: Boolean, modi
                 color = HanppieDesignTokens.RemoteHudContent, fontSize = 12.sp)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (!state.blocksManualControl) TrackingAction(tr(Res.string.object_tracking), enabled, "tracking-start", onStart)
-            if (phase == TrackingPhase.TARGET_READY) TrackingAction(tr(Res.string.tracking_start_follow), enabled, "tracking-confirm", onConfirm)
-            if (state.blocksManualControl) TrackingAction(tr(Res.string.tracking_stop),
-                phase != TrackingPhase.STOPPING, "tracking-stop", onStop)
+            if (!state.blocksManualControl) HudTextButton(tr(Res.string.object_tracking), enabled, "tracking-start", action = onStart)
+            if (phase == TrackingPhase.TARGET_READY) HudTextButton(tr(Res.string.tracking_start_follow), enabled, "tracking-confirm", action = onConfirm)
+            if (state.blocksManualControl) HudTextButton(tr(Res.string.tracking_stop),
+                phase != TrackingPhase.STOPPING, "tracking-stop", action = onStop)
         }
     }
 }
 
 @Composable
-private fun TrackingAction(label: String, enabled: Boolean, tag: String, action: () -> Unit) {
+internal fun HudTextButton(label: String, enabled: Boolean, tag: String, description: String = label, action: () -> Unit) {
     Box(Modifier.heightIn(min = HanppieDesignTokens.TouchTarget).testTag(tag)
+        .semantics { contentDescription = description }
         .clickable(enabled = enabled, role = Role.Button, onClick = action).padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center) {
         Text(label, color = if (enabled) HanppieDesignTokens.RemoteHudContent else HanppieDesignTokens.RemoteHudMuted,

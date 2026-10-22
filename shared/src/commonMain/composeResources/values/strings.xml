@@ -666,4 +666,11 @@
     <string name="speaker_language_ko">한국어</string>
     <string name="speaker_language_fr">Français</string>
     <string name="speaker_language_ru">Русский</string>
+    <string name="camera_zoom_failed">Zoom was not confirmed. Check the connection and try again.</string>
+    <string name="camera_zoom_to_normal">Return to 1× zoom</string>
+    <string name="camera_zoom_to_four">Switch to 4× zoom</string>
+    <string name="camera_zoom_changing">Changing zoom…</string>
+    <string name="camera_zoom_waiting">Waiting for camera</string>
+    <string name="camera_zoom_value">Zoom %1$s×</string>
+    <string name="camera_zoom_tracking_unavailable">Return to 1× zoom to start tracking</string>
 </resources>

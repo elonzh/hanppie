@@ -3,6 +3,7 @@ package cn.elonzh.hanppie.robot.session
 import cn.elonzh.hanppie.robot.lab.LabChannel
 import cn.elonzh.hanppie.robot.media.SpeakerAudio
 import cn.elonzh.hanppie.robot.media.SpeakerCommands
+import cn.elonzh.hanppie.robot.media.CameraCommands
 import cn.elonzh.hanppie.robot.media.VideoResolution
 import cn.elonzh.hanppie.robot.protocol.AppEnvelope
 import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
@@ -56,6 +57,23 @@ class AppSession(private val target: RobotTarget,
         val reply: CompletableDeferred<ByteArray> = CompletableDeferred())
     private val pendingRequests = mutableMapOf<Int, PendingRequest>()
     val audio: cn.elonzh.hanppie.robot.media.RobotAudioService = SpeakerCommands(::request)
+    private val cameraCommands = CameraCommands(::request) { robotNanoTime() / 1_000_000 }
+    private var cameraZoomChanging = false
+    private var cameraZoomMayBeActive = false
+    val camera: cn.elonzh.hanppie.robot.media.RobotCameraService = object : cn.elonzh.hanppie.robot.media.RobotCameraService by cameraCommands {
+        override suspend fun setZoom(hundredths: Int) {
+            require(hundredths in 100..400)
+            txLock.withLock {
+                check(remote && connected && !labRunning && !cameraZoomChanging && !tracking.value.blocksManualControl) { "请先退出跟随并启用遥控" }
+                cameraZoomChanging = true
+                if (hundredths > 100) cameraZoomMayBeActive = true
+            }
+            try {
+                cameraCommands.setZoom(hundredths)
+                if (hundredths == 100) txLock.withLock { cameraZoomMayBeActive = false }
+            } finally { txLock.withLock { cameraZoomChanging = false } }
+        }
+    }
     private val active = AtomicBoolean(false)
     private var socket: RobotDatagram? = null
     private val receiverScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -90,6 +108,7 @@ class AppSession(private val target: RobotTarget,
     val tracking get() = objectTracking.state
     fun startTracking() = txLock.withLock {
         check(remote && active.load() && !labRunning && robotNanoTime() - lastReceivedNanos < 500_000_000)
+        check(!cameraZoomChanging && !cameraZoomMayBeActive) { "请先将相机恢复到 1 倍变焦" }
         inputDeadline = robotNanoTime() + 250_000_000
         objectTracking.start()
     }
@@ -449,11 +468,13 @@ class AppSession(private val target: RobotTarget,
     }
 
     private fun failRequests() = txLock.withLock {
+        cameraCommands.close()
         pendingRequests.values.forEach { it.reply.completeExceptionally(RobotRequestException(RequestProblem.DISCONNECTED)) }
         pendingRequests.clear()
     }
 
     private fun sendNeutral(forceActuatorStop: Boolean = false) = txLock.withLock {
+        cameraCommands.expire()
         val seq = sequence
         sequence = (sequence + 1) and 65535
         val fresh = remote && robotNanoTime() < inputDeadline
@@ -506,7 +527,14 @@ class AppSession(private val target: RobotTarget,
                         txLock.withLock { envelope.observe(data) }
                         Protocol.frames(data).filter { it.valid }.forEach { frame ->
                             Telemetry.gimbalYaw(frame)?.let { yaw -> yawSample = yaw to robotNanoTime() }
-                            txLock.withLock { objectTracking.receive(frame); receiveReply(frame) }
+                            txLock.withLock {
+                                objectTracking.receive(frame)
+                                val revision = cameraCommands.state.value.revision
+                                cameraCommands.receive(frame)
+                                if (cameraCommands.state.value.revision != revision && !cameraZoomChanging)
+                                    cameraZoomMayBeActive = cameraCommands.state.value.zoomHundredths?.let { it != 100 } ?: cameraZoomMayBeActive
+                                receiveReply(frame)
+                            }
                             updateProduct(frame)
                             if (frame.set == Protocol.CMDSET_RM && frame.id == Protocol.CMD_RM_AUDIO_TO_APP) onAudio?.invoke(frame.payload) else onFrame(frame)
                         }

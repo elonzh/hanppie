@@ -55,6 +55,7 @@ private class PlatformRobotSession(
     override val product: RobotProduct get() = app.product
     override val tracking get() = app.tracking
     override val audio get() = app.audio
+    override val camera get() = app.camera
     override fun startTracking() = app.startTracking()
     override fun selectTrackingTarget(x: Float, y: Float) = app.selectTrackingTarget(x, y)
     override fun confirmTracking() = app.confirmTracking()
