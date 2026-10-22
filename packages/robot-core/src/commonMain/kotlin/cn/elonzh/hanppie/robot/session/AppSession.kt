@@ -64,12 +64,16 @@ class AppSession(private val target: RobotTarget,
     private val audioCommands = SpeakerCommands(::request) { robotNanoTime() / 1_000_000 }
     val audio: cn.elonzh.hanppie.robot.media.RobotAudioService get() = audioCommands
     private val wifiCommands = WifiCommands(request = ::request)
+    private val sdrCommands = cn.elonzh.hanppie.robot.network.SdrCommands(::request)
+    val sdr: cn.elonzh.hanppie.robot.network.RobotSdrService = object : cn.elonzh.hanppie.robot.network.RobotSdrService by sdrCommands {
+        override suspend fun set(change: cn.elonzh.hanppie.robot.network.SdrChange, onDispatch: () -> Unit) = networkChange { sdrCommands.set(change, onDispatch) }
+    }
     val wifi: RobotWifiService = object : RobotWifiService by wifiCommands {
         override suspend fun configure(credentials: RobotApCredentials,
-            onConfirmed: (WifiConfirmedField) -> Unit) = wifiChange { wifiCommands.configure(credentials, onConfirmed) }
-        override suspend fun reboot() = wifiChange { wifiCommands.reboot() }
-        override suspend fun setChannelMode(mode: cn.elonzh.hanppie.robot.network.WifiChannelMode, onDispatch: () -> Unit) = wifiChange { wifiCommands.setChannelMode(mode, onDispatch) }
-        override suspend fun setChannel(channel: Int, onDispatch: () -> Unit) = wifiChange { wifiCommands.setChannel(channel, onDispatch) }
+            onConfirmed: (WifiConfirmedField) -> Unit) = networkChange { wifiCommands.configure(credentials, onConfirmed) }
+        override suspend fun reboot() = networkChange { wifiCommands.reboot() }
+        override suspend fun setChannelMode(mode: cn.elonzh.hanppie.robot.network.WifiChannelMode, onDispatch: () -> Unit) = networkChange { wifiCommands.setChannelMode(mode, onDispatch) }
+        override suspend fun setChannel(channel: Int, onDispatch: () -> Unit) = networkChange { wifiCommands.setChannel(channel, onDispatch) }
     }
     private val storageAccess = Mutex()
     private val cameraCommands = CameraCommands(::request, storageAccess = storageAccess) { robotNanoTime() / 1_000_000 }
@@ -114,7 +118,7 @@ class AppSession(private val target: RobotTarget,
     @Volatile var product: RobotProduct = RobotProduct()
         private set
     private val modeMutex = Mutex()
-    private suspend fun wifiChange(action: suspend () -> Unit) {
+    private suspend fun networkChange(action: suspend () -> Unit) {
         check(modeMutex.tryLock()) { "请等待控制模式切换结束" }
         try {
             txLock.withLock { check(connected && !remote && !labRunning && !tracking.value.blocksManualControl) { "请先退出遥控或停止脚本" } }
@@ -507,6 +511,7 @@ class AppSession(private val target: RobotTarget,
     private fun failRequests() = txLock.withLock {
         audioCommands.close()
         wifiCommands.close()
+        sdrCommands.close()
         cameraCommands.close()
         albumCommands.close()
         pendingRequests.values.forEach { it.reply.completeExceptionally(RobotRequestException(RequestProblem.DISCONNECTED)) }

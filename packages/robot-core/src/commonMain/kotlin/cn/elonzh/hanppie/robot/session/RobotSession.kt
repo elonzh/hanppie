@@ -67,6 +67,7 @@ interface RobotSession : AutoCloseable {
     val files: RobotFileService
     val audio: RobotAudioService
     val wifi: RobotWifiService
+    val sdr: cn.elonzh.hanppie.robot.network.RobotSdrService
     val album: cn.elonzh.hanppie.robot.media.album.RobotAlbumService
     val camera: cn.elonzh.hanppie.robot.media.RobotCameraService
 

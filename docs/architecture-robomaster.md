@@ -370,6 +370,37 @@ SNR 转换要求物理载荷至少 18 字节；偏移 0 为 uint32LE 声明总�
 
 静态片段保存于忽略目录 `.hanppie/validation/2026-10-22-official-gap/N02-native-*`。推送的真实节点/属性/频率、列表变化、报告量纲、切换时序和失联恢复均待实机；合成向量及 UDP 回环不替代这些证据，具体状态见[实施台账 N02](./official-app-capability-implementation.md#n02-验证入口与设备待验)。
 
+#### SDR 链路配置
+
+固定 macOS 1.1.5/build 239 包含 `RobomasterSDRLink`；它与 Wi-Fi 的节点、命令和枚举独立。`Base.CONTROL/LinkMode.cs` 为 AP=0、SDR=1、Station=2、None=4，`RealController` 将 `DJIWiFiLinkMode` 的读取值直接转换为该枚举；这为当前模式探测提供客户端依据，但没有证明现有 UDP 入口在 SDR 硬件上的可达性。**客户端代码 / 待实机验证**
+
+| 操作 | 原生目的字节 / cmdset:id / 载荷 | 原生入口 |
+| --- | --- | --- |
+| 更新配置快照 | `0x0e` / `09:21` / 空 | ActionUpdateConfigs `0x6d61c0`；目的字节 `0x6d628a` |
+| 设置频点 | `0x0e` / `09:0d` / `01` + uint16LE 频点编码 | SetCurrentFreqPoint `0x6d4cb0`；载荷 `0x6d4d23–0x6d4d2b` |
+| 设置频段 | 同上，`02` + uint16LE 枚举 | SetCurrentFreqBand `0x6d5270` |
+| 设置选择方式 | 同上，`03` + uint16LE 枚举 | SetChannelSelectionMode `0x6d5600` |
+| 设置带宽 | 同上，`04` + uint16LE 枚举 | SetBandwidth `0x6d5990` |
+
+四种设置均是 3 字节载荷，不能复用 N02 的 Wi-Fi 格式；例如选择方式的载荷长度在 `0x6d56eb` 置为 3。配置响应转换入口 `0x6d8d30` 先检查 retcode，再分别读取选择方式 uint8@1（`0x6d912f`）、带宽 uint8@2（`0x6d8e09`）、频点 uint16LE@3（`0x6d8f0b`）、频段 uint8@5（`0x6d9024`）、双频标志@6 非零即真（`0x6d924e`）。转换并未要求响应无附加字节。**原生代码**
+
+`DJISDRChannelSelectionMode` 为手动=0、自动=1，与 Wi-Fi 相反；`DJISDRBandwidth` 为 20 MHz=0、10 MHz=1；`DJISDRFreqBand` 为双频=0、2.4 GHz=1、5.8 GHz=2、未知=3。Hanppie 保留查询中的未知编码，不将未知值当作默认配置。**客户端/当前代码**
+
+消费者设置页 `ViewSettingConnect` 只按 SDR 模式显示信号质量面板，完整调参消费者位于 `Module.InnerTools.View/ViewSDR.cs`。该内部工具每秒执行一次 UpdateConfigs；自动模式禁用频段、隐藏带宽并禁用频点滑块；手动模式依双频标志显示 2.4/5.8 GHz，拖动结束发送频点。其频段切换函数先改变滑块所在频段，而原生另有上述独立 SetCurrentFreqBand。Hanppie 使用显式频段写入和回读，不复制内部工具的无确认事件写入或每秒轮询。**客户端/当前代码**
+
+内部工具按以下范围以 1 MHz 步长生成 `.5 MHz` 的中心频率，来自 `SliderValueToFreqPoint`，并非设备或地区可用列表：
+
+| 频段 / 带宽 | 手动滑块中心频率 | 对应原生频点编码 |
+| --- | --- | --- |
+| 2.4 GHz / 20 MHz | 2410.5–2472.5 MHz | 1011–1073 |
+| 2.4 GHz / 10 MHz | 2405.5–2477.5 MHz | 1006–1078 |
+| 5.8 GHz / 20 MHz | 5735.5–5839.5 MHz | 2549–2653 |
+| 5.8 GHz / 10 MHz | 5730.5–5844.5 MHz | 2544–2658 |
+
+`ChannelToFreqPoint` 另能显示编码 901–1200、2084–2283、2284–2663，分别按 `2400.5 + (ch−1001)`、`5150.5 + (ch−2084)`、`5470.5 + (ch−2284)` MHz 转换；未知编码不能猜测频率。内部工具的 5.8 GHz / 10 MHz 逆映射 `FreqPointToSliderValue` 使用 5720.5，和前向 5730.5 不一致；Hanppie 的输入直接按前向范围生成编码，不复用该逆滑块计算。**客户端代码 / 当前实现取舍**
+
+内部工具也有国家代码写入；Hanppie 未新增该操作，原有国家代码冲突 C02 仍冻结。本轮恢复的配置快照只有双频支持标志，没有国家许可或完整可用频点列表；手动范围不能视为合法地区范围、特定固件支持或射频认证结论。没有设备，节点路由、模式值、配置应答、生效/断连时序和射频效果均待验证。静态片段保留在忽略目录 `.hanppie/validation/2026-10-22-official-gap/N03-native-SDR-*`，逐项状态见[实施台账 N03](./official-app-capability-implementation.md#n03-验证入口与设备待验)。
+
 ### 5.3 RoboMaster App 与 Lab 程序机制
 
 RoboMaster App 提供手机和 macOS 客户端，Lab 是该应用中的程序功能；两者不共同构成一套名为“App/Lab”的协议。实际链路由以下机制组成：

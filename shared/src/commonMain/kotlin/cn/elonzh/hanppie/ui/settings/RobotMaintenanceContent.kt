@@ -78,6 +78,7 @@ internal fun RobotMaintenanceContent(model: ConsoleController, onAlbum: (() -> U
             }
         }
     }
+    cn.elonzh.hanppie.ui.robot.network.SdrSettingsControls(model)
     if (onWifi != null) Button(onWifi, Modifier.heightIn(min = 48.dp).testTag("settings-wifi-open")) {
         Text(tr(Res.string.robot_wifi))
     }
