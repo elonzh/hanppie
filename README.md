@@ -45,6 +45,7 @@ RoboMaster 开源工作台。在电脑、手机和平板上驾驶机器人、编
 | 机器人 SD 拍录 | 驾驶舱左上方点击“SD 卡拍录”，可拍照、开始或停止机内录像；入口显示机内录像秒数，原主机拍录按钮保持独立。[设备待验项](./docs/official-app-capability-implementation.md#a05-验证入口与设备待验) |
 | 机器人媒体 | 在“SD 卡拍录”面板或“设置 → 机器人维护”点击“浏览媒体”，点选文件查看缩略图并下载；“已下载”中可打开、用系统播放器播放视频、导出或删除本地副本。[设备待验项](./docs/official-app-capability-implementation.md#a06-验证入口与设备待验) |
 | 机器人音频 | 在“设置 → 音视频”查询机器人音量、应用音量并回读确认，或更改机器人语音语言；与应用界面语言分别设置。当前设备验证边界见[实施台账](./docs/official-app-capability-implementation.md#a01-验证入口与设备待验) |
+| 收音与播放 | 在“设置 → 音视频 → 机器人收音与播放”查询收音开关、查看最近播放状态或发送防啸叫配置。驾驶舱“按住对讲”录制短片，松开后上传播放。[设备待验项](./docs/official-app-capability-implementation.md#a08-验证入口与设备待验) |
 | 编写脚本 | 在“脚本”页新建、导入 `.py`，或从预置脚本创建副本；保存到本机脚本库，再点击“运行脚本”。Lab 脚本使用机内 API 和 Python 3.6 语法，见 [Lab 编程指南](./shared/src/commonMain/composeResources/files/skills/lab-python/SKILL.md) |
 | AI 编程 | 在“设置 → 模型服务”选择供应商，填写 API Key、模型并测试配置；在“对话”页描述需求，检查完整脚本后确认执行 |
 | 停止脚本 | 使用“停止脚本”。退出编辑器或取消 AI 生成不会停止已经启动的机内脚本 |

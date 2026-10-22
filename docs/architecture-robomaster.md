@@ -589,6 +589,25 @@ Hanppie 当前将上述包接入 App 会话请求与接收通道，过滤相机�
 
 这些新接入查询、语音写入及所有语言的固件支持尚未获得本轮实机确认。现有音量写节点与官方静态节点不同，按[实施台账 C09](./official-app-capability-implementation.md#冲突记录保持现状留待决策)保留；显式音量操作沿现有节点等待应答，再通过原生查询节点核对。跨节点读写是否反映同一设备设置、语音切换是否需要等待、固件是否支持上述全部语言均为待验项。原生库指纹沿用[静态提取记录](./s1-app-static-analysis-2026-09-08.md)，本次局部反汇编位于 `.hanppie/validation/2026-10-22-official-gap/native-System-*Volume.txt` 和 `*SpeakerLanguage.txt`。**待验证**
 
+#### 机器人收音、防啸叫与播放任务
+
+固定版本原生 `RobomasterSystemAbstraction` 的收音开关使用相机节点 `0x01`，与上节音量/语言的原生节点不同。`DJIRobomasterSystemSoundEnabled` 表示机器人声音流开关；终端是否监听还受 `DJIAudioController.SettingAudioSwitch` / `mFPVStartPlayAudio` 等本地条件控制，不能把此值当作本机播放、麦克风权限或双工通话状态。**客户端代码**
+
+| 操作 | 原生请求/字段 | 定位 |
+| --- | --- | --- |
+| 查询声音流开关 | 相机 `0x01`，`3f:1f`，空请求；返回 retcode 后的一字节，原生按非零解释为真 | GetSoundStreamEnabled `0x69be10`，构造 `0x69be85..0x69be96`；转换 `0x6b5f20`，读取 `0x6b5f6b..0x6b5f71` |
+| 写声音流开关 | 相机 `0x01`，`3f:1e`，一字节 0/1 | SetSoundStreamEnabled `0x69b690`，`0x69b706..0x69b77a`；Hanppie 既有推流路径只在监听开启时写 1 |
+| 写防啸叫 | 相机 `0x01`，`3f:e1`，四字节：开启 `01 0c 01 01`，关闭 `01 0c 01 02` | SetEnableAntiLarsenAlgorithm `0x730a10`，`0x730a90..0x730aff`；InternalSetAudioRecordingConfig `0x730c40`，`0x730c76..0x730d25` |
+| 播放任务推送 | `3f:b4`；uint8 任务号 @ 0、uint8 任务进度 @ 1、原始状态 @ 2、uint32 LE sound ID @ 3；状态低两位为 0 时发布 IsPlaying=true | ObserverPushPack `0x693000`，full-command `0x403f00b4` 在 `0x693106`；OnPlaySoundStatusPush `0x698460`，读取 `0x6984d6..0x6984e9` |
+
+防啸叫 key 为 Write，当前没有其 getter 或状态推送。布尔值在原生内部转换为 1（开启）/2（关闭），不能直接把 false 编码成末字节 0，也不能从 ACK 推定声学效果或“回声消除已生效”。播放任务进度在机载 `event_client.py:task_sync_process` 被命名为 percent；Hanppie 对超出 0–100 的字节保留原值但不显示百分比。状态非零只显示非播放/停止，不将它统一解释为成功完成。**原生/机载代码**
+
+原生播放回调先比较任务号与当前任务（`0x69848a..0x698492`）；ActionPlaySound 在 `0x6ab870..0x6ab879` 递增任务号，发往节点 `0x09`（`0x6ab8fb`）。Hanppie 当前实机派生的短片播放载荷固定为 `0b040000010001000001`。新增收听仅显示有效来源的最近任务推送，不把它绑定到当前按住对讲的文件，也不据此驱动对讲/Lab 的完成状态；改变任务号和抢占策略的冲突见实施台账 C13。
+
+静态 C# `RecordAudio/RecordAudioComponent` 录音并生成 Opus 文件，`RecordAudioPanel.TransformSoundFile` 通过 PushFile 上传，`PlaySoundFile` 再调用 PlaySound；已恢复的该路径不足以证明另一条连续终端麦克风上行或全双工通话契约。既有 Hanppie 短片对讲不能因此写成连续通话；也不能把这类未证实模式当作已确认缺陷直接替换当前路径。**代码 / 证据边界**
+
+局部证据保留在 `.hanppie/validation/2026-10-22-official-gap/native-System-SoundStreamEnabled.txt`、`native-System-SoundStreamReply.txt`、`native-Camera-AntiLarsen.txt`、`native-System-PlaySoundStatus.txt`、`native-System-PlaySoundObserver.txt` 与 `native-System-PlaySoundRequest.txt`。本轮没有设备，声音流开关真实含义/应答、防啸叫的声学效果、播放推送属性/频率/来源/任务关联、延迟和并发结果均待验证；清单见[实施台账 A08](./official-app-capability-implementation.md#a08-验证入口与设备待验)。
+
 ### 5.5 红外发射与命中链路
 
 S1 的红外能力至少包含三层，不能把其中任意一层统称为“红外编码”：

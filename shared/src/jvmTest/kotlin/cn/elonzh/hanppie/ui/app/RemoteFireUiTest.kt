@@ -78,6 +78,9 @@ class RemoteFireUiTest {
             override suspend fun setZoom(hundredths: Int) {}
         }
         override val audio = object : cn.elonzh.hanppie.robot.media.RobotAudioService {
+            override val playback = kotlinx.coroutines.flow.MutableStateFlow<cn.elonzh.hanppie.robot.media.RobotSpeakerPlayback?>(null)
+            override suspend fun readSoundEnabled() = false
+            override suspend fun setAntiFeedback(enabled: Boolean) = error("unused")
             override suspend fun read(): cn.elonzh.hanppie.robot.media.RobotAudioSettings = error("unused")
             override suspend fun applyVolume(volume: Int): cn.elonzh.hanppie.robot.media.RobotAudioSettings = error("unused")
             override suspend fun setLanguage(language: cn.elonzh.hanppie.robot.media.SpeakerLanguage): cn.elonzh.hanppie.robot.media.RobotAudioSettings = error("unused")

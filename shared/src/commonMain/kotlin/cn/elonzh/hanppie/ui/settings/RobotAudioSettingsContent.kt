@@ -10,6 +10,7 @@ import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.media.SpeakerLanguage
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.robot.audio.RobotAudioController
+import cn.elonzh.hanppie.ui.robot.audio.AudioSetting
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -43,6 +44,44 @@ internal fun RobotAudioSettingsContent(controller: RobotAudioController, connect
                     }
                     Button(controller::refresh, enabled = enabled,
                         modifier = Modifier.heightIn(min = 48.dp).testTag("robot-audio-refresh")) { Text(tr(Res.string.refresh)) }
+                }
+            }
+        }
+    }
+    if (connected) {
+        Text(tr(Res.string.native_audio_title), fontSize = 15.sp)
+        Card(Modifier.fillMaxWidth().testTag("robot-audio-signal"),
+            colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                when (val sound = state.soundEnabled) {
+                    is AudioSetting.Value -> Text(tr(if (sound.value) Res.string.native_audio_snapshot_on else Res.string.native_audio_snapshot_off),
+                        Modifier.testTag("robot-sound-snapshot"), fontSize = 14.sp)
+                    is AudioSetting.Failed -> Text(sound.message.resolve(), Modifier.testTag("robot-sound-error"), fontSize = 14.sp,
+                        color = MiuixTheme.colorScheme.error)
+                    else -> Text(tr(if (sound == AudioSetting.Loading) Res.string.native_audio_reading else Res.string.native_audio_unknown), fontSize = 14.sp)
+                }
+                Text(tr(Res.string.native_audio_scope), fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                Button(controller::refreshSound, Modifier.heightIn(min = 48.dp).testTag("robot-sound-refresh"),
+                    enabled && state.soundEnabled != AudioSetting.Loading) { Text(tr(Res.string.native_audio_refresh)) }
+                val playback = state.playback
+                Text(when {
+                    playback == null -> tr(Res.string.robot_playback_wait)
+                    !playback.playing -> tr(Res.string.robot_playback_stopped)
+                    playback.percent != null -> tr(Res.string.robot_playback_progress, playback.percent!!)
+                    else -> tr(Res.string.robot_playback_running)
+                }, Modifier.testTag("robot-playback-status"), fontSize = 14.sp)
+                val feedback = state.antiFeedback
+                SettingsDropdown(tr(Res.string.anti_feedback), "robot-anti-feedback",
+                    (feedback as? AudioSetting.Value)?.value?.toString() ?: tr(Res.string.anti_feedback_choose),
+                    listOf("true" to tr(Res.string.native_audio_on), "false" to tr(Res.string.native_audio_off)),
+                    enabled && feedback != AudioSetting.Loading) { controller.setAntiFeedback(it == "true") }
+                when (feedback) {
+                    AudioSetting.Loading -> Text(tr(Res.string.anti_feedback_applying), Modifier.testTag("robot-feedback-result"), fontSize = 14.sp)
+                    is AudioSetting.Value -> Text(tr(if (feedback.value) Res.string.anti_feedback_on_ack else Res.string.anti_feedback_off_ack),
+                        Modifier.testTag("robot-feedback-result"), fontSize = 14.sp)
+                    is AudioSetting.Failed -> Text(feedback.message.resolve(), Modifier.testTag("robot-feedback-result"),
+                        fontSize = 14.sp, color = MiuixTheme.colorScheme.error)
+                    AudioSetting.Unread -> Unit
                 }
             }
         }

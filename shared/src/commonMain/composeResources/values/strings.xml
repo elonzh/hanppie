@@ -773,4 +773,22 @@
     <string name="camera_keyframe_requested">Refresh request acknowledged. Check the video image.</string>
     <string name="camera_switch_task_active">Stop tracking or end the script before switching cameras.</string>
     <string name="camera_switch_busy">Finish capture or media transfer before switching cameras.</string>
+    <string name="native_audio_title">Robot microphone and playback</string>
+    <string name="native_audio_snapshot_on">Last query: robot microphone enabled</string>
+    <string name="native_audio_snapshot_off">Last query: robot microphone disabled</string>
+    <string name="native_audio_reading">Reading the robot microphone setting…</string>
+    <string name="native_audio_unknown">Robot microphone setting has not been queried</string>
+    <string name="native_audio_refresh">Query robot microphone</string>
+    <string name="native_audio_scope">The robot microphone and local monitoring have separate controls.</string>
+    <string name="robot_playback_wait">Waiting for playback status…</string>
+    <string name="robot_playback_running">Robot speaker: playing</string>
+    <string name="robot_playback_progress">Robot speaker: playing · %1$d%%</string>
+    <string name="robot_playback_stopped">Robot speaker: stopped</string>
+    <string name="anti_feedback">Feedback suppression</string>
+    <string name="anti_feedback_choose">Choose a setting</string>
+    <string name="native_audio_on">Enable</string>
+    <string name="native_audio_off">Disable</string>
+    <string name="anti_feedback_applying">Sending feedback suppression request…</string>
+    <string name="anti_feedback_on_ack">Enable feedback suppression request acknowledged</string>
+    <string name="anti_feedback_off_ack">Disable feedback suppression request acknowledged</string>
 </resources>

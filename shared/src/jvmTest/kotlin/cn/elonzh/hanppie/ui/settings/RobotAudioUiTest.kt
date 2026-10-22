@@ -19,6 +19,7 @@ import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme
 import cn.elonzh.hanppie.ui.app.testConsoleModel
 import cn.elonzh.hanppie.ui.i18n.Localization
 import cn.elonzh.hanppie.ui.robot.audio.RobotAudioController
+import cn.elonzh.hanppie.ui.robot.audio.AudioSetting
 import kotlinx.coroutines.*
 import org.junit.Rule
 import org.junit.Test
@@ -28,6 +29,18 @@ import javax.imageio.ImageIO
 import kotlin.test.*
 
 private class AudioFixture : RobotAudioService {
+    override val playback = kotlinx.coroutines.flow.MutableStateFlow<cn.elonzh.hanppie.robot.media.RobotSpeakerPlayback?>(null)
+    var sound = false
+    var signalFailure = false
+    val feedbackWrites = mutableListOf<Boolean>()
+    override suspend fun readSoundEnabled(): Boolean {
+        if (signalFailure) throw RobotRequestException(RequestProblem.TIMED_OUT)
+        return sound
+    }
+    override suspend fun setAntiFeedback(enabled: Boolean) {
+        feedbackWrites += enabled
+        if (signalFailure) throw RobotRequestException(RequestProblem.TIMED_OUT)
+    }
     var settings = RobotAudioSettings(38, 0)
     var failure = false
     override suspend fun read(): RobotAudioSettings {
@@ -72,6 +85,48 @@ class RobotAudioUiTest {
             rule.onNodeWithText("机器人返回的音量：65%").assertIsDisplayed()
         } finally { controller.clear(); scope.cancel() }
     }
+
+    @Test fun actualSettingsQueryDeviceAudioAndKeepFeedbackAcknowledgementSeparateFromPlayback() {
+        Localization.initialize("zh", null)
+        val model = testConsoleModel()
+        val audio = AudioFixture()
+        model.state.value = model.state.value.copy(connected = true)
+        model.robotAudio.attach(audio)
+        try {
+            rule.setContent { TestWorkbenchTheme { SettingsPage(model) } }
+            rule.onNodeWithTag("settings-category-media").performScrollTo().performClick()
+            rule.waitUntil(3_000) { model.robotAudio.state.value.soundEnabled is AudioSetting.Value }
+            rule.onNodeWithTag("robot-sound-snapshot").performScrollTo().assertTextEquals("上次查询的机器人收音：关闭")
+            audio.sound = true
+            rule.onNodeWithTag("robot-sound-refresh").performScrollTo().performClick()
+            rule.waitUntil(3_000) { model.robotAudio.state.value.soundEnabled == AudioSetting.Value(true) }
+            rule.onNodeWithTag("robot-sound-snapshot").performScrollTo().assertTextEquals("上次查询的机器人收音：开启")
+            audio.playback.value = RobotSpeakerPlayback(11, 65536, 35, 0)
+            rule.onNodeWithTag("robot-playback-status").performScrollTo().assertTextEquals("机器人扬声器：播放中 · 35%")
+            rule.onNodeWithTag("robot-anti-feedback-selector").performScrollTo().performClick()
+            rule.onNodeWithContentDescription("robot-anti-feedback-true").performClick()
+            rule.waitUntil(3_000) { model.robotAudio.state.value.antiFeedback == AudioSetting.Value(true) }
+            rule.onNodeWithTag("robot-feedback-result").performScrollTo().assertTextEquals("已确认防啸叫开启请求")
+            audio.signalFailure = true
+            rule.onNodeWithTag("robot-sound-refresh").performScrollTo().performClick()
+            rule.waitUntil(3_000) { model.robotAudio.state.value.soundEnabled is AudioSetting.Failed }
+            rule.onNodeWithTag("robot-sound-snapshot").assertDoesNotExist()
+            rule.onNodeWithTag("robot-audio-apply-volume").performScrollTo().assertIsEnabled()
+            audio.signalFailure = false
+            rule.onNodeWithTag("robot-sound-refresh").performScrollTo().performClick()
+            rule.waitUntil(3_000) { model.robotAudio.state.value.soundEnabled is AudioSetting.Value }
+            audio.playback.value = RobotSpeakerPlayback(11, 65536, 100, 1)
+            rule.onNodeWithTag("robot-playback-status").performScrollTo().assertTextEquals("机器人扬声器：已停止")
+            audio.playback.value = null
+            rule.waitUntil(3_000) {
+                rule.onAllNodes(hasTestTag("robot-playback-status") and hasText("等待播放状态…")).fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.onNodeWithTag("robot-playback-status").assertTextEquals("等待播放状态…")
+            rule.runOnIdle { model.robotAudio.clear(); model.state.value = model.state.value.copy(connected = false) }
+            rule.onNodeWithTag("robot-audio-signal").assertDoesNotExist()
+            assertEquals(listOf(true), audio.feedbackWrites)
+        } finally { model.close() }
+    }
 }
 
 @OptIn(ExperimentalTestApi::class)
@@ -106,6 +161,13 @@ class RobotAudioLayoutTest {
                 out.setRGB(0, 0, width, height, pixels, 0, width)
                 val file = File("build/reports/ui/audio-$width-$height-$language.png").apply { parentFile.mkdirs() }
                 ImageIO.write(out, "png", file)
+                onNodeWithTag("robot-sound-refresh").performScrollTo().assertIsDisplayed().assertIsEnabled()
+                onNodeWithTag("robot-anti-feedback-selector").performScrollTo().assertIsDisplayed().assertIsEnabled()
+                assertTrue(onNodeWithTag("robot-anti-feedback-selector").fetchSemanticsNode().boundsInRoot.height >= 48)
+                val signalImage = onNodeWithTag("audio-layout").captureToImage()
+                signalImage.readPixels(pixels)
+                out.setRGB(0, 0, width, height, pixels, 0, width)
+                ImageIO.write(out, "png", File("build/reports/ui/audio-signal-$width-$height-$language.png"))
             } finally { model.close(); Localization.initialize("zh", null) }
         }
 }
