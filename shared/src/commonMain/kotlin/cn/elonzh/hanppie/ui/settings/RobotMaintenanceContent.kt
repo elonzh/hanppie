@@ -16,11 +16,12 @@ import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-internal fun RobotMaintenanceContent(model: ConsoleController) {
+internal fun RobotMaintenanceContent(model: ConsoleController, onAlbum: (() -> Unit)? = null) {
     val console by model.state.collectAsState()
     val state by model.robotCamera.state.collectAsState()
+    val album by model.robotAlbum.state.collectAsState()
     val storage = state.storage.takeIf { console.connected }
-    val canFormat = storage?.canFormat == true && !state.storageBusy
+    val canFormat = storage?.canFormat == true && !state.storageBusy && !album.nativeBusy
     var confirmConnection by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(state.connection, canFormat) {
         if (!canFormat || confirmConnection != state.connection) confirmConnection = null
@@ -57,6 +58,7 @@ internal fun RobotMaintenanceContent(model: ConsoleController) {
                 if (storage.recording) Text(tr(Res.string.camera_storage_recording_elapsed, storage.recordingSeconds), fontSize = 14.sp)
             }
             if (console.connected) {
+                if (album.nativeBusy) Text(tr(Res.string.album_transfer_active), fontSize = 14.sp)
                 Button({ confirmConnection = state.connection }, enabled = canFormat,
                     modifier = Modifier.heightIn(min = 48.dp).testTag("camera-storage-format")) {
                     Text(tr(Res.string.camera_storage_format))
@@ -70,6 +72,9 @@ internal fun RobotMaintenanceContent(model: ConsoleController) {
                         Modifier.testTag("camera-storage-format-result"), fontSize = 14.sp, color = MiuixTheme.colorScheme.error)
                     CameraRequest.Idle -> Unit
                 }
+            }
+            if (onAlbum != null) Button(onAlbum, Modifier.heightIn(min = 48.dp).testTag("settings-album-open")) {
+                Text(tr(Res.string.album_browse))
             }
         }
     }

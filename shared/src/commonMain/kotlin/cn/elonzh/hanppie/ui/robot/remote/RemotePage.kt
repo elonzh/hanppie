@@ -124,6 +124,7 @@ internal fun RemotePage(
     inputEnabled: Boolean = true,
     navigationEnabled: Boolean = inputEnabled,
     manageSession: Boolean = true,
+    onAlbum: (() -> Unit)? = null,
 ) {
     RemoteOrientation(onBack)
     var keyboardHints by remember { mutableStateOf(false) }
@@ -322,7 +323,7 @@ internal fun RemotePage(
             model.cameraZoom::setZoom)
         OnboardCaptureControls(model.robotCamera, connected.connected, inputEnabled && foreground,
             (maxHeight - 180.dp).coerceAtLeast(80.dp),
-            Modifier.align(Alignment.TopStart).padding(top = 76.dp, start = HanppieDesignTokens.RemoteEdgePadding)) {
+            Modifier.align(Alignment.TopStart).padding(top = 76.dp, start = HanppieDesignTokens.RemoteEdgePadding), onAlbum = onAlbum) {
             keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
             model.stopFiring(); model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
             (onPushToTalkStop ?: model::endPushToTalk)()

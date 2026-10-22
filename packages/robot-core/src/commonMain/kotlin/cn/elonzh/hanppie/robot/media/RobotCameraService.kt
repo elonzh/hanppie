@@ -36,6 +36,7 @@ interface RobotCameraService {
 /** Native camera status and configuration requests, owned by the App connection. */
 internal class CameraCommands(
     private val request: suspend (receiver: Int, set: Int, id: Int, payload: ByteArray) -> ByteArray,
+    private val storageAccess: Mutex = Mutex(),
     private val localNow: () -> CameraDate = CameraDate::localNow,
     private val nowMillis: () -> Long,
 ) : RobotCameraService {
@@ -132,9 +133,15 @@ internal class CameraCommands(
     }
 
     override suspend fun formatStorage() = storageTask {
-        check(freshStorage().canFormat) { "存储卡状态已变化，不能格式化" }
-        command(0x72, byteArrayOf(0))
+        check(storageAccess.tryLock()) { "存储卡传输正在进行" }
+        try {
+            check(freshStorage().canFormat) { "存储卡状态已变化，不能格式化" }
+            command(0x72, byteArrayOf(0))
+        } finally { storageAccess.unlock() }
     }
+
+    fun canReadStorage(): Boolean = !closed && nowMillis() - lastReceived < 1_500 &&
+        state.value.storage?.let { it.inserted && !it.formatting && !it.hasError } == true
 
     private suspend fun prepareCapture(mode: Int) {
         check(freshStorage().canCapture) { "存储卡不可拍录" }

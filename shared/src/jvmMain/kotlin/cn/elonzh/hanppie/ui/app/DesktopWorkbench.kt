@@ -212,6 +212,8 @@ private fun DesktopWorkbenchWindow(onExit: () -> Unit) {
                 onRobotFileUpload = holder::uploadRobotFile,
                 onRobotFileDownload = holder::downloadRobotFile,
                 onRobotFileOpen = holder::openRobotFile,
+                onRobotMediaOpen = holder::openRobotMedia,
+                onRobotMediaExport = holder::exportRobotMedia,
                 onOpenWifiSettings = wifiSettingsCommand?.let { command ->
                     {
                         try { ProcessBuilder(command).start() }

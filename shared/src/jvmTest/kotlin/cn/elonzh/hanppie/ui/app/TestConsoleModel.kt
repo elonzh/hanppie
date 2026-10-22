@@ -122,6 +122,7 @@ internal fun testConsoleModel(
         error("Agent HTTP client must not be created by isolated UI tests")
     },
     scriptStartConfirmationTimeoutMillis: Long = 10_000,
+    albumDirectory: () -> io.github.vinceglb.filekit.PlatformFile = { error("No album directory in this test") },
 ): ConsoleModel = ConsoleModel(
     voiceInput = voiceInput,
     speakerInput = speakerInput,
@@ -135,4 +136,5 @@ internal fun testConsoleModel(
     prepareNetwork = prepareNetwork,
     autoConnectOnStart = false,
     scriptStartConfirmationTimeoutMillis = scriptStartConfirmationTimeoutMillis,
+    albumDirectory = albumDirectory,
 )

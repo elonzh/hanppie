@@ -214,6 +214,8 @@ fun AndroidWorkbench(autoConnectOnStart: Boolean = true) {
             onRobotFileUpload = holder::uploadRobotFile,
             onRobotFileDownload = holder::downloadRobotFile,
             onRobotFileOpen = holder::openRobotFile,
+            onRobotMediaOpen = holder::openRobotMedia,
+            onRobotMediaExport = holder::exportRobotMedia,
             onOpenWifiSettings = {
                 try { context.startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)) }
                 catch (_: Exception) { holder.updateFileError(tr(Res.string.could_not_open_wifi_settings)) }

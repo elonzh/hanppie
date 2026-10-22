@@ -56,13 +56,14 @@ class OnboardCaptureUiTest {
         val model = testConsoleModel()
         val camera = OnboardCameraFixture()
         val localMedia = RemoteMediaController()
+        var albumOpens = 0
         model.state.value = model.state.value.copy(connected = true)
         model.robotCamera.attach(camera)
         val controller = object : ConsoleController by model {
             override fun drive(x: Double, y: Double, z: Double, pitch: Double, yaw: Double) {}
         }
         try {
-            rule.setContent { TestWorkbenchTheme { RemotePage(controller, videoContent = {}, mediaControls = localMedia, manageSession = false) } }
+            rule.setContent { TestWorkbenchTheme { RemotePage(controller, videoContent = {}, mediaControls = localMedia, manageSession = false, onAlbum = { albumOpens++ }) } }
             rule.onNodeWithTag("onboard-capture-open").performClick()
             rule.onNodeWithText("照片和视频保存在机器人 SD 卡。").assertIsDisplayed()
             rule.onNodeWithTag("onboard-record-stop").assertIsNotEnabled()
@@ -77,7 +78,10 @@ class OnboardCaptureUiTest {
             rule.onNodeWithTag("onboard-capture-open").assertTextEquals("SD · 42 秒").performClick()
             rule.onNodeWithTag("onboard-record-stop").performScrollTo().performClick()
             result("已确认机器人停止录像")
+            rule.onNodeWithTag("onboard-album-open").performScrollTo().performClick()
+            rule.onNodeWithTag("onboard-photo").assertDoesNotExist()
             rule.runOnIdle {
+                assertEquals(1, albumOpens)
                 assertEquals(1, camera.photos); assertEquals(listOf(true, false), camera.recording)
                 assertEquals(RemoteMediaRequests(), localMedia.requests.value)
             }
@@ -168,7 +172,7 @@ class OnboardCaptureLayoutTest {
                         LaunchedEffect(Unit) {
                             while (true) { model.videoFrames.publish(null, ImageBitmap(1280, 720)); delay(50) }
                         }
-                        RemotePage(controller, videoContent = { Box(Modifier.fillMaxSize().background(HanppieDesignTokens.RemoteHudSurface)) }, manageSession = false)
+                        RemotePage(controller, videoContent = { Box(Modifier.fillMaxSize().background(HanppieDesignTokens.RemoteHudSurface)) }, manageSession = false, onAlbum = {})
                     }
                 } }
                 onNodeWithTag("onboard-capture-open").assertIsDisplayed().assertIsEnabled()
@@ -182,6 +186,7 @@ class OnboardCaptureLayoutTest {
                 onNodeWithTag("onboard-photo").performScrollTo().assertIsDisplayed()
                 onNodeWithTag("onboard-record-start").assertIsDisplayed()
                 onNodeWithTag("onboard-record-stop").performScrollTo().assertIsDisplayed()
+                onNodeWithTag("onboard-album-open").performScrollTo().assertIsDisplayed()
                 onNodeWithTag("onboard-capture-close").performScrollTo().assertIsDisplayed()
                 snapshot("sd-capture-panel-$width-$height-$language",
                     onNode(isRoot() and hasAnyDescendant(hasTestTag("onboard-photo"))))

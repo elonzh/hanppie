@@ -527,6 +527,27 @@ S1 会在 UDP `10607` 数据会话中输出 H.264 视频和 Opus 音频。本机
 
 静态证据保留于 `.hanppie/validation/2026-10-22-official-gap/native-Camera-SetWorkMode.txt`、`native-Camera-ActionStartTakePhoto.txt`、`native-Camera-ActionStartRecordVideo.txt`、`native-Camera-ActionStopRecordVideo.txt` 和 `native-Album-StartCapture.txt`。没有实机确认模式切换的时延、对推流/变焦/跟随的影响、实际照片和视频文件、停止后的文件收尾或多客户端行为；设备清单见[实施台账 A05](./official-app-capability-implementation.md#a05-验证入口与设备待验)。
 
+#### 相册索引与媒体传输
+
+固定 macOS `1.1.5/build 239` 的 `DJI/DJILocalAlbumController.cs` 枚举应用私有 `Media/Thumb/` 下的 JPG，再关联 `Media/` 原图或 MP4；照片原图可以延迟请求，视频只有本地文件存在且时长有效才进入该列表，删除也只操作终端文件。这个“本地相册”不是 FTP 的 SD 卡目录。原生 `DJIRobomasterAlbumEventHandler` 在拍照状态回落后请求增量列表，收到无卡或格式化状态时重置索引游标；Hanppie 的显式浏览入口使用同一类列表与文件请求。**客户端代码**
+
+`SendCameraFilePack`（`0x41630`，构造 `0x416a2..0x416ac`）将内层包发往相机节点 `0x01`，外层为 `cmdset=00 / id=26`，请求应答。`StartListenPack`（`0x3fad0`，注册 `0x3fb94`）监听 full-command 键 `0x40000027`，即 `00:27` 的入站媒体包；键的高位不是线上 attr。所有多字节内层字段为 little-endian。**原生构造代码**
+
+| 包 | 长度与内层载荷 | 定位 |
+| --- | --- | --- |
+| 列表请求 | 17 字节：`4a 00 11 10`、uint16 内层 ID @ 4、uint32 序号 0 @ 6、uint32 起始索引 @ 10、uint16 数量 `ffff` @ 14、类型 0 @ 16 | OnReqAlbumFileList `0x3fa70`，本实现从索引 1 请求 |
+| 文件请求 | 26 字节：`4a 20 1a 10`、内层 ID、序号 0、uint32 文件索引 @ 10、uint16 数量 1 @ 14、分区 @ 16（0 原文件 / 1 缩略图）、零字节 @ 17、uint32 偏移 0 @ 18、uint32 列表文件大小 @ 22 | OnReqAlbumFile `0x414d0`，初始化 `0x415f0` |
+| 数据公共头 | 10 字节：`4a`；类型 @ 1 为 `01` 列表 / `21` 文件；uint16 @ 2 低 12 位为包长、高 4 位为标志（1 表示末包）；uint16 内层 ID @ 4；uint32 @ 6 区分首包 0 与后续包 | OnRecvAlbumMessage `0x40310`，分支 `0x40550..0x40569` |
+| 列表首包 | uint32 条目数 @ 10、uint32 总长度 @ 14（包含 8 字节列表元数据）；实际记录从 @ 18 开始，后续包从 @ 10 开始 | `0x40637`、`0x408a2..0x408db` |
+| 文件首包 | 13 字节元数据，其 uint32 @ 14 为包含元数据的总长度；实际文件从 @ 23 开始，后续包从 @ 10 开始；其余元数据未命名 | `0x40679`、`0x40713..0x40741` |
+| 接收确认 | 16 字节：`4a 22 10 10`、**新分配的**内层 ID、序号 0、uint32 已收包数 @ 10、uint16 缺包数 0 @ 14；列表与文件都使用它 | AckDownloadFileState `0x40d00`，`0x40d31..0x40e20` |
+
+`OnUpdateFileList`（`0x40e50`）按 `18 + byte@17` 步长遍历记录：uint32 大小 @ 4、uint32 索引 @ 8、格式码 @ 16。格式码 0 进入照片缩略图请求分支（`0x410bc..0x4111c`）；附加字节的含义尚不明确，不能当作已证明的文件名、拍摄日期或视频时长。`StopCurrentAlbumFileRequest`（`0x41820`）只操作本地队列/定时器，没有据此确认一条线上取消命令。**原生代码**
+
+Hanppie 当前将上述包接入 App 会话请求与接收通道，过滤相机来源、App 目的、有效 CRC 和 attr `00`，要求数据内层 ID 与当前请求一致，并将 uint32 @ 6 当作连续递增分片序号以处理乱序、重复和缺口；这些是有明确失败边界的客户端策略，**内层 ID 回显、连续序号、实际推送属性，以及 `00:26/27` 在当前 App UDP 隧道上的可达性仍待实机确认**。原厂路由中存在 TCP `20002` 下载服务，不等于本轮已证明媒体一定经现有命令隧道传输。最终传输确认走现有带应答请求代理，其设备应答行为也待核实；本地取消停止等待和写入，不声称终止设备发送。
+
+局部反汇编保留在 `.hanppie/validation/2026-10-22-official-gap/native-Album-OnReqAlbumFileList.txt`、`native-Album-FileRequestSendCancel.txt`、`native-Album-Observer.txt`、`native-Album-ReceiveListWrite.txt` 与 `native-Album-FileIdentity.txt`。当前离线传输、共享界面及设备待验清单见[实施台账 A06](./official-app-capability-implementation.md#a06-验证入口与设备待验)；回环分片和测试图片不构成真实 SD 文件、视频可播放性或吞吐证据。
+
 #### 机器人音频配置
 
 固定版本 `RobomasterSystemAbstraction` 的原生请求构造函数给出以下配置通道。查询请求无 payload，写入为一字节；成功读取响应为 `retcode + uint8 value`。音量有效范围为 0–100；旧实机音量读写闭环见后文[血量、对局与命中受理](#血量对局与命中受理2026-09-19-实机)。**代码 / 历史实测**

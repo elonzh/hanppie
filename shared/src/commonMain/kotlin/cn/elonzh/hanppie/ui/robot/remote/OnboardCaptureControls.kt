@@ -21,7 +21,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 internal fun OnboardCaptureControls(controller: RobotCameraController, connected: Boolean, enabled: Boolean,
-    contentMaxHeight: Dp, modifier: Modifier = Modifier, onOpen: () -> Unit) {
+    contentMaxHeight: Dp, modifier: Modifier = Modifier, onAlbum: (() -> Unit)? = null, onOpen: () -> Unit) {
     val state by controller.state.collectAsState()
     val storage = state.storage.takeIf { connected }
     var openConnection by remember { mutableStateOf<Long?>(null) }
@@ -60,6 +60,8 @@ internal fun OnboardCaptureControls(controller: RobotCameraController, connected
                 enabled = !state.storageBusy && (storage == null || storage.recording || state.capture is CameraRequest.Failed)) {
                 Text(tr(Res.string.stop_recording))
             }
+            if (onAlbum != null) Button({ openConnection = null; onAlbum() }, Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                .testTag("onboard-album-open")) { Text(tr(Res.string.album_browse)) }
             Button({ openConnection = null }, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("onboard-capture-close")) {
                 Text(tr(Res.string.close))
             }

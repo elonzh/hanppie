@@ -98,7 +98,8 @@ private fun IosWorkbench(platform: IosPlatformServices) {
                 onPushToTalkStart = holder.model::beginPushToTalk, onPushToTalkStop = holder.model::endPushToTalk,
                 fileError = holder.fileError, onFileError = holder::updateFileError,
                 onRobotFileUpload = holder::uploadRobotFile, onRobotFileDownload = holder::downloadRobotFile,
-                onRobotFileOpen = holder::openRobotFile, onOpenWifiSettings = { wifiGuidance = true })
+                onRobotFileOpen = holder::openRobotFile, onRobotMediaOpen = holder::openRobotMedia,
+                onRobotMediaExport = holder::exportRobotMedia, onOpenWifiSettings = { wifiGuidance = true })
         }
     }
 }

@@ -66,6 +66,7 @@ private val workbenchNavigationConfiguration = SavedStateConfiguration {
             subclass(DebugRoute.serializer())
             subclass(ChatRoute.serializer())
             subclass(SettingsRoute.serializer())
+            subclass(RobotAlbumRoute.serializer())
             subclass(ConnectionGuideRoute.serializer())
             subclass(DirectConnectionGuideRoute.serializer())
             subclass(RouterConnectionGuideRoute.serializer())
@@ -91,6 +92,8 @@ internal fun Console(
     onRobotFileUpload: ((String) -> Unit)? = null,
     onRobotFileDownload: ((cn.elonzh.hanppie.robot.files.RobotFileEntry) -> Unit)? = null,
     onRobotFileOpen: ((cn.elonzh.hanppie.robot.files.RobotFileEntry) -> Unit)? = null,
+    onRobotMediaOpen: ((cn.elonzh.hanppie.ui.robot.album.LocalRobotMedia) -> Unit)? = null,
+    onRobotMediaExport: ((cn.elonzh.hanppie.ui.robot.album.LocalRobotMedia) -> Unit)? = null,
     onOpenWifiSettings: (() -> Unit)? = null,
 ) {
     val renderState = remember(model) { model.state.sample(100) }
@@ -100,6 +103,10 @@ internal fun Console(
     val currentRoute = backStack.last() as WorkbenchRoute
     val focus = LocalFocusManager.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    fun openAlbum() {
+        focus.clearFocus(); keyboard?.hide(); onFileError(null)
+        if (backStack.lastOrNull() != RobotAlbumRoute) backStack.add(RobotAlbumRoute)
+    }
     fun navigate(index: Int) {
         focus.clearFocus()
         keyboard?.hide()
@@ -215,7 +222,7 @@ internal fun Console(
                         val compact = maxWidth < HanppieDesignTokens.CompactBreakpoint
                         val useNavigationRail = !compact || maxWidth > maxHeight
                         val shortWindow = maxHeight < 480.dp
-                        val workspacePage = route == ScriptRoute || route == ChatRoute
+                        val workspacePage = route == ScriptRoute || route == ChatRoute || route == RobotAlbumRoute
                         val compressedHeight = maxHeight < 240.dp
                         val compressedChat = route == ChatRoute && compressedHeight
                         val compressedSettings = route == SettingsRoute && compressedHeight
@@ -244,7 +251,7 @@ internal fun Console(
                                     .padding(horizontal = if (route == RobotRoute) 0.dp else if (compact) HanppieDesignTokens.PagePaddingCompact
                                     else HanppieDesignTokens.PagePaddingExpanded)
                                     .padding(bottom = if (workspacePage && compressedHeight) 4.dp else if (workspacePage) HanppieDesignTokens.PagePaddingCompact else 0.dp)) {
-                                    if (routeTab != 1 && route != RobotRoute && !isConnectionGuide && !compressedSettings) {
+                                    if (routeTab != 1 && route != RobotRoute && route != RobotAlbumRoute && !isConnectionGuide && !compressedSettings) {
                                         Row(Modifier.fillMaxWidth().height(if (compressedChat) 48.dp else 72.dp), verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.SpaceBetween) {
                                             Text(if (routeTab == 0) tr(Res.string.my_robot) else labels[routeTab],
@@ -282,11 +289,13 @@ internal fun Console(
                                                 if (document.value.busy) return@ChatPage
                                                 if (document.value.dirty) pendingChatScript = scriptId else openChatScript(scriptId)
                                             }, onSettings = { navigate(4) })
-                                        SettingsRoute -> SettingsPage(model, Modifier.weight(1f), onSpeechSettings)
+                                        SettingsRoute -> SettingsPage(model, Modifier.weight(1f), onSpeechSettings, onAlbum = ::openAlbum)
+                                        RobotAlbumRoute -> cn.elonzh.hanppie.ui.robot.album.RobotAlbumPage(model, Modifier.weight(1f),
+                                            ::goBack, onRobotMediaOpen, onRobotMediaExport, fileError)
                                         RobotRoute -> cn.elonzh.hanppie.ui.robot.scene.RobotExperience(
                                             model, state, compact, Modifier.weight(1f),
                                             { connectionDetails = true }, ::navigate, onCockpitChanged,
-                                            onPushToTalkStart, onPushToTalkStop)
+                                            onPushToTalkStart, onPushToTalkStop, onAlbum = ::openAlbum)
                                         ScriptRoute -> ScriptPage(model, document, compact, onImport, onExport,
                                             fileError, onFileError, onConnectionDetails = { connectionDetails = true },
                                             onImportAudio = onImportAudio,

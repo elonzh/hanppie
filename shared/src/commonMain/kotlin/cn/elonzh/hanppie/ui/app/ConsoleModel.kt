@@ -129,6 +129,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import io.github.vinceglb.filekit.filesDir
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -157,6 +161,9 @@ internal class ConsoleModel(
     private val clock: Clock = Clock.System,
     private val autoConnectOnStart: Boolean = true,
     private val scriptStartConfirmationTimeoutMillis: Long = 10_000,
+    private val albumDirectory: () -> io.github.vinceglb.filekit.PlatformFile = {
+        io.github.vinceglb.filekit.PlatformFile(io.github.vinceglb.filekit.FileKit.filesDir, "robot-media")
+    },
 ) : ConsoleController {
     override var voicePageActive = false
     override val isForeground: Boolean get() = acceptingWork.load()
@@ -184,8 +191,13 @@ internal class ConsoleModel(
     override val robotAudio = cn.elonzh.hanppie.ui.robot.audio.RobotAudioController(scope)
     override val cameraZoom = cn.elonzh.hanppie.ui.robot.remote.CameraZoomController(scope)
     override val robotCamera = cn.elonzh.hanppie.ui.robot.camera.RobotCameraController(scope)
+    override val robotAlbum = cn.elonzh.hanppie.ui.robot.album.RobotAlbumController(scope, albumDirectory)
     init {
         scope.launch(start = CoroutineStart.UNDISPATCHED) { scriptLibrary.load() }
+        scope.launch {
+            robotCamera.state.map { it.storage?.let { card -> !card.inserted || card.formatting || card.hasError } == true }
+                .distinctUntilChanged().filter { it }.collect { robotAlbum.invalidateStorage() }
+        }
     }
     override fun saveSettings() {
         settings.save()
@@ -624,7 +636,7 @@ internal class ConsoleModel(
                 connectionRevision.addAndFetch(1)
                 session.exchange(null)?.close()
                 lab.store(null)
-                robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear()
+                robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear()
                 state.update { it.copy(connected = false, connectedAddress = null, connecting = false,
                     statusMessage = uiText(Res.string.connection_failed)) }
                 throw error
@@ -732,6 +744,7 @@ internal class ConsoleModel(
             robotAudio.attach(candidate.audio)
             cameraZoom.attach(candidate.camera)
             robotCamera.attach(candidate.camera)
+            robotAlbum.attach(candidate.album)
             state.update { it.copy(connected = true, connectedAddress = target.ip, connecting = false,
                 statusMessage = uiText(Res.string.connected_to_value,target.ip), error = null,
                 robotProduct = candidate.product, devices = emptyList()) }
@@ -776,7 +789,7 @@ internal class ConsoleModel(
     }
 
     private fun newSession(target: RobotTarget): RobotSession {
-        robotAudio.clear(); cameraZoom.clear(); robotCamera.clear()
+        robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear()
         val candidate = robotRuntime.open(target, ::receive, ::log, ::connectionLost)
         candidate.onVideo = { videoConsumer.load()?.invoke(it) }
         candidate.onAudio = { audioConsumer.load()?.invoke(it) }
@@ -799,7 +812,7 @@ internal class ConsoleModel(
             if (session.load() !== candidate) return@launch
             session.store(null)
             lab.store(null)
-            robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear()
+            robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear()
             candidate.close()
             log(reason)
             state.update { it.lost(reason).copy(busy = false, connecting = false) }
@@ -810,7 +823,7 @@ internal class ConsoleModel(
         connectionRevision.addAndFetch(1)
         haltRemote()
         session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState()
-        robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear()
+        robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear()
         state.update {
             val uncertain = it.scriptRunPhase.mayBeExecuting
             it.copy(connected = false, connectedAddress = null, connecting = false,
@@ -902,8 +915,10 @@ internal class ConsoleModel(
     }
 
     internal fun receive(frame: DussFrame) {
+        val payload = if (frame.set == 0 && frame.id == 0x27)
+            "media=${frame.payload.size} B header=${frame.payload.copyOfRange(0, minOf(10, frame.payload.size)).hex()}" else frame.payload.hex()
         val line = "seq=${frame.sequence} ${frame.sender.toString(16)}→${frame.receiver.toString(16)} " +
-            "${frame.set.toString(16)}:${frame.id.toString(16)} attr=${frame.attr.toString(16)} ${frame.payload.hex()}"
+            "${frame.set.toString(16)}:${frame.id.toString(16)} attr=${frame.attr.toString(16)} $payload"
         val motion = Telemetry.motion(frame)
         val chassisAttitude = Telemetry.chassisAttitude(frame)
         val wheels = Telemetry.wheels(frame)
@@ -1006,7 +1021,7 @@ internal class ConsoleModel(
         chat.cancelAndJoin()
         scope.coroutineContext[Job]?.children?.toList()?.forEach { it.cancelAndJoin() }
         session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState()
-        robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear()
+        robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear()
         state.update {
             val uncertain = it.scriptRunPhase.mayBeExecuting
             it.copy(connected = false, connectedAddress = null, connecting = false, busy = false,
@@ -1016,5 +1031,5 @@ internal class ConsoleModel(
                 scriptMessage = if (uncertain) uiText(Res.string.connection_closed_robot_state_unknown) else it.scriptMessage)
         }
     }
-    override fun close() { connectionRevision.addAndFetch(1); robotFiles.close(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
+    override fun close() { connectionRevision.addAndFetch(1); robotFiles.close(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
 }

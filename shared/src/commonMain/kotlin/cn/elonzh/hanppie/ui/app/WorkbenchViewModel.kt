@@ -20,6 +20,8 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.cacheDir
+import io.github.vinceglb.filekit.copyTo
+import cn.elonzh.hanppie.ui.robot.album.LocalRobotMedia
 import io.github.vinceglb.filekit.createDirectories
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.openFilePicker
@@ -174,6 +176,18 @@ internal class WorkbenchViewModel(
                 }
             }
         }
+    }
+
+    fun openRobotMedia(file: LocalRobotMedia) = launchFileAction("open downloaded robot media") {
+        try { FileKit.openFileWithDefaultApplication(file.file) }
+        catch (error: CancellationException) { throw error }
+        catch (error: Exception) { throw IllegalStateException(tr(Res.string.no_application_can_open_this_file), error) }
+    }
+
+    fun exportRobotMedia(file: LocalRobotMedia) = launchFileAction("export downloaded robot media") {
+        val destination = FileKit.openFileSaver(suggestedName = "SD_${file.sourceIndex}", defaultExtension = file.content.extension)
+            ?: return@launchFileAction
+        file.file.copyTo(destination)
     }
 
     fun pauseConnection() {

@@ -50,6 +50,13 @@ class RemoteFireUiTest {
     @get:Rule val rule = createComposeRule()
 
     private class FakeRobotSession : RobotSession {
+        override val album = object : cn.elonzh.hanppie.robot.media.album.RobotAlbumService {
+            override val busy = kotlinx.coroutines.flow.MutableStateFlow(false)
+            override suspend fun list(): List<cn.elonzh.hanppie.robot.media.album.RobotMediaEntry> = error("unused")
+            override suspend fun download(entry: cn.elonzh.hanppie.robot.media.album.RobotMediaEntry,
+                part: cn.elonzh.hanppie.robot.media.album.RobotMediaPart, destination: kotlinx.io.Sink,
+                onProgress: (Long, Long) -> Unit) { error("unused") }
+        }
         val infraredCount = AtomicInteger(0)
         val gelCount = AtomicInteger(0)
         val driveCount = AtomicInteger(0)

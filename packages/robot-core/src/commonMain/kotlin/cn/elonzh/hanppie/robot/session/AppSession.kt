@@ -57,7 +57,10 @@ class AppSession(private val target: RobotTarget,
         val reply: CompletableDeferred<ByteArray> = CompletableDeferred())
     private val pendingRequests = mutableMapOf<Int, PendingRequest>()
     val audio: cn.elonzh.hanppie.robot.media.RobotAudioService = SpeakerCommands(::request)
-    private val cameraCommands = CameraCommands(::request) { robotNanoTime() / 1_000_000 }
+    private val storageAccess = Mutex()
+    private val cameraCommands = CameraCommands(::request, storageAccess = storageAccess) { robotNanoTime() / 1_000_000 }
+    private val albumCommands = cn.elonzh.hanppie.robot.media.album.NativeAlbum(storageAccess, cameraCommands::canReadStorage, ::request)
+    val album: cn.elonzh.hanppie.robot.media.album.RobotAlbumService get() = albumCommands
     private var cameraZoomChanging = false
     private var cameraZoomMayBeActive = false
     val camera: cn.elonzh.hanppie.robot.media.RobotCameraService = object : cn.elonzh.hanppie.robot.media.RobotCameraService by cameraCommands {
@@ -469,6 +472,7 @@ class AppSession(private val target: RobotTarget,
 
     private fun failRequests() = txLock.withLock {
         cameraCommands.close()
+        albumCommands.close()
         pendingRequests.values.forEach { it.reply.completeExceptionally(RobotRequestException(RequestProblem.DISCONNECTED)) }
         pendingRequests.clear()
     }
@@ -531,6 +535,10 @@ class AppSession(private val target: RobotTarget,
                                 objectTracking.receive(frame)
                                 val revision = cameraCommands.state.value.revision
                                 cameraCommands.receive(frame)
+                                albumCommands.receive(frame)
+                                if (cameraCommands.state.value.revision != revision &&
+                                    cameraCommands.state.value.storage?.let { !it.inserted || it.formatting || it.hasError } == true)
+                                    albumCommands.invalidateStorage()
                                 if (cameraCommands.state.value.revision != revision && !cameraZoomChanging)
                                     cameraZoomMayBeActive = cameraCommands.state.value.zoomHundredths?.let { it != 100 } ?: cameraZoomMayBeActive
                                 receiveReply(frame)
