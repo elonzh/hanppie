@@ -29,6 +29,7 @@ private class CameraConfigurationFixture : RobotCameraService {
     var dateError = false
     var date = CameraDate(2020, 1, 1, 0, 0, 0)
     override suspend fun setZoom(hundredths: Int) = error("unused")
+    override suspend fun formatStorage() { error("unused") }
     override suspend fun getAntiFlicker(): Int = antiFlicker
     override suspend fun setAntiFlicker(mode: AntiFlicker): Int { antiFlicker = mode.wireValue; return antiFlicker }
     override suspend fun getDate(): CameraDate {

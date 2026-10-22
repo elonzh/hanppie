@@ -105,6 +105,7 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                                 SettingsCategory.GENERAL -> "${tr(Res.string.language)} · ${appearance.settings.nightMode.label()}"
                                 SettingsCategory.MODEL -> tr(Res.string.settings_model_summary)
                                 SettingsCategory.MEDIA -> "${media.videoResolution.label} · ${media.speakerVolume}%"
+                                SettingsCategory.ROBOT -> tr(Res.string.robot_maintenance_summary)
                                 SettingsCategory.CONTROL -> tr(Res.string.control_settings_summary)
                                 SettingsCategory.LIGHTS -> tr(Res.string.settings_lights_summary)
                                 SettingsCategory.SHORTCUTS -> tr(Res.string.keyboard_shortcuts_summary)
@@ -142,11 +143,12 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                     key(activeCategory) {
                         Column(Modifier.weight(1f).fillMaxWidth().testTag("settings-detail-${activeCategory.id}")
                             .verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            settingsMessage?.let { Text(it.resolve(), fontSize = 13.sp) }
+                            if (activeCategory != SettingsCategory.ROBOT) settingsMessage?.let { Text(it.resolve(), fontSize = 13.sp) }
                             when (activeCategory) {
                                 SettingsCategory.GENERAL -> GeneralSettingsContent(model, onSpeechSettings)
                                 SettingsCategory.MODEL -> ModelSettingsContent(model)
                                 SettingsCategory.MEDIA -> MediaSettingsContent(model)
+                                SettingsCategory.ROBOT -> RobotMaintenanceContent(model)
                                 SettingsCategory.CONTROL -> ControlSettingsContent(model)
                                 SettingsCategory.LIGHTS -> LightsSettingsContent(model)
                                 SettingsCategory.SHORTCUTS -> ShortcutsSettingsContent(model, capturing) { capturing = it; shortcutFocus.requestFocus() }
@@ -169,6 +171,7 @@ private enum class SettingsCategory(
     GENERAL("general", Res.string.general_settings, WorkbenchGlyph.SETTINGS),
     MODEL("model", Res.string.model_service, WorkbenchGlyph.CHAT, canSave = true),
     MEDIA("media", Res.string.audio_video, WorkbenchGlyph.VIDEO, canSave = true),
+    ROBOT("robot", Res.string.robot_maintenance, WorkbenchGlyph.ROBOT),
     CONTROL("control", Res.string.control, WorkbenchGlyph.CROSSHAIR, canSave = true),
     LIGHTS("lights", Res.string.remote_led_colors, WorkbenchGlyph.RECORD, canSave = true),
     SHORTCUTS("shortcuts", Res.string.keyboard_shortcuts, WorkbenchGlyph.CODE, canSave = true),

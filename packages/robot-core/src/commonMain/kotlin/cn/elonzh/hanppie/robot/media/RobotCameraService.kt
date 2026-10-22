@@ -13,8 +13,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.Mutex
 
-data class CameraState(val zoomHundredths: Int? = null, val revision: Long = 0, val timeSynced: Boolean? = null)
+data class CameraState(val zoomHundredths: Int? = null, val revision: Long = 0, val timeSynced: Boolean? = null,
+    val storage: CameraStorageStatus? = null)
 
 interface RobotCameraService {
     val state: StateFlow<CameraState>
@@ -23,6 +25,8 @@ interface RobotCameraService {
     suspend fun setAntiFlicker(mode: AntiFlicker): Int
     suspend fun getDate(): CameraDate?
     suspend fun syncClock(): CameraDate
+    /** Returns after the command reply, not after physical media erasure has been independently verified. */
+    suspend fun formatStorage()
 }
 
 /** Native camera status and configuration requests, owned by the App connection. */
@@ -35,6 +39,7 @@ internal class CameraCommands(
     override val state = mutableState.asStateFlow()
     private var lastReceived = 0L
     @Volatile private var closed = false
+    private val storageOperation = Mutex()
 
     fun receive(frame: DussFrame) {
         if (closed || !frame.valid || frame.sender != Protocol.HOST_CAMERA || frame.receiver != Protocol.HOST_MOBILE ||
@@ -42,11 +47,11 @@ internal class CameraCommands(
         val zoom = frame.payload.u16(8)
         lastReceived = nowMillis()
         mutableState.value = CameraState(zoom.takeIf { it in 100..400 }, state.value.revision + 1,
-            frame.payload.u16(5) and 0xc0 != 0)
+            frame.payload.u16(5) and 0xc0 != 0, CameraStorageStatus.decode(frame.payload))
     }
 
     fun expire() {
-        if ((state.value.zoomHundredths != null || state.value.timeSynced != null) && nowMillis() - lastReceived >= 1_500)
+        if ((state.value.zoomHundredths != null || state.value.timeSynced != null || state.value.storage != null) && nowMillis() - lastReceived >= 1_500)
             mutableState.value = CameraState(revision = state.value.revision + 1)
     }
 
@@ -103,6 +108,15 @@ internal class CameraCommands(
         if (actual.wallSeconds - expected.wallSeconds !in 0..elapsedSeconds + 1)
             throw RobotRequestException(RequestProblem.NOT_APPLIED)
         return actual
+    }
+
+    override suspend fun formatStorage() {
+        check(storageOperation.tryLock()) { "存储卡操作正在进行" }
+        try {
+            if (closed) throw RobotRequestException(RequestProblem.DISCONNECTED)
+            check(nowMillis() - lastReceived < 1_500 && state.value.storage?.canFormat == true) { "存储卡状态已变化，不能格式化" }
+            command(0x72, byteArrayOf(0))
+        } finally { storageOperation.unlock() }
     }
 
     fun close() {

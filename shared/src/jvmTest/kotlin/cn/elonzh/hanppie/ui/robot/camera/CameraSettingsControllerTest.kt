@@ -15,7 +15,15 @@ class CameraSettingsControllerTest {
         var readGate: CompletableDeferred<Unit>? = null
         var syncGate: CompletableDeferred<Unit>? = null
         var syncs = 0
+        var formats = 0
+        var formatError: Exception? = null
+        var formatGate: CompletableDeferred<Unit>? = null
         override suspend fun setZoom(hundredths: Int) = error("unused")
+        override suspend fun formatStorage() {
+            formats++
+            withContext(NonCancellable) { formatGate?.await() }
+            formatError?.let { throw it }
+        }
         override suspend fun getAntiFlicker(): Int = 2
         override suspend fun setAntiFlicker(mode: AntiFlicker): Int = mode.wireValue
         override suspend fun getDate(): CameraDate {
@@ -105,6 +113,47 @@ class CameraSettingsControllerTest {
             controller.clear()
             assertEquals(CameraSetting.Idle, controller.state.value.date)
             assertNull(controller.state.value.timeSynced)
+        } finally { gate.complete(Unit); scope.cancel() }
+    }
+
+    @Test fun formatReplyIsSeparateFromLiveStateAndCannotQueueDuplicateRequests(): Unit = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val gate = CompletableDeferred<Unit>()
+        try {
+            val camera = Camera().apply { formatGate = gate }
+            val storage = CameraStorageStatus(true, 0, 1024, 512, 123, 456, false, false, 0)
+            camera.state.value = CameraState(100, timeSynced = true, storage = storage)
+            val controller = CameraSettingsController(scope)
+            controller.attach(camera); controller.formatStorage(); controller.formatStorage()
+            assertEquals(1, camera.formats)
+            assertEquals(CameraSetting.Loading, controller.state.value.formatRequest)
+            controller.refresh(); assertIs<CameraSetting.Value<*>>(controller.state.value.date)
+            gate.complete(Unit); yield()
+            assertEquals(CameraSetting.Value(Unit), controller.state.value.formatRequest)
+            assertEquals(storage, controller.state.value.storage)
+            camera.state.value = camera.state.value.copy(storage = storage.copy(stateCode = 5))
+            assertTrue(assertNotNull(controller.state.value.storage).formatting)
+            camera.state.value = CameraState()
+            assertNull(controller.state.value.storage)
+        } finally { gate.complete(Unit); scope.cancel() }
+    }
+
+    @Test fun formatFailuresDoNotRetryAndLateAckCannotRestoreAnOldConnection(): Unit = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val gate = CompletableDeferred<Unit>()
+        try {
+            val camera = Camera().apply { formatError = RobotRequestException(RequestProblem.TIMED_OUT) }
+            val controller = CameraSettingsController(scope)
+            controller.attach(camera); controller.formatStorage()
+            assertIs<CameraSetting.Failed>(controller.state.value.formatRequest)
+            repeat(3) { camera.state.value = CameraState(100, it + 1L, true) }
+            assertEquals(1, camera.formats)
+            camera.formatError = null; camera.formatGate = gate
+            controller.formatStorage(); controller.clear(); controller.attach(camera)
+            gate.complete(Unit); yield()
+            assertEquals(CameraSetting.Idle, controller.state.value.formatRequest)
+            assertNull(controller.state.value.storage)
+            assertEquals(2, camera.formats)
         } finally { gate.complete(Unit); scope.cancel() }
     }
 }

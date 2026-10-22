@@ -5,8 +5,12 @@ package cn.elonzh.hanppie.ui.robot.camera
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.media.AntiFlicker
 import cn.elonzh.hanppie.robot.media.CameraDate
+import cn.elonzh.hanppie.robot.media.CameraStorageStatus
 import cn.elonzh.hanppie.robot.media.RobotCameraService
+import cn.elonzh.hanppie.robot.session.RequestProblem
+import cn.elonzh.hanppie.robot.session.RobotRequestException
 import cn.elonzh.hanppie.ui.i18n.UiText
+import cn.elonzh.hanppie.ui.i18n.uiText
 import cn.elonzh.hanppie.ui.robot.device.robotRequestMessage
 import kotlin.concurrent.atomics.AtomicLong
 import kotlinx.coroutines.*
@@ -26,6 +30,8 @@ internal data class CameraSettingsState(
     val antiFlicker: CameraSetting<Int> = CameraSetting.Idle,
     val date: CameraSetting<CameraDate?> = CameraSetting.Idle,
     val timeSynced: Boolean? = null,
+    val storage: CameraStorageStatus? = null,
+    val formatRequest: CameraSetting<Unit> = CameraSetting.Idle,
 )
 
 /** Per-connection native settings; clock synchronization is attempted once on a fresh unsynced status. */
@@ -33,6 +39,7 @@ internal class CameraSettingsController(private val scope: CoroutineScope) {
     private class Binding(val id: Long, val service: RobotCameraService, val scope: CoroutineScope) {
         val antiFlicker = Mutex()
         val clock = Mutex()
+        val storage = Mutex()
         var autoSyncAttempted = false
     }
     val state = MutableStateFlow(CameraSettingsState())
@@ -47,7 +54,7 @@ internal class CameraSettingsController(private val scope: CoroutineScope) {
         state.value = CameraSettingsState(connection = current.id)
         current.scope.launch {
             service.state.collect { status ->
-                update(current) { it.copy(timeSynced = status.timeSynced) }
+                update(current) { it.copy(timeSynced = status.timeSynced, storage = status.storage) }
                 if (status.timeSynced == false && !current.autoSyncAttempted)
                     current.autoSyncAttempted = syncClock(current)
             }
@@ -69,12 +76,23 @@ internal class CameraSettingsController(private val scope: CoroutineScope) {
     private fun syncClock(current: Binding): Boolean =
         work<CameraDate?>(current, current.clock, { old, value -> old.copy(date = value) }) { it.syncClock() }
 
+    fun formatStorage() {
+        val current = binding ?: return
+        work(current, current.storage, { old, value -> old.copy(formatRequest = value) },
+            errorMessage = { error -> uiText(when {
+                error is IllegalStateException -> Res.string.camera_storage_state_changed
+                error is RobotRequestException && error.problem == RequestProblem.REJECTED -> Res.string.camera_storage_format_rejected
+                else -> Res.string.camera_storage_format_uncertain
+            }) }) { it.formatStorage() }
+    }
+
     private fun update(current: Binding, transform: (CameraSettingsState) -> CameraSettingsState) {
         state.update { if (it.connection == current.id) transform(it) else it }
     }
 
     private fun <T> work(current: Binding, mutex: Mutex,
         set: (CameraSettingsState, CameraSetting<T>) -> CameraSettingsState,
+        errorMessage: (Exception) -> UiText = { robotRequestMessage(it, Res.string.camera_settings_failed) },
         action: suspend (RobotCameraService) -> T,
     ): Boolean {
         if (binding !== current || !current.scope.isActive || !mutex.tryLock()) return false
@@ -84,7 +102,7 @@ internal class CameraSettingsController(private val scope: CoroutineScope) {
                 val result = action(current.service)
                 update(current) { set(it, CameraSetting.Value(result)) }
             } catch (error: CancellationException) { throw error }
-            catch (error: Exception) { update(current) { set(it, CameraSetting.Failed(robotRequestMessage(error, Res.string.camera_settings_failed))) } }
+            catch (error: Exception) { update(current) { set(it, CameraSetting.Failed(errorMessage(error))) } }
             finally { mutex.unlock() }
         }
         return true

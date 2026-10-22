@@ -470,7 +470,7 @@ S1 会在 UDP `10607` 数据会话中输出 H.264 视频和 Opus 音频。本机
 
 原生 `RobomasterCameraAbstraction::SetDigitalZoomFactor`（`0x72d630`）构造相机节点 `0x01`、命令 `02:34` 的五字节载荷：`09 00 00` 加 little-endian uint16 倍率，100 表示 1 倍，400 表示 4 倍。现有 Hanppie 遥控初始化的 `0900006400` 与其 1 倍载荷一致。新变焦沿用这条现有发送路径，不替换握手、初始化或退出载荷。**代码**
 
-倍率来自原生相机简化状态 `02:e4`，并非一个已确认的独立 GetZoom 请求。`ObserverPushPack`（`0x72a650`，注册点 `0x72a756`）绑定该命令；`OnCameraSimpleStatusPush`（`0x72a930`）要求 payload 至少 26 字节，在 `0x72b398` 读取偏移 8 的 little-endian uint16，写入 `RMCameraParamDigitalZoomFactor`。Hanppie 当前解释该推送中的倍率和下述时钟同步字段，过滤来源相机节点、目的 App 节点和非响应属性。**代码 / 待实机确认**
+倍率来自原生相机简化状态 `02:e4`，并非一个已确认的独立 GetZoom 请求。`ObserverPushPack`（`0x72a650`，注册点 `0x72a756`）绑定该命令；`OnCameraSimpleStatusPush`（`0x72a930`）要求 payload 至少 26 字节，在 `0x72b398` 读取偏移 8 的 little-endian uint16，写入 `RMCameraParamDigitalZoomFactor`。Hanppie 当前解释该推送中的倍率、下述时钟同步与存储卡字段，过滤来源相机节点、目的 App 节点和非响应属性。**代码 / 待实机确认**
 
 官方 `ViewSinglePlayer.StateZoom` 在进入/退出时分别请求 400/100，变焦状态关闭跟随入口，跟随状态隐藏变焦入口；`SystemSinglePlayer` 进入和退出单人操控时均恢复 100。官方 `RealController.LerpCameraDigitalZoom` 通过连续设置值实现过渡；Hanppie 当前直接请求端点，不复现这段逐帧插值。**代码**
 
@@ -492,6 +492,25 @@ S1 会在 UDP `10607` 数据会话中输出 H.264 视频和 Opus 音频。本机
 `02:e4` 的同步状态由原生 `OnCameraSimpleStatusPush` 在 `0x72bdab..0x72bdb1` 读取偏移 5 并测试掩码 `0xc0`；任一位非零即上报已同步。`Module.Setting.System/SystemSetting.OnCameraIsTimeSynced` 仅在设备报告未同步时写入 `DateTime.Now` 的六个本地日期字段，没有时区载荷。Hanppie 因此使用本机本地时间，不把其当作 UTC；状态缺失时也不臆测为未同步。**代码**
 
 本次没有实机证据确认响应长度、年份格式、时钟步进/写入时延、夏令时切换及抗闪烁画面效果。局部反汇编仍放在 `.hanppie/validation/2026-10-22-official-gap/native-Camera-*AntiFlicker.txt`、`*CameraDate.txt` 和 `native-Camera-GetDateReplyValidation.txt`；测试和设备待验项见[实施台账 A03](./official-app-capability-implementation.md#a03-验证入口与设备待验)。
+
+#### 相机 SD 卡状态与格式化
+
+固定版本的 `OnCameraSimpleStatusPush` 还解释以下字段；多字节值均为 little-endian。容量单位由官方 `DJICameraSDCardTotalSpaceInMB` / `DJICameraSDCardRemaingSpaceInMB` 和设置页的 MB 显示确认。空间与剩余拍录量通过 `CommonIntValue` 传递，Hanppie 将负 int32 保留为未知，不当作无符号大容量。**代码**
+
+| 字段 | Payload 偏移 / 掩码 | 原生定位 |
+| --- | --- | --- |
+| 插卡 / 原始状态码 | byte 2 的 `0x10` / 低 4 位 | `0x72b4b5..0x72b4bb`；格式化与满卡见下文 |
+| 原生录像时长 | uint16 @ 3，秒 | `0x72b056` |
+| 正在录像 | uint16 @ 5，`0x3000 != 0` | `0x72af3f..0x72af48` |
+| 正在拍照 | byte @ 7，`0x30 != 0` | `0x72ae10..0x72ae1c` |
+| 总容量 / 剩余容量 | int32 @ 10 / 14，MB | `0x72b806` / `0x72b921` |
+| 剩余照片数 / 剩余录像秒数 | int32 @ 18 / 22 | `0x72ba48` / `0x72bb6c` |
+
+状态码 `5` 是格式化中（`0x72bc95..0x72bc9c`），`8` 是满卡（`0x72b6f4..0x72b6fb`）。`GetIsSDCardError(int)`（`0x73bf30`）用 `(code - 2) <= 9` 和 `0x317` 位图判定错误，命中 `2/3/4/6/10/11`。其余非零码未取得完整命名依据，不自行添加“卡损坏”“文件系统错误”等细分解释。**代码**
+
+`ActionFormatSDCard`（`0x7328c0`）构造相机节点 `0x01` 的 `02:72` 请求，payload 为一个零字节：零初始化位于 `0x7328e9`，长度 1 位于 `0x732956`。官方 `ViewSettingSystem.OnSDCardFormat` 检查连接、插卡和未录像，再弹出确认后调用 `SendSDCardFormat`；`OnCameraSDCardIsFormatting` 只按推送开关等待提示，没有把命令应答当作物理格式化完成或删除文件的证明。**代码**
+
+上述内容来自固定版本静态分析，本轮没有 SD 卡实机证据。局部反汇编在 `.hanppie/validation/2026-10-22-official-gap/native-Camera-OnCameraSimpleStatusPush.txt`、`native-Camera-ActionFormatSDCard.txt` 和 `native-Camera-GetIsSDCardError.txt`。真实状态码、容量量纲、格式化应答与推送顺序、失败恢复和文件删除结果见[实施台账 A04 待验](./official-app-capability-implementation.md#a04-验证入口与设备待验)。
 
 #### 机器人音频配置
 
