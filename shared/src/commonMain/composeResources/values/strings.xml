@@ -632,4 +632,18 @@
     <string name="signal_level_weak">Weak</string>
     <string name="signal_level_unknown">Unknown</string>
     <string name="signal_quality_raw">Wi-Fi quality raw value: %1$s (0x07:0x09; not dBm or a percentage)</string>
+    <string name="object_tracking">Object tracking</string>
+    <string name="tracking_select_target">Tap a target in the video</string>
+    <string name="tracking_preparing">Preparing object tracking…</string>
+    <string name="tracking_selecting">Locking target…</string>
+    <string name="tracking_ready">Target locked. Starting will move the robot.</string>
+    <string name="tracking_start_follow">Start following</string>
+    <string name="tracking_starting">Starting to follow…</string>
+    <string name="tracking_following">Following · Use a joystick or direction key to take over</string>
+    <string name="tracking_stopping">Stopping tracking…</string>
+    <string name="tracking_stop">Stop tracking</string>
+    <string name="tracking_stop_unconfirmed">Stop not confirmed. Retry stopping.</string>
+    <string name="tracking_target_lost">Target lost. Following has ended.</string>
+    <string name="tracking_rejected">The robot could not enable tracking. Try again.</string>
+    <string name="tracking_timeout">Tracking timed out. Try again.</string>
 </resources>

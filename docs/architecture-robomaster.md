@@ -446,6 +446,22 @@ SDK `EscSubject` 的 `<hhhhhhhhIIIIBBBB`：四项有符号 RPM、四项编码器
 
 可复现的输入指纹、反汇编地址和本次验证记录见 [macOS App 静态分析记录](s1-app-static-analysis-2026-09-08.md)。本地提取对象索引位于 `.hanppie/app-analysis/2026-09-08/report.md`；原始分析材料仍保留在该目录，首页使用的转换模型及来源说明见 [展示素材](../assets/robot-scene/README.md)。
 
+#### 对象追踪跟随
+
+macOS 官方 App 的 `VisionFollow` 使用 `DJIDetectionType.HumanTracking = 0x40`，状态依次为搜索、锁定、跟随。点击目标调用 `SendAutoFollowTracking`，发送归一化中心坐标 `(x,y)`、宽高为零；锁定后用户确认才发送跟随启动，取消使用同一指令的关闭位。它与上述 `3f:22` 调试速度分支不同；通用物体种类、识别范围和固件支持程度不能从名称推断。**代码**
+
+`unitybridge` 的 `RobomasterVisionAbstraction` 构造以下原生消息，目的节点为 `host=17,index=7`（DUSS `0xf1`），命令集为 `0x0a`，需要响应：
+
+| 指令 | ID | Payload |
+| --- | --- | --- |
+| 开关识别 | `a3` | little-endian uint16 功能位，跟随 `0x0040`，关闭 `0` |
+| 选择目标 | `a8` | uint16 `0x0040`，uint8 `0`，四项 little-endian float `x,y,width,height` |
+| 确认 / 取消 | `a7` | uint16 `0x0040`，uint8 `1` / `0`，四个零字节 |
+
+`0a:a4` 视觉推送的公共头长 9 字节：偏移 0 是类型（`1` 人体候选、`6` 跟随），偏移 1 是状态（`0` 存在、`1` 初始化、`2` 等待确认、`3` 运行），偏移 6 是 uint16 异常码，偏移 8 是目标数量。上述类型每项 20 字节，包含四项归一化中心位置与宽高 float 以及 uint32 Info。坐标原点在视频左上角；矩形按中心和宽高显示。**代码**
+
+这些字段来自固定版本原生构造函数和推送解码器的静态分析，尚无本次真实设备抓包或物理跟随证据。Hanppie 已按用户要求接入离线实现，当前状态机与验证边界见[当前实现](./architecture.md#134-遥控操纵镜头坐标系与安全联动)，输入指纹、反汇编地址及测试记录见[2026-10-22 离线记录](./object-tracking-validation-2026-10-22.md)。**待验证**
+
 ### 5.4 原生媒体路径
 
 S1 会在 UDP `10607` 数据会话中输出 H.264 视频和 Opus 音频。本机已解码出 `1280×720 yuv420p` 视频帧，以及 48 kHz、单声道、signed 16-bit PCM 音频帧。这里描述的是 S1 原生媒体能力；Hanppie 如何请求、分流和解码见 [Hanppie 技术架构 1.9 节](./architecture.md#19-媒体兼容与混合后端)。**实测/代码**

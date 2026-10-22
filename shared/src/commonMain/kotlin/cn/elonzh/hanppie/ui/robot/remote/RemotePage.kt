@@ -128,6 +128,10 @@ internal fun RemotePage(
     val colors = MiuixTheme.colorScheme
     val connected by model.state.collectAsState()
     val remoteEnabled by model.remoteEnabled.collectAsState()
+    val tracking by model.tracking.collectAsState()
+    val manualActionsEnabled = !tracking.blocksManualControl
+    val videoFrame = model.videoFrames.image(connected.connectedAddress)
+    var videoFresh by remember { mutableStateOf(false) }
     val foreground by model.foregroundState.collectAsState()
     val enabled = remoteEnabled && inputEnabled && foreground
     val gelSelected by model.gelSelected.collectAsState()
@@ -158,6 +162,22 @@ internal fun RemotePage(
         model.setRemoteLed(null)
         if (manageSession) { model.leaveRemote(); model.stopMedia() }
     } }
+    LaunchedEffect(enabled, connected.connectedAddress) {
+        while (enabled) {
+            videoFresh = model.videoFrames.isFresh(connected.connectedAddress)
+            delay(100)
+        }
+        videoFresh = false
+    }
+    LaunchedEffect(tracking.active, enabled) {
+        while (tracking.active) {
+            if (!enabled || !model.videoFrames.isFresh(connected.connectedAddress)) {
+                model.stopObjectTracking()
+                break
+            }
+            delay(100)
+        }
+    }
     LaunchedEffect(enabled) {
         if (enabled) focus.requestFocus()
         else { keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; model.stopFiring() }
@@ -183,7 +203,7 @@ internal fun RemotePage(
     }
     val currentShiftHeld = Key.ShiftLeft in currentKeys || Key.ShiftRight in currentKeys
     val fireKeyHeld = currentControl.shortcuts.isHeld(ControlAction.Fire, currentKeys, currentShiftHeld)
-    val shouldFire = enabled && (fireKeyHeld || firePointerHeld)
+    val shouldFire = enabled && manualActionsEnabled && (fireKeyHeld || firePointerHeld)
     LaunchedEffect(shouldFire) {
         if (shouldFire) model.startFiring() else model.stopFiring()
     }
@@ -255,7 +275,9 @@ internal fun RemotePage(
             }
         }
         if (videoContent == null) RobotVideo(model, mediaControls, Modifier.fillMaxSize()) else videoContent()
-        RemoteCrosshair(model, Modifier.align(Alignment.Center))
+        if (tracking.active && videoFrame != null) ObjectTrackingTargets(tracking, videoFrame.width, videoFrame.height,
+            enabled, model::selectTrackingTarget)
+        if (!tracking.blocksManualControl) RemoteCrosshair(model, Modifier.align(Alignment.Center))
         Row(Modifier.align(Alignment.TopStart).padding(HanppieDesignTokens.RemoteEdgePadding),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             onBack?.let { back -> HudIconButton(tr(Res.string.back_to_console), WorkbenchGlyph.BACK, enabled = navigationEnabled && foreground, action = back) }
@@ -282,7 +304,7 @@ internal fun RemotePage(
                     SignalIndicator(connected.signalQuality)
                     HeadingIndicator(connected.gimbal?.yawDegrees, Modifier.heightIn(min = 48.dp)
                         .testTag("recenter-gimbal")
-                        .clickable(enabled = enabled && connected.gimbal != null, onClickLabel = tr(Res.string.recenter_gimbal)) {
+                        .clickable(enabled = enabled && manualActionsEnabled && connected.gimbal != null, onClickLabel = tr(Res.string.recenter_gimbal)) {
                             model.recenterGimbal(); focus.requestFocus()
                         })
                 }
@@ -292,6 +314,13 @@ internal fun RemotePage(
                 color = colors.onSurface, style = MiuixTheme.textStyles.subtitle)
             return@BoxWithConstraints
         }
+        ObjectTrackingControls(tracking, enabled && videoFrame != null && videoFresh,
+            Modifier.align(Alignment.TopCenter).padding(top = 76.dp),
+            onStart = {
+                keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+                model.startObjectTracking(); focus.requestFocus()
+            }, onConfirm = { model.confirmObjectTracking(); focus.requestFocus() },
+            onStop = { model.stopObjectTracking(); focus.requestFocus() })
         val touchInset = (maxWidth * .06f).coerceIn(32.dp, 80.dp)
         if (!keyboardHints) {
             Column(Modifier.align(Alignment.BottomStart).padding(start = touchInset, bottom = 32.dp).testTag("remote-touch-left"),
@@ -326,7 +355,7 @@ internal fun RemotePage(
                 horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     HudIconButton(if (gelSelected) tr(Res.string.fire_one_gel_bead) else tr(Res.string.fire_infrared),
-                        WorkbenchGlyph.CROSSHAIR, enabled = enabled && !connected.busy, selected = firePointerHeld,
+                        WorkbenchGlyph.CROSSHAIR, enabled = enabled && manualActionsEnabled && !connected.busy, selected = firePointerHeld,
                         onPressChange = { held ->
                             firePointerHeld = held
                             if (held) {

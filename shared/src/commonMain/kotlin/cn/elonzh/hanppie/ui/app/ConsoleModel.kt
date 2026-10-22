@@ -82,6 +82,7 @@ import cn.elonzh.hanppie.robot.protocol.hex
 import cn.elonzh.hanppie.robot.session.RobotLabSession
 import cn.elonzh.hanppie.robot.session.RobotRuntime
 import cn.elonzh.hanppie.robot.session.RobotSession
+import cn.elonzh.hanppie.robot.tracking.TrackingState
 import cn.elonzh.hanppie.robot.session.RobotTarget
 import cn.elonzh.hanppie.robot.telemetry.Telemetry
 import cn.elonzh.hanppie.ui.chat.ChatAgent
@@ -236,6 +237,25 @@ internal class ConsoleModel(
     private val connectionPreferencesLoaded = AtomicBoolean(false)
     override val foregroundState = MutableStateFlow(true)
     private val remoteRevision = AtomicLong(0L)
+    override val tracking = MutableStateFlow(TrackingState())
+    private var trackingObserver: Job? = null
+    private fun trackingAction(action: (RobotSession) -> Unit) {
+        val current = session.load() ?: return
+        if (!remoteEnabled.value || !isForeground || state.value.busy || chat.state.value.running) return
+        gimbalCentering.cancel(); stopFiring()
+        runCatching { action(current) }.onFailure { error ->
+            runCatching { current.stopTracking() }
+            log(error.message.orEmpty())
+        }
+    }
+    override fun startObjectTracking() {
+        if (videoFrames.isFresh(state.value.connectedAddress)) trackingAction { it.startTracking() }
+    }
+    override fun selectTrackingTarget(x: Float, y: Float) = trackingAction { it.selectTrackingTarget(x, y) }
+    override fun confirmObjectTracking() {
+        if (videoFrames.isFresh(state.value.connectedAddress)) trackingAction { it.confirmTracking() }
+    }
+    override fun stopObjectTracking() { runCatching { session.load()?.stopTracking() } }
     override val remoteEnabled = MutableStateFlow(false)
     override val remoteInput = MutableStateFlow(List(5) { 0.0 })
     override val cameraYaw = MutableStateFlow<Double?>(null)
@@ -285,7 +305,7 @@ internal class ConsoleModel(
     }
     private val gimbalCentering = cn.elonzh.hanppie.ui.robot.remote.GimbalCentering()
     override fun recenterGimbal() {
-        if (remoteEnabled.value && isForeground && acceptingWork.load() && !chat.state.value.running && !state.value.busy) {
+        if (remoteEnabled.value && isForeground && acceptingWork.load() && !chat.state.value.running && !state.value.busy && !tracking.value.blocksManualControl) {
             gimbalCentering.start(clock.now().toEpochMilliseconds())
         }
     }
@@ -322,7 +342,7 @@ internal class ConsoleModel(
         }
     }
     override fun startFiring() {
-        if (!remoteEnabled.value || !acceptingWork.load() || chat.state.value.running || state.value.busy) return
+        if (!remoteEnabled.value || !acceptingWork.load() || chat.state.value.running || state.value.busy || tracking.value.blocksManualControl) return
         firingInternal.store(true)
         firing.value = true
         if (firingJob?.isActive == true) return
@@ -364,7 +384,7 @@ internal class ConsoleModel(
         }
     }
     override fun fire() {
-        if (remoteEnabled.value && acceptingWork.load() && !chat.state.value.running && !state.value.busy) {
+        if (remoteEnabled.value && acceptingWork.load() && !chat.state.value.running && !state.value.busy && !tracking.value.blocksManualControl) {
             val s = session.load() ?: return
             val ok = runCatching { s.fireInfrared() }.onFailure {
                 state.update { current ->
@@ -375,7 +395,7 @@ internal class ConsoleModel(
         }
     }
     override fun fireGel() {
-        if (!remoteEnabled.value || !acceptingWork.load() || chat.state.value.running || state.value.busy) return
+        if (!remoteEnabled.value || !acceptingWork.load() || chat.state.value.running || state.value.busy || tracking.value.blocksManualControl) return
         scope.launch {
             val s = session.load() ?: return@launch
             gelFireMutex.withLock {
@@ -751,10 +771,16 @@ internal class ConsoleModel(
         val candidate = robotRuntime.open(target, ::receive, ::log, ::connectionLost)
         candidate.onVideo = { videoConsumer.load()?.invoke(it) }
         candidate.onAudio = { audioConsumer.load()?.invoke(it) }
+        trackingObserver?.cancel()
+        tracking.value = TrackingState()
+        trackingObserver = scope.launch {
+            candidate.tracking.collect { value -> if (session.load() === candidate) tracking.value = value }
+        }
         return candidate
     }
 
     private fun connectionLost(candidate: RobotSession, reason: String) {
+        tracking.value = TrackingState()
         gimbalCentering.cancel()
         remoteEnabled.value = false
         stopFiring()
@@ -774,7 +800,7 @@ internal class ConsoleModel(
     override fun disconnect() = work {
         connectionRevision.addAndFetch(1)
         haltRemote()
-        session.exchange(null)?.close(); lab.store(null)
+        session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState()
         robotFiles.clear()
         state.update {
             val uncertain = it.scriptRunPhase.mayBeExecuting
@@ -970,7 +996,7 @@ internal class ConsoleModel(
         connectionRevision.addAndFetch(1)
         chat.cancelAndJoin()
         scope.coroutineContext[Job]?.children?.toList()?.forEach { it.cancelAndJoin() }
-        session.exchange(null)?.close(); lab.store(null)
+        session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState()
         robotFiles.clear()
         state.update {
             val uncertain = it.scriptRunPhase.mayBeExecuting
@@ -981,5 +1007,5 @@ internal class ConsoleModel(
                 scriptMessage = if (uncertain) uiText(Res.string.connection_closed_robot_state_unknown) else it.scriptMessage)
         }
     }
-    override fun close() { connectionRevision.addAndFetch(1); robotFiles.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
+    override fun close() { connectionRevision.addAndFetch(1); robotFiles.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
 }

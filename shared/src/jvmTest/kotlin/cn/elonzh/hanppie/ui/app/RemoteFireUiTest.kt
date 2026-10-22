@@ -57,6 +57,11 @@ class RemoteFireUiTest {
 
         override val connected = true
         override val product = RobotProduct(model = RobotModel.ROBOMASTER_S1)
+        override val tracking = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.tracking.TrackingState())
+        override fun startTracking() {}
+        override fun selectTrackingTarget(x: Float, y: Float) {}
+        override fun confirmTracking() {}
+        override fun stopTracking() {}
         override val cameraYaw: Double? = null
         override var onVideo: ((ByteArray) -> Unit)? = null
         override var onAudio: ((ByteArray) -> Unit)? = null

@@ -18,6 +18,7 @@ import cn.elonzh.hanppie.robot.remote.RemoteControl
 import cn.elonzh.hanppie.robot.remote.remoteEffects
 import cn.elonzh.hanppie.robot.remote.remoteExit
 import cn.elonzh.hanppie.robot.remote.remoteSetup
+import cn.elonzh.hanppie.robot.tracking.ObjectTracking
 import cn.elonzh.hanppie.robot.telemetry.Telemetry
 import kotlin.concurrent.Volatile
 import kotlin.concurrent.atomics.AtomicBoolean
@@ -68,6 +69,29 @@ class AppSession(private val target: RobotTarget,
     val cameraYaw: Double? get() = yawSample?.takeIf { robotNanoTime() - it.second < 500_000_000 }?.first
     private var inputDeadline = 0L
     private var triggerDeadline = 0L
+    private val objectTracking = ObjectTracking(
+        send = { id, payload -> send(Protocol.HOST_VISION, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_VISION, id, payload) },
+        nowMillis = { robotNanoTime() / 1_000_000 },
+        stopMotion = {
+            controlPayload = RemoteControl.velocity(0.0, 0.0, 0.0)
+            gimbalPayload = RemoteControl.gimbalVelocity(0.0, 0.0)
+            gimbalInput = 0.0 to 0.0; chassisYawInput = 0.0; cameraInput = 0.0 to 0.0; triggerDeadline = 0
+            send(Protocol.HOST_CHASSIS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_WHEEL_SPEED_SET, ByteArray(8))
+            send(Protocol.HOST_GIMBAL, Protocol.ATTR_NO_ACK, Protocol.CMDSET_GIMBAL, Protocol.CMD_GIMBAL_EXT_CTRL_ACCEL, gimbalPayload)
+        },
+    )
+    val tracking get() = objectTracking.state
+    fun startTracking() = txLock.withLock {
+        check(remote && active.load() && !labRunning && robotNanoTime() - lastReceivedNanos < 500_000_000)
+        inputDeadline = robotNanoTime() + 250_000_000
+        objectTracking.start()
+    }
+    fun selectTrackingTarget(x: Float, y: Float) = txLock.withLock { objectTracking.select(x, y) }
+    fun confirmTracking() = txLock.withLock {
+        check(remote && active.load() && robotNanoTime() < inputDeadline && robotNanoTime() - lastReceivedNanos < 500_000_000)
+        objectTracking.confirm()
+    }
+    fun stopTracking() = txLock.withLock { objectTracking.stop() }
     @Volatile var onVideo: ((ByteArray) -> Unit)? = null
     @Volatile var onAudio: ((ByteArray) -> Unit)? = null
 
@@ -94,6 +118,11 @@ class AppSession(private val target: RobotTarget,
             runCatching { sendNeutral(forceActuatorStop = true) }
             error("500 毫秒未收到机器人数据，遥控已安全停止")
         }
+        if (tracking.value.blocksManualControl) {
+            if (listOf(x, y, z, pitch, yaw).any { it != 0.0 }) objectTracking.stop()
+            inputDeadline = robotNanoTime() + 250_000_000
+            return@withLock
+        }
         controlPayload = RemoteControl.velocity(x, y, z)
         chassisYawInput = z
         gimbalInput = pitch to yaw
@@ -103,13 +132,14 @@ class AppSession(private val target: RobotTarget,
         inputDeadline = robotNanoTime() + 250_000_000
     }
     fun halt() = txLock.withLock {
+        objectTracking.stop()
         clearMotionInput()
         if (active.load()) sendNeutral()
     }
     /** Best-effort stop for explicit disconnect, link loss, and a newly restored session. */
     fun safetyStop(repetitions: Int = 3) {
         require(repetitions in 1..10)
-        txLock.withLock { clearMotionInput() }
+        txLock.withLock { objectTracking.stop(); clearMotionInput() }
         repeat(repetitions) { index ->
             txLock.withLock { if (active.load()) sendNeutral(forceActuatorStop = true) }
             if (index + 1 < repetitions) robotSleep(20)
@@ -128,7 +158,7 @@ class AppSession(private val target: RobotTarget,
         var blasterLedEnabled = false
         try {
             val fireSequence = txLock.withLock {
-                check(remote && active.load() && !labRunning) { "遥控未启用" }
+                check(remote && active.load() && !labRunning && !tracking.value.blocksManualControl) { "遥控未启用" }
                 send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_LED_COLOR_SET, RemoteControl.muzzleFireLed(true))
                 fireLedEnabled = true
                 send(Protocol.HOST_GUN, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_GUN_LED_SET, RemoteControl.blasterLed(true))
@@ -182,7 +212,7 @@ class AppSession(private val target: RobotTarget,
         }
     }
     fun fireInfrared() = txLock.withLock {
-        check(remote && active.load()) { "遥控未启用" }
+        check(remote && active.load() && !tracking.value.blocksManualControl) { "遥控未启用" }
         triggerDeadline = robotNanoTime() + 120_000_000
     }
     fun setLed(red: Int, green: Int, blue: Int, enabled: Boolean = true) = txLock.withLock {
@@ -386,10 +416,11 @@ class AppSession(private val target: RobotTarget,
         val seq = sequence
         sequence = (sequence + 1) and 65535
         val fresh = remote && robotNanoTime() < inputDeadline
+        objectTracking.tick(fresh && robotNanoTime() - lastReceivedNanos < 500_000_000)
         val payload = if (remote && robotNanoTime() < triggerDeadline) "0000042000010840000230".hexBytes()
             else Protocol.neutral
         sendPacket(envelope.control(Protocol.duss(Protocol.HOST_MOBILE, Protocol.HOST_HDVT_UAV, Protocol.ATTR_NO_ACK, Protocol.CMDSET_SPECIAL, Protocol.CMD_SPECIAL_RM_CONTROL, payload, seq)))
-        if (remote || forceActuatorStop) {
+        if ((remote && !tracking.value.blocksManualControl) || forceActuatorStop) {
             var velocity = if (fresh) controlPayload else RemoteControl.velocity(0.0,0.0,0.0)
             var gimbal = if(fresh) gimbalPayload else RemoteControl.gimbalVelocity(0.0,0.0)
             if (fresh && cameraRelative) {
@@ -434,6 +465,7 @@ class AppSession(private val target: RobotTarget,
                         txLock.withLock { envelope.observe(data) }
                         Protocol.frames(data).filter { it.valid }.forEach { frame ->
                             Telemetry.gimbalYaw(frame)?.let { yaw -> yawSample = yaw to robotNanoTime() }
+                            txLock.withLock { objectTracking.receive(frame) }
                             updateProduct(frame)
                             if (frame.set == Protocol.CMDSET_RM && frame.id == Protocol.CMD_RM_AUDIO_TO_APP) onAudio?.invoke(frame.payload) else onFrame(frame)
                         }

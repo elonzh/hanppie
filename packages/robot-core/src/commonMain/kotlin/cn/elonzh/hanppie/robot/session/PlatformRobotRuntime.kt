@@ -53,6 +53,11 @@ private class PlatformRobotSession(
 ) : RobotSession {
     override val connected: Boolean get() = app.connected
     override val product: RobotProduct get() = app.product
+    override val tracking get() = app.tracking
+    override fun startTracking() = app.startTracking()
+    override fun selectTrackingTarget(x: Float, y: Float) = app.selectTrackingTarget(x, y)
+    override fun confirmTracking() = app.confirmTracking()
+    override fun stopTracking() = app.stopTracking()
     override val cameraYaw: Double? get() = app.cameraYaw
     override var onVideo: ((ByteArray) -> Unit)?
         get() = app.onVideo

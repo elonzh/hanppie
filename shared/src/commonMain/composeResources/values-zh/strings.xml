@@ -632,4 +632,18 @@
     <string name="signal_level_weak">弱</string>
     <string name="signal_level_unknown">未知</string>
     <string name="signal_quality_raw">Wi-Fi 质量原始值：%1$s（0x07:0x09；不是 dBm 或百分比）</string>
+    <string name="object_tracking">对象跟随</string>
+    <string name="tracking_select_target">点击画面中的目标</string>
+    <string name="tracking_preparing">正在准备对象跟随…</string>
+    <string name="tracking_selecting">正在锁定目标…</string>
+    <string name="tracking_ready">目标已锁定，开始后机器人将自动移动</string>
+    <string name="tracking_start_follow">开始跟随</string>
+    <string name="tracking_starting">正在启动跟随…</string>
+    <string name="tracking_following">正在跟随 · 操纵摇杆或方向键可接管</string>
+    <string name="tracking_stopping">正在停止跟随…</string>
+    <string name="tracking_stop">停止跟随</string>
+    <string name="tracking_stop_unconfirmed">尚未确认停止，请重试停止</string>
+    <string name="tracking_target_lost">目标已丢失，跟随已结束</string>
+    <string name="tracking_rejected">机器人未能启用跟随，请重新尝试</string>
+    <string name="tracking_timeout">跟随响应超时，请重新尝试</string>
 </resources>

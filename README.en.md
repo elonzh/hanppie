@@ -37,6 +37,7 @@ The official RoboMaster app is not required. Manual IPv4/AppID entry is availabl
 | Task | How |
 | --- | --- |
 | Drive | Enter the cockpit after connecting. Use the twin sticks, or WASD to move, Q/E to turn and arrow keys for the gimbal. Esc returns to the workbench. See Settings → Shortcuts for all controls |
+| Object tracking | In the cockpit, choose Object tracking, tap a target, then select Start following after it locks. Stop tracking or use a direction control to take over. See the [hardware validation boundary](./docs/architecture.md#134-遥控操纵镜头坐标系与安全联动) (Chinese) |
 | Write scripts | Create a script, import a `.py` file or copy a preset in Scripts. Save it locally, then choose Run script. Lab programs use onboard APIs and Python 3.6 syntax; see the [Lab programming guide](./shared/src/commonMain/composeResources/files/skills/lab-python/SKILL.md) (Chinese) |
 | Use AI assistance | Choose a provider in Settings → Model service, enter the API key and model, then test the configuration. Describe your task in Chat and review the complete script before approving execution |
 | Stop a script | Use Stop script. Leaving the editor or cancelling AI generation does not stop an onboard script |

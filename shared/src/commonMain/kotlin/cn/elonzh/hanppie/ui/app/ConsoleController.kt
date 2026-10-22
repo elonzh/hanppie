@@ -17,6 +17,7 @@ import cn.elonzh.hanppie.ui.speech.SpeechInput
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import cn.elonzh.hanppie.robot.tracking.TrackingState
 
 internal enum class AmmoType {
     INFRARED,
@@ -42,6 +43,11 @@ internal interface ConsoleController : AutoCloseable {
     val robotFiles: RobotFilesController
     val chat: ChatAgent
     val foregroundState: MutableStateFlow<Boolean>
+    val tracking: StateFlow<TrackingState>
+    fun startObjectTracking()
+    fun selectTrackingTarget(x: Float, y: Float)
+    fun confirmObjectTracking()
+    fun stopObjectTracking()
     val remoteEnabled: MutableStateFlow<Boolean>
     val remoteInput: MutableStateFlow<List<Double>>
     val cameraYaw: MutableStateFlow<Double?>

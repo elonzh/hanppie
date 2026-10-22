@@ -1,5 +1,7 @@
 package cn.elonzh.hanppie.robot.session
 
+import cn.elonzh.hanppie.robot.tracking.TrackingState
+import kotlinx.coroutines.flow.StateFlow
 import cn.elonzh.hanppie.robot.files.RobotFileService
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.robot.lab.LabUpload
@@ -50,6 +52,11 @@ interface RobotLabSession {
 interface RobotSession : AutoCloseable {
     val connected: Boolean
     val product: RobotProduct
+    val tracking: StateFlow<TrackingState>
+    fun startTracking()
+    fun selectTrackingTarget(x: Float, y: Float)
+    fun confirmTracking()
+    fun stopTracking()
     val cameraYaw: Double?
     var onVideo: ((ByteArray) -> Unit)?
     var onAudio: ((ByteArray) -> Unit)?

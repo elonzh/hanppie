@@ -161,7 +161,7 @@ import top.yukonga.miuix.kmp.basic.*
     }
     Box(modifier.background(Color.Black)) {
         Box(Modifier.fillMaxSize()) {
-            frame?.let { Image(it,tr(Res.string.robot_live_video),Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+            frame?.let { Image(it,tr(Res.string.robot_live_video),Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
         }
         if (!preview) Column(Modifier.align(Alignment.TopEnd).graphicsLayer { alpha = hudAlpha }.padding(end = HanppieDesignTokens.RemoteEdgePadding,
             top = HanppieDesignTokens.RemoteEdgePadding), horizontalAlignment = Alignment.End) {
