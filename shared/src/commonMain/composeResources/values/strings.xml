@@ -756,4 +756,21 @@
     <string name="album_retry">Retry</string>
     <string name="album_preview_loading">Loading preview…</string>
     <string name="album_preview_failed">Preview unavailable. Open the original file to view it.</string>
+    <string name="camera_imaging">Image and capture</string>
+    <string name="camera_video_format">Current video: %1$s</string>
+    <string name="camera_photo_size">Photo dimensions</string>
+    <string name="camera_source">Video source</string>
+    <string name="camera_source_value">Current camera: %1$s</string>
+    <string name="camera_main">Main camera</string>
+    <string name="camera_secondary">Secondary camera</string>
+    <string name="camera_imaging_wait">Waiting for camera status…</string>
+    <string name="camera_transmission_rate">Video transmission rate</string>
+    <string name="camera_rate_choose">Choose a rate</string>
+    <string name="camera_rate_confirmed">Rate request acknowledged: %1$s</string>
+    <string name="camera_imaging_applying">Confirming the request…</string>
+    <string name="camera_imaging_confirmed">Confirmed by camera status.</string>
+    <string name="camera_keyframe">Refresh video image</string>
+    <string name="camera_keyframe_requested">Refresh request acknowledged. Check the video image.</string>
+    <string name="camera_switch_task_active">Stop tracking or end the script before switching cameras.</string>
+    <string name="camera_switch_busy">Finish capture or media transfer before switching cameras.</string>
 </resources>

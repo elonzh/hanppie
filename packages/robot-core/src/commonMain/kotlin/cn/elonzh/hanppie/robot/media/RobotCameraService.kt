@@ -16,7 +16,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Mutex
 
 data class CameraState(val zoomHundredths: Int? = null, val revision: Long = 0, val timeSynced: Boolean? = null,
-    val storage: CameraStorageStatus? = null, val workMode: Int? = null)
+    val storage: CameraStorageStatus? = null, val workMode: Int? = null, val imaging: CameraImagingStatus? = null)
 
 interface RobotCameraService {
     val state: StateFlow<CameraState>
@@ -25,6 +25,12 @@ interface RobotCameraService {
     suspend fun setAntiFlicker(mode: AntiFlicker): Int
     suspend fun getDate(): CameraDate?
     suspend fun syncClock(): CameraDate
+    suspend fun setPhotoSize(size: CameraPhotoSize)
+    /** Confirms the request only; this client exposes no native transmission-rate getter. */
+    suspend fun setTransmissionRate(rate: VideoTransmissionRate)
+    suspend fun switchCamera(index: Int)
+    /** Acknowledgement does not prove that a new frame has reached a decoder. */
+    suspend fun requestKeyFrame()
     /** Returns after the command reply, not after physical media erasure has been independently verified. */
     suspend fun formatStorage()
     /** Acknowledged photo request and a new status; does not verify a saved file. */
@@ -42,7 +48,7 @@ internal class CameraCommands(
 ) : RobotCameraService {
     private val mutableState = MutableStateFlow(CameraState())
     override val state = mutableState.asStateFlow()
-    private var lastReceived = 0L
+    @Volatile private var lastReceived = 0L
     @Volatile private var closed = false
     private val storageOperation = Mutex()
 
@@ -52,7 +58,9 @@ internal class CameraCommands(
         val zoom = frame.payload.u16(8)
         lastReceived = nowMillis()
         mutableState.value = CameraState(zoom.takeIf { it in 100..400 }, state.value.revision + 1,
-            frame.payload.u16(5) and 0xc0 != 0, CameraStorageStatus.decode(frame.payload), frame.payload.u16(5) and 3)
+            frame.payload.u16(5) and 0xc0 != 0, CameraStorageStatus.decode(frame.payload), frame.payload.u16(5) and 3,
+            CameraImagingStatus(frame.payload.u8(6) and 15, frame.payload.u8(7) and 15,
+                (frame.payload.u16(5) ushr 4) and 3, (frame.payload.u16(5) ushr 2) and 3))
     }
 
     fun expire() {
@@ -117,6 +125,41 @@ internal class CameraCommands(
         if (actual.wallSeconds - expected.wallSeconds !in 0..elapsedSeconds + 1)
             throw RobotRequestException(RequestProblem.NOT_APPLIED)
         return actual
+    }
+
+    override suspend fun setTransmissionRate(rate: VideoTransmissionRate) {
+        if (closed) throw RobotRequestException(RequestProblem.DISCONNECTED)
+        request(Protocol.HOST_CAMERA, Protocol.CMDSET_DM368, 0x20, ByteArray(2).apply { put16(0, rate.kbps) })
+    }
+
+    override suspend fun requestKeyFrame() {
+        if (closed) throw RobotRequestException(RequestProblem.DISCONNECTED)
+        // Native ActionRequestIFrame targets 0x0e through the special command set, not camera 02:xx.
+        request(0x0e, Protocol.CMDSET_SPECIAL, 0x01, byteArrayOf(0, 0, 0, 0, 0, 0x20, 0, 0, 0, 0x20))
+    }
+
+    private fun requireIdleImaging(): CameraImagingStatus {
+        val card = freshStorage()
+        check(!card.recording && !card.shooting && !card.formatting) { "相机正在拍录或格式化" }
+        return checkNotNull(state.value.imaging) { "没有相机状态" }
+    }
+
+    override suspend fun setPhotoSize(size: CameraPhotoSize) = storageTask {
+        requireIdleImaging()
+        val before = state.value.revision
+        command(0x12, byteArrayOf(size.code.toByte(), 1))
+        awaitStatus(before) { it.imaging?.photoSize == size.code }
+    }
+
+    override suspend fun switchCamera(index: Int) = storageTask {
+        require(index in 0..1)
+        check(storageAccess.tryLock()) { "存储卡传输正在进行" }
+        try {
+            check(index in requireIdleImaging().availableCameras) { "设备未报告此相机" }
+            val before = state.value.revision
+            command(0xe3, byteArrayOf(index.toByte()))
+            awaitStatus(before) { it.imaging?.let { image -> image.cameraIndex == index && index in image.availableCameras } == true }
+        } finally { storageAccess.unlock() }
     }
 
     private suspend fun storageTask(action: suspend () -> Unit) {

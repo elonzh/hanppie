@@ -267,6 +267,10 @@ internal fun MediaSettingsContent(model: ConsoleController) {
         model.mediaSettings.value = media.copy(videoResolution = VideoResolution.valueOf(id))
     }
 
+    val album by model.robotAlbum.state.collectAsState()
+    val tracking by model.tracking.collectAsState()
+    CameraImagingContent(model.robotCamera, robot.connected, enabled, album.nativeBusy,
+        !tracking.blocksManualControl && !robot.scriptRunPhase.mayBeExecuting)
     CameraSettingsContent(model.robotCamera, robot.connected, enabled)
     Text(tr(Res.string.speaker_volume), fontSize = 15.sp)
     Card(

@@ -71,6 +71,10 @@ class RemoteFireUiTest {
             override suspend fun setAntiFlicker(mode: cn.elonzh.hanppie.robot.media.AntiFlicker): Int = error("unused")
             override suspend fun getDate(): cn.elonzh.hanppie.robot.media.CameraDate? = error("unused")
             override suspend fun syncClock(): cn.elonzh.hanppie.robot.media.CameraDate = error("unused")
+            override suspend fun setPhotoSize(size: cn.elonzh.hanppie.robot.media.CameraPhotoSize) = error("unused")
+            override suspend fun setTransmissionRate(rate: cn.elonzh.hanppie.robot.media.VideoTransmissionRate) = error("unused")
+            override suspend fun switchCamera(index: Int) = error("unused")
+            override suspend fun requestKeyFrame() = error("unused")
             override suspend fun setZoom(hundredths: Int) {}
         }
         override val audio = object : cn.elonzh.hanppie.robot.media.RobotAudioService {

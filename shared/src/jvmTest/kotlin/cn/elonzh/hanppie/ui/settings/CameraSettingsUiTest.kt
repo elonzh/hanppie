@@ -28,6 +28,10 @@ private class CameraConfigurationFixture : RobotCameraService {
     var antiFlicker = 2
     var dateError = false
     var date = CameraDate(2020, 1, 1, 0, 0, 0)
+    override suspend fun setPhotoSize(size: cn.elonzh.hanppie.robot.media.CameraPhotoSize) = error("unused")
+    override suspend fun setTransmissionRate(rate: cn.elonzh.hanppie.robot.media.VideoTransmissionRate) = error("unused")
+    override suspend fun switchCamera(index: Int) = error("unused")
+    override suspend fun requestKeyFrame() = error("unused")
     override suspend fun setZoom(hundredths: Int) = error("unused")
     override suspend fun takePhoto() { error("unused") }
     override suspend fun setRecording(active: Boolean) { error("unused") }

@@ -77,6 +77,7 @@ class ObjectTrackingSessionTest {
                         "The remote ticker must not overwrite native tracking with zero speeds")
                     assertFailsWith<IllegalStateException> { session.fireInfrared() }
                     assertFailsWith<IllegalStateException> { session.camera.setZoom(400) }
+                    assertFailsWith<IllegalStateException> { session.camera.switchCamera(1) }
                     session.drive(.2, 0.0, 0.0, 0.0, 0.0)
                     waitFor(TrackingPhase.OFF)
                     assertTrue(sent.any { it.set == 0xa && it.id == 0xa7 && it.payload[2] == 0.toByte() })

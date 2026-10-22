@@ -21,6 +21,10 @@ class CameraSettingsControllerTest {
         var captures = 0
         var captureGate: CompletableDeferred<Unit>? = null
         var captureError: Exception? = null
+        override suspend fun setPhotoSize(size: cn.elonzh.hanppie.robot.media.CameraPhotoSize) = error("unused")
+        override suspend fun setTransmissionRate(rate: cn.elonzh.hanppie.robot.media.VideoTransmissionRate) = error("unused")
+        override suspend fun switchCamera(index: Int) = error("unused")
+        override suspend fun requestKeyFrame() = error("unused")
         override suspend fun setZoom(hundredths: Int) = error("unused")
         override suspend fun takePhoto() {
             captures++

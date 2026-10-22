@@ -41,6 +41,10 @@ private class OnboardCameraFixture : RobotCameraService {
             card.copy(recording = active, recordingSeconds = if (active) 42 else 0), 1)
     }
     override suspend fun formatStorage() = error("unused")
+    override suspend fun setPhotoSize(size: cn.elonzh.hanppie.robot.media.CameraPhotoSize) = error("unused")
+    override suspend fun setTransmissionRate(rate: cn.elonzh.hanppie.robot.media.VideoTransmissionRate) = error("unused")
+    override suspend fun switchCamera(index: Int) = error("unused")
+    override suspend fun requestKeyFrame() = error("unused")
     override suspend fun setZoom(hundredths: Int) = error("unused")
     override suspend fun getAntiFlicker(): Int = error("unused")
     override suspend fun setAntiFlicker(mode: AntiFlicker): Int = error("unused")

@@ -61,20 +61,33 @@ class AppSession(private val target: RobotTarget,
     private val cameraCommands = CameraCommands(::request, storageAccess = storageAccess) { robotNanoTime() / 1_000_000 }
     private val albumCommands = cn.elonzh.hanppie.robot.media.album.NativeAlbum(storageAccess, cameraCommands::canReadStorage, ::request)
     val album: cn.elonzh.hanppie.robot.media.album.RobotAlbumService get() = albumCommands
-    private var cameraZoomChanging = false
-    private var cameraZoomMayBeActive = false
+    @Volatile private var cameraViewChanging = false
+    @Volatile private var cameraZoomMayBeActive = false
     val camera: cn.elonzh.hanppie.robot.media.RobotCameraService = object : cn.elonzh.hanppie.robot.media.RobotCameraService by cameraCommands {
+        override suspend fun switchCamera(index: Int) {
+            txLock.withLock {
+                check(connected && !labRunning && !cameraViewChanging && !tracking.value.blocksManualControl) { "请先退出跟随或脚本任务" }
+                cameraViewChanging = true
+            }
+            try { cameraCommands.switchCamera(index) }
+            finally {
+                txLock.withLock {
+                    cameraViewChanging = false
+                    cameraCommands.state.value.zoomHundredths?.let { cameraZoomMayBeActive = it != 100 }
+                }
+            }
+        }
         override suspend fun setZoom(hundredths: Int) {
             require(hundredths in 100..400)
             txLock.withLock {
-                check(remote && connected && !labRunning && !cameraZoomChanging && !tracking.value.blocksManualControl) { "请先退出跟随并启用遥控" }
-                cameraZoomChanging = true
+                check(remote && connected && !labRunning && !cameraViewChanging && !tracking.value.blocksManualControl) { "请先退出跟随并启用遥控" }
+                cameraViewChanging = true
                 if (hundredths > 100) cameraZoomMayBeActive = true
             }
             try {
                 cameraCommands.setZoom(hundredths)
                 if (hundredths == 100) txLock.withLock { cameraZoomMayBeActive = false }
-            } finally { txLock.withLock { cameraZoomChanging = false } }
+            } finally { txLock.withLock { cameraViewChanging = false } }
         }
     }
     private val active = AtomicBoolean(false)
@@ -111,7 +124,7 @@ class AppSession(private val target: RobotTarget,
     val tracking get() = objectTracking.state
     fun startTracking() = txLock.withLock {
         check(remote && active.load() && !labRunning && robotNanoTime() - lastReceivedNanos < 500_000_000)
-        check(!cameraZoomChanging && !cameraZoomMayBeActive) { "请先将相机恢复到 1 倍变焦" }
+        check(!cameraViewChanging && !cameraZoomMayBeActive) { "请先将相机恢复到 1 倍变焦" }
         inputDeadline = robotNanoTime() + 250_000_000
         objectTracking.start()
     }
@@ -539,7 +552,7 @@ class AppSession(private val target: RobotTarget,
                                 if (cameraCommands.state.value.revision != revision &&
                                     cameraCommands.state.value.storage?.let { !it.inserted || it.formatting || it.hasError } == true)
                                     albumCommands.invalidateStorage()
-                                if (cameraCommands.state.value.revision != revision && !cameraZoomChanging)
+                                if (cameraCommands.state.value.revision != revision && !cameraViewChanging)
                                     cameraZoomMayBeActive = cameraCommands.state.value.zoomHundredths?.let { it != 100 } ?: cameraZoomMayBeActive
                                 receiveReply(frame)
                             }

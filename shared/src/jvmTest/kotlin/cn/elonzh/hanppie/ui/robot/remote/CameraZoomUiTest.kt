@@ -37,6 +37,10 @@ private class CameraFixture : RobotCameraService {
     override suspend fun setAntiFlicker(mode: AntiFlicker): Int = error("unused")
     override suspend fun getDate(): CameraDate? = error("unused")
     override suspend fun syncClock(): CameraDate = error("unused")
+    override suspend fun setPhotoSize(size: cn.elonzh.hanppie.robot.media.CameraPhotoSize) = error("unused")
+    override suspend fun setTransmissionRate(rate: cn.elonzh.hanppie.robot.media.VideoTransmissionRate) = error("unused")
+    override suspend fun switchCamera(index: Int) = error("unused")
+    override suspend fun requestKeyFrame() = error("unused")
     override suspend fun setZoom(hundredths: Int) {
         if (fail) throw RobotRequestException(RequestProblem.REJECTED)
         state.value = CameraState(hundredths, state.value.revision + 1)

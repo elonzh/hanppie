@@ -756,4 +756,21 @@
     <string name="album_retry">重试</string>
     <string name="album_preview_loading">正在加载预览…</string>
     <string name="album_preview_failed">预览不可用，可打开原文件查看。</string>
+    <string name="camera_imaging">画面与拍摄</string>
+    <string name="camera_video_format">当前视频：%1$s</string>
+    <string name="camera_photo_size">拍照尺寸</string>
+    <string name="camera_source">画面来源</string>
+    <string name="camera_source_value">当前相机：%1$s</string>
+    <string name="camera_main">主相机</string>
+    <string name="camera_secondary">副相机</string>
+    <string name="camera_imaging_wait">等待相机状态…</string>
+    <string name="camera_transmission_rate">视频传输码率</string>
+    <string name="camera_rate_choose">选择码率</string>
+    <string name="camera_rate_confirmed">码率请求已确认：%1$s</string>
+    <string name="camera_imaging_applying">正在确认请求…</string>
+    <string name="camera_imaging_confirmed">已收到相机状态确认。</string>
+    <string name="camera_keyframe">恢复视频画面</string>
+    <string name="camera_keyframe_requested">刷新请求已确认，请查看视频画面。</string>
+    <string name="camera_switch_task_active">先停止跟随或结束脚本，再切换相机。</string>
+    <string name="camera_switch_busy">先结束拍录或媒体传输，再切换相机。</string>
 </resources>

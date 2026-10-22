@@ -548,6 +548,32 @@ Hanppie 当前将上述包接入 App 会话请求与接收通道，过滤相机�
 
 局部反汇编保留在 `.hanppie/validation/2026-10-22-official-gap/native-Album-OnReqAlbumFileList.txt`、`native-Album-FileRequestSendCancel.txt`、`native-Album-Observer.txt`、`native-Album-ReceiveListWrite.txt` 与 `native-Album-FileIdentity.txt`。当前离线传输、共享界面及设备待验清单见[实施台账 A06](./official-app-capability-implementation.md#a06-验证入口与设备待验)；回环分片和测试图片不构成真实 SD 文件、视频可播放性或吞吐证据。
 
+#### 相机格式、传输码率与画面来源
+
+固定版本的相机简化状态 `02:e4` 还提供以下字段，均复用前述 26 字节最小长度。格式来自推送，没有在该抽象中发现独立的 GetVideoFormat/GetPhotoSize 请求。**原生代码**
+
+| 字段 | 读取与解释 | OnCameraSimpleStatusPush 定位 |
+| --- | --- | --- |
+| 视频格式 | byte @ 6 低四位；官方枚举 0 = 1280×720/30 fps，1 = 1920×1080/30 fps | `0x72b286..0x72b28d` |
+| 拍照尺寸 | byte @ 7 低四位；0 = 1920×1080，1 = 1280×720，2 = 2560×1440 | `0x72b188..0x72b18f` |
+| 主相机存在 | uint16 @ 5 的 `0x30` 不等于 `0x20` | `0x72aab2..0x72aabc` |
+| 副相机存在 | 同一掩码不等于 `0x10`；参考客户端对编码 0/3 均报告两者存在 | `0x72abcf..0x72abd9` |
+| 当前相机索引 | uint16 @ 5 右移两位后取低两位 | `0x72acea..0x72acf4` |
+
+枚举来源为 `RobotService/DJI/DJICameraVideoFormat.cs` 与 `DJICameraPhotoSize.cs`；`Module.InnerTools.View/ViewCamera.cs` 的主/副按钮分别传 0/1。未定义的视频/照片格式、索引 2/3 保留为未知，不推断额外分辨率、帧率或相机。**客户端代码**
+
+| 操作 | 目标与载荷 | 原生构造依据 |
+| --- | --- | --- |
+| 写视频格式 | 相机 `0x01`，`02:18`，5 字节；经标准分辨率/帧率转换，Hanppie 既有 720p/1080p 初始化路径继续使用 | SetVideoFormat `0x72deb0`，`0x72df31..0x72dfdb`；标准映射 `0x73bf00/0x73bf20` |
+| 写拍照尺寸 | 相机 `0x01`，`02:12`，`[尺寸枚举, 01]` | SetPhotoSize `0x72e650`，`0x72e6c3..0x72e739` |
+| 写传输码率 | 相机 `0x01`，**`08:20`**，uint16 LE，官方输入 Mbps 乘 1000 后截断并限制到 65535；内部工具提供 2.4/3.4/6 Mbps | SetVideoTransRate `0x730ef0`，乘数 `0x84e9a4 = 1000.0f`，`0x730f63..0x730ff1` |
+| 切换相机 | 相机 `0x01`，`02:e3`，一字节索引 | ActionSwitchCamera `0x7322c0`，`0x73232d..0x73239f` |
+| 请求关键帧 | 节点 **`0x0e`**，**`01:01`**，10 字节 `00 00 00 00 00 20 00 00 00 20` | ActionRequestIFrame `0x732a70`，载荷 `0x732a99..0x732aa7`，节点/命令/长度 `0x732afa..0x732b19` |
+
+`DJICameraVideoTransRate` 只有 Write 访问，原生相机抽象未提供码率 getter 或推送字段。机载 `duml_cmdset.py` 虽定义 `DM368_GET_BITRATE = 0x21`，当前没有其调用、请求/应答布局或设备证据，不能仅凭常量发请求或把写入应答当回读。关键帧请求的应答也不证明终端已收到新 I 帧或解码恢复。**代码 / 未验证边界**
+
+本轮没有设备。相机存在位编码（尤其 0/3）、不同固件的字段和实际硬件、拍照尺寸生效、码率的真实速率与单位、节点 `0x0e` 的请求可达性/应答、图像来源与恢复结果均待验。局部反汇编保留为 `.hanppie/validation/2026-10-22-official-gap/native-Camera-SetVideoFormat.txt`、`native-Camera-StandardFormatMappings.txt`、`native-Camera-SetPhotoSize.txt`、`native-Camera-SetVideoTransRate.txt`、`native-Camera-ActionSwitchCamera.txt` 和 `native-Camera-ActionRequestIFrame.txt`；推送沿用 `native-Camera-OnCameraSimpleStatusPush.txt`。离线测试及设备验收见[实施台账 A07](./official-app-capability-implementation.md#a07-验证入口与设备待验)。
+
 #### 机器人音频配置
 
 固定版本 `RobomasterSystemAbstraction` 的原生请求构造函数给出以下配置通道。查询请求无 payload，写入为一字节；成功读取响应为 `retcode + uint8 value`。音量有效范围为 0–100；旧实机音量读写闭环见后文[血量、对局与命中受理](#血量对局与命中受理2026-09-19-实机)。**代码 / 历史实测**
