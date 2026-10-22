@@ -39,6 +39,7 @@ internal fun SettingsDropdown(
     tag: String,
     selected: String,
     values: List<Pair<String, String>>,
+    enabled: Boolean = true,
     onOpen: () -> Unit = {},
     change: (String) -> Unit,
 ) {
@@ -48,7 +49,7 @@ internal fun SettingsDropdown(
         Button({
             if (!expanded) onOpen()
             expanded = true
-        }, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("$tag-selector").semantics { contentDescription = "$tag-selector" }) {
+        }, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("$tag-selector").semantics { contentDescription = "$tag-selector" }, enabled = enabled) {
             Text(label, Modifier.weight(1f), fontSize = 15.sp)
             Text(selectedLabel, fontSize = 14.sp,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary)

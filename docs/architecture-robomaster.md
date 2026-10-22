@@ -466,6 +466,21 @@ macOS 官方 App 的 `VisionFollow` 使用 `DJIDetectionType.HumanTracking = 0x4
 
 S1 会在 UDP `10607` 数据会话中输出 H.264 视频和 Opus 音频。本机已解码出 `1280×720 yuv420p` 视频帧，以及 48 kHz、单声道、signed 16-bit PCM 音频帧。这里描述的是 S1 原生媒体能力；Hanppie 如何请求、分流和解码见 [Hanppie 技术架构 1.9 节](./architecture.md#19-媒体兼容与混合后端)。**实测/代码**
 
+#### 机器人音频配置
+
+固定版本 `RobomasterSystemAbstraction` 的原生请求构造函数给出以下配置通道。查询请求无 payload，写入为一字节；成功读取响应为 `retcode + uint8 value`。音量有效范围为 0–100；旧实机音量读写闭环见后文[血量、对局与命中受理](#血量对局与命中受理2026-09-19-实机)。**代码 / 历史实测**
+
+| 操作 | cmdset:id | 官方构造节点 | 静态定位 |
+| --- | --- | --- | --- |
+| 查询音量 | `3f:1c` | `0x09` | GetVolume `0x69d400`，返回值转换 `0x6b7b2b` 读取 rsp+1 |
+| 写入音量 | `3f:1b` | `0x09` | SetVolume `0x69cc80`；Hanppie 现有写入路径为 `0x01`，此次不替换 |
+| 查询语音语言 | `3f:17` | `0x09` | GetSpeakerLanguage `0x6a3600`，返回值转换 `0x6bfa2b` 读取 rsp+1 |
+| 写入语音语言 | `3f:16` | `0x09` | SetSpeakerLanguage `0x6a3c90`，单字节载荷写入 `0x6a3d03..0x6a3d7a` |
+
+官方 `COMMON/Languages.cs` 在 App 与机器人之间交换中英文枚举：线上 `0` 英文、`1` 中文，其他 `2` 日语、`4` 德语、`5` 西班牙语、`6` 韩语、`7` 法语、`8` 俄语保持原值；设置页不提供繁体语音枚举 `3`。不能直接发送 App 语言下标或把未知返回值降级为英文。**代码**
+
+这些新接入查询、语音写入及所有语言的固件支持尚未获得本轮实机确认。现有音量写节点与官方静态节点不同，按[实施台账 C09](./official-app-capability-implementation.md#冲突记录保持现状留待决策)保留；显式音量操作沿现有节点等待应答，再通过原生查询节点核对。跨节点读写是否反映同一设备设置、语音切换是否需要等待、固件是否支持上述全部语言均为待验项。原生库指纹沿用[静态提取记录](./s1-app-static-analysis-2026-09-08.md)，本次局部反汇编位于 `.hanppie/validation/2026-10-22-official-gap/native-System-*Volume.txt` 和 `*SpeakerLanguage.txt`。**待验证**
+
 ### 5.5 红外发射与命中链路
 
 S1 的红外能力至少包含三层，不能把其中任意一层统称为“红外编码”：

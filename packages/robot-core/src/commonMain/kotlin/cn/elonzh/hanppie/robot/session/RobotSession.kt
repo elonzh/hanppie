@@ -6,6 +6,7 @@ import cn.elonzh.hanppie.robot.files.RobotFileService
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.robot.lab.LabUpload
 import cn.elonzh.hanppie.robot.media.VideoResolution
+import cn.elonzh.hanppie.robot.media.RobotAudioService
 import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
 import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.product.RobotProduct
@@ -62,6 +63,7 @@ interface RobotSession : AutoCloseable {
     var onAudio: ((ByteArray) -> Unit)?
     val lab: RobotLabSession
     val files: RobotFileService
+    val audio: RobotAudioService
 
     suspend fun connect()
     fun safetyStop()

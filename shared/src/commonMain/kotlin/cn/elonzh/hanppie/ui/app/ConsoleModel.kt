@@ -181,11 +181,13 @@ internal class ConsoleModel(
     override val scriptLibrary = ScriptLibrary(scriptRepository)
     override val scriptAudio = ScriptAudioLibrary(scriptRepository, audioImporter, audioPlayer)
     override val robotFiles = RobotFilesController(scope) { acceptingWork.load() && state.value.connected }
+    override val robotAudio = cn.elonzh.hanppie.ui.robot.audio.RobotAudioController(scope)
     init {
         scope.launch(start = CoroutineStart.UNDISPATCHED) { scriptLibrary.load() }
     }
     override fun saveSettings() {
         settings.save()
+        robotAudio.invalidate()
         val current = session.load()
         if (current != null && current.connected) {
             scope.launch {
@@ -197,6 +199,7 @@ internal class ConsoleModel(
     override fun testModelSettings() = modelTester.test(modelSettings.value)
     override fun restoreDefaultSettings() {
         settings.restoreDefaults()
+        robotAudio.invalidate()
         val current = session.load()
         if (current != null && current.connected) {
             scope.launch {
@@ -619,7 +622,7 @@ internal class ConsoleModel(
                 connectionRevision.addAndFetch(1)
                 session.exchange(null)?.close()
                 lab.store(null)
-                robotFiles.clear()
+                robotFiles.clear(); robotAudio.clear()
                 state.update { it.copy(connected = false, connectedAddress = null, connecting = false,
                     statusMessage = uiText(Res.string.connection_failed)) }
                 throw error
@@ -724,6 +727,7 @@ internal class ConsoleModel(
             session.store(candidate)
             lab.store(candidate.lab)
             robotFiles.attach(candidate.files)
+            robotAudio.attach(candidate.audio)
             state.update { it.copy(connected = true, connectedAddress = target.ip, connecting = false,
                 statusMessage = uiText(Res.string.connected_to_value,target.ip), error = null,
                 robotProduct = candidate.product, devices = emptyList()) }
@@ -768,6 +772,7 @@ internal class ConsoleModel(
     }
 
     private fun newSession(target: RobotTarget): RobotSession {
+        robotAudio.clear()
         val candidate = robotRuntime.open(target, ::receive, ::log, ::connectionLost)
         candidate.onVideo = { videoConsumer.load()?.invoke(it) }
         candidate.onAudio = { audioConsumer.load()?.invoke(it) }
@@ -790,7 +795,7 @@ internal class ConsoleModel(
             if (session.load() !== candidate) return@launch
             session.store(null)
             lab.store(null)
-            robotFiles.clear()
+            robotFiles.clear(); robotAudio.clear()
             candidate.close()
             log(reason)
             state.update { it.lost(reason).copy(busy = false, connecting = false) }
@@ -801,7 +806,7 @@ internal class ConsoleModel(
         connectionRevision.addAndFetch(1)
         haltRemote()
         session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState()
-        robotFiles.clear()
+        robotFiles.clear(); robotAudio.clear()
         state.update {
             val uncertain = it.scriptRunPhase.mayBeExecuting
             it.copy(connected = false, connectedAddress = null, connecting = false,
@@ -997,7 +1002,7 @@ internal class ConsoleModel(
         chat.cancelAndJoin()
         scope.coroutineContext[Job]?.children?.toList()?.forEach { it.cancelAndJoin() }
         session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState()
-        robotFiles.clear()
+        robotFiles.clear(); robotAudio.clear()
         state.update {
             val uncertain = it.scriptRunPhase.mayBeExecuting
             it.copy(connected = false, connectedAddress = null, connecting = false, busy = false,
@@ -1007,5 +1012,5 @@ internal class ConsoleModel(
                 scriptMessage = if (uncertain) uiText(Res.string.connection_closed_robot_state_unknown) else it.scriptMessage)
         }
     }
-    override fun close() { connectionRevision.addAndFetch(1); robotFiles.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
+    override fun close() { connectionRevision.addAndFetch(1); robotFiles.close(); robotAudio.clear(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
 }

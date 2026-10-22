@@ -2,6 +2,7 @@ package cn.elonzh.hanppie.robot.session
 
 import cn.elonzh.hanppie.robot.lab.LabChannel
 import cn.elonzh.hanppie.robot.media.SpeakerAudio
+import cn.elonzh.hanppie.robot.media.SpeakerCommands
 import cn.elonzh.hanppie.robot.media.VideoResolution
 import cn.elonzh.hanppie.robot.protocol.AppEnvelope
 import cn.elonzh.hanppie.robot.protocol.DiscoveredRobot
@@ -36,6 +37,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** One owner per robot connection. Blocking UDP is confined to an IO coroutine. */
 @OptIn(ExperimentalAtomicApi::class)
@@ -49,6 +52,10 @@ class AppSession(private val target: RobotTarget,
     private val destination = target.ip
     private var sequence = 10072
     private val txLock = RobotLock()
+    private data class PendingRequest(val receiver: Int, val set: Int, val id: Int,
+        val reply: CompletableDeferred<ByteArray> = CompletableDeferred())
+    private val pendingRequests = mutableMapOf<Int, PendingRequest>()
+    val audio: cn.elonzh.hanppie.robot.media.RobotAudioService = SpeakerCommands(::request)
     private val active = AtomicBoolean(false)
     private var socket: RobotDatagram? = null
     private val receiverScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -412,6 +419,40 @@ class AppSession(private val target: RobotTarget,
         seq
     }
 
+    private suspend fun request(receiver: Int, set: Int, id: Int, payload: ByteArray): ByteArray {
+        val pending = PendingRequest(receiver, set, id)
+        val seq = txLock.withLock {
+            if (!connected) throw RobotRequestException(RequestProblem.DISCONNECTED)
+            val next = send(receiver, Protocol.ATTR_NEED_ACK, set, id, payload)
+            check(pendingRequests.put(next, pending) == null)
+            next
+        }
+        try {
+            return withTimeoutOrNull(1_500) { pending.reply.await() }
+                ?: throw RobotRequestException(RequestProblem.TIMED_OUT)
+        } finally {
+            txLock.withLock { if (pendingRequests[seq] === pending) pendingRequests.remove(seq) }
+        }
+    }
+
+    private fun receiveReply(frame: DussFrame) {
+        val pending = pendingRequests[frame.sequence] ?: return
+        if (!frame.valid || frame.sender != pending.receiver || frame.receiver != Protocol.HOST_MOBILE ||
+            frame.attr !in listOf(Protocol.ATTR_ACK, Protocol.ATTR_RESP_NEED_ACK) ||
+            frame.set != pending.set || frame.id != pending.id) return
+        pendingRequests.remove(frame.sequence)
+        when {
+            frame.payload.isEmpty() -> pending.reply.completeExceptionally(RobotRequestException(RequestProblem.INVALID_RESPONSE))
+            frame.payload.u8(0) != 0 -> pending.reply.completeExceptionally(RobotRequestException(RequestProblem.REJECTED, frame.payload.u8(0)))
+            else -> pending.reply.complete(frame.payload)
+        }
+    }
+
+    private fun failRequests() = txLock.withLock {
+        pendingRequests.values.forEach { it.reply.completeExceptionally(RobotRequestException(RequestProblem.DISCONNECTED)) }
+        pendingRequests.clear()
+    }
+
     private fun sendNeutral(forceActuatorStop: Boolean = false) = txLock.withLock {
         val seq = sequence
         sequence = (sequence + 1) and 65535
@@ -465,7 +506,7 @@ class AppSession(private val target: RobotTarget,
                         txLock.withLock { envelope.observe(data) }
                         Protocol.frames(data).filter { it.valid }.forEach { frame ->
                             Telemetry.gimbalYaw(frame)?.let { yaw -> yawSample = yaw to robotNanoTime() }
-                            txLock.withLock { objectTracking.receive(frame) }
+                            txLock.withLock { objectTracking.receive(frame); receiveReply(frame) }
                             updateProduct(frame)
                             if (frame.set == Protocol.CMDSET_RM && frame.id == Protocol.CMD_RM_AUDIO_TO_APP) onAudio?.invoke(frame.payload) else onFrame(frame)
                         }
@@ -484,7 +525,7 @@ class AppSession(private val target: RobotTarget,
         } catch (error: Exception) {
             if (active.load()) runCatching { safetyStop() }
             if (active.exchange(false)) onLost(error.message ?: error::class.simpleName.orEmpty())
-        } finally { socket?.close() }
+        } finally { failRequests(); socket?.close() }
     }
 
     private fun updateProduct(frame: DussFrame) {
@@ -506,6 +547,7 @@ class AppSession(private val target: RobotTarget,
         if (active.load()) runCatching { safetyStop() }
         if (active.load() && remote) runCatching { send(Protocol.HOST_CHASSIS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_WORK_MODE_SET, byteArrayOf(0)) }
         active.store(false)
+        failRequests()
         socket?.close()
         receiverScope.cancel()
         receiver = null

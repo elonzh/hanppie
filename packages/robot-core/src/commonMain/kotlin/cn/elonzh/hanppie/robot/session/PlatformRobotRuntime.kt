@@ -54,6 +54,7 @@ private class PlatformRobotSession(
     override val connected: Boolean get() = app.connected
     override val product: RobotProduct get() = app.product
     override val tracking get() = app.tracking
+    override val audio get() = app.audio
     override fun startTracking() = app.startTracking()
     override fun selectTrackingTarget(x: Float, y: Float) = app.selectTrackingTarget(x, y)
     override fun confirmTracking() = app.confirmTracking()

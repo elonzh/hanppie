@@ -252,6 +252,7 @@ internal fun ModelSettingsContent(model: ConsoleController) {
 @OptIn(ExperimentalLayoutApi::class)
 internal fun MediaSettingsContent(model: ConsoleController) {
     val media by model.mediaSettings.collectAsState()
+    val robot by model.state.collectAsState()
     val chat by model.chat.state.collectAsState()
     val settingsBusy by model.settingsBusy.collectAsState()
     val enabled = !chat.running && !settingsBusy
@@ -295,6 +296,7 @@ internal fun MediaSettingsContent(model: ConsoleController) {
             )
         }
     }
+    RobotAudioSettingsContent(model.robotAudio, robot.connected, media.speakerVolume, enabled)
 }
 
 @Composable

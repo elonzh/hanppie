@@ -55,6 +55,11 @@ class RemoteFireUiTest {
         val driveCount = AtomicInteger(0)
         val labStopCount = AtomicInteger(0)
 
+        override val audio = object : cn.elonzh.hanppie.robot.media.RobotAudioService {
+            override suspend fun read(): cn.elonzh.hanppie.robot.media.RobotAudioSettings = error("unused")
+            override suspend fun applyVolume(volume: Int): cn.elonzh.hanppie.robot.media.RobotAudioSettings = error("unused")
+            override suspend fun setLanguage(language: cn.elonzh.hanppie.robot.media.SpeakerLanguage): cn.elonzh.hanppie.robot.media.RobotAudioSettings = error("unused")
+        }
         override val connected = true
         override val product = RobotProduct(model = RobotModel.ROBOMASTER_S1)
         override val tracking = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.tracking.TrackingState())

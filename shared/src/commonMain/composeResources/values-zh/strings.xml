@@ -646,4 +646,24 @@
     <string name="tracking_target_lost">目标已丢失，跟随已结束</string>
     <string name="tracking_rejected">机器人未能启用跟随，请重新尝试</string>
     <string name="tracking_timeout">跟随响应超时，请重新尝试</string>
+    <string name="robot_audio_settings">机器人音频</string>
+    <string name="robot_audio_connect_first">连接机器人后可查询音量和设置语音语言</string>
+    <string name="robot_audio_reading">正在与机器人确认音频设置…</string>
+    <string name="robot_audio_current_volume">机器人返回的音量：%1$s%%</string>
+    <string name="robot_audio_apply_volume">应用 %1$s%% 音量并确认</string>
+    <string name="robot_speaker_language">机器人语音语言</string>
+    <string name="robot_speaker_language_unknown">当前语言无法识别，选择语言可重新设置</string>
+    <string name="robot_settings_timed_out">机器人未及时回复，请刷新重试</string>
+    <string name="robot_settings_rejected">机器人拒绝了设置，请刷新后检查当前值</string>
+    <string name="robot_settings_invalid_response">机器人返回的数据无法识别，请刷新重试</string>
+    <string name="robot_settings_not_applied">机器人返回的值与请求不同，请刷新后检查</string>
+    <string name="robot_settings_connection_failed">音频设置未确认，请检查连接后刷新</string>
+    <string name="speaker_language_en">English</string>
+    <string name="speaker_language_zh">简体中文</string>
+    <string name="speaker_language_ja">日本語</string>
+    <string name="speaker_language_de">Deutsch</string>
+    <string name="speaker_language_es">Español</string>
+    <string name="speaker_language_ko">한국어</string>
+    <string name="speaker_language_fr">Français</string>
+    <string name="speaker_language_ru">Русский</string>
 </resources>

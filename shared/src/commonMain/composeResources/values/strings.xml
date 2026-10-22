@@ -646,4 +646,24 @@
     <string name="tracking_target_lost">Target lost. Following has ended.</string>
     <string name="tracking_rejected">The robot could not enable tracking. Try again.</string>
     <string name="tracking_timeout">Tracking timed out. Try again.</string>
+    <string name="robot_audio_settings">Onboard audio</string>
+    <string name="robot_audio_connect_first">Connect the robot to read its volume and change its voice language.</string>
+    <string name="robot_audio_reading">Checking audio settings with the robot…</string>
+    <string name="robot_audio_current_volume">Volume reported by robot: %1$s%%</string>
+    <string name="robot_audio_apply_volume">Apply %1$s%% volume and verify</string>
+    <string name="robot_speaker_language">Robot voice language</string>
+    <string name="robot_speaker_language_unknown">The current language is unrecognized. Select a language to change it.</string>
+    <string name="robot_settings_timed_out">The robot did not reply in time. Refresh to try again.</string>
+    <string name="robot_settings_rejected">The robot rejected the request. Refresh to check its current values.</string>
+    <string name="robot_settings_invalid_response">The robot returned unrecognized data. Refresh to try again.</string>
+    <string name="robot_settings_not_applied">The robot reported a different value. Refresh to check its current settings.</string>
+    <string name="robot_settings_connection_failed">Audio settings were not confirmed. Check the connection, then refresh.</string>
+    <string name="speaker_language_en">English</string>
+    <string name="speaker_language_zh">简体中文</string>
+    <string name="speaker_language_ja">日本語</string>
+    <string name="speaker_language_de">Deutsch</string>
+    <string name="speaker_language_es">Español</string>
+    <string name="speaker_language_ko">한국어</string>
+    <string name="speaker_language_fr">Français</string>
+    <string name="speaker_language_ru">Русский</string>
 </resources>
