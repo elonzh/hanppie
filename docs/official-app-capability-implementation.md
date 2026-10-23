@@ -55,8 +55,8 @@
 | E01 | 机械臂/爪安装管理、直接操控与状态 HUD | 离线完成 | `90daea2`；49 项 E01 用例与 30 项回归通过，真实维护/FPV 入口及四组横屏共 31 张渲染验收完成；下方 E01 记录 | 扩展识别、绑定/带载、运动/限位与停止；全部未执行 |
 | E02 | 舵机、ToF、适配板在线列表、标识与数据订阅 | 离线完成 | `4621d79`；33 项 E02 用例与 72 项回归通过，真实维护入口及四组横屏共 38 张渲染验收完成；下方 E02 记录 | 各类扩展身份、实际数据/量纲、标识灯和离线变化；全部未执行 |
 | V01 | 跟随原生 Info、候选框处理、状态/错误解释 | 离线完成 | `ddf6b20`；9 项新增与 29 项回归通过，真实操控页四组横屏共 28 张合成渲染，独立审查 ship；下方 V01 记录 | 原生 Info/状态/异常、候选重叠、坐标和物理停止；全部未执行 |
-| V02 | 机器人/标签辅助瞄准、激光点与识别结果叠加 | 离线完成 | 本次范围提交；74 项定向测试、桌面 classes 与 core/shared iOS Simulator 编译通过，36 张真实操控页合成渲染；独立审查唯一标签遮挡问题已修复复核 ship。激光/AR 无已建立原生生产路径；标签 PID 瞄准归入 C04 保留待决策 | 资源、坐标、标签距离、目标/瞄准、模式切换与停止效果；全部未执行 |
-| V03 | 人体/姿态/巡线/颜色等检测配置、结果与资源管理 | 待实施 | — | 硬件/资源支持和结果准确性 |
+| V02 | 机器人/标签辅助瞄准、激光点与识别结果叠加 | 离线完成 | `f221c21`；74 项定向测试、桌面 classes 与 core/shared iOS Simulator 编译通过，36 张真实操控页合成渲染；独立审查唯一标签遮挡问题已修复复核 ship。激光/AR 无已建立原生生产路径；标签 PID 瞄准归入 C04 保留待决策 | 资源、坐标、标签距离、目标/瞄准、模式切换与停止效果；全部未执行 |
+| V03 | 人体/姿态/巡线/颜色等检测配置、结果与资源管理 | 离线完成 | 本次范围提交；81 项定向测试、桌面 classes 与 core/shared iOS Simulator 编译通过，56 张真实操控页合成渲染，独立审查 ship；颜色枚举差异保留设备待验 | 硬件/资源支持和结果准确性 |
 | P01 | 普通 Python 自主程序的安装/卸载、脱机按钮绑定与状态 | 待实施 | — | 程序断开主机后能否按预期启动/停止 |
 | P02 | 自定义技能安装、槽位、触发、冷却与运行状态 | 待实施 | — | FPV 技能触发与执行/冷却 |
 | P03 | 脚本自定义 UI 属性、控件渲染与事件回传 | 待实施 | — | 真实机载脚本的控件/事件契约 |
@@ -123,7 +123,8 @@
 | 2026-10-23 | E01 机械臂与机械爪 | 49 项 E01 用例、30 项回归全部通过，desktop classes 与 core/shared iOS Simulator 编译通过；真实维护入口、FPV 输入切换与四组横屏共 31 张渲染；独立恢复问题修复复核 ship，实机未执行 | `90daea2` |
 | 2026-10-23 | E02 常规扩展部件 | 33 项 E02 用例、72 项回归全部通过，desktop classes 与 core/shared iOS Simulator 编译通过；真实维护/编址导航及四组横屏共 38 张合成渲染，独立审查 ship；实机未执行 | `4621d79` |
 | 2026-10-23 | V01 跟随报告与目标语义 | 核心 14、共享与遥控回归 24，共 38 个不同用例通过；desktop classes、core/shared iOS Simulator 编译通过；四组横屏共 28 张真实操控页合成渲染及独立审查 ship；实机未执行 | `ddf6b20` |
-| 2026-10-23 | V02 机器人瞄准与标签 | 新增 20、回归 54，共 74 个不同用例通过；desktop classes、core/shared iOS Simulator 编译通过，36 张实际操控页合成渲染；唯一标签遮挡问题修复后 11 项重复复核通过，独立审查 ship；实机未执行 | `feat(vision): 补齐机器人辅助瞄准与标签识别` |
+| 2026-10-23 | V02 机器人瞄准与标签 | 新增 20、回归 54，共 74 个不同用例通过；desktop classes、core/shared iOS Simulator 编译通过，36 张实际操控页合成渲染；唯一标签遮挡问题修复后 11 项重复复核通过，独立审查 ship；实机未执行 | `f221c21` |
+| 2026-10-23 | V03 通用视觉与颜色 | 81 个不同用例通过（新增 7、回归 74）；desktop classes、core/shared iOS Simulator 编译通过；56 张真实操控页合成渲染，独立审查 ship；停止后状态收尾另复核 23 项，不重复累计；实机未执行 | `feat(vision): 补齐通用视觉检测与颜色配置` |
 
 ### A01 验证入口与设备待验
 
@@ -688,5 +689,30 @@ FPV 的“臂 / 爪”入口显式切换输入面板，保留视频和媒体/遥
 5. 分别检查开启/关闭应答、回读先后、设备异常、未知报告、目标消失、关闭拒绝/无应答时的机械效果；零位图回读与物理停止仍需独立确认。
 6. 检查操控/报告/视频租约、失焦、离页、断连/关闭和重新连接的真实归零与不自动恢复。记录仅能尽力关闭的结果，不把客户端退出说成已停止。
 7. 标签 PID 瞄准按 C04 另行决策；激光/AR/自动锁定若在另一官方平台/固件中出现，须先建立生产/调用/线上契约，再决定扩展，不能从别名推断已支持。
+
+### V03 通用检测、颜色配置与设备待验
+
+离线完成，随本次范围提交；全部物理验收仍未执行。完整范围为头肩/人体/姿态/巡线的原生配置、结果与共享入口，标签/线颜色写入，以及与跟随、自瞄、Lab 和维护之间的资源生命周期。上游唯一事实来源见[通用检测与颜色配置契约](./architecture-robomaster.md#通用检测与颜色配置契约)，当前实现见[应用架构](./architecture.md#134-遥控操纵镜头坐标系与安全联动)。
+
+定向范围 81 个不同用例通过：核心 39、共享 42，新增 7（协议/事务 5、共享交互 2）、回归 74。扩展现有真实 UDP 合成 peer 覆盖全部六模式、不同应答节点、颜色写入与采样/姿态结果；根连接用例验证颜色参数传递与前后台、旧连接隔离；横屏用例覆盖六模式选择、线/标签颜色步骤、已知/未知姿态、两条独立线组与详情、颜色拒绝/停止未确认，以及自瞄/标签/跟随回归。新字段不引入第二个会话或调度器。
+
+```bash
+./gradlew :packages:robot-core:desktopTest --tests '*VisionControlTest' --tests '*VisionSessionTest' --tests '*ObjectTracking*Test' --tests '*RobotArmSessionTest' --tests '*RobotExtensionSessionTest' --tests '*RobotCalibrationSessionTest' --tests '*RobotFirmwareSessionTest' --tests '*RobotPowerSessionTest' --tests '*RobotAddressingSessionTest' --tests '*AppSessionIntegrationTest.loopbackHandshakeSetupTelemetryAndClose*' :shared:jvmTest --tests '*Vision*Test' --tests '*ObjectTrackingUiTest' --tests '*ObjectTrackingLayoutTest' --tests '*RemoteFireUiTest' --tests '*RemoteLifecycleUiTest' --tests '*RobotArmConnectionTest' --tests '*RobotArmControllerTest' :desktopApp:classes :packages:robot-core:compileKotlinIosSimulatorArm64 :shared:compileKotlinIosSimulatorArm64 --console=plain
+```
+
+使用现有 JDK 25 wrapper，未改工具链；desktop classes 和 core/shared iOS Simulator 编译通过，未执行 Android、iOS UI 或实机。原生向量、拒绝/超时、颜色事务取消/关闭/晚到应答、报告新鲜度、只读操控与停止归属均有定向用例；颜色没有 getter 的边界由状态契约保护，不以应答冒充实际滤色。结果与原始 XML 归档见忽略目录 `.hanppie/validation/2026-10-22-official-gap/V03-results.json`、`V03-final-scope.log`、`V03-final-scope-xml/`。
+
+真实 `RemotePage` 的合成渲染覆盖 844×390、1024×600、1280×720 中文，以及 844×390 英文 1.4 倍字体；每组 13 种状态共 52 张，另有 4 张跟随回归。实际图像、尺寸和摘要见 `.impeccable/review/v03/captures.json`。识别框、被动姿态名和巡线采样均为合成状态，没有真实识别画面。正常停止与已结束错误的关闭入口均清除旧报告时间，避免 OFF 状态持续发布旧年龄；该生命周期收尾经同一组 23 项核心/共享定向复核、桌面 classes 与 core/shared iOS 编译通过，最终日志为 `V03-lifecycle-final.log`，重复测试不累计。独立收尾审查逐张核对 56 张 required raw、方向与现有设计，结果为 `ship`、无 material fixes；范围限桌面 Compose 横屏、英文大字和离线证据，不扩展为 Android、iOS UI 或设备验收。
+
+全部设备待验为“未执行”：
+
+1. 逐模式核对头肩/人体/姿态/线的实际检测位、来源、属性、报告头部和记录布局；尤其 App 会话是否收到类型 `2/4`，与机载程序/其他客户端的资源冲突及固件拒绝结果。
+2. 核对归一化坐标、黑边、边缘、未知/重复姿态 ID；已定义动作与原始 Info 高低字、未知状态/异常码的实际意义。
+3. 核对巡线十点分组、多线顺序、T/十字路口、空结果及切线角/曲率量纲；真实轨迹与显示匹配，不用合成线证明识别准确。
+4. 核对节点 `09 / 0a:ab` 及颜色 `1/2/3` 的接受与实际滤色效果，特别固定 App/SDK 绿色 `2` 与恢复机载黄 `2`/绿 `4` 的差异；没有 getter，不宣称回读了颜色或失败时恢复旧颜色。
+5. 核对颜色拒绝、丢应答、中途取消及晚到应答不会继续启用，模式回读不一致/停止未确认保持资源占用；显式重试及“当前颜色”不额外写入配置。
+6. 核对检测期间保留手动操控；视频/报告/操作者租约、失焦/离页/后台/断连/退役时结果清空和关闭效果，重连不自动启用；与跟随、自瞄、机械臂、相机、程序和维护的真实互斥。
+
+C01–C14 保持原状。通用检测不触发机载姿态动作或自动巡线驾驶；这些运动行为不能在本项中绕开 C04 的执行器所有权，既有 Lab API 保留。
 
 当前没有任何新增能力获得实机验收。离线完成不清除表中的实机待验项，也不代表该目标的其他条目已经完成。

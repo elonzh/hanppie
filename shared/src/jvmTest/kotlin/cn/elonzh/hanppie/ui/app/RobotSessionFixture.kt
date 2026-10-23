@@ -135,7 +135,8 @@ internal class RobotSessionFixture : RobotSession {
     override val vision = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.vision.VisionState())
     val visionStarts = java.util.concurrent.CopyOnWriteArrayList<cn.elonzh.hanppie.robot.vision.VisionMode>()
     val visionStops = AtomicInteger(0)
-    override fun startVision(mode: cn.elonzh.hanppie.robot.vision.VisionMode) { visionStarts += mode }
+    val visionColors = java.util.concurrent.CopyOnWriteArrayList<cn.elonzh.hanppie.robot.vision.VisionColor?>()
+    override fun startVision(mode: cn.elonzh.hanppie.robot.vision.VisionMode, color: cn.elonzh.hanppie.robot.vision.VisionColor?) { visionStarts += mode; visionColors += color }
     override fun stopVision() { visionStops.incrementAndGet(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState() }
     override fun startTracking() {}
     override fun selectTrackingTarget(x: Float, y: Float) {}

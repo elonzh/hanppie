@@ -748,7 +748,19 @@ V01 进一步闭合了 `Info` 的来源与消费者：`OnRecvRunningStatusPush 7
 
 机载 `VisionCtrl.detect_marker_and_aim`（`rm_ctrl.py:3601`）则是另一条路径：最多循环 5 秒、每 40 ms 查标签，写 `robot_mode_chassis_follow` 与云台 yaw/pitch PID，结束时将 PID 输出归零。它不是本次已恢复的一个独立原生 App 自瞄 opcode，其模式/PID 会与现有速度控制、软件回中和镜头坐标辅助争用执行器，后续决策归入实施台账 C04。机载 `detection_enable_priority` 虽有核数/优先级表，`__enable_detection` 的整段仲裁代码实际位于三引号字符串内；执行路径为合并位图、写入并回读检查，不能将未执行的表说成当前有效设备调度规则。**机载代码 / 控制权边界**
 
-来源摘要、15 个注册名和原生片段保留在忽略目录 `2026-10-23-ddf6b20-audit.json`、`V02-native-characteristics.txt`、`V02-native-register-keys.txt`、`V02-native-get-mask-callback.txt`、`V02-native-listening.txt`、`V02-native-debug.txt`。原生库 SHA-256 为 `66e5ff67a64931ca492af448216cac3ee34323c3442bc72cd7acdcf19bf96e80`。这些是静态研究事实；Hanppie 的 V02 代码、状态归属和离线边界见[当前实现](./architecture.md#134-遥控操纵镜头坐标系与安全联动)与[实施台账](./official-app-capability-implementation.md#v02-辅助瞄准标签识别与设备待验)，V03 尚待实施，全部真实检测/瞄准效果和设备资源行为仍待验收。开发前的差距快照见[日期化复核](./official-app-gap-review-2026-10-23-ddf6b20.md)。
+来源摘要、15 个注册名和原生片段保留在忽略目录 `2026-10-23-ddf6b20-audit.json`、`V02-native-characteristics.txt`、`V02-native-register-keys.txt`、`V02-native-get-mask-callback.txt`、`V02-native-listening.txt`、`V02-native-debug.txt`。原生库 SHA-256 为 `66e5ff67a64931ca492af448216cac3ee34323c3442bc72cd7acdcf19bf96e80`。这些是静态研究事实；Hanppie 的 V02 代码、状态归属和离线边界见[当前实现](./architecture.md#134-遥控操纵镜头坐标系与安全联动)与[实施台账](./official-app-capability-implementation.md#v02-辅助瞄准标签识别与设备待验)，V03 的通用契约见下节，全部真实检测/瞄准效果和设备资源行为仍待验收。开发前的差距快照见[日期化复核](./official-app-gap-review-2026-10-23-ddf6b20.md)。
+
+#### 通用检测与颜色配置契约
+
+固定 App `DJIDetectionType` 和机载 `rm_define` 定义头肩 `1`、人体 `2`、姿态 `4`、线 `16` 的检测位；对应 `0a:a4` 类型为 `0/1/2/4`。App 原生 `OnRecvRunningStatusPush` 只向已注册普通状态特征分发类型 `0/1/3/5/6`，不能把缺少 C# 姿态/巡线特征误判为线上没有对应记录。机载 `Vision.recognition_event_register` 订阅同一 `0a:a4`，`VisionCtrl.recognition_event_process`/`callback_data_pack` 解析 9 字节头部及每项 20 字节；官方 [SDK protocol.py](https://github.com/dji-sdk/RoboMaster-SDK/blob/master/src/robomaster/protocol.py#L1631) 的 `ProtoVisionDetectInfo` 独立提供对应布局。Hanppie 的原始 DUSS 接收不依赖 C# 特征桥接。**静态报文契约，设备路由/推送待验**
+
+姿态仍为四个 little-endian float 的矩形及 Info；机载按低 16 位解释动作 ID，官方 SDK 同列 `1` 跳跃、`2/3` 举左/右手、`4` 正 V、`5` 倒 V、`6` 拍照、`7/8` 左/右手挥动、`9` 静止。C# `DJIDetectionPostureKind` 的名称/默认值不能替代这条实际机载/SDK ID 路径；原始 32 位 Info 必须保留，未知 ID 不猜动作。**代码，动作识别待验**
+
+线类型记录的四个 float 是 `x/y/theta/C`，不是 `x/y/width/height`；后跟完整 32 位 Info。归一化位置与有限切线角、曲率分开校验，不能拒绝负角度或把曲率当归一化高度。机载 `get_vision_detection_info` 说明每条线十个采样点，多线时其公开 getter 会取中间一组；Hanppie 保留原始推送的全部采样。官方 [S1 编程指南](https://www.dji.com/robomaster-s1/programming-guide)给出曲率 `0..10`、线型 `0` 无线、`1` 单线、`2` T 路口、`3` 十字路口。报告中空结果、新鲜度与设备状态分别处理。**布局及用户数据契约，实际坐标/曲率待验**
+
+原生 `SetVisionLineColor 7c6320` 与 `SetVisionMarkerColor 7c6aa0` 构造目的节点 `09`、`0a:ab`、两字节 `[attribute,color]`，attribute 为线 `1`/标签 `2`，颜色直接取 `CommonIntValue+8` 的低字节。`DJIVisionColor` 与官方 [SDK vision.py](https://github.com/dji-sdk/RoboMaster-SDK/blob/master/src/robomaster/vision.py#L284) 的配置值均为红 `1`、绿 `2`、蓝 `3`；这里以 App 原生构造作为节点依据，不照搬 SDK 模块默认节点。未建立独立 getter，应答只能证明命令结果。恢复的机载 `rm_define` 则含黄 `2`、绿 `4`，且 `attr_set` 与 setter 枚举检查不完全一致；此差异须以真实固件/滤色结果验收，不能修改恢复源、静默换值或虚构型号兼容规则。**原生构造/枚举差异，滤色效果待验**
+
+V03 的原生片段、来源 URL/文件摘要和当前边界保留于忽略目录 `V03-native-contracts.json` 与 `V03-native-color-pack.txt`；当前实现职责见[应用架构](./architecture.md#134-遥控操纵镜头坐标系与安全联动)，推进与设备验收见[实施台账](./official-app-capability-implementation.md#v03-通用检测颜色配置与设备待验)。没有以检测开启替代自动巡线/姿态动作，也没有变更既有 Lab API 或 C01–C14。
 
 ### 5.4 原生媒体路径
 

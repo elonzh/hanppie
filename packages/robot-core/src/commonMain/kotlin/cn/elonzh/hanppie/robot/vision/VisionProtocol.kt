@@ -14,13 +14,20 @@ data class VisionRect(val x: Float, val y: Float, val width: Float, val height: 
 }
 
 enum class VisionDeviceStatus(val raw: Int) { EXIST(0), INITIALIZING(1), WAITING_CONFIRM(2), RUNNING(3) }
-data class VisionReport(val type: Int, val status: Int, val error: Int, val rectangles: List<VisionRect>) {
+/** Line records use theta/curvature in the slots occupied by rectangle width/height. */
+data class VisionLinePoint(val x: Float, val y: Float, val tangent: Float, val curvature: Float, val info: Int)
+data class VisionReport(val type: Int, val status: Int, val error: Int, val rectangles: List<VisionRect>,
+    val linePoints: List<VisionLinePoint> = emptyList()) {
     val deviceStatus: VisionDeviceStatus? get() = VisionDeviceStatus.entries.firstOrNull { it.raw == status }
 }
 
 /** Ordinary App marker display: low word ID, high word distance labelled in centimetres. */
 val VisionRect.markerId: Int get() = info and 0xffff
 val VisionRect.markerDistanceCentimetres: Int get() = info ushr 16
+val VisionRect.poseId: Int get() = info and 0xffff
+
+/** App/SDK colour values. Restored onboard enum differences remain a device acceptance item. */
+enum class VisionColor(val raw: Int) { RED(1), GREEN(2), BLUE(3) }
 
 /** The fixed client's public marker enum defines digits 10–19 and letters 20–45. */
 fun markerSymbol(id: Int): String? = when (id) {
@@ -29,11 +36,21 @@ fun markerSymbol(id: Int): String? = when (id) {
     else -> null
 }
 
-/** Fixed RoboMaster App native constructors and ordinary rectangle decoder; advanced markers differ. */
+/** App constructors plus onboard/official SDK record layouts; advanced markers differ. */
 object VisionProtocol {
     const val ENABLE = 0xa3
     const val PUSH = 0xa4
     const val GET_ENABLE = 0xa5
+    const val SET_COLOR = 0xab
+    const val COLOR_RECEIVER = 0x09
+    fun color(mode: VisionMode, color: VisionColor): ByteArray {
+        val attribute = when (mode) {
+            VisionMode.LINES -> 1
+            VisionMode.MARKERS -> 2
+            else -> error("This detector has no colour attribute")
+        }
+        return byteArrayOf(attribute.toByte(), color.raw.toByte())
+    }
     fun enable(mask: Int): ByteArray {
         require(mask in 0..0xffff)
         return byteArrayOf(mask.toByte(), (mask ushr 8).toByte())
@@ -43,13 +60,18 @@ object VisionProtocol {
         if (!frame.valid || frame.sender != Protocol.HOST_VISION || frame.receiver != Protocol.HOST_MOBILE ||
             frame.attr != Protocol.ATTR_NO_ACK || frame.set != Protocol.CMDSET_VISION || frame.id != PUSH) return null
         val p = frame.payload
-        // Native publishes these ordinary types. Pose/line and advanced markers need separate contracts.
-        if (p.size < 9 || p.u8(0) !in listOf(0, 1, 3, 5, 6) || p.size != 9 + p.u8(8) * 20) return null
+        if (p.size < 9 || p.u8(0) !in 0..6 || p.size != 9 + p.u8(8) * 20) return null
         val rectangles = List(p.u8(8)) { index ->
             val offset = 9 + index * 20
             fun int(at: Int) = (0..3).fold(0) { bits, i -> bits or (p.u8(at + i) shl (8 * i)) }
             VisionRect(Float.fromBits(int(offset)), Float.fromBits(int(offset + 4)),
                 Float.fromBits(int(offset + 8)), Float.fromBits(int(offset + 12)), int(offset + 16))
+        }
+        if (p.u8(0) == 4) {
+            if (rectangles.any { !it.x.isFinite() || it.x !in 0f..1f || !it.y.isFinite() || it.y !in 0f..1f ||
+                !it.width.isFinite() || !it.height.isFinite() || it.height !in 0f..10f }) return null
+            return VisionReport(4, p.u8(1), p.u16(6), emptyList(),
+                rectangles.map { VisionLinePoint(it.x, it.y, it.width, it.height, it.info) })
         }
         if (rectangles.any { rect -> listOf(rect.x, rect.y, rect.width, rect.height).any { !it.isFinite() || it !in 0f..1f } }) return null
         return VisionReport(p.u8(0), p.u8(1), p.u16(6), rectangles.filter { it.valid })

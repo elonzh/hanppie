@@ -266,7 +266,7 @@ class AppSession(private val target: RobotTarget,
     )
     val tracking get() = objectTracking.state
     private val visionControl = cn.elonzh.hanppie.robot.vision.VisionControl(
-        send = { id, payload -> send(Protocol.HOST_VISION, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_VISION, id, payload) },
+        send = { receiver, id, payload -> send(receiver, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_VISION, id, payload) },
         nowMillis = { robotNanoTime() / 1_000_000 },
         stopGimbal = {
             controlPayload = RemoteControl.velocity(0.0, 0.0, 0.0)
@@ -278,7 +278,7 @@ class AppSession(private val target: RobotTarget,
         },
     )
     val vision get() = visionControl.state
-    fun startVision(mode: cn.elonzh.hanppie.robot.vision.VisionMode) = txLock.withLock {
+    fun startVision(mode: cn.elonzh.hanppie.robot.vision.VisionMode, color: cn.elonzh.hanppie.robot.vision.VisionColor? = null) = txLock.withLock {
         check(remote && active.load() && !labRunning && !powerTransition && !tracking.value.blocksManualControl &&
             !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl &&
             robotNanoTime() - lastReceivedNanos < 500_000_000) { "请结束其他任务并检查连接后启用遥控" }
@@ -286,7 +286,7 @@ class AppSession(private val target: RobotTarget,
         check(!vision.value.ownsPipeline) { "请先结束当前视觉模式" }
         clearMotionInput()
         inputDeadline = robotNanoTime() + 250_000_000
-        visionControl.start(mode)
+        visionControl.start(mode, color)
     }
     fun stopVision() = txLock.withLock { visionControl.stop() }
     fun startTracking() = txLock.withLock {

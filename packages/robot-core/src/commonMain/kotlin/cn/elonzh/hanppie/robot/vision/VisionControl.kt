@@ -7,7 +7,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-enum class VisionMode(val mask: Int, val reportType: Int) { ROBOT_AIM(8, 3), MARKERS(32, 5) }
+enum class VisionMode(val mask: Int, val reportType: Int) {
+    ROBOT_AIM(8, 3), MARKERS(32, 5), HEAD_SHOULDERS(1, 0), PEOPLE(2, 1), POSE(4, 2), LINES(16, 4);
+    val supportsColor: Boolean get() = this == MARKERS || this == LINES
+}
 enum class VisionPhase { OFF, CHECKING, STARTING, ACTIVE, STOPPING, ERROR, CLOSED }
 enum class VisionProblem { RESOURCE_BUSY, REJECTED, TIMED_OUT, MODE_MISMATCH, TARGET_LOST, DEVICE_ERROR, UNSUPPORTED_REPORT, STOP_UNCONFIRMED }
 
@@ -22,6 +25,9 @@ data class VisionState(
     val responseCode: Int? = null,
     val rejectedCommand: Int? = null,
     val enableMayBeActive: Boolean = false,
+    val color: VisionColor? = null,
+    val colorAccepted: Boolean = false,
+    val linePoints: List<VisionLinePoint> = emptyList(),
 ) {
     val ownsPipeline: Boolean get() = phase in listOf(VisionPhase.CHECKING, VisionPhase.STARTING, VisionPhase.ACTIVE, VisionPhase.STOPPING) ||
         problem == VisionProblem.STOP_UNCONFIRMED
@@ -31,12 +37,12 @@ data class VisionState(
 
 /** Session-owned transaction machine. Calls, receive and tick share the session transmit lock. */
 class VisionControl(
-    private val send: (Int, ByteArray) -> Int,
+    private val send: (Int, Int, ByteArray) -> Int,
     private val nowMillis: () -> Long,
     private val stopGimbal: () -> Unit,
 ) {
-    private enum class Command { INSPECT, RESET, ENABLE, VERIFY, DISABLE, VERIFY_STOP }
-    private data class Pending(val command: Command, val id: Int, val sequence: Int, val sentAt: Long)
+    private enum class Command { INSPECT, RESET, COLOR, ENABLE, VERIFY, DISABLE, VERIFY_STOP }
+    private data class Pending(val command: Command, val receiver: Int, val id: Int, val sequence: Int, val sentAt: Long)
     private val mutableState = MutableStateFlow(VisionState())
     val state: StateFlow<VisionState> = mutableState.asStateFlow()
     private var pending: Pending? = null
@@ -46,15 +52,17 @@ class VisionControl(
     private var stopAttempts = 0
     private var stopProblem: VisionProblem? = null
 
-    fun start(mode: VisionMode) {
+    fun start(mode: VisionMode, color: VisionColor? = null) {
         check(state.value.phase != VisionPhase.CLOSED && !state.value.ownsPipeline)
-        mutableState.value = VisionState(phase = VisionPhase.CHECKING, mode = mode)
+        require(color == null || mode.supportsColor)
+        mutableState.value = VisionState(phase = VisionPhase.CHECKING, mode = mode, color = color)
         lastReportAt = null; targetSeen = false; stopProblem = null; stopAttempts = 0
         command(Command.INSPECT, VisionProtocol.GET_ENABLE, byteArrayOf())
     }
 
     fun stop(problem: VisionProblem? = null) {
         if (state.value.phase == VisionPhase.ERROR && !state.value.ownsPipeline) {
+            lastReportAt = null
             mutableState.value = VisionState()
             return
         }
@@ -65,7 +73,7 @@ class VisionControl(
             finishStop()
             return
         }
-        mutableState.value = state.value.copy(phase = VisionPhase.STOPPING, rectangles = emptyList(), problem = null)
+        mutableState.value = state.value.copy(phase = VisionPhase.STOPPING, rectangles = emptyList(), linePoints = emptyList(), problem = null)
         stopAttempts = 0
         sendStop()
     }
@@ -76,9 +84,9 @@ class VisionControl(
         if (state.value.ownsGimbal) runCatching(stopGimbal)
     }
 
-    private fun command(command: Command, id: Int, payload: ByteArray) {
+    private fun command(command: Command, id: Int, payload: ByteArray, receiver: Int = Protocol.HOST_VISION) {
         try {
-            pending = Pending(command, id, send(id, payload), nowMillis())
+            pending = Pending(command, receiver, id, send(receiver, id, payload), nowMillis())
         } catch (_: Exception) {
             pending = null
             if (state.value.enableMayBeActive) unconfirmed()
@@ -88,7 +96,7 @@ class VisionControl(
 
     private fun fail(problem: VisionProblem) {
         pending = null
-        mutableState.value = state.value.copy(phase = VisionPhase.ERROR, rectangles = emptyList(), problem = problem)
+        mutableState.value = state.value.copy(phase = VisionPhase.ERROR, rectangles = emptyList(), linePoints = emptyList(), problem = problem)
     }
 
     private fun unconfirmed() {
@@ -98,15 +106,23 @@ class VisionControl(
 
     private fun finishStop() {
         pending = null
+        if (stopProblem == null) lastReportAt = null
         mutableState.value = if (stopProblem == null) VisionState() else
-            state.value.copy(phase = VisionPhase.ERROR, mask = 0, rectangles = emptyList(),
+            state.value.copy(phase = VisionPhase.ERROR, mask = 0, rectangles = emptyList(), linePoints = emptyList(),
                 problem = stopProblem, enableMayBeActive = false)
+    }
+
+    private fun enable() {
+        // Mark before transmission: a send failure cannot prove the device stayed off.
+        mutableState.value = state.value.copy(enableMayBeActive = true)
+        if (state.value.ownsGimbal) runCatching(stopGimbal)
+        command(Command.ENABLE, VisionProtocol.ENABLE, VisionProtocol.enable(requireNotNull(state.value.mode).mask))
     }
 
     fun receive(frame: DussFrame) {
         if (state.value.phase == VisionPhase.CLOSED) return
         val expected = pending
-        if (expected != null && frame.valid && frame.sender == Protocol.HOST_VISION && frame.receiver == Protocol.HOST_MOBILE &&
+        if (expected != null && frame.valid && frame.sender == expected.receiver && frame.receiver == Protocol.HOST_MOBILE &&
             frame.attr == Protocol.ATTR_RESP_NEED_ACK && frame.set == Protocol.CMDSET_VISION &&
             frame.id == expected.id && frame.sequence == expected.sequence && frame.payload.isNotEmpty()) {
             pending = null
@@ -131,10 +147,13 @@ class VisionControl(
                     }
                 }
                 Command.RESET -> {
-                    // Once an enable might have reached the robot, only verified OFF releases ownership.
-                    mutableState.value = state.value.copy(enableMayBeActive = true)
-                    if (state.value.ownsGimbal) runCatching(stopGimbal)
-                    command(Command.ENABLE, VisionProtocol.ENABLE, VisionProtocol.enable(requireNotNull(state.value.mode).mask))
+                    val color = state.value.color
+                    if (color == null) enable() else command(Command.COLOR, VisionProtocol.SET_COLOR,
+                        VisionProtocol.color(requireNotNull(state.value.mode), color), VisionProtocol.COLOR_RECEIVER)
+                }
+                Command.COLOR -> {
+                    mutableState.value = state.value.copy(colorAccepted = true)
+                    enable()
                 }
                 Command.ENABLE -> command(Command.VERIFY, VisionProtocol.GET_ENABLE, byteArrayOf())
                 Command.VERIFY -> {
@@ -160,7 +179,8 @@ class VisionControl(
         val report = VisionProtocol.push(frame)?.takeIf { it.type == current.mode?.reportType } ?: return
         lastReportAt = nowMillis()
         mutableState.value = current.copy(report = report, reportAgeMillis = 0,
-            rectangles = if (current.phase == VisionPhase.ACTIVE) report.rectangles else emptyList())
+            rectangles = if (current.phase == VisionPhase.ACTIVE) report.rectangles else emptyList(),
+            linePoints = if (current.phase == VisionPhase.ACTIVE) report.linePoints else emptyList())
         when {
             report.error != 0 -> stop(VisionProblem.DEVICE_ERROR)
             report.deviceStatus == null -> stop(VisionProblem.UNSUPPORTED_REPORT)
@@ -176,7 +196,8 @@ class VisionControl(
         lastReportAt?.let { at ->
             val age = (now - at).coerceAtLeast(0)
             mutableState.value = state.value.copy(reportAgeMillis = age,
-                rectangles = if (age < 750) state.value.rectangles else emptyList())
+                rectangles = if (age < 750) state.value.rectangles else emptyList(),
+                linePoints = if (age < 750) state.value.linePoints else emptyList())
         }
         val current = state.value
         if (current.phase == VisionPhase.STOPPING) {
@@ -196,7 +217,7 @@ class VisionControl(
     fun close(sendCleanup: Boolean = true) {
         if (state.value.phase == VisionPhase.CLOSED) return
         if (sendCleanup && state.value.enableMayBeActive) {
-            runCatching { send(VisionProtocol.ENABLE, VisionProtocol.enable(0)) }
+            runCatching { send(Protocol.HOST_VISION, VisionProtocol.ENABLE, VisionProtocol.enable(0)) }
             if (state.value.ownsGimbal) runCatching(stopGimbal)
         }
         pending = null

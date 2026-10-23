@@ -4,20 +4,20 @@ import cn.elonzh.hanppie.robot.protocol.*
 import kotlin.test.*
 
 class VisionControlTest {
-    private data class Sent(val id: Int, val payload: ByteArray, val sequence: Int)
+    private data class Sent(val id: Int, val payload: ByteArray, val sequence: Int, val receiver: Int)
     private class Rig {
         var now = 100L
         var zeros = 0
         var sendFails = false
         val sent = mutableListOf<Sent>()
-        val control = VisionControl({ id, payload ->
+        val control = VisionControl({ receiver, id, payload ->
             if (sendFails) error("transport closed")
             val sequence = sent.size + 1
-            sent += Sent(id, payload, sequence)
+            sent += Sent(id, payload, sequence, receiver)
             sequence
         }, { now }, { zeros++ })
         fun response(command: Sent = sent.last(), code: Int = 0, mask: Int? = null) =
-            DussFrame(0, 0xf1, 2, command.sequence, 0xc0, 0x0a, command.id,
+            DussFrame(0, command.receiver, 2, command.sequence, 0xc0, 0x0a, command.id,
                 byteArrayOf(code.toByte()) + (mask?.let(VisionProtocol::enable) ?: byteArrayOf()), true)
         fun ack(code: Int = 0, mask: Int? = null) = control.receive(response(code = code, mask = mask))
         fun active(mode: VisionMode = VisionMode.ROBOT_AIM) {
@@ -51,7 +51,7 @@ class VisionControlTest {
         val aim = report()
         for (bad in listOf(aim.copy(sender = 9), aim.copy(receiver = 9), aim.copy(attr = 0xc0),
             aim.copy(valid = false), aim.copy(id = 0x90), aim.copy(payload = aim.payload.copyOf(9)),
-            aim.copy(payload = aim.payload + byteArrayOf(0)), report(type = 8), report(type = 4))) assertNull(VisionProtocol.push(bad))
+            aim.copy(payload = aim.payload + byteArrayOf(0)), report(type = 8), report(type = 7))) assertNull(VisionProtocol.push(bad))
         val invalid = aim.payload.copyOf().apply { "0000c07f".hexBytes().copyInto(this, 9) }
         assertNull(VisionProtocol.push(aim.copy(payload = invalid)))
         assertNull(cn.elonzh.hanppie.robot.tracking.TrackingProtocol.push(aim))
@@ -198,5 +198,109 @@ class VisionControlTest {
         assertFailsWith<IllegalStateException> { rig.control.start(VisionMode.MARKERS) }
         val loader = Rig(); loader.active(); val prior = loader.sent.size
         loader.control.close(sendCleanup = false); assertEquals(prior, loader.sent.size)
+    }
+
+    private fun lineReport(theta: Float = -35f, curvature: Float = 6f, count: Int = 10, info: Int = 2): DussFrame {
+        val record = listOf(.4f, .8f, theta, curvature).flatMap { v -> List(4) { (v.toBits() ushr (8 * it)).toByte() } }.toByteArray() +
+            ByteArray(4) { (info ushr (8 * it)).toByte() }
+        return report(type = 4, target = false).let { it.copy(payload = it.payload.copyOf().apply { this[8] = count.toByte() } +
+            List(count) { record }.fold(byteArrayOf()) { bytes, item -> bytes + item }) }
+    }
+
+    @Test fun passiveDetectorVectorsKeepPoseInfoAndLineTangentCurvatureOutsideRectangleRules() {
+        for ((mode, mask, type) in listOf(Triple(VisionMode.HEAD_SHOULDERS, 1, 0), Triple(VisionMode.PEOPLE, 2, 1),
+            Triple(VisionMode.POSE, 4, 2), Triple(VisionMode.LINES, 16, 4))) {
+            assertEquals(mask, mode.mask); assertEquals(type, mode.reportType)
+        }
+        val pose = VisionProtocol.push(report(type = 2, info = 0x12340006))!!.rectangles.single()
+        assertEquals(6, pose.poseId); assertEquals(0x12340006, pose.info)
+        val line = VisionProtocol.push(lineReport())!!
+        assertTrue(line.rectangles.isEmpty()); assertEquals(10, line.linePoints.size)
+        assertEquals(VisionLinePoint(.4f, .8f, -35f, 6f, 2), line.linePoints.first())
+        assertEquals(20, VisionProtocol.push(lineReport(count = 20))!!.linePoints.size)
+        assertTrue(VisionProtocol.push(lineReport(count = 0))!!.linePoints.isEmpty())
+        for (bad in listOf(lineReport(theta = Float.NaN), lineReport(curvature = Float.POSITIVE_INFINITY),
+            lineReport(curvature = -1f), lineReport(curvature = 11f))) assertNull(VisionProtocol.push(bad))
+        // A line point is not a target box: zero curvature and coordinates on the edge are valid.
+        assertNotNull(VisionProtocol.push(lineReport(theta = 180f, curvature = 0f)))
+        assertEquals("0102", VisionProtocol.color(VisionMode.LINES, VisionColor.GREEN).hex())
+        assertEquals("0203", VisionProtocol.color(VisionMode.MARKERS, VisionColor.BLUE).hex())
+    }
+
+    @Test fun colourUsesItsOwnReceiverAndAcceptedColourNeverReplacesMaskReadback() {
+        for (mode in listOf(VisionMode.LINES, VisionMode.MARKERS)) {
+            val rig = Rig(); rig.control.start(mode, VisionColor.RED); rig.ack(mask = 0); rig.ack()
+            assertEquals(9, rig.sent.last().receiver); assertEquals(0xab, rig.sent.last().id)
+            assertContentEquals(VisionProtocol.color(mode, VisionColor.RED), rig.sent.last().payload)
+            assertFalse(rig.control.state.value.colorAccepted)
+            val ack = rig.response()
+            for (bad in listOf(ack.copy(sender = 0xf1), ack.copy(sequence = 999), ack.copy(attr = 0), ack.copy(receiver = 9))) rig.control.receive(bad)
+            assertEquals(3, rig.sent.size)
+            rig.control.receive(ack)
+            assertTrue(rig.control.state.value.colorAccepted)
+            assertEquals(0xf1, rig.sent.last().receiver); assertEquals(if (mode == VisionMode.LINES) "1000" else "2000", rig.sent.last().payload.hex())
+            rig.ack(); assertEquals(VisionPhase.STARTING, rig.control.state.value.phase)
+            rig.ack(mask = mode.mask); assertEquals(VisionPhase.ACTIVE, rig.control.state.value.phase)
+            assertEquals(VisionColor.RED, rig.control.state.value.color)
+            rig.control.stop(); rig.stopped(); assertEquals(VisionPhase.OFF, rig.control.state.value.phase)
+        }
+    }
+
+    @Test fun colourRejectionTimeoutOrCancelDoesNotEnableAndCannotClaimItRestoredPriorColour() {
+        for (event in listOf("reject", "timeout", "cancel", "close")) {
+            val rig = Rig(); rig.control.start(VisionMode.LINES, VisionColor.BLUE); rig.ack(mask = 0); rig.ack()
+            val late = rig.response()
+            when (event) {
+                "reject" -> rig.ack(code = 4)
+                "timeout" -> { rig.now += 1_501; rig.control.tick(true) }
+                "cancel" -> rig.control.stop()
+                else -> rig.control.close()
+            }
+            val sent = rig.sent.size
+            rig.control.receive(late); rig.control.tick(true)
+            assertEquals(sent, rig.sent.size)
+            assertFalse(rig.control.state.value.ownsPipeline)
+            assertFalse(rig.control.state.value.colorAccepted)
+            assertFalse(rig.sent.any { it.id == 0xa3 && it.payload.contentEquals(VisionProtocol.enable(16)) })
+        }
+        val busy = Rig(); busy.control.start(VisionMode.LINES, VisionColor.BLUE); busy.ack(mask = 64)
+        assertEquals(1, busy.sent.size, "Foreign ownership must also prevent colour writes")
+        assertFailsWith<IllegalArgumentException> { Rig().control.start(VisionMode.PEOPLE, VisionColor.RED) }
+    }
+
+    @Test fun allPassiveModesLeaveGimbalManualAndEmptyReportsAreFreshWithoutRestartingMotion() {
+        for (mode in listOf(VisionMode.HEAD_SHOULDERS, VisionMode.PEOPLE, VisionMode.POSE, VisionMode.LINES)) {
+            val rig = Rig(); rig.active(mode)
+            rig.control.receive(if (mode == VisionMode.LINES) lineReport() else report(type = mode.reportType, info = 6))
+            assertFalse(rig.control.state.value.ownsGimbal); assertEquals(0, rig.zeros)
+            assertEquals(if (mode == VisionMode.LINES) 10 else 0, rig.control.state.value.linePoints.size)
+            rig.now += 751; rig.control.tick(true)
+            assertTrue(rig.control.state.value.linePoints.isEmpty()); assertTrue(rig.control.state.value.rectangles.isEmpty())
+            rig.control.receive(report(type = mode.reportType, target = false))
+            assertEquals(VisionPhase.ACTIVE, rig.control.state.value.phase)
+            rig.control.tick(false); rig.stopped()
+            assertEquals(VisionPhase.OFF, rig.control.state.value.phase)
+            val stopped = rig.control.state.value
+            rig.now += 2_000; rig.control.tick(true)
+            assertEquals(stopped, rig.control.state.value, "Completed detections must not keep publishing an old report age")
+        }
+    }
+
+    @Test fun lineReportsKeepRawDiagnosticsButStoppingClearsEveryVisibleResult() {
+        val rig = Rig(); rig.active(VisionMode.LINES)
+        rig.control.receive(lineReport(info = 0x12340003))
+        assertEquals(0x12340003, rig.control.state.value.linePoints.first().info)
+        rig.control.receive(report(type = 2)); assertEquals(4, rig.control.state.value.report!!.type)
+        val broken = lineReport().let { frame -> frame.copy(payload = frame.payload.copyOf().apply { this[6] = 5 }) }
+        rig.control.receive(broken)
+        assertEquals(VisionPhase.STOPPING, rig.control.state.value.phase)
+        assertTrue(rig.control.state.value.linePoints.isEmpty())
+        rig.stopped(); assertEquals(5, rig.control.state.value.report!!.error)
+        assertEquals(VisionProblem.DEVICE_ERROR, rig.control.state.value.problem)
+        rig.control.stop()
+        val dismissed = rig.control.state.value
+        rig.now += 2_000; rig.control.tick(true)
+        assertEquals(VisionState(), dismissed)
+        assertEquals(dismissed, rig.control.state.value, "Dismissing a completed error must also retire the old report clock")
     }
 }

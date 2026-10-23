@@ -16,10 +16,11 @@ class VisionConnectionTest {
             model.enableRemote(); await { model.remoteEnabled.value && !model.state.value.busy }
             model.startVision(VisionMode.ROBOT_AIM)
             assertEquals(listOf(VisionMode.ROBOT_AIM), sessions[0].visionStarts)
+            assertNull(sessions[0].visionColors.single())
             sessions[0].vision.value = VisionState(VisionPhase.ACTIVE, VisionMode.ROBOT_AIM, enableMayBeActive = true)
             await { model.vision.value.ownsGimbal }
             model.state.value = model.state.value.copy(busy = true)
-            model.startVision(VisionMode.MARKERS); assertEquals(1, sessions[0].visionStarts.size)
+            model.startVision(VisionMode.LINES, VisionColor.GREEN); assertEquals(1, sessions[0].visionStarts.size)
             model.state.value = model.state.value.copy(busy = false)
             model.setForeground(false); await { !model.remoteEnabled.value && !model.vision.value.ownsPipeline }
             model.setForeground(true); delay(50)
@@ -31,6 +32,11 @@ class VisionConnectionTest {
             assertEquals(VisionPhase.OFF, model.vision.value.phase)
             assertTrue(sessions[1].visionStarts.isEmpty())
             assertFalse(model.remoteEnabled.value)
+            model.videoFrames.publish(model.state.value.connectedAddress, ImageBitmap(2, 2))
+            model.enableRemote(); await { model.remoteEnabled.value && !model.state.value.busy }
+            model.startVision(VisionMode.LINES, VisionColor.GREEN)
+            assertEquals(listOf(VisionMode.LINES), sessions[1].visionStarts)
+            assertEquals(VisionColor.GREEN, sessions[1].visionColors.single())
         } finally { model.close() }
     }
 }

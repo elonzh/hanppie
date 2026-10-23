@@ -315,12 +315,12 @@ internal class ConsoleModel(
     private var trackingObserver: Job? = null
     override val vision = MutableStateFlow(cn.elonzh.hanppie.robot.vision.VisionState())
     private var visionObserver: Job? = null
-    override fun startVision(mode: cn.elonzh.hanppie.robot.vision.VisionMode) {
+    override fun startVision(mode: cn.elonzh.hanppie.robot.vision.VisionMode, color: cn.elonzh.hanppie.robot.vision.VisionColor?) {
         val current = session.load() ?: return
         if (!remoteEnabled.value || !isForeground || !acceptingWork.load() || state.value.busy || chat.state.value.running ||
             tracking.value.blocksManualControl || !videoFrames.isFresh(state.value.connectedAddress)) return
         gimbalCentering.cancel(); stopFiring()
-        runCatching { current.startVision(mode) }.onFailure { log(it.message.orEmpty()) }
+        runCatching { current.startVision(mode, color) }.onFailure { log(it.message.orEmpty()) }
     }
     override fun stopVision() { runCatching { session.load()?.stopVision() } }
     private fun trackingAction(action: (RobotSession) -> Unit) {

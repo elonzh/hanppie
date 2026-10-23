@@ -406,9 +406,9 @@ internal fun RemotePage(
         }
         if (!armMode) VisionModeControls(vision, tracking, enabled && videoFrame != null && videoFresh && !zoom.busy && (zoom.hundredths == null || zoom.hundredths == 100),
             Modifier.align(Alignment.TopCenter).padding(top = 76.dp).then(reserveVisionSpace("vision")),
-            onStart = { mode ->
+            onStart = { mode, color ->
                 keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
-                model.startVision(mode); focus.requestFocus()
+                model.startVision(mode, color); focus.requestFocus()
             }, onStop = { model.stopVision(); focus.requestFocus() },
             onStartTracking = {
                 keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false

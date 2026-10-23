@@ -31,18 +31,24 @@ class VisionSessionTest {
                     robot.send(DatagramPacket(bytes, bytes.size, packet.socketAddress))
                     if (bytes.size >= 12) {
                         val envelope = AppEnvelope(bytes.u16(2), 80)
-                        fun reply(id: Int, payload: ByteArray, sequence: Int = 1, attr: Int = 0xc0) {
-                            val data = envelope.direct(Protocol.duss(0xf1, 2, attr, 0x0a, id, payload, sequence))
+                        fun reply(id: Int, payload: ByteArray, sequence: Int = 1, attr: Int = 0xc0, sender: Int = 0xf1) {
+                            val data = envelope.direct(Protocol.duss(sender, 2, attr, 0x0a, id, payload, sequence))
                             robot.send(DatagramPacket(data, data.size, packet.socketAddress))
                         }
-                        for (frame in frames.filter { it.receiver == 0xf1 && it.set == 0x0a }) when (frame.id) {
+                        for (frame in frames.filter { it.set == 0x0a }) when (frame.id) {
                             0xa3 -> { mask = frame.payload.u16(0); reply(0xa3, byteArrayOf(0), frame.sequence) }
                             0xa5 -> reply(0xa5, byteArrayOf(0) + VisionProtocol.enable(mask), frame.sequence)
+                            0xab -> if (frame.receiver == 9) reply(0xab, byteArrayOf(0), frame.sequence, sender = 9)
                         }
                         if (mask != 0) {
-                            val geometry = listOf(.5f, .5f, .2f, .3f).flatMap { value -> List(4) { (value.toBits() ushr (8 * it)).toByte() } }.toByteArray()
-                            reply(0xa4, byteArrayOf(if (mask == 8) 3 else 5, 3, 0, 0, 0, 0, 0, 0, 1) +
-                                geometry + byteArrayOf(if (mask == 8) 5 else 45, 0, if (mask == 8) 0 else 100, 0), attr = 0)
+                            val mode = VisionMode.entries.single { it.mask == mask }
+                            val geometry = (if (mode == VisionMode.LINES) listOf(.5f, .5f, -45f, 2f) else listOf(.5f, .5f, .2f, .3f))
+                                .flatMap { value -> List(4) { (value.toBits() ushr (8 * it)).toByte() } }.toByteArray()
+                            val record = geometry + byteArrayOf(when (mode) { VisionMode.ROBOT_AIM -> 5; VisionMode.MARKERS -> 45; VisionMode.LINES -> 2; else -> 6 },
+                                0, if (mode == VisionMode.MARKERS) 100 else 0, 0)
+                            val count = if (mode == VisionMode.LINES) 10 else 1
+                            reply(0xa4, byteArrayOf(mode.reportType.toByte(), 3, 0, 0, 0, 0, 0, 0, count.toByte()) +
+                                List(count) { record }.fold(byteArrayOf()) { bytes, item -> bytes + item }, attr = 0)
                         }
                     }
                 } catch (_: SocketTimeoutException) { } catch (_: SocketException) { break }
@@ -90,6 +96,18 @@ class VisionSessionTest {
                 val markerMark = sent.size
                 delay(100)
                 assertTrue(sent.drop(markerMark).any { it.set == 4 && it.id == 0xc && it.payload.take(6).any { b -> b != 0.toByte() } }, "Read-only markers must preserve manual gimbal input")
+                for (mode in listOf(VisionMode.HEAD_SHOULDERS, VisionMode.PEOPLE, VisionMode.POSE, VisionMode.LINES)) {
+                    session.stopVision(); await(VisionPhase.OFF)
+                    session.startVision(mode, if (mode == VisionMode.LINES) VisionColor.GREEN else null); await(VisionPhase.ACTIVE)
+                    withTimeout(2_000) { while (session.vision.value.report?.type != mode.reportType) delay(5) }
+                    assertFalse(session.vision.value.ownsGimbal)
+                    assertEquals(mode.mask, session.vision.value.mask)
+                    if (mode == VisionMode.LINES) {
+                        assertTrue(session.vision.value.colorAccepted)
+                        assertEquals(-45f, session.vision.value.linePoints.first().tangent)
+                        assertTrue(sent.any { it.receiver == 9 && it.id == 0xab && it.payload.hex() == "0102" })
+                    }
+                }
                 operator.cancelAndJoin(); operator = null
                 session.exitRemote(); await(VisionPhase.OFF)
                 session.enterRemote()

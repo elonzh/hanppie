@@ -38,7 +38,7 @@ class VisionUiTest {
         var publish = true
         val controller = object : ConsoleController by model {
             override val vision = vision
-            override fun startVision(mode: VisionMode) { starts += mode; vision.value = VisionState(VisionPhase.ACTIVE, mode, mask = mode.mask, enableMayBeActive = true) }
+            override fun startVision(mode: VisionMode, color: VisionColor?) { starts += mode; vision.value = VisionState(VisionPhase.ACTIVE, mode, mask = mode.mask, enableMayBeActive = true) }
             override fun stopVision() { stops++; vision.value = VisionState() }
             override fun drive(x: Double, y: Double, z: Double, pitch: Double, yaw: Double) = Unit
         }
@@ -56,6 +56,7 @@ class VisionUiTest {
             rule.onNodeWithTag("vision-stop").performClick()
             rule.onNodeWithTag("vision-tools").performClick()
             rule.onNodeWithTag("vision-start-markers").performClick()
+            rule.onNodeWithTag("vision-current-color").performClick()
             assertEquals(VisionMode.MARKERS, starts.last())
             publish = false
             rule.waitUntil(4_000) { stops >= 2 && vision.value.phase == VisionPhase.OFF }
@@ -73,7 +74,7 @@ class VisionUiTest {
         var stops = 0
         rule.setContent { TestWorkbenchTheme {
             val value by state.collectAsState()
-            VisionModeControls(value, TrackingState(), false, Modifier, {}, { stops++ }, {}, {}, {})
+            VisionModeControls(value, TrackingState(), false, Modifier, { _, _ -> }, { stops++ }, {}, {}, {})
         } }
         rule.onNodeWithTag("vision-retry").assertDoesNotExist()
         rule.onNodeWithTag("vision-stop").performClick(); assertEquals(1, stops)
@@ -98,6 +99,46 @@ class VisionUiTest {
         } }
         rule.onNodeWithText("标签 Z · 100 cm").assertIsDisplayed()
         rule.onNodeWithTag("vision-marker-0").assertHasNoClickAction()
+    }
+
+    @Test fun colourStepWaitsForChoiceAndRetryPreservesItsModeAndFilter() {
+        Localization.initialize("zh", null)
+        val state = MutableStateFlow(VisionState())
+        val starts = mutableListOf<Pair<VisionMode, VisionColor?>>()
+        rule.setContent { TestWorkbenchTheme {
+            val value by state.collectAsState()
+            VisionModeControls(value, TrackingState(), true, Modifier,
+                { mode, color -> starts += mode to color }, {}, {}, {}, {})
+        } }
+        rule.onNodeWithTag("vision-tools").performClick()
+        rule.onNodeWithTag("vision-start-lines").performClick()
+        assertTrue(starts.isEmpty())
+        rule.onNodeWithTag("vision-colors-back").performClick()
+        rule.onNodeWithTag("vision-start-pose").performClick()
+        assertEquals(VisionMode.POSE to null, starts.single())
+        rule.onNodeWithTag("vision-tools").performClick()
+        rule.onNodeWithTag("vision-start-lines").performClick()
+        rule.onNodeWithTag("vision-color-blue").performClick()
+        assertEquals(VisionMode.LINES to VisionColor.BLUE, starts.last())
+        rule.runOnIdle { state.value = VisionState(VisionPhase.ERROR, VisionMode.LINES, color = VisionColor.BLUE,
+            problem = VisionProblem.REJECTED, responseCode = 4, rejectedCommand = VisionProtocol.SET_COLOR) }
+        rule.onNodeWithTag("vision-retry").performClick()
+        assertEquals(VisionMode.LINES to VisionColor.BLUE, starts.last())
+    }
+
+    @Test fun poseAndLineResultsKeepTheirIdentityAndNeverOfferMotionActions() {
+        Localization.initialize("zh", null)
+        val state = MutableStateFlow(VisionState(VisionPhase.ACTIVE, VisionMode.POSE,
+            rectangles = listOf(VisionRect(.4f, .5f, .2f, .3f, 6), VisionRect(.7f, .5f, .2f, .3f, 0x1234))))
+        rule.setContent { TestWorkbenchTheme { val value by state.collectAsState(); VisionTargets(value, 1280, 720) } }
+        rule.onNodeWithText("拍照手势").assertIsDisplayed()
+        rule.onNodeWithText("姿态 4660").assertIsDisplayed()
+        rule.onNodeWithTag("vision-result-0").assertHasNoClickAction()
+        rule.runOnIdle { state.value = VisionState(VisionPhase.ACTIVE, VisionMode.LINES,
+            linePoints = List(10) { i -> VisionLinePoint(.3f + i * .02f, .8f - i * .04f, -35f, 3f, 2) }) }
+        rule.onNodeWithContentDescription("10 个采样点").assertExists()
+        rule.onNodeWithText("T 形路口").assertIsDisplayed()
+        rule.onNodeWithTag("vision-result-0").assertHasNoClickAction()
     }
 }
 
@@ -130,19 +171,34 @@ class VisionLayoutTest {
                 } }
                 val aim = VisionState(VisionPhase.ACTIVE, VisionMode.ROBOT_AIM, mask = 8, enableMayBeActive = true,
                     rectangles = listOf(VisionRect(.5f, .5f, .22f, .35f, 5)), reportAgeMillis = 0)
+                val points = List(20) { i -> val j = i % 10
+                    VisionLinePoint(if (i < 10) .28f + j * .012f else .7f - j * .01f, .85f - j * .065f, -35f, 2f, if (i < 10) 2 else 3) }
+                val lines = VisionState(VisionPhase.ACTIVE, VisionMode.LINES, mask = 16, enableMayBeActive = true,
+                    color = VisionColor.BLUE, colorAccepted = true, linePoints = points,
+                    report = VisionReport(4, 3, 0, emptyList(), points))
                 val cases = listOf(
-                    "off" to VisionState(), "chooser" to VisionState(),
-                    "starting" to aim.copy(phase = VisionPhase.STARTING, rectangles = emptyList()),
+                    "off" to VisionState(), "chooser" to VisionState(), "marker-colors" to VisionState(), "line-colors" to VisionState(),
                     "aim" to aim,
                     "markers" to VisionState(VisionPhase.ACTIVE, VisionMode.MARKERS, mask = 32, enableMayBeActive = true,
                         rectangles = listOf(VisionRect(.28f, .5f, .17f, .3f, 0x0064002d), VisionRect(.77f, .92f, .18f, .25f, 0x00fa0003))),
-                    "stopping" to aim.copy(phase = VisionPhase.STOPPING, rectangles = emptyList()),
-                    "uncertain" to aim.copy(phase = VisionPhase.ERROR, rectangles = emptyList(), problem = VisionProblem.STOP_UNCONFIRMED),
-                    "busy" to aim.copy(phase = VisionPhase.ERROR, enableMayBeActive = false, rectangles = emptyList(), problem = VisionProblem.RESOURCE_BUSY))
+                    "head" to aim.copy(mode = VisionMode.HEAD_SHOULDERS, mask = 1),
+                    "people" to aim.copy(mode = VisionMode.PEOPLE, mask = 2),
+                    "pose" to aim.copy(mode = VisionMode.POSE, mask = 4, rectangles = listOf(
+                        VisionRect(.28f, .5f, .17f, .3f, 6), VisionRect(.77f, .92f, .18f, .25f, 99))),
+                    "lines" to lines, "line-details" to lines,
+                    "uncertain" to lines.copy(phase = VisionPhase.ERROR, linePoints = emptyList(), problem = VisionProblem.STOP_UNCONFIRMED),
+                    "color-rejected" to lines.copy(phase = VisionPhase.ERROR, enableMayBeActive = false, linePoints = emptyList(),
+                        colorAccepted = false, problem = VisionProblem.REJECTED, responseCode = 4, rejectedCommand = 0xab))
                 for ((name, value) in cases) {
                     runOnIdle { vision.value = value }
                     waitForIdle()
-                    if (name == "chooser") onNodeWithTag("vision-tools").performClick()
+                    if (name in listOf("chooser", "marker-colors", "line-colors")) {
+                        onNodeWithTag("vision-tools").performClick()
+                        if (name != "chooser") onNodeWithTag(if (name == "marker-colors") "vision-start-markers" else "vision-start-lines").performClick()
+                        val picker = onNodeWithTag("vision-picker").fetchSemanticsNode().boundsInRoot
+                        assertTrue(picker.left >= 0 && picker.right <= width && picker.bottom <= height)
+                    }
+                    if (name == "line-details") onNodeWithTag("vision-show-details").performClick()
                     val tag = if (value.phase == VisionPhase.OFF) "tracking-controls" else "vision-controls"
                     onNodeWithTag(tag).assertIsDisplayed()
                     val controls = onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
@@ -150,9 +206,10 @@ class VisionLayoutTest {
                     assertTrue(controls.top >= telemetry.bottom)
                     assertTrue(controls.left >= 0 && controls.right <= width && controls.bottom <= height)
                     if (name == "chooser") onNodeWithTag("vision-start-aim").assertIsDisplayed()
-                    if (name == "markers") for (index in 0..1) {
-                        onNodeWithTag("vision-marker-$index").assertIsDisplayed()
-                        val label = onNodeWithTag("vision-marker-$index").fetchSemanticsNode().boundsInRoot
+                    if (name in listOf("markers", "pose", "lines")) for (index in 0..1) {
+                        val labelTag = if (name == "markers") "vision-marker-$index" else "vision-result-$index"
+                        onNodeWithTag(labelTag).assertIsDisplayed()
+                        val label = onNodeWithTag(labelTag).fetchSemanticsNode().boundsInRoot
                         for (hud in listOf("vision-controls", "remote-touch-left", "remote-touch-right", "remote-ammo", "remote-telemetry"))
                             assertFalse(label.overlaps(onNodeWithTag(hud).fetchSemanticsNode().boundsInRoot), "Marker label must stay clear of $hud")
                     }
@@ -160,8 +217,9 @@ class VisionLayoutTest {
                     val pixels = IntArray(image.width * image.height); image.readPixels(pixels)
                     val buffered = BufferedImage(image.width, image.height, BufferedImage.TYPE_INT_ARGB)
                     buffered.setRGB(0, 0, image.width, image.height, pixels, 0, image.width)
-                    val file = File("build/reports/ui/vision-v02-$width-$height-$language-$name.png"); file.parentFile.mkdirs()
+                    val file = File("build/reports/ui/vision-v03-$width-$height-$language-$name.png"); file.parentFile.mkdirs()
                     ImageIO.write(buffered, "png", file)
+                    if (name in listOf("chooser", "marker-colors", "line-colors")) onNodeWithTag("vision-tools").performClick()
                 }
             } finally { model.close(); Localization.initialize("zh", null) }
         }
