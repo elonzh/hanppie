@@ -25,6 +25,7 @@ import com.composables.icons.lucide.ArrowDown
 import com.composables.icons.lucide.ArrowLeftRight
 import com.composables.icons.lucide.BatteryMedium
 import com.composables.icons.lucide.Bot
+import com.composables.icons.lucide.BookOpen
 import com.composables.icons.lucide.Camera
 import com.composables.icons.lucide.Signal
 import com.composables.icons.lucide.SignalLow
@@ -75,11 +76,12 @@ internal enum class WorkbenchGlyph {
     BACK, ADD, IMPORT, EXPORT, UPLOAD, DOWNLOAD, SAVE, EDIT, DELETE, STOP, ACTIVITY, CHEVRON_RIGHT,
     FILE, FILE_TEXT, FOLDER, REFRESH, MORE, OPEN, VIDEO, VIDEO_OFF, SPEAKER, MUTED, CAMERA, RECORD,
     CROSSHAIR, SEARCH, CONNECT, WIFI, ROUTER, BATTERY, SIGNAL, SIGNAL_LOW, SIGNAL_MEDIUM, SIGNAL_UNKNOWN, PACKETS, MICROPHONE, SEND, ROBOT, CODE, CHAT, SETTINGS,
-    PLAY, PAUSE, GRIP_VERTICAL, INFO, COPY, ARROW_LEFT, ARROW_RIGHT, ARROW_UP, ARROW_DOWN,
+    PLAY, PAUSE, GRIP_VERTICAL, INFO, COPY, ARROW_LEFT, ARROW_RIGHT, ARROW_UP, ARROW_DOWN, GUIDE,
 }
 
 internal val WorkbenchGlyph.icon: ImageVector get() = when (this) {
     WorkbenchGlyph.BACK -> Lucide.ArrowLeft
+    WorkbenchGlyph.GUIDE -> Lucide.BookOpen
     WorkbenchGlyph.ADD -> Lucide.Plus
     WorkbenchGlyph.IMPORT -> Lucide.FileInput
     WorkbenchGlyph.EXPORT -> Lucide.FileOutput

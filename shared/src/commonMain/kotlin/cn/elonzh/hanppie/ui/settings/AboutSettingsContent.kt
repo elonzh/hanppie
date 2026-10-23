@@ -42,6 +42,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 internal fun AboutSettingsContent(
     modifier: Modifier = Modifier,
     buildInfo: HanppieBuildInfo = remember { getPlatformBuildInfo() },
+    onGuide: (() -> Unit)? = null,
 ) {
     val uriHandler = LocalUriHandler.current
     val clipboardManager = LocalClipboardManager.current
@@ -52,6 +53,11 @@ internal fun AboutSettingsContent(
         modifier = modifier.fillMaxWidth().testTag("about-settings-content"),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        if (onGuide != null) Button(onGuide, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("about-user-guide")) {
+            WorkbenchIcon(WorkbenchGlyph.GUIDE)
+            Spacer(Modifier.width(12.dp))
+            Text(tr(Res.string.guide_title))
+        }
         // 1. Hero Brand Card
         Card(
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(HanppieDesignTokens.CardRadius)),

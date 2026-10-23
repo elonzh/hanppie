@@ -39,7 +39,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @OptIn(ExperimentalLayoutApi::class)
 internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifier, onSpeechSettings: (() -> Unit)? = null,
     onAlbum: (() -> Unit)? = null, onWifi: (() -> Unit)? = null, showRobotMaintenance: Boolean = false,
-    onAddressing: (() -> Unit)? = null, onCalibration: (() -> Unit)? = null, onFirmware: (() -> Unit)? = null, onArm: (() -> Unit)? = null, onExtensions: (() -> Unit)? = null, onGamepad: (() -> Unit)? = null) {
+    onAddressing: (() -> Unit)? = null, onCalibration: (() -> Unit)? = null, onFirmware: (() -> Unit)? = null, onArm: (() -> Unit)? = null, onExtensions: (() -> Unit)? = null, onGamepad: (() -> Unit)? = null, onGuide: (() -> Unit)? = null) {
     val media by model.mediaSettings.collectAsState()
     val control by model.controlSettings.collectAsState()
     val chat by model.chat.state.collectAsState()
@@ -162,7 +162,7 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                                 SettingsCategory.CONTROL -> ControlSettingsContent(model, onGamepad)
                                 SettingsCategory.LIGHTS -> LightsSettingsContent(model)
                                 SettingsCategory.SHORTCUTS -> ShortcutsSettingsContent(model, capturing) { capturing = it; shortcutFocus.requestFocus() }
-                                SettingsCategory.ABOUT -> AboutSettingsContent(buildInfo = buildInfo)
+                                SettingsCategory.ABOUT -> AboutSettingsContent(buildInfo = buildInfo, onGuide = onGuide)
                             }
                         }
                     }

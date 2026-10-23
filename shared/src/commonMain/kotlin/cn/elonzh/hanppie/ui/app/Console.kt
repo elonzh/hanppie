@@ -36,6 +36,8 @@ import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.robot.device.ConnectionDetail
 import cn.elonzh.hanppie.ui.robot.device.ConnectionGuideMode
 import cn.elonzh.hanppie.ui.robot.device.ConnectionGuidePage
+import cn.elonzh.hanppie.ui.guide.GuideDestination
+import cn.elonzh.hanppie.ui.guide.UsageGuidePage
 import cn.elonzh.hanppie.ui.robot.device.ConnectionStatusChip
 import cn.elonzh.hanppie.ui.robot.diagnostics.DebugPage
 import cn.elonzh.hanppie.ui.robot.diagnostics.RobotFilesDebugTab
@@ -66,6 +68,7 @@ private val workbenchNavigationConfiguration = SavedStateConfiguration {
             subclass(DebugRoute.serializer())
             subclass(ChatRoute.serializer())
             subclass(SettingsRoute.serializer())
+            subclass(UsageGuideRoute.serializer())
             subclass(RobotAlbumRoute.serializer())
             subclass(RobotWifiRoute.serializer())
             subclass(RobotAddressingRoute.serializer())
@@ -249,8 +252,17 @@ internal fun Console(
     fun goBack() {
         if (requestAddressingExit() || requestCalibrationExit() || requestFirmwareExit() || requestArmExit()) return
         if (backStack.lastOrNull() == RobotWifiRoute && model.robotWifi.state.value.busy) return
+        val guide = backStack.lastOrNull() as? UsageGuideRoute
+        if (guide?.topic != null) {
+            backStack[backStack.lastIndex] = if (guide.step > 0) guide.copy(step = guide.step - 1) else UsageGuideRoute()
+            return
+        }
         if (backStack.size > 1) backStack.removeLastOrNull()
         else if (backStack.lastOrNull() != RobotRoute) backStack[0] = RobotRoute
+    }
+    fun openGuide() {
+        focus.clearFocus(); keyboard?.hide()
+        if (backStack.lastOrNull() !is UsageGuideRoute) backStack.add(UsageGuideRoute())
     }
     LaunchedEffect(state.connected, currentRoute) {
         if (state.connected && manual) {
@@ -320,7 +332,7 @@ internal fun Console(
                         val compact = maxWidth < HanppieDesignTokens.CompactBreakpoint
                         val useNavigationRail = !compact || maxWidth > maxHeight
                         val shortWindow = maxHeight < 480.dp
-                        val workspacePage = route == ScriptRoute || route == ChatRoute || route == RobotAlbumRoute || route == RobotWifiRoute || route == RobotAddressingRoute || route == RobotCalibrationRoute || route == RobotFirmwareRoute || route == RobotArmRoute || route == RobotExtensionRoute || route == GamepadRoute
+                        val workspacePage = route == ScriptRoute || route == ChatRoute || route == RobotAlbumRoute || route == RobotWifiRoute || route == RobotAddressingRoute || route == RobotCalibrationRoute || route == RobotFirmwareRoute || route == RobotArmRoute || route == RobotExtensionRoute || route == GamepadRoute || route is UsageGuideRoute
                         val compressedHeight = maxHeight < 240.dp
                         val compressedChat = route == ChatRoute && compressedHeight
                         val compressedSettings = route == SettingsRoute && compressedHeight
@@ -349,7 +361,7 @@ internal fun Console(
                                     .padding(horizontal = if (route == RobotRoute) 0.dp else if (compact) HanppieDesignTokens.PagePaddingCompact
                                     else HanppieDesignTokens.PagePaddingExpanded)
                                     .padding(bottom = if (workspacePage && compressedHeight) 4.dp else if (workspacePage) HanppieDesignTokens.PagePaddingCompact else 0.dp)) {
-                                    if (routeTab != 1 && route != RobotRoute && route != RobotAlbumRoute && route != RobotWifiRoute && route != RobotAddressingRoute && route != RobotCalibrationRoute && route != RobotFirmwareRoute && route != RobotArmRoute && route != RobotExtensionRoute && route != GamepadRoute && !isConnectionGuide && !compressedSettings) {
+                                    if (routeTab != 1 && route != RobotRoute && route != RobotAlbumRoute && route != RobotWifiRoute && route != RobotAddressingRoute && route != RobotCalibrationRoute && route != RobotFirmwareRoute && route != RobotArmRoute && route != RobotExtensionRoute && route != GamepadRoute && route !is UsageGuideRoute && !isConnectionGuide && !compressedSettings) {
                                         Row(Modifier.fillMaxWidth().height(if (compressedChat) 48.dp else 72.dp), verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.SpaceBetween) {
                                             Text(if (routeTab == 0) tr(Res.string.my_robot) else labels[routeTab],
@@ -388,7 +400,23 @@ internal fun Console(
                                                 if (document.value.dirty) pendingChatScript = scriptId else openChatScript(scriptId)
                                             }, onSettings = { navigate(4) })
                                         SettingsRoute -> SettingsPage(model, Modifier.weight(1f), onSpeechSettings, onAlbum = ::openAlbum, onWifi = ::openWifi,
-                                            showRobotMaintenance = showRobotMaintenance, onAddressing = ::openAddressing, onCalibration = ::openCalibration, onFirmware = ::openFirmware, onArm = ::openArm, onExtensions = ::openExtensions, onGamepad = ::openGamepad)
+                                            showRobotMaintenance = showRobotMaintenance, onAddressing = ::openAddressing, onCalibration = ::openCalibration, onFirmware = ::openFirmware, onArm = ::openArm, onExtensions = ::openExtensions, onGamepad = ::openGamepad, onGuide = ::openGuide)
+                                        is UsageGuideRoute -> UsageGuidePage(route.topic, route.step, Modifier.weight(1f),
+                                            gamepadAvailable = model.gamepad.available, onBack = ::goBack,
+                                            onSelect = { topic -> backStack[backStack.lastIndex] = UsageGuideRoute(topic) },
+                                            onStep = { step -> backStack[backStack.lastIndex] = route.copy(step = step) },
+                                            onOpen = { target -> when (target) {
+                                                GuideDestination.CONNECTION -> backStack.add(ConnectionGuideRoute)
+                                                GuideDestination.ROBOT -> navigate(0)
+                                                GuideDestination.ALBUM -> openAlbum()
+                                                GuideDestination.SCRIPTS -> navigate(1)
+                                                GuideDestination.HEALTH -> openHealth()
+                                                GuideDestination.ADDRESSING -> openAddressing()
+                                                GuideDestination.CALIBRATION -> openCalibration()
+                                                GuideDestination.FIRMWARE -> openFirmware()
+                                                GuideDestination.ARM -> openArm()
+                                                GuideDestination.GAMEPAD -> if (model.gamepad.available) openGamepad()
+                                            } })
                                         GamepadRoute -> cn.elonzh.hanppie.ui.robot.gamepad.GamepadInformationPage(model.gamepad, Modifier.weight(1f), ::goBack)
                                         RobotExtensionRoute -> cn.elonzh.hanppie.ui.robot.extensions.RobotExtensionPage(model, Modifier.weight(1f), ::goBack, ::openAddressing)
                                         RobotArmRoute -> cn.elonzh.hanppie.ui.robot.arm.RobotArmPage(model, Modifier.weight(1f),
@@ -418,7 +446,7 @@ internal fun Console(
                                         RobotRoute -> cn.elonzh.hanppie.ui.robot.scene.RobotExperience(
                                             model, state, compact, Modifier.weight(1f),
                                             { connectionDetails = true }, ::navigate, onCockpitChanged,
-                                            onPushToTalkStart, onPushToTalkStop, onAlbum = ::openAlbum, onHealth = ::openHealth)
+                                            onPushToTalkStart, onPushToTalkStop, onAlbum = ::openAlbum, onHealth = ::openHealth, onGuide = ::openGuide)
                                         ScriptRoute -> ScriptPage(model, document, compact, onImport, onExport,
                                             fileError, onFileError, onConnectionDetails = { connectionDetails = true },
                                             onImportAudio = onImportAudio,

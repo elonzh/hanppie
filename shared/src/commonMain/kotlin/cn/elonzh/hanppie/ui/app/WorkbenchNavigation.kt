@@ -24,6 +24,11 @@ internal data object ChatRoute : WorkbenchRoute { override val topLevelIndex = 3
 internal data object SettingsRoute : WorkbenchRoute { override val topLevelIndex = 4 }
 
 @Serializable
+internal data class UsageGuideRoute(val topic: cn.elonzh.hanppie.ui.guide.GuideTopic? = null, val step: Int = 0) : WorkbenchRoute {
+    override val topLevelIndex = 4
+}
+
+@Serializable
 internal data object RobotAlbumRoute : WorkbenchRoute { override val topLevelIndex = 0 }
 
 @Serializable

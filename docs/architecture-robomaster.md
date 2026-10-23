@@ -568,6 +568,12 @@ SDK `EscSubject` 的 `<hhhhhhhhIIIIBBBB`：四项有符号 RPM、四项编码器
 
 固定 macOS 1.1.5/build 239 的 `COMMON/DJILanguageType.cs` 定义 `zh/en/ja/zhHant/de/es/ko/fr/ru`。`COMMON/Languages.cs` 根据选中类型载入本地 CSV，查找文本并处理换行；`Module.Setting.System/SystemSetting.start` 从 `System.Language` 读取选择。它们是本地界面配置，不是账号或机器人语言指令；`Languages.AppLanguageType2RobotLanguageType` 的语音映射也不能作为界面语言支持表。Hanppie 的实现和剩余语言统一见[当前语言架构](./architecture.md#132-客户端架构与分层设计)与[实施台账 D02](./official-app-capability-implementation.md#d02-繁体中文阶段与剩余范围)。**固定版托管消费者；没有导入官方翻译表**
 
+#### 官方本地场景引导与重置
+
+同一固定版本的 `Module.Tutorial.System/SystemTutorial` 监听首次单机操控、红外/水弹发射、跟随、自定义技能、机械臂、手柄、对战和菜单事件；由 `StatisticManager` 计数决定是否调用 `OnShowModuleTutorial`。`ViewTutorial` 根据 `StatisticType` 加载本地预制体，操控项追加 PC 后缀，堆栈关闭后退出教程视图。它是本地首次场景弹层，不应与云端课程或 Scratch 新手教学混写。**固定版托管消费者**
+
+`ViewSettingSystem.OnResetTutorial` 发送 `Event_ResetTutorial` 并设置 `ResetNoviceGuide/ResetNoviceProgram`；前者使 `SystemTutorial.ResetTool` 清除本地场景计数并重新监听，后两者由 Lab Web 桥接另外读取、清零。Hanppie 不导入 Scratch 标志、官方预制体或自动弹层；主动查看指南的当前职责见[应用架构](./architecture.md#132-客户端架构与分层设计)，自动改变操控焦点的差异和决策依据见[台账 C21](./official-app-capability-implementation.md#冲突记录保持现状留待决策)。本地内容参考官方手册的连接/操控/跟随、升级和校准任务，并按当前实现组织，不把原 App 页面路径照搬为 Hanppie 用法。
+
 #### 输入灵敏度与机器人运动参数
 
 固定 macOS 1.1.5/build 239 的 `ViewSettingControl` 将终端输入响应与机器人运动参数分开处理。灵敏度标准预设向四轴写 50；自定义保存的初值为前后/横移 35、云台水平 50、俯仰 40，切回标准不删除自定义值。`LeftJoystick` 的触摸分支把指针增量乘灵敏度 ×0.01 后累加位置，`RightJoystick.Delta` 按输入类型应用云台灵敏度；它们不是直接以灵敏度百分比配置机器人速度。输入类型枚举为 Touch/Joystick/KeyboardMouse/GamePad，是否公开还取决于平台条件。官方手柄另有原生进程内的输入参数，不能由当前屏幕/键盘偏好抵扣 I02，也不能把参数写入桥接解释为独立无线设置指令。**代码**
