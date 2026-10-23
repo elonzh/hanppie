@@ -5,6 +5,7 @@ import cn.elonzh.hanppie.robot.network.RobotWifiService
 import cn.elonzh.hanppie.robot.network.RobotApCredentials
 import cn.elonzh.hanppie.robot.network.WifiConfirmedField
 import cn.elonzh.hanppie.robot.extensions.arm.*
+import cn.elonzh.hanppie.robot.challenge.*
 
 import cn.elonzh.hanppie.robot.lab.LabChannel
 import cn.elonzh.hanppie.robot.media.SpeakerAudio
@@ -227,7 +228,7 @@ class AppSession(private val target: RobotTarget,
         }
         override suspend fun switchCamera(index: Int) {
             txLock.withLock {
-                check(connected && !labRunning && !cameraViewChanging && !tracking.value.blocksManualControl && !vision.value.ownsPipeline && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl) { "请先退出跟随、脚本、编址、校准或固件任务" }
+                check(connected && !labRunning && !cameraViewChanging && !tracking.value.blocksManualControl && !vision.value.ownsPipeline && !challenge.value.ownsRound && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl) { "请先退出跟随、挑战、脚本、编址、校准或固件任务" }
                 cameraViewChanging = true
             }
             try { cameraCommands.switchCamera(index) }
@@ -241,7 +242,7 @@ class AppSession(private val target: RobotTarget,
         override suspend fun setZoom(hundredths: Int) {
             require(hundredths in 100..400)
             txLock.withLock {
-                check(remote && connected && !labRunning && !cameraViewChanging && !tracking.value.blocksManualControl && !vision.value.ownsPipeline) { "请先退出跟随并启用遥控" }
+                check(remote && connected && !labRunning && !cameraViewChanging && !tracking.value.blocksManualControl && !vision.value.ownsPipeline && !challenge.value.ownsRound) { "请先退出跟随或挑战并启用遥控" }
                 cameraViewChanging = true
                 if (hundredths > 100) cameraZoomMayBeActive = true
             }
@@ -263,7 +264,7 @@ class AppSession(private val target: RobotTarget,
         private set
     private val modeMutex = Mutex()
     private fun checkArmControl() {
-        check(remote && connected && !labRunning && !powerTransition && !tracking.value.blocksManualControl && !vision.value.ownsPipeline &&
+        check(remote && connected && !labRunning && !powerTransition && !tracking.value.blocksManualControl && !vision.value.ownsPipeline && !challenge.value.ownsRound &&
             !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl &&
             robotNanoTime() - lastReceivedNanos < 500_000_000) { "请结束其他任务并检查连接后启用遥控" }
     }
@@ -281,7 +282,7 @@ class AppSession(private val target: RobotTarget,
     private suspend fun <T> withIdleControl(allowFirmware: Boolean = false, action: suspend () -> T): T {
         check(modeMutex.tryLock()) { "请等待控制模式切换结束" }
         try {
-            txLock.withLock { check(connected && !powerTransition && !remote && !labRunning && !tracking.value.blocksManualControl && !vision.value.ownsPipeline && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && (allowFirmware || !firmware.state.value.blocksControl)) { "请先退出遥控、脚本、编址、校准或固件任务" } }
+            txLock.withLock { check(connected && !powerTransition && !remote && !labRunning && !tracking.value.blocksManualControl && !vision.value.ownsPipeline && !challenge.value.ownsRound && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && (allowFirmware || !firmware.state.value.blocksControl)) { "请先退出遥控、挑战、脚本、编址、校准或固件任务" } }
             return action()
         } finally { modeMutex.unlock() }
     }
@@ -336,20 +337,58 @@ class AppSession(private val target: RobotTarget,
         },
     )
     val vision get() = visionControl.state
+    private val challengeSetup = ChallengeSetup(
+        remoteEffects.first { it.set == Protocol.CMDSET_RM && it.id == Protocol.CMD_RM_GAME_STATE_SYNC }.payload.hexBytes(),
+        { id, payload -> send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, id, payload) },
+        { robotNanoTime() / 1_000_000 })
+    private var challengeVisionStarted = false
+    private val challengeRound = ChallengeRound({ robotNanoTime() / 1_000_000 }, {
+        challengeSetup.stop()
+        visionControl.stop()
+        clearChallengeMotion()
+        if (active.load() && !firmware.state.value.loaderMayBeActive) {
+            send(Protocol.HOST_CHASSIS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_WHEEL_SPEED_SET, ByteArray(8))
+            send(Protocol.HOST_GIMBAL, Protocol.ATTR_NO_ACK, Protocol.CMDSET_GIMBAL, Protocol.CMD_GIMBAL_EXT_CTRL_ACCEL, gimbalPayload)
+        }
+    })
+    val challenge get() = challengeRound.state
+    fun startChallenge(configuration: ChallengeConfiguration) = txLock.withLock {
+        check(!modeMutex.isLocked) { "请等待控制模式切换结束" }
+        requireVisionAvailable()
+        if (challenge.value.phase == ChallengePhase.RESULT && challenge.value.stopConfirmed) challengeRound.dismissResult()
+        check(!challenge.value.ownsRound) { "请先结束当前挑战" }
+        clearMotionInput()
+        inputDeadline = robotNanoTime() + 250_000_000
+        challengeVisionStarted = false
+        challengeRound.prepare(configuration)
+        challengeSetup.prepare(configuration)
+    }
+    fun stopChallenge() = txLock.withLock { challengeRound.cancel() }
+    fun dismissChallenge() = txLock.withLock { challengeRound.dismissResult() }
+    private fun clearChallengeMotion() {
+        triggerDeadline = 0
+        controlPayload = RemoteControl.velocity(0.0, 0.0, 0.0)
+        gimbalPayload = RemoteControl.gimbalVelocity(0.0, 0.0)
+        cameraInput = 0.0 to 0.0; gimbalInput = 0.0 to 0.0; chassisYawInput = 0.0
+    }
     fun startVision(mode: cn.elonzh.hanppie.robot.vision.VisionMode, color: cn.elonzh.hanppie.robot.vision.VisionColor? = null) = txLock.withLock {
+        requireVisionAvailable()
+        check(!challenge.value.ownsRound) { "请先结束当前挑战" }
+        clearMotionInput()
+        inputDeadline = robotNanoTime() + 250_000_000
+        visionControl.start(mode, color)
+    }
+    private fun requireVisionAvailable() {
         check(remote && active.load() && !labRunning && !powerTransition && !tracking.value.blocksManualControl &&
             !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl &&
             robotNanoTime() - lastReceivedNanos < 500_000_000) { "请结束其他任务并检查连接后启用遥控" }
         check(!cameraViewChanging && !cameraZoomMayBeActive) { "请先将相机恢复到 1 倍变焦" }
         check(!vision.value.ownsPipeline) { "请先结束当前视觉模式" }
-        clearMotionInput()
-        inputDeadline = robotNanoTime() + 250_000_000
-        visionControl.start(mode, color)
     }
-    fun stopVision() = txLock.withLock { visionControl.stop() }
+    fun stopVision() = txLock.withLock { challengeRound.cancel(); visionControl.stop() }
     fun startTracking() = txLock.withLock {
         check(remote && active.load() && !labRunning && robotNanoTime() - lastReceivedNanos < 500_000_000)
-        check(!vision.value.ownsPipeline) { "请先结束当前视觉模式" }
+        check(!vision.value.ownsPipeline && !challenge.value.ownsRound) { "请先结束当前视觉模式或挑战" }
         check(!cameraViewChanging && !cameraZoomMayBeActive) { "请先将相机恢复到 1 倍变焦" }
         armCommands.stopControl()
         inputDeadline = robotNanoTime() + 250_000_000
@@ -392,6 +431,11 @@ class AppSession(private val target: RobotTarget,
             inputDeadline = robotNanoTime() + 250_000_000
             return@withLock
         }
+        if (challenge.value.blocksControl) {
+            clearChallengeMotion()
+            inputDeadline = robotNanoTime() + 250_000_000
+            return@withLock
+        }
         if (vision.value.blocksManualControl || vision.value.ownsGimbal && (pitch != 0.0 || yaw != 0.0)) {
             if (pitch != 0.0 || yaw != 0.0) visionControl.stop()
             inputDeadline = robotNanoTime() + 250_000_000
@@ -421,6 +465,7 @@ class AppSession(private val target: RobotTarget,
         }
     }
     private fun clearMotionInput() {
+        challengeRound.cancel()
         visionControl.stop()
         armCommands.stopControl()
         if (firmware.state.value.loaderMayBeActive) armCommands.retireIdentification() else armCommands.stopIdentification()
@@ -437,7 +482,7 @@ class AppSession(private val target: RobotTarget,
         var blasterLedEnabled = false
         try {
             val fireSequence = txLock.withLock {
-                check(remote && active.load() && !labRunning && !tracking.value.blocksManualControl && !vision.value.blocksManualControl) { "遥控未启用" }
+                check(remote && active.load() && !labRunning && !tracking.value.blocksManualControl && !vision.value.blocksManualControl && !challenge.value.blocksControl && (!challenge.value.ownsRound || challenge.value.configuration?.firing == ChallengeFiring.GEL)) { "遥控未启用" }
                 send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_LED_COLOR_SET, RemoteControl.muzzleFireLed(true))
                 fireLedEnabled = true
                 send(Protocol.HOST_GUN, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_GUN_LED_SET, RemoteControl.blasterLed(true))
@@ -480,6 +525,7 @@ class AppSession(private val target: RobotTarget,
     }
     suspend fun exitRemote() = withContext(Dispatchers.IO) {
         modeMutex.withLock {
+        txLock.withLock { challengeRound.leave() }
         if (!remote) return@withLock
         halt()
         if (remote && connected) for (c in remoteExit) {
@@ -491,7 +537,7 @@ class AppSession(private val target: RobotTarget,
         }
     }
     fun fireInfrared() = txLock.withLock {
-        check(remote && active.load() && !tracking.value.blocksManualControl && !vision.value.blocksManualControl) { "遥控未启用" }
+        check(remote && active.load() && !tracking.value.blocksManualControl && !vision.value.blocksManualControl && !challenge.value.blocksControl && (!challenge.value.ownsRound || challenge.value.configuration?.firing == ChallengeFiring.INFRARED)) { "遥控未启用" }
         triggerDeadline = robotNanoTime() + 120_000_000
     }
     fun setLed(red: Int, green: Int, blue: Int, enabled: Boolean = true) = txLock.withLock {
@@ -770,19 +816,26 @@ class AppSession(private val target: RobotTarget,
         calibrationCommands.tick()
         firmwareCommands.tick()
         extensionCommands.tick()
-        armCommands.tick(remote && !labRunning && !powerTransition && !tracking.value.blocksManualControl && !vision.value.ownsPipeline &&
+        armCommands.tick(remote && !labRunning && !powerTransition && !tracking.value.blocksManualControl && !vision.value.ownsPipeline && !challenge.value.ownsRound &&
             !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl,
             robotNanoTime() - lastReceivedNanos < 500_000_000)
         val seq = sequence
         sequence = (sequence + 1) and 65535
         val fresh = remote && robotNanoTime() < inputDeadline
         objectTracking.tick(fresh && robotNanoTime() - lastReceivedNanos < 500_000_000)
+        challengeSetup.tick()
+        if (fresh && robotNanoTime() - lastReceivedNanos < 500_000_000 && challenge.value.phase == ChallengePhase.PREPARING && challengeSetup.environment.ready && !challengeVisionStarted) {
+            challengeVisionStarted = true
+            visionControl.start(cn.elonzh.hanppie.robot.vision.VisionMode.MARKERS)
+        }
         visionControl.tick(fresh && robotNanoTime() - lastReceivedNanos < 500_000_000)
-        val payload = if (remote && robotNanoTime() < triggerDeadline) "0000042000010840000230".hexBytes()
+        challengeRound.tick(fresh && robotNanoTime() - lastReceivedNanos < 500_000_000, vision.value, challengeSetup.environment)
+        if (challenge.value.blocksControl) clearChallengeMotion()
+        val payload = if (remote && !challenge.value.blocksControl && robotNanoTime() < triggerDeadline) "0000042000010840000230".hexBytes()
             else Protocol.neutral
         sendPacket(envelope.control(Protocol.duss(Protocol.HOST_MOBILE, Protocol.HOST_HDVT_UAV, Protocol.ATTR_NO_ACK, Protocol.CMDSET_SPECIAL, Protocol.CMD_SPECIAL_RM_CONTROL, payload, seq)))
         if ((remote && !tracking.value.blocksManualControl) || forceActuatorStop) {
-            val manualFresh = fresh && !vision.value.blocksManualControl
+            val manualFresh = fresh && !vision.value.blocksManualControl && !challenge.value.blocksControl
             var velocity = if (manualFresh) controlPayload else RemoteControl.velocity(0.0,0.0,0.0)
             var gimbal = if (manualFresh) gimbalPayload else RemoteControl.gimbalVelocity(0.0,0.0)
             if (manualFresh && cameraRelative) {
@@ -813,7 +866,7 @@ class AppSession(private val target: RobotTarget,
 
     override fun labMode(running: Boolean) {
         txLock.withLock {
-            check(!powerTransition && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl && !vision.value.ownsPipeline && !arm.state.value.busy && !extensions.state.value.busy) { "请先结束电源、编址、校准、固件或扩展任务" }
+            check(!powerTransition && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl && !vision.value.ownsPipeline && !challenge.value.ownsRound && !arm.state.value.busy && !extensions.state.value.busy) { "请先结束挑战、电源、编址、校准、固件或扩展任务" }
             mode = Protocol.MODE_LAB; labRunning = running
             if (!running) mobileInfo.reset()
             armCommands.stopControl()
@@ -843,6 +896,8 @@ class AppSession(private val target: RobotTarget,
                             txLock.withLock {
                                 objectTracking.receive(frame)
                                 visionControl.receive(frame)
+                                challengeSetup.receive(frame)
+                                if (challengeFireReport(frame) != null) challenge.value.sight?.let { challengeRound.fireStatus(vision.value, it) }
                                 labUiCommands.receive(frame)
                                 mobileInfo.receive(frame, mobileInfoAllowed())
                                 val revision = cameraCommands.state.value.revision
@@ -913,6 +968,8 @@ class AppSession(private val target: RobotTarget,
     override fun close() {
         txLock.withLock { labUiCommands.state.value.runId?.let { labUiCommands.setVisible(it, false) } }
         if (active.load()) runCatching { safetyStop() }
+        challengeRound.close()
+        challengeSetup.close()
         firmwareCommands.close()
         armCommands.close(sendCleanup = !firmware.state.value.loaderMayBeActive)
         extensionCommands.close(sendCleanup = !firmware.state.value.loaderMayBeActive)

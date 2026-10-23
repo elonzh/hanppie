@@ -1117,13 +1117,17 @@ S1 的红外能力至少包含三层，不能把其中任意一层统称为“�
 | 红外判定 | `IrShootMarker.cs:67–167` 使用真实绘制准星与活动标签框的严格内部相交，取第一个可用框；刚命中的 ID 暂时排除，约 500 ms 后恢复。设备发射事件才触发判定，通知参数未作为命中数量；命中提示、声音与碎片是 App 反馈，不能称为装甲确认 |
 | 水弹判定 | `WgShootMarker.cs:31–113` 启用时读取机内准星，发射事件选取离准星最近的标签，不要求框内；100 ms 后开始最多 2.5 秒的观察，持续消失超过 300 ms 则产生主机命中事件，重新出现会重置消失计时。未调用的 `CheckSteadyDown` 不作为实际判定步骤 |
 | 发射通知消费者 | `SystemSinglePlayer.cs:131/174/378–380` 监听/取消 `DJIRobomasterWaterGunShootFrequency`，转为 `Event_RobotFire`；不能复用 Hanppie 的“命令已发送”反馈来计分 |
-| 原生发射报告 | `GunListening` 的 `0x7d06b6` 注册观察键 `0x403f0050`；`OnFireStatusPush`（`0x7d0890`）检查正文至少 6 字节，将偏移 0 的四字节位型写入 ShootSpeed、偏移 4 的 u8 写入 ShootFrequency。观察键前缀不是 wire 属性；偏移 5 的语义、真实来源/属性/周期、重复通知及缓存更新策略仍待补证，不能将频率原值乘入分数 |
+| 原生发射报告 | `GunListening` 的 `0x7d06b6` 注册观察键 `0x403f0050`；`OnFireStatusPush`（`0x7d0890`）检查正文至少 6 字节，将偏移 0 的四字节位型写入 ShootSpeed、偏移 4 的 u8 写入 ShootFrequency。`CreateCharacteristics` 的 `0x7cc53b..0x7cc5d3` 为 ShootFrequency 的 key 1 设置 AccessType `0x10`；`GetAccessType`（`0x64b7c0`）读取 key 1，`UpdateParamValue` 的 `0x7d6aaf` 使此类通知绕过值相等过滤。因此不能只按相同频率值去重，也不能将原值乘入分数。观察键前缀不是 wire 属性；偏移 5 的语义、真实来源/属性/周期及物理对应关系仍待验 |
 | 规则配置与恢复 | `ViewChallenger.cs:74–114` 保存并关闭 Armor/BloodCalc，退出恢复，切换 OffControlFunction；`JudgeShoot.cs:350–376` 与 `JudgeRace.cs:191–244` 临时切换 Gun 和 OverheatIncrease，销毁时恢复 Gun 并将热量增长设回 0。必须追原生封包及现有初始化关系，不能照搬 C# 参数名猜报文 |
 | 结束与成绩 | 两个 Judge 的 `StateEnd` 锁控制并停止自定义技能；结果输入姓名，分别按分数降序/用时升序显示前五。记录存在当前组件的 `List<Record>`，未在这两类建立跨组件销毁或应用重启持久化；不能把内存榜单写成官方云榜或持久成绩契约 |
 
 靶场的单次命中和竞速的标签完成均是主机规则；水弹标签消失还可能受遮挡和检测丢失影响。此前红外光学/装甲探测与本节发射通知、主机判定是不同证据层级。自动竞速的用户程序/技能依赖继续纳入 G01，并保留安装槽冲突 C15；不因手动规则可以独立实现而删除该范围。
 
-原生材料为忽略目录 `.hanppie/validation/2026-10-22-official-gap/G01-native-*`；通用缓存更新函数已定位，但 ShootFrequency 对应 characteristic 的通知条件尚未完整恢复。本节不宣称一包对应一次物理发射，也没有修改固定初始化序列或新增设备验证。Hanppie 的开发进度、未提交边界和待验项只在[实施台账 G01](./official-app-capability-implementation.md#g01-规则与会话开发状态)维护。
+原生 `SetGameConfigList`（`0x6a1730`）直接复制 CommonListValue 的 int32 向量至 `09 / 3f:09`。既有实机派生 FPV 配置表中，Gun/OverheatIncrease/ArmorEnable/BloodCalcEnable 的 ID 分别为 1002/1008/1031/1032，原值为 1/0/0/1；挑战采用官方消费者的 1（红外）或 0（水弹）/200/0/0，保留其他规则与 buff/skill 尾表。返回码只能确认设置请求应答，没有已建立的全表 getter，恢复的是本应用既有 FPV 配置而非其他客户端的未知旧值。
+
+`ActionFunctionEnable`（`0x6aa730`，`0x6aa7df..0x6aa878`）将列表编码为数量 u8 后接每项 id u8/enable u8，发送 `09 / 3f:77`；托管 `DJIRmEnableFunctionType.OffControlFunction=5`。因此既有初始化 `01 05 00` 与官方挑战退出的 id 5/true 存在真实策略差异。Hanppie 不在挑战结束时覆盖这一现状，取舍见[台账 C19](./official-app-capability-implementation.md#冲突记录保持现状留待决策)。换组和三秒阶段转换没有官方 ControlLock 写入；准备与结果才锁控制。
+
+原生材料为忽略目录 `.hanppie/validation/2026-10-22-official-gap/G01-native-*`，含配置、功能列表、ShootFrequency characteristic 与访问器片段。本节不宣称一包对应一次物理发射，也没有修改固定初始化序列或新增设备验证。Hanppie 的开发进度、阶段边界和待验项只在[实施台账 G01](./official-app-capability-implementation.md#g01-手动挑战阶段与设备待验)维护。
 
 #### 自主程序与自定义技能安装
 

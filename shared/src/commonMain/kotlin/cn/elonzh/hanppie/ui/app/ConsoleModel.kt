@@ -21,6 +21,7 @@ import cn.elonzh.hanppie.agent.tools.RobotStatusTool
 import cn.elonzh.hanppie.agent.tools.SaveLabScriptTool
 import cn.elonzh.hanppie.agent.tools.StopLabTool
 import cn.elonzh.hanppie.resources.robot_power_task_active
+import cn.elonzh.hanppie.resources.challenge_not_ready
 import cn.elonzh.hanppie.resources.arm_task_active
 import cn.elonzh.hanppie.resources.arm_target_changed
 import cn.elonzh.hanppie.resources.extensions_task_active
@@ -334,6 +335,21 @@ internal class ConsoleModel(
     private var trackingObserver: Job? = null
     override val vision = MutableStateFlow(cn.elonzh.hanppie.robot.vision.VisionState())
     private var visionObserver: Job? = null
+    override val challenge = MutableStateFlow(cn.elonzh.hanppie.robot.challenge.ChallengeState())
+    private var challengeObserver: Job? = null
+    override fun startChallenge(configuration: cn.elonzh.hanppie.robot.challenge.ChallengeConfiguration): String? {
+        val current = session.load() ?: return tr(cn.elonzh.hanppie.resources.Res.string.robot_is_not_connected)
+        val round = current.challenge.value
+        if (round.ownsRound && !(round.phase == cn.elonzh.hanppie.robot.challenge.ChallengePhase.RESULT && round.stopConfirmed))
+            return tr(Res.string.challenge_not_ready)
+        if (!remoteEnabled.value || !isForeground || !acceptingWork.load() || state.value.busy || chat.state.value.running ||
+            tracking.value.blocksManualControl || !videoFrames.isFresh(state.value.connectedAddress)) return tr(cn.elonzh.hanppie.resources.Res.string.challenge_not_ready)
+        clearRemoteInputs()
+        return runCatching { current.startChallenge(configuration) }.fold(onSuccess = { null },
+            onFailure = { error -> log(error.message.orEmpty()); tr(Res.string.challenge_not_ready) })
+    }
+    override fun stopChallenge() { stopFiring(); runCatching { session.load()?.stopChallenge() } }
+    override fun dismissChallenge() { runCatching { session.load()?.dismissChallenge() } }
     override val labUi = MutableStateFlow(LabUiState())
     private var labUiObserver: Job? = null
     private var labUiVisibleRun: String? = null
@@ -390,8 +406,9 @@ internal class ConsoleModel(
     override val talkBusy = MutableStateFlow(false)
     override fun shiftGear(delta: Int) { driveGear.update { (it + delta).coerceIn(1, DriveSpeed.gearCount) } }
     override fun selectGear(gear: Int) { driveGear.value = gear.coerceIn(1, DriveSpeed.gearCount) }
-    override fun switchAmmo() { gelSelected.value = !gelSelected.value }
-    override fun fireSelected() { if (gelSelected.value) fireGel() else fire() }
+    override fun switchAmmo() { if (!challenge.value.ownsRound) gelSelected.value = !gelSelected.value }
+    private val selectedGel: Boolean get() = challenge.value.firing?.let { it == cn.elonzh.hanppie.robot.challenge.ChallengeFiring.GEL } ?: gelSelected.value
+    override fun fireSelected() { if (selectedGel) fireGel() else fire() }
     private val videoConsumer = AtomicReference<((ByteArray) -> Unit)?>(null)
     private val audioConsumer = AtomicReference<((ByteArray) -> Unit)?>(null)
     override val videoFrames = cn.elonzh.hanppie.ui.robot.remote.VideoFrameCache()
@@ -426,7 +443,7 @@ internal class ConsoleModel(
     private val gimbalCentering = cn.elonzh.hanppie.ui.robot.remote.GimbalCentering()
     override fun recenterGimbal() {
         if (remoteEnabled.value && isForeground && acceptingWork.load() && !chat.state.value.running && !state.value.busy && !tracking.value.blocksManualControl &&
-            !(vision.value.ownsPipeline && vision.value.mode == cn.elonzh.hanppie.robot.vision.VisionMode.ROBOT_AIM)) {
+            !challenge.value.blocksControl && !(vision.value.ownsPipeline && vision.value.mode == cn.elonzh.hanppie.robot.vision.VisionMode.ROBOT_AIM)) {
             gimbalCentering.start(clock.now().toEpochMilliseconds())
         }
     }
@@ -469,7 +486,7 @@ internal class ConsoleModel(
         }
     }
     override fun startFiring() {
-        if (!remoteEnabled.value || !acceptingWork.load() || chat.state.value.running || state.value.busy || tracking.value.blocksManualControl || vision.value.blocksManualControl) return
+        if (!remoteEnabled.value || !acceptingWork.load() || chat.state.value.running || state.value.busy || tracking.value.blocksManualControl || vision.value.blocksManualControl || challenge.value.blocksControl) return
         firingInternal.store(true)
         firing.value = true
         if (firingJob?.isActive == true) return
@@ -477,7 +494,7 @@ internal class ConsoleModel(
             try {
                 while (firingInternal.load() && remoteEnabled.value && acceptingWork.load() && !chat.state.value.running && !state.value.busy) {
                     val s = session.load() ?: break
-                    if (gelSelected.value) {
+                    if (selectedGel) {
                         val seq = gelFireMutex.withLock {
                             if (!firingInternal.load() || !remoteEnabled.value) return@withLock null
                             runCatching { s.fireGelOnce { _fireEvents.tryEmit(AmmoType.GEL) } }.getOrNull()
@@ -506,7 +523,7 @@ internal class ConsoleModel(
     override fun stopFiring() {
         firingInternal.store(false)
         firing.value = false
-        if (!gelSelected.value) {
+        if (!selectedGel) {
             firingJob?.cancel()
         }
     }
@@ -952,6 +969,14 @@ internal class ConsoleModel(
         visionObserver = scope.launch {
             candidate.vision.collect { value -> if (session.load() === candidate) vision.value = value }
         }
+        challengeObserver?.cancel()
+        challenge.value = cn.elonzh.hanppie.robot.challenge.ChallengeState()
+        challengeObserver = scope.launch {
+            candidate.challenge.collect { value -> if (session.load() === candidate) {
+                challenge.value = value
+                if (value.blocksControl) { gimbalCentering.cancel(); stopFiring() }
+            } }
+        }
         clearLabUiBinding()
         labUiObserver = scope.launch {
             candidate.labUi.state.collect { value -> if (session.load() === candidate) {
@@ -996,6 +1021,7 @@ internal class ConsoleModel(
         clearLabUiBinding()
         haltRemote()
         session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState()
+        challenge.value = cn.elonzh.hanppie.robot.challenge.ChallengeState()
         robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.detach(); robotArm.detach(); robotExtensions.detach(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotMotion.clear(); robotDisplay.clear(); robotWifi.detach(preserveNetworkRecovery); robotSdr.detach(preserveNetworkRecovery)
         state.update {
             val uncertain = it.scriptRunPhase.mayBeExecuting

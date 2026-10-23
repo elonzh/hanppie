@@ -14,6 +14,14 @@ import kotlinx.io.Source
 import java.util.concurrent.atomic.AtomicInteger
 
 internal class RobotSessionFixture : RobotSession {
+    val challengeState = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.challenge.ChallengeState())
+    override val challenge = challengeState
+    var challengeStart: (cn.elonzh.hanppie.robot.challenge.ChallengeConfiguration) -> Unit = {}
+    var challengeStop: () -> Unit = {}
+    var challengeDismiss: () -> Unit = {}
+    override fun startChallenge(configuration: cn.elonzh.hanppie.robot.challenge.ChallengeConfiguration) = challengeStart(configuration)
+    override fun stopChallenge() = challengeStop()
+    override fun dismissChallenge() = challengeDismiss()
     val labUiState = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.lab.ui.LabUiState())
     val labUiVisibility = java.util.concurrent.CopyOnWriteArrayList<Pair<String, Boolean>>()
     data class LabUiEvent(val runId: String, val key: cn.elonzh.hanppie.robot.lab.ui.LabWidgetKey, val token: Long,

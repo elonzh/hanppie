@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import cn.elonzh.hanppie.ui.app.AmmoType
 import cn.elonzh.hanppie.ui.app.ConsoleController
+import cn.elonzh.hanppie.robot.challenge.ChallengeFiring
 import cn.elonzh.hanppie.ui.settings.ReticleStyle
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.coroutineScope
@@ -44,7 +45,9 @@ internal fun RemoteCrosshair(
 ) {
     val display by model.displaySettings.collectAsState()
     val firing by model.firing.collectAsState()
-    val gelSelected by model.gelSelected.collectAsState()
+    val preferredGelSelected by model.gelSelected.collectAsState()
+    val challenge by model.challenge.collectAsState()
+    val gelSelected = challenge.firing?.let { it == ChallengeFiring.GEL } ?: preferredGelSelected
 
     val recoil = remember { Animatable(0f) }
     val shockwave = remember { Animatable(1f) }

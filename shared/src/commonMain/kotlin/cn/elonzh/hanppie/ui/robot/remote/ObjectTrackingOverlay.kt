@@ -145,7 +145,7 @@ internal fun ObjectTrackingControls(state: TrackingState, enabled: Boolean, modi
             else -> null
         }
         detail?.let { Text(it, Modifier.testTag("tracking-report-detail"), color = HanppieDesignTokens.RemoteHudContent, fontSize = 12.sp) }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)) {
             if (!state.blocksManualControl) HudTextButton(tr(if (phase == TrackingPhase.ERROR) Res.string.tracking_retry else Res.string.object_tracking), enabled, "tracking-start", action = onStart)
             if (!state.blocksManualControl) additionalActions()
             if (phase == TrackingPhase.TARGET_READY) HudTextButton(tr(Res.string.tracking_start_follow), enabled, "tracking-confirm", action = onConfirm)

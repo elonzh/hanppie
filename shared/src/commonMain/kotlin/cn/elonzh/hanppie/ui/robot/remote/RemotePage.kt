@@ -1,5 +1,7 @@
 package cn.elonzh.hanppie.ui.robot.remote
 
+import cn.elonzh.hanppie.robot.challenge.*
+
 import cn.elonzh.hanppie.resources.camera_zoom_tracking_unavailable
 
 import cn.elonzh.hanppie.ui.robot.telemetry.signalQualityLabel
@@ -153,6 +155,8 @@ internal fun RemotePage(
     val remoteEnabled by model.remoteEnabled.collectAsState()
     val tracking by model.tracking.collectAsState()
     val vision by model.vision.collectAsState()
+    val challenge by model.challenge.collectAsState()
+    var challengeChoosing by remember { mutableStateOf(false) }
     val health by model.robotHealth.state.collectAsState()
     val display by model.displaySettings.collectAsState()
     val displayDevice by model.robotDisplay.state.collectAsState()
@@ -160,12 +164,13 @@ internal fun RemotePage(
     val arm by model.robotArm.state.collectAsState()
     var armMode by remember(arm.connection) { mutableStateOf(false) }
     val hasArmControls = arm.task.armOnline || arm.task.clawOnline
-    val manualActionsEnabled = !tracking.blocksManualControl && !vision.blocksManualControl && !armMode
+    val manualActionsEnabled = !tracking.blocksManualControl && !vision.blocksManualControl && !challenge.blocksControl && !challengeChoosing && !armMode
     val videoFrame = model.videoFrames.image(connected.connectedAddress)
     var videoFresh by remember { mutableStateOf(false) }
     val foreground by model.foregroundState.collectAsState()
     val enabled = remoteEnabled && inputEnabled && foreground
-    val gelSelected by model.gelSelected.collectAsState()
+    val preferredGelSelected by model.gelSelected.collectAsState()
+    val gelSelected = challenge.firing?.let { it == ChallengeFiring.GEL } ?: preferredGelSelected
     val gear by model.driveGear.collectAsState()
     val control by model.controlSettings.collectAsState()
     val relativePointer = LocalRelativePointer.current
@@ -207,6 +212,7 @@ internal fun RemotePage(
     val currentKeys by rememberUpdatedState(keys)
     val currentGear by rememberUpdatedState(gear)
     val currentControl by rememberUpdatedState(control)
+    val currentChallengeBlocked by rememberUpdatedState(challenge.blocksControl || challengeChoosing)
     val gamepadAllowed = enabled && manualActionsEnabled && !vision.ownsGimbal && !connected.busy && inputLifecycleState.isAtLeast(Lifecycle.State.RESUMED)
     val currentGamepadAllowed by rememberUpdatedState(gamepadAllowed)
     LaunchedEffect(model, gamepadInput) {
@@ -227,7 +233,7 @@ internal fun RemotePage(
     DisposableEffect(aimInput) { onDispose { aimInput.close() } }
     DisposableEffect(aimInput, inputLifecycle) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event in listOf(Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP) && (aimInput.state.value.mode != AimInputMode.OFF || gamepadInput.state.value.active)) {
+            if (event in listOf(Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP) && (aimInput.state.value.mode != AimInputMode.OFF || gamepadInput.state.value.active || model.challenge.value.ownsRound)) {
                 aimInput.stop(); gamepadInput.stop()
                 suppressedKeys = suppressedKeys + physicalKeys
                 keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
@@ -287,12 +293,34 @@ internal fun RemotePage(
             model.stopFiring()
         }
     }
+    LaunchedEffect(challenge.blocksControl, challengeChoosing) {
+        if (challenge.blocksControl || challengeChoosing) {
+            aimInput.stop(); gamepadInput.stop()
+            suppressedKeys = suppressedKeys + physicalKeys
+            keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; keyboardHints = false
+            model.stopFiring(); model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
+        }
+    }
+    LaunchedEffect(challenge.ownsRound, enabled) {
+        while (model.challenge.value.ownsRound) {
+            if (!enabled || !model.videoFrames.isFresh(connected.connectedAddress)) { model.stopChallenge(); break }
+            delay(100)
+        }
+    }
+    LaunchedEffect(enabled) { if (!enabled) challengeChoosing = false }
+    LaunchedEffect(enabled, challengeChoosing, challenge.phase) {
+        if (enabled && !challengeChoosing && challenge.phase != ChallengePhase.RESULT) {
+            androidx.compose.runtime.withFrameNanos { }
+            focus.requestFocus()
+        }
+    }
     LaunchedEffect(enabled) {
         if (enabled) focus.requestFocus()
         else { gamepadInput.stop(); if (armMode) suppressedKeys = suppressedKeys + physicalKeys; keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; model.robotArm.stopControl(); model.stopFiring() }
     }
     LaunchedEffect(enabled) {
         while (enabled) {
+            if (currentChallengeBlocked) { model.drive(0.0, 0.0, 0.0, 0.0, 0.0); delay(50); continue }
             if (currentArmMode) { model.drive(0.0, 0.0, 0.0, 0.0, 0.0); delay(50); continue }
             val ownedGamepad = gamepadInput.state.value.active
             val pad = gamepadInput.frame(currentControl.gamepadInput, currentGamepadAllowed)
@@ -380,6 +408,10 @@ internal fun RemotePage(
             return@onPreviewKeyEvent false
         }
         val supported = control.shortcuts.supports(it.key)
+        if ((challenge.blocksControl || challengeChoosing) && supported && it.key != Key.Escape) {
+            if (it.type == KeyEventType.KeyDown) suppressedKeys = suppressedKeys + it.key
+            return@onPreviewKeyEvent true
+        }
         if (supported && enabled && it.type == KeyEventType.KeyDown) {
             if (gamepadInput.state.value.active) { gamepadInput.stop(); model.clearRemoteInputs() }
             keyboardHints = true
@@ -444,7 +476,7 @@ internal fun RemotePage(
             val density = androidx.compose.ui.platform.LocalDensity.current
             val viewport = VideoViewport.forImage(with(density) { maxWidth.toPx() }, with(density) { maxHeight.toPx() },
                 videoFrame?.width ?: 1280, videoFrame?.height ?: 720, display.fillVideo)
-            val offset = viewport.sightOffset(displayDevice.sight?.zoomOut, zoom.hundredths ?: 100)
+            val offset = viewport.sightOffset(if (challenge.ownsRound) challenge.sight else displayDevice.sight?.zoomOut, zoom.hundredths ?: 100)
             RemoteCrosshair(model, Modifier.align(Alignment.Center).offset {
                 androidx.compose.ui.unit.IntOffset(offset.x.toInt(), offset.y.toInt())
             })
@@ -461,7 +493,7 @@ internal fun RemotePage(
                 suppressedKeys = suppressedKeys + physicalKeys
                 model.clearRemoteInputs(); armMode = !armMode; focus.requestFocus()
             }, Modifier.heightIn(min = 48.dp).widthIn(max = 156.dp).testTag("remote-arm-toggle").semantics { selected = armMode },
-                enabled = enabled && !tracking.blocksManualControl && !vision.ownsPipeline && !connected.busy,
+                enabled = enabled && !tracking.blocksManualControl && !vision.ownsPipeline && !challenge.ownsRound && !challengeChoosing && !connected.busy,
                 colors = if (armMode) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors(
                     color = HanppieDesignTokens.RemoteHudSurface, contentColor = HanppieDesignTokens.RemoteHudContent)) {
                 Text(tr(Res.string.arm_control_label), fontSize = 14.sp)
@@ -504,7 +536,7 @@ internal fun RemotePage(
                 color = colors.onSurface, style = MiuixTheme.textStyles.subtitle)
             return@BoxWithConstraints
         }
-        if (manualActionsEnabled && !vision.ownsPipeline) CameraZoomControls(zoom, enabled && videoFresh && !connected.busy,
+        if (manualActionsEnabled && !vision.ownsPipeline && !challenge.ownsRound) CameraZoomControls(zoom, enabled && videoFresh && !connected.busy,
             Modifier.align(Alignment.TopEnd).padding(top = 76.dp, end = HanppieDesignTokens.RemoteEdgePadding),
             model.cameraZoom::setZoom)
         OnboardCaptureControls(model.robotCamera, connected.connected, inputEnabled && foreground,
@@ -515,7 +547,11 @@ internal fun RemotePage(
             model.robotArm.stopControl(); model.stopFiring(); model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
             (onPushToTalkStop ?: model::endPushToTalk)()
         }
-        if (!armMode) VisionModeControls(vision, tracking, enabled && videoFrame != null && videoFresh && !zoom.busy && (zoom.hundredths == null || zoom.hundredths == 100),
+        if (challenge.ownsRound) {
+            if (challenge.phase != ChallengePhase.RESULT) ChallengeHud(challenge,
+                Modifier.align(Alignment.TopCenter).padding(top = 76.dp).then(reserveVisionSpace("challenge")), model::stopChallenge)
+        }
+        else if (!armMode) VisionModeControls(vision, tracking, enabled && videoFrame != null && videoFresh && !zoom.busy && (zoom.hundredths == null || zoom.hundredths == 100),
             Modifier.align(Alignment.TopCenter).padding(top = 76.dp).then(reserveVisionSpace("vision")),
             onStart = { mode, color ->
                 aimInput.stop(); gamepadInput.stop()
@@ -528,7 +564,14 @@ internal fun RemotePage(
                 model.startObjectTracking(); focus.requestFocus()
             }, onConfirmTracking = { model.confirmObjectTracking(); focus.requestFocus() },
             onStopTracking = { model.stopObjectTracking(); focus.requestFocus() },
-            unavailableReason = if ((zoom.hundredths ?: 100) > 100) Res.string.camera_zoom_tracking_unavailable else null)
+            unavailableReason = if ((zoom.hundredths ?: 100) > 100) Res.string.camera_zoom_tracking_unavailable else null,
+            onChallenge = {
+                aimInput.stop(); gamepadInput.stop(); model.clearRemoteInputs()
+                challengeChoosing = true
+            })
+        ChallengeDialogs(challengeChoosing, challenge, enabled && videoFresh && !connected.busy,
+            (maxHeight - 144.dp).coerceAtLeast(128.dp), { challengeChoosing = false }, model::startChallenge, model::stopChallenge,
+            { model.dismissChallenge(); focus.requestFocus() })
         val touchInset = (maxWidth * .06f).coerceIn(32.dp, 80.dp)
         if (armMode) cn.elonzh.hanppie.ui.robot.arm.RobotArmControls(model.robotArm,
             enabled && !connected.busy, videoFresh,
@@ -558,7 +601,7 @@ internal fun RemotePage(
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     key(control.inputSensitivities) {
                         Stick(tr(Res.string.chassis),
-                            foreground && enabled && !gamepadDrive.active, { keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
+                            foreground && enabled && !challenge.blocksControl && !challengeChoosing && !gamepadDrive.active, { keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
                             tr(Res.string.chassis)) { left = it }
                     }
 
@@ -583,7 +626,7 @@ internal fun RemotePage(
 
                 }
                 key(control.inputSensitivities) {
-                    Stick("${tr(Res.string.gimbal)} · ${control.gimbalSpeed}°/s", foreground && enabled && !(gamepadDrive.active && gamepadDrive.gimbalActive),
+                    Stick("${tr(Res.string.gimbal)} · ${control.gimbalSpeed}°/s", foreground && enabled && !challenge.blocksControl && !challengeChoosing && !(gamepadDrive.active && gamepadDrive.gimbalActive),
                         { aimInput.stop(); keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
                         tr(Res.string.gimbal)) { right = it }
                 }
@@ -592,7 +635,7 @@ internal fun RemotePage(
                 HudIconButton(tr(Res.string.switch_ammo),
                     WorkbenchGlyph.PACKETS,
                     artwork = if (gelSelected) Res.drawable.official_ammo_gel else Res.drawable.official_ammo_infrared,
-                    enabled = enabled, stateLabel = if (gelSelected) tr(Res.string.gel) else tr(Res.string.ir)) {
+                    enabled = enabled && !challenge.ownsRound && !challengeChoosing, stateLabel = if (gelSelected) tr(Res.string.gel) else tr(Res.string.ir)) {
                     model.switchAmmo(); focus.requestFocus()
                 }
             }
@@ -600,7 +643,7 @@ internal fun RemotePage(
         if (talking || talkBusy) Text(if (talking) tr(if (microphoneReady) Res.string.talking else Res.string.microphone_preparing) else tr(Res.string.sending_talk),
             Modifier.align(Alignment.BottomCenter).padding(bottom = 54.dp), color = HanppieDesignTokens.RemoteHudContent,
             fontSize = 12.sp)
-        if (keyboardHints && !armMode) {
+        if (keyboardHints && !armMode && !challenge.ownsRound) {
             Text(keyboardHint(control.shortcuts), Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp)
                 .widthIn(max = 380.dp).background(HanppieDesignTokens.RemoteHudSurface.copy(alpha = .72f),
                     androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp)

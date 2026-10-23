@@ -76,8 +76,7 @@ internal class DisplayCommands(
 
     private suspend fun sight(): SightCalibration {
         val payload = command(9, 0x57)
-        invalidUnless(payload.size == 9 && (1..7 step 2).all { payload.u16(it) in 0..10000 })
-        return SightCalibration(SightPoint(payload.u16(1), payload.u16(3)), SightPoint(payload.u16(5), payload.u16(7)))
+        return sightCalibration(payload) ?: throw RobotRequestException(RequestProblem.INVALID_RESPONSE)
     }
 
     private suspend fun headlights(): HeadlightBrightness {
@@ -106,6 +105,11 @@ internal class DisplayCommands(
     }
 
     fun close() { closed = true }
+}
+
+internal fun sightCalibration(payload: ByteArray): SightCalibration? {
+    if (payload.size != 9 || payload.u8(0) != 0 || (1..7 step 2).any { payload.u16(it) !in 0..10000 }) return null
+    return SightCalibration(SightPoint(payload.u16(1), payload.u16(3)), SightPoint(payload.u16(5), payload.u16(7)))
 }
 
 private fun invalidUnless(condition: Boolean) {

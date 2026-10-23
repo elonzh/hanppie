@@ -31,7 +31,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 internal fun VisionModeControls(vision: VisionState, tracking: TrackingState, enabled: Boolean, modifier: Modifier,
     onStart: (VisionMode, VisionColor?) -> Unit, onStop: () -> Unit, onStartTracking: () -> Unit,
     onConfirmTracking: () -> Unit, onStopTracking: () -> Unit,
-    unavailableReason: org.jetbrains.compose.resources.StringResource? = null) {
+    unavailableReason: org.jetbrains.compose.resources.StringResource? = null, onChallenge: (() -> Unit)? = null) {
     var choosing by remember { mutableStateOf(false) }
     var colorMode by remember { mutableStateOf<VisionMode?>(null) }
     LaunchedEffect(enabled, tracking.active, vision.phase) { if (!enabled || tracking.active || vision.phase != VisionPhase.OFF) choosing = false }
@@ -39,6 +39,7 @@ internal fun VisionModeControls(vision: VisionState, tracking: TrackingState, en
         Column(modifier.widthIn(max = 360.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             ObjectTrackingControls(tracking, enabled, Modifier, onStartTracking, onConfirmTracking, onStopTracking, unavailableReason) {
                 HudTextButton(tr(Res.string.vision_tools), enabled, "vision-tools") { choosing = !choosing; colorMode = null }
+                if (onChallenge != null) HudTextButton(tr(Res.string.challenge_entry), enabled, "challenge-open", action = onChallenge)
             }
             if (choosing) Column(Modifier.background(HanppieDesignTokens.RemoteHudSurface.copy(alpha = HanppieDesignTokens.RemoteHudAlpha),
                 RoundedCornerShape(12.dp)).padding(horizontal = 8.dp, vertical = 4.dp).testTag("vision-picker"),
