@@ -1,5 +1,7 @@
 package cn.elonzh.hanppie.robot.tracking
 
+import cn.elonzh.hanppie.robot.vision.*
+
 import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.protocol.Protocol
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,19 +13,19 @@ enum class TrackingProblem { REJECTED, TIMED_OUT, TARGET_LOST, DEVICE_ERROR, UNS
 
 data class TrackingState(
     val phase: TrackingPhase = TrackingPhase.OFF,
-    val rectangles: List<TrackingRect> = emptyList(),
-    val candidates: List<TrackingRect> = emptyList(),
+    val rectangles: List<VisionRect> = emptyList(),
+    val candidates: List<VisionRect> = emptyList(),
     val problem: TrackingProblem? = null,
-    val report: TrackingPush? = null,
+    val report: VisionReport? = null,
     val responseCode: Int? = null,
     val rejectedCommand: Int? = null,
 ) {
     /** Official VisionFollow filters against the first tracked rectangle, retaining other candidates. */
-    val targets: List<TrackingRect> get() {
+    val targets: List<VisionRect> get() {
         val tracked = rectangles.firstOrNull()
         return rectangles + candidates.filter { candidate -> tracked == null || tracked.intersection(candidate) < tracked.width * tracked.height * .5f }
     }
-    fun selectableAt(x: Float, y: Float): TrackingRect? = if (phase in listOf(TrackingPhase.SEARCHING, TrackingPhase.TARGET_READY))
+    fun selectableAt(x: Float, y: Float): VisionRect? = if (phase in listOf(TrackingPhase.SEARCHING, TrackingPhase.TARGET_READY))
         targets.asReversed().firstOrNull { it.kind == TrackingTargetKind.CANDIDATE && it.contains(x, y) } else null
     val active: Boolean get() = phase != TrackingPhase.OFF && phase != TrackingPhase.ERROR
     val blocksManualControl: Boolean get() = active || problem == TrackingProblem.STOP_UNCONFIRMED
@@ -41,9 +43,9 @@ class ObjectTracking(
     val state: StateFlow<TrackingState> = mutableState.asStateFlow()
     private var pending: Pending? = null
     private var deadline = 0L
-    private var lastTrackingPush = 0L
+    private var lastVisionReport = 0L
     private var lastCandidatePush = 0L
-    private var lastStatus: TrackingPush? = null
+    private var lastStatus: VisionReport? = null
     private var confirmed = false
     private var stopAttempts = 0
     private var stopProblem: TrackingProblem? = null
@@ -51,7 +53,7 @@ class ObjectTracking(
     fun start() {
         check(!state.value.blocksManualControl)
         mutableState.value = TrackingState(TrackingPhase.STARTING)
-        lastStatus = null; lastTrackingPush = 0; lastCandidatePush = 0; confirmed = false; stopProblem = null
+        lastStatus = null; lastVisionReport = 0; lastCandidatePush = 0; confirmed = false; stopProblem = null
         stopMotion()
         command(Command.RESET, TrackingProtocol.ENABLE, TrackingProtocol.enable(false))
     }
@@ -66,7 +68,7 @@ class ObjectTracking(
     }
 
     fun confirm() {
-        check(state.value.phase == TrackingPhase.TARGET_READY && nowMillis() - lastTrackingPush < 750 &&
+        check(state.value.phase == TrackingPhase.TARGET_READY && nowMillis() - lastVisionReport < 750 &&
             state.value.rectangles.any { it.kind == TrackingTargetKind.READY })
         confirmed = false
         mutableState.value = state.value.copy(phase = TrackingPhase.STARTING_FOLLOW)
@@ -143,7 +145,7 @@ class ObjectTracking(
             return
         }
         mutableState.value = state.value.copy(report = push)
-        lastTrackingPush = nowMillis()
+        lastVisionReport = nowMillis()
         if (state.value.phase == TrackingPhase.SEARCHING) deadline = nowMillis() + 3_000
         lastStatus = push
         if (push.error != 0) { stop(TrackingProblem.DEVICE_ERROR); return }
@@ -155,8 +157,8 @@ class ObjectTracking(
         val push = lastStatus ?: return
         val phase = state.value.phase
         val expectedKind = when (push.deviceStatus) {
-            TrackingDeviceStatus.WAITING_CONFIRM -> TrackingTargetKind.READY
-            TrackingDeviceStatus.RUNNING -> TrackingTargetKind.FOLLOWING
+            VisionDeviceStatus.WAITING_CONFIRM -> TrackingTargetKind.READY
+            VisionDeviceStatus.RUNNING -> TrackingTargetKind.FOLLOWING
             else -> null
         }
         if (expectedKind != null && push.rectangles.isNotEmpty() && push.rectangles.none { it.kind == expectedKind }) {
@@ -193,7 +195,7 @@ class ObjectTracking(
             when {
                 !operatorPresent -> stop()
                 pending?.let { now - it.sentAt >= 1_500 } == true -> stop(TrackingProblem.TIMED_OUT)
-                lastTrackingPush != 0L && now - lastTrackingPush >= 1_500 -> stop(TrackingProblem.TIMED_OUT)
+                lastVisionReport != 0L && now - lastVisionReport >= 1_500 -> stop(TrackingProblem.TIMED_OUT)
                 current.phase != TrackingPhase.FOLLOWING && current.phase != TrackingPhase.TARGET_READY && now >= deadline ->
                     stop(TrackingProblem.TIMED_OUT)
             }

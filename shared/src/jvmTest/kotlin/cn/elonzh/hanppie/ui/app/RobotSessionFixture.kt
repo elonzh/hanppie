@@ -132,6 +132,11 @@ internal class RobotSessionFixture : RobotSession {
     override val connected = true
     override val product = RobotProduct(model = RobotModel.ROBOMASTER_S1)
     override val tracking = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.tracking.TrackingState())
+    override val vision = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.vision.VisionState())
+    val visionStarts = java.util.concurrent.CopyOnWriteArrayList<cn.elonzh.hanppie.robot.vision.VisionMode>()
+    val visionStops = AtomicInteger(0)
+    override fun startVision(mode: cn.elonzh.hanppie.robot.vision.VisionMode) { visionStarts += mode }
+    override fun stopVision() { visionStops.incrementAndGet(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState() }
     override fun startTracking() {}
     override fun selectTrackingTarget(x: Float, y: Float) {}
     override fun confirmTracking() {}
@@ -166,7 +171,7 @@ internal class RobotSessionFixture : RobotSession {
     override fun drive(x: Double, y: Double, z: Double, pitch: Double, yaw: Double, cameraRelative: Boolean) {
         driveCount.incrementAndGet()
     }
-    override fun halt() {}
+    override fun halt() { stopVision() }
     override fun fireInfrared() {
         infraredCount.incrementAndGet()
     }

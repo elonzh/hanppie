@@ -18,7 +18,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
@@ -36,42 +35,15 @@ import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.tracking.TrackingPhase
 import cn.elonzh.hanppie.robot.tracking.TrackingProblem
 import cn.elonzh.hanppie.robot.tracking.TrackingState
-import cn.elonzh.hanppie.robot.tracking.TrackingRect
+import cn.elonzh.hanppie.robot.vision.VisionRect
+import cn.elonzh.hanppie.robot.tracking.kind
 import cn.elonzh.hanppie.robot.tracking.TrackingTargetKind
 import cn.elonzh.hanppie.ui.design.HanppieDesignTokens
 import cn.elonzh.hanppie.ui.i18n.tr
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-/** Same Fit transform as the video renderers. Letterbox taps never select a target. */
-internal data class TrackingViewport(val left: Float, val top: Float, val width: Float, val height: Float) {
-    fun point(x: Float, y: Float): Pair<Float, Float>? =
-        if (width > 0 && height > 0 && x in left..left + width && y in top..top + height)
-            (x - left) / width to (y - top) / height else null
-
-    /** Official Follow_2 shifts upward a quarter of the source height and uses a pixel square. */
-    fun bounds(rect: TrackingRect): Rect {
-        val w = rect.width * width
-        val following = rect.kind == TrackingTargetKind.FOLLOWING
-        val h = if (following) w else rect.height * height
-        val cx = left + rect.x * width
-        val cy = top + (rect.y - if (following) rect.height * .25f else 0f) * height
-        val x1 = (cx - w / 2).coerceIn(left, left + width)
-        val y1 = (cy - h / 2).coerceIn(top, top + height)
-        return Rect(x1, y1, (cx + w / 2).coerceIn(x1, left + width), (cy + h / 2).coerceIn(y1, top + height))
-    }
-
-    companion object {
-        fun fit(width: Float, height: Float, videoWidth: Int, videoHeight: Int): TrackingViewport {
-            require(videoWidth > 0 && videoHeight > 0)
-            val scale = minOf(width / videoWidth, height / videoHeight)
-            val w = videoWidth * scale; val h = videoHeight * scale
-            return TrackingViewport((width - w) / 2, (height - h) / 2, w, h)
-        }
-    }
-}
-
-private fun TrackingRect.actionable(phase: TrackingPhase): Boolean = when (kind) {
+private fun VisionRect.actionable(phase: TrackingPhase): Boolean = when (kind) {
     TrackingTargetKind.CANDIDATE -> phase in listOf(TrackingPhase.SEARCHING, TrackingPhase.TARGET_READY)
     TrackingTargetKind.READY -> phase == TrackingPhase.TARGET_READY
     TrackingTargetKind.FOLLOWING -> phase == TrackingPhase.FOLLOWING
@@ -84,7 +56,7 @@ internal fun ObjectTrackingTargets(state: TrackingState, videoWidth: Int, videoH
     val ink = MiuixTheme.colorScheme.primary
     val muted = HanppieDesignTokens.RemoteHudMuted
     val current by rememberUpdatedState(state)
-    val activate: (TrackingRect) -> Unit = { rect ->
+    val activate: (VisionRect) -> Unit = { rect ->
         if (enabled && rect.actionable(state.phase)) when (rect.kind) {
             TrackingTargetKind.CANDIDATE -> onSelect(rect.x, rect.y)
             TrackingTargetKind.READY -> onConfirm()
@@ -105,15 +77,15 @@ internal fun ObjectTrackingTargets(state: TrackingState, videoWidth: Int, videoH
         .semantics { contentDescription = description; customActions = actions }
         .pointerInput(enabled, videoWidth, videoHeight) {
             if (enabled) detectTapGestures { offset ->
-                val viewport = TrackingViewport.fit(size.width.toFloat(), size.height.toFloat(), videoWidth, videoHeight)
+                val viewport = VideoViewport.fit(size.width.toFloat(), size.height.toFloat(), videoWidth, videoHeight)
                 if (viewport.point(offset.x, offset.y) != null) current.targets.asReversed().firstOrNull {
-                    it.actionable(current.phase) && viewport.bounds(it).contains(offset)
+                    it.actionable(current.phase) && viewport.bounds(it, it.kind == TrackingTargetKind.FOLLOWING).contains(offset)
                 }?.let(currentActivate)
             }
         }) {
-        val viewport = TrackingViewport.fit(size.width, size.height, videoWidth, videoHeight)
+        val viewport = VideoViewport.fit(size.width, size.height, videoWidth, videoHeight)
         for (rect in state.targets) {
-            val bounds = viewport.bounds(rect)
+            val bounds = viewport.bounds(rect, rect.kind == TrackingTargetKind.FOLLOWING)
             val candidate = rect.kind == TrackingTargetKind.CANDIDATE
             val known = rect.kind in listOf(TrackingTargetKind.CANDIDATE, TrackingTargetKind.READY, TrackingTargetKind.FOLLOWING)
             drawRect(if (known) ink else muted, bounds.topLeft, bounds.size,
@@ -126,7 +98,8 @@ internal fun ObjectTrackingTargets(state: TrackingState, videoWidth: Int, videoH
 @Composable
 internal fun ObjectTrackingControls(state: TrackingState, enabled: Boolean, modifier: Modifier,
     onStart: () -> Unit, onConfirm: () -> Unit, onStop: () -> Unit,
-    unavailableReason: org.jetbrains.compose.resources.StringResource? = null) {
+    unavailableReason: org.jetbrains.compose.resources.StringResource? = null,
+    additionalActions: @Composable () -> Unit = {}) {
     val phase = state.phase
     val status = when (phase) {
         TrackingPhase.OFF -> unavailableReason
@@ -166,6 +139,7 @@ internal fun ObjectTrackingControls(state: TrackingState, enabled: Boolean, modi
         detail?.let { Text(it, Modifier.testTag("tracking-report-detail"), color = HanppieDesignTokens.RemoteHudContent, fontSize = 12.sp) }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (!state.blocksManualControl) HudTextButton(tr(if (phase == TrackingPhase.ERROR) Res.string.tracking_retry else Res.string.object_tracking), enabled, "tracking-start", action = onStart)
+            if (!state.blocksManualControl) additionalActions()
             if (phase == TrackingPhase.TARGET_READY) HudTextButton(tr(Res.string.tracking_start_follow), enabled, "tracking-confirm", action = onConfirm)
             if (state.blocksManualControl) HudTextButton(tr(Res.string.tracking_stop),
                 phase != TrackingPhase.STOPPING, "tracking-stop", action = onStop)

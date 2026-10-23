@@ -734,6 +734,22 @@ V01 进一步闭合了 `Info` 的来源与消费者：`OnRecvRunningStatusPush 7
 
 这些字段来自固定版本原生构造函数、推送解码器与客户端消费者的静态分析，尚无本次真实设备抓包或物理跟随证据。Hanppie 当前离线实现与安全边界见[当前实现](./architecture.md#134-遥控操纵镜头坐标系与安全联动)，V01 的来源摘要、验证与设备待验项见[实施台账](./official-app-capability-implementation.md#v01-跟随报告与设备待验)；初次接入的输入指纹与反汇编地址保留在[2026-10-22 离线记录](./object-tracking-validation-2026-10-22.md)。桌面合成验证与平台编译不证明原生报文被设备接受、纵轴选点正确或机器人已物理停止。**静态依据 / 待设备**
 
+#### 辅助瞄准、标签与通用视觉 key 的边界
+
+固定 macOS 1.1.5/build 239 的 `DJIDetectionType` 将 `Aimbot=8`、`Marker=32` 与 `HumanTracking=64` 分开。`BattlePlayer.OnRobotEnableAimbot` 开启时发送 Aimbot，关闭时发送 Marker；`OnRobotControl` 仍转发驾驶/发射输入，累计非零云台输入超过阈值后转回 Marker。未发现该公开自瞄流程要求先发送人体跟随选点或 `UserConfirm(8)`，不能照人体流程补造自动瞄准协议。SDK 的机器人检测位/类型也不能替代这里的 Aimbot。**客户端流程，设备未验**
+
+原生 `SetDetectionEnable 7c45f0`、`GetDetectionEnable 7c4d80` 沿同一视觉节点 `f1`、命令集 `0a` 发送 `a3` 和 `a5`：设置为 uint16LE 位图，读取请求为空；成功响应经回调 `7ca34b` 从偏移 1 读取 uint16LE。`RealController.SendDetectionEnable` 先关闭再写请求位图，但后续重试回调错误地引用第一次关闭的结果；不能把这种客户端结果误报作为新实现的确认规则。**原生构造/解码与客户端代码**
+
+`OnRecvRunningStatusPush 7c3880` 的跳表 `7c4204` 将类型 0/1/3/5/6 分别转发头肩、人体、自瞄、标签、跟随；类型 2/4 在该解码分支没有对应 App 发布，类型 8 另走高级标签分支。因此不能只按 SDK 类型表假定所有类别都能从此 App 回调取得。普通自瞄/标签项沿前述 9 字节头和 20 字节矩形布局；`DJIVisionRect.GetID()` 取 Info 低 16 位，`GetDistance()` 取高 16 位，`UI/VisionDetectionMarker` 为标签显示消费这两个值。`UI/VisionRectMarker.SetMarker` 将距离直接显示为 `cm`，`UI/VisionDetectionMarkerID` 定义数字 10–19 和字母 20–45；其他 ID 的图案含义不由这些枚举推定。这与跟随直接将完整 Info 解释为绘制/动作枚举不同。**原生分派 / 客户端消费者**
+
+`RegisterVisionKeys 2ef20` 中 `0x6000002/3/4/6` 分别映射通用 `DJIFlightAssistantParam…` 名称，而非 `RMVisionParam…`：对应 TrackingAutoLockTarget、ARParameters、ARTagEnabled、LaserPosition。`RobomasterVisionAbstraction::CreateCharacteristics 7b78b0–7c3080` 实际注册 15 个特征：跟随、自瞄、标签、头肩、人体运行状态，DebugRect、MarkerAdvanceStatus、FirmwareVersion、DetectionEnable、UserTrackingRect、TrackingDistance、VisionLineColor、VisionMarkerColor、UserConfirm、UserCancel；没有上述 4 个 FlightAssistant 别名。`SystemSinglePlayer` 与 `UI/AssistedAim` 虽监听/显示 LaserPosition，目前仍未建立这版 RoboMaster 原生数据生产路径；AR 项也不能仅凭 key 定义计作公开功能。这个结论限定固定客户端，不能外推为所有固件/平台永不支持。**桥接注册 / 原生特征，生产路径未建立**
+
+`OnRecvDebugRectPush 7c4220` 是独立 `0a:90` 调试报告：至少 21 字节，前 16 字节为矩形四项 float，接着 4 字节颜色和 1 字节 rectType；它不是 LaserPosition 的坐标替代路径。**原生监听/解码**
+
+机载 `VisionCtrl.detect_marker_and_aim`（`rm_ctrl.py:3601`）则是另一条路径：最多循环 5 秒、每 40 ms 查标签，写 `robot_mode_chassis_follow` 与云台 yaw/pitch PID，结束时将 PID 输出归零。它不是本次已恢复的一个独立原生 App 自瞄 opcode，其模式/PID 会与现有速度控制、软件回中和镜头坐标辅助争用执行器，后续决策归入实施台账 C04。机载 `detection_enable_priority` 虽有核数/优先级表，`__enable_detection` 的整段仲裁代码实际位于三引号字符串内；执行路径为合并位图、写入并回读检查，不能将未执行的表说成当前有效设备调度规则。**机载代码 / 控制权边界**
+
+来源摘要、15 个注册名和原生片段保留在忽略目录 `2026-10-23-ddf6b20-audit.json`、`V02-native-characteristics.txt`、`V02-native-register-keys.txt`、`V02-native-get-mask-callback.txt`、`V02-native-listening.txt`、`V02-native-debug.txt`。原生库 SHA-256 为 `66e5ff67a64931ca492af448216cac3ee34323c3442bc72cd7acdcf19bf96e80`。这些是静态研究事实；Hanppie 的 V02 代码、状态归属和离线边界见[当前实现](./architecture.md#134-遥控操纵镜头坐标系与安全联动)与[实施台账](./official-app-capability-implementation.md#v02-辅助瞄准标签识别与设备待验)，V03 尚待实施，全部真实检测/瞄准效果和设备资源行为仍待验收。开发前的差距快照见[日期化复核](./official-app-gap-review-2026-10-23-ddf6b20.md)。
+
 ### 5.4 原生媒体路径
 
 S1 会在 UDP `10607` 数据会话中输出 H.264 视频和 Opus 音频。本机已解码出 `1280×720 yuv420p` 视频帧，以及 48 kHz、单声道、signed 16-bit PCM 音频帧。这里描述的是 S1 原生媒体能力；Hanppie 如何请求、分流和解码见 [Hanppie 技术架构 1.9 节](./architecture.md#19-媒体兼容与混合后端)。**实测/代码**
@@ -933,15 +949,14 @@ S1 的红外能力至少包含三层，不能把其中任意一层统称为“�
 
 | 结论 | 证据 |
 | --- | --- |
-| Lab 脚本可作为"技能"安装并由 skill id 释放：安装载荷 = JSON `{guid, sign, SkillIndex}` | 反编译 `Module.LAB.System/SystemUploadDsp.cs` 构造 `DJIInstallScratchSkillParamValue{guid, sign, SkillIndex}` 后 `performAction(SystemInstallScratchSkill)`；原生 `RMInstallScratchSkillMsg::FromJson` + 构造函数 `(string, string, int)` |
-| 技能表载荷 = 二进制结构 `{playerCount, skillCount}` + 每项 `{playerId, teamId, skillA(u16), …}` | `DJISkillTableParamValue` 的 `StructLayout(Explicit, Pack=1)` 字段偏移 |
-| `SetCarAndSkillID` 载荷 = JSON `{"list": [int…]}` | `DJIListParamValue.List<int>` 带 `[JsonProperty]`；原生侧对应 `CommonListValue` |
+| 客户端有将 Lab 脚本安装为技能的流程，桥接字段为 `{guid, sign, SkillIndex}` | 反编译 `Module.LAB.System/SystemUploadDsp.cs` 构造 `DJIInstallScratchSkillParamValue{guid, sign, SkillIndex}` 后 `performAction(SystemInstallScratchSkill)`；原生 `RMInstallScratchSkillMsg::FromJson` + 构造函数 `(string, string, int)`；尚不能将桥接 JSON 当作无线载荷 |
+| 技能表的 C# 互操作结构包含 `{playerCount, skillCount}` 及每项 `{playerId, teamId, skillA(u16), …}` | `DJISkillTableParamValue` 的 `StructLayout(Explicit, Pack=1)` 字段偏移；线上封包仍需追原生构造 |
+| `SetCarAndSkillID` 的进程内参数为 `{"list": [int…]}` | `DJIListParamValue.List<int>` 带 `[JsonProperty]`；原生侧对应 `CommonListValue`，不据此确定线上编码 |
 | 技能状态可读：`SkillStatus` 返回 `DJISkillInfo{skillID, skillCD}` 列表 | `RealController` 用 `StartListeningOnKey(SystemSkillStatus)` 并遍历 `skillStatus` |
-| 所有命令的参数结构都有权威定义 | `decompiled/RobotService/DJI/*ParamValue.cs`：带 `[JsonProperty]` 者为 JSON、带 `StructLayout` 者为二进制 |
+| 参数类可确定桥接字段，不能单独确定无线载荷 | `decompiled/RobotService/DJI/*ParamValue.cs` 的 `[JsonProperty]` 和 `StructLayout` 分别描述进程内 JSON 与互操作结构；节点、命令号、选择子、字节序和响应还须追到原生封包/解码 |
 | 释放技能走 `SendSkillControlPack(DJICustomSkillControlKey, int)` | 原生符号 `UnityBridge::DJIRobomasterScratchControlProcessor::SendSkillControlPack` |
 
-⇒ **"编码自定义红外载荷 + 自定义处理逻辑"的官方路径**：上传 Lab 脚本 → 安装为技能（guid/sign/SkillIndex）→
-用技能控制包释放 → 技能表/本车技能 ID 绑定 → 红外帧携带该 skill id，事件侧即可识别。
+客户端流程可确认上传 Lab 脚本、以 guid/sign/SkillIndex 请求安装、绑定技能表/本车技能 ID 及释放技能。自定义技能与红外帧/事件的完整映射尚未验收，不能由上述桥接字段宣称已支持任意自定义红外载荷或端到端技能安装。
 
 **未验证**：安装/释放/技能表的线上命令号（`SendSkillControlPack` 的包常量尚未提取）；写入 `CarAndSkillID` 的正确取值；
 `GetCustomSkillInfo(0x3F/0xA8)` 的请求结构（二进制与 JSON 形式均被拒 224）。

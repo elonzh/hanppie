@@ -1,5 +1,7 @@
 package cn.elonzh.hanppie.robot.tracking
 
+import cn.elonzh.hanppie.robot.vision.*
+
 import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.protocol.Protocol
 import cn.elonzh.hanppie.robot.protocol.hex
@@ -31,7 +33,7 @@ class ObjectTrackingTest {
         assertEquals("40000000000000", TrackingProtocol.confirm(false).hex())
         assertEquals("4000000000003f0000803e0000000000000000", TrackingProtocol.select(.5f, .25f).hex())
         val valid = push(2)
-        assertEquals(TrackingRect(.5f, .25f, .2f, .4f, 2), TrackingProtocol.push(valid)!!.rectangles.single())
+        assertEquals(VisionRect(.5f, .25f, .2f, .4f, 2), TrackingProtocol.push(valid)!!.rectangles.single())
         assertNull(TrackingProtocol.push(valid.copy(sender = 9)))
         assertNull(TrackingProtocol.push(valid.copy(attr = 0xc0)))
         assertNull(TrackingProtocol.push(valid.copy(valid = false)))
@@ -122,12 +124,12 @@ class ObjectTrackingTest {
         assertEquals(TrackingTargetKind.UNKNOWN, decoded.rectangles.single().kind)
         assertNull(decoded.deviceStatus)
         assertEquals(0xfedc, decoded.error)
-        for (status in TrackingDeviceStatus.entries) assertEquals(status, TrackingProtocol.push(push(status.raw))!!.deviceStatus)
-        assertEquals(TrackingTargetKind.NONE, TrackingRect(.5f, .5f, .1f, .1f).kind)
+        for (status in VisionDeviceStatus.entries) assertEquals(status, TrackingProtocol.push(push(status.raw))!!.deviceStatus)
+        assertEquals(TrackingTargetKind.NONE, VisionRect(.5f, .5f, .1f, .1f).kind)
     }
 
     @Test fun overlappingCandidatesAreFilteredAtTheOfficialHalfTrackedAreaThreshold() {
-        val tracked = TrackingRect(.5f, .5f, .5f, .5f, 2)
+        val tracked = VisionRect(.5f, .5f, .5f, .5f, 2)
         val duplicate = tracked.copy(info = 1)
         val half = tracked.copy(x = .75f, info = 1)
         val distinct = tracked.copy(x = .76f, info = 1)

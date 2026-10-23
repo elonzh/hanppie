@@ -35,6 +35,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -47,6 +48,10 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -133,16 +138,20 @@ internal fun RemotePage(
 ) {
     RemoteOrientation(onBack)
     var keyboardHints by remember { mutableStateOf(false) }
+    val visionOcclusions = remember { mutableStateMapOf<String, Rect>() }
+    var surfaceOrigin by remember { mutableStateOf(Offset.Zero) }
+    fun reserveVisionSpace(id: String) = Modifier.onGloballyPositioned { visionOcclusions[id] = it.boundsInRoot() }
     val colors = MiuixTheme.colorScheme
     val connected by model.state.collectAsState()
     val remoteEnabled by model.remoteEnabled.collectAsState()
     val tracking by model.tracking.collectAsState()
+    val vision by model.vision.collectAsState()
     val health by model.robotHealth.state.collectAsState()
     val zoom by model.cameraZoom.state.collectAsState()
     val arm by model.robotArm.state.collectAsState()
     var armMode by remember(arm.connection) { mutableStateOf(false) }
     val hasArmControls = arm.task.armOnline || arm.task.clawOnline
-    val manualActionsEnabled = !tracking.blocksManualControl && !armMode
+    val manualActionsEnabled = !tracking.blocksManualControl && !vision.blocksManualControl && !armMode
     val videoFrame = model.videoFrames.image(connected.connectedAddress)
     var videoFresh by remember { mutableStateOf(false) }
     val foreground by model.foregroundState.collectAsState()
@@ -196,6 +205,22 @@ internal fun RemotePage(
                 break
             }
             delay(100)
+        }
+    }
+    LaunchedEffect(vision.ownsPipeline, enabled) {
+        while (vision.ownsPipeline) {
+            if (!enabled || !model.videoFrames.isFresh(connected.connectedAddress)) {
+                model.stopVision()
+                break
+            }
+            delay(100)
+        }
+    }
+    LaunchedEffect(vision.phase, vision.mode) {
+        if (vision.mode == cn.elonzh.hanppie.robot.vision.VisionMode.ROBOT_AIM &&
+            vision.phase != cn.elonzh.hanppie.robot.vision.VisionPhase.OFF) {
+            keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+            model.stopFiring()
         }
     }
     LaunchedEffect(enabled) {
@@ -297,7 +322,7 @@ internal fun RemotePage(
             }
         }
         supported
-    }.focusable()) {
+    }.focusable().onGloballyPositioned { surfaceOrigin = it.positionInRoot() }) {
         val landscapeReady = maxWidth >= maxHeight
         val compactHud = maxWidth < 800.dp
         LaunchedEffect(landscapeReady) { if (!landscapeReady) { firePointerHeld = false; model.stopFiring(); model.haltRemote() } }
@@ -314,6 +339,10 @@ internal fun RemotePage(
         if (videoContent == null) RobotVideo(model, mediaControls, Modifier.fillMaxSize()) else videoContent()
         if (tracking.active && videoFrame != null) ObjectTrackingTargets(tracking, videoFrame.width, videoFrame.height,
             enabled, model::selectTrackingTarget, model::confirmObjectTracking, model::stopObjectTracking)
+        if (vision.phase == cn.elonzh.hanppie.robot.vision.VisionPhase.ACTIVE && videoFresh && videoFrame != null)
+            VisionTargets(vision, videoFrame.width, videoFrame.height, visionOcclusions.filterKeys {
+                it !in listOf("left", "right", "ammo") || !keyboardHints && !armMode
+            }.values.map { it.translate(-surfaceOrigin) })
         if (!tracking.blocksManualControl && !armMode) RemoteCrosshair(model, Modifier.align(Alignment.Center))
         Row(Modifier.align(Alignment.TopStart).padding(HanppieDesignTokens.RemoteEdgePadding),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -326,7 +355,7 @@ internal fun RemotePage(
                 armSwitchKeys = armSwitchKeys + physicalKeys
                 model.clearRemoteInputs(); armMode = !armMode; focus.requestFocus()
             }, Modifier.heightIn(min = 48.dp).widthIn(max = 156.dp).testTag("remote-arm-toggle").semantics { selected = armMode },
-                enabled = enabled && !tracking.blocksManualControl && !connected.busy,
+                enabled = enabled && !tracking.blocksManualControl && !vision.ownsPipeline && !connected.busy,
                 colors = if (armMode) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors(
                     color = HanppieDesignTokens.RemoteHudSurface, contentColor = HanppieDesignTokens.RemoteHudContent)) {
                 Text(tr(Res.string.arm_control_label), fontSize = 14.sp)
@@ -340,7 +369,7 @@ internal fun RemotePage(
         Card(Modifier.align(Alignment.TopCenter).offset(x = hudOffset)
             .widthIn(max = (maxWidth - (leftHudWidth + armHudWidth + mediaHudWidth + 48).dp).coerceAtLeast(80.dp))
             .padding(top = HanppieDesignTokens.RemoteEdgePadding)
-            .testTag("remote-telemetry"),
+            .testTag("remote-telemetry").then(reserveVisionSpace("telemetry")),
             colors = CardDefaults.defaultColors(color = HanppieDesignTokens.RemoteHudSurface.copy(alpha = HanppieDesignTokens.RemoteHudAlpha)),
             insideMargin = PaddingValues(0.dp)) {
                 Row(Modifier.padding(horizontal = if (compactHud) 8.dp else 12.dp, vertical = 0.dp),
@@ -355,7 +384,7 @@ internal fun RemotePage(
                     SignalIndicator(connected.signalQuality)
                     HeadingIndicator(connected.gimbal?.yawDegrees, Modifier.heightIn(min = 48.dp)
                         .testTag("recenter-gimbal")
-                        .clickable(enabled = enabled && manualActionsEnabled && connected.gimbal != null, onClickLabel = tr(Res.string.recenter_gimbal)) {
+                        .clickable(enabled = enabled && manualActionsEnabled && !vision.ownsGimbal && connected.gimbal != null, onClickLabel = tr(Res.string.recenter_gimbal)) {
                             model.recenterGimbal(); focus.requestFocus()
                         })
                 }
@@ -365,30 +394,34 @@ internal fun RemotePage(
                 color = colors.onSurface, style = MiuixTheme.textStyles.subtitle)
             return@BoxWithConstraints
         }
-        if (manualActionsEnabled) CameraZoomControls(zoom, enabled && videoFresh && !connected.busy,
+        if (manualActionsEnabled && !vision.ownsPipeline) CameraZoomControls(zoom, enabled && videoFresh && !connected.busy,
             Modifier.align(Alignment.TopEnd).padding(top = 76.dp, end = HanppieDesignTokens.RemoteEdgePadding),
             model.cameraZoom::setZoom)
         OnboardCaptureControls(model.robotCamera, connected.connected, inputEnabled && foreground,
             (maxHeight - 180.dp).coerceAtLeast(80.dp),
-            Modifier.align(Alignment.TopStart).padding(top = 76.dp, start = HanppieDesignTokens.RemoteEdgePadding), onAlbum = onAlbum) {
+            Modifier.align(Alignment.TopStart).padding(top = 76.dp, start = HanppieDesignTokens.RemoteEdgePadding).then(reserveVisionSpace("capture")), onAlbum = onAlbum) {
             keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
             model.robotArm.stopControl(); model.stopFiring(); model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
             (onPushToTalkStop ?: model::endPushToTalk)()
         }
-        if (!armMode) ObjectTrackingControls(tracking, enabled && videoFrame != null && videoFresh && !zoom.busy && (zoom.hundredths == null || zoom.hundredths == 100),
-            Modifier.align(Alignment.TopCenter).padding(top = 76.dp),
-            onStart = {
+        if (!armMode) VisionModeControls(vision, tracking, enabled && videoFrame != null && videoFresh && !zoom.busy && (zoom.hundredths == null || zoom.hundredths == 100),
+            Modifier.align(Alignment.TopCenter).padding(top = 76.dp).then(reserveVisionSpace("vision")),
+            onStart = { mode ->
+                keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+                model.startVision(mode); focus.requestFocus()
+            }, onStop = { model.stopVision(); focus.requestFocus() },
+            onStartTracking = {
                 keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
                 model.startObjectTracking(); focus.requestFocus()
-            }, onConfirm = { model.confirmObjectTracking(); focus.requestFocus() },
-            onStop = { model.stopObjectTracking(); focus.requestFocus() },
+            }, onConfirmTracking = { model.confirmObjectTracking(); focus.requestFocus() },
+            onStopTracking = { model.stopObjectTracking(); focus.requestFocus() },
             unavailableReason = if ((zoom.hundredths ?: 100) > 100) Res.string.camera_zoom_tracking_unavailable else null)
         val touchInset = (maxWidth * .06f).coerceIn(32.dp, 80.dp)
         if (armMode) cn.elonzh.hanppie.ui.robot.arm.RobotArmControls(model.robotArm,
             enabled && !connected.busy, videoFresh,
             Modifier.align(Alignment.BottomCenter).padding(start = HanppieDesignTokens.RemoteEdgePadding, end = HanppieDesignTokens.RemoteEdgePadding, bottom = 20.dp))
         if (!keyboardHints && !armMode) {
-            Column(Modifier.align(Alignment.BottomStart).padding(start = touchInset, bottom = 32.dp).testTag("remote-touch-left"),
+            Column(Modifier.align(Alignment.BottomStart).padding(start = touchInset, bottom = 32.dp).testTag("remote-touch-left").then(reserveVisionSpace("left")),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.testTag("remote-gear-bar").drawBehind {
                     val height = 28.dp.toPx()
@@ -416,7 +449,7 @@ internal fun RemotePage(
 
                 }
             }
-            Column(Modifier.align(Alignment.BottomEnd).padding(end = touchInset, bottom = 32.dp).testTag("remote-touch-right"),
+            Column(Modifier.align(Alignment.BottomEnd).padding(end = touchInset, bottom = 32.dp).testTag("remote-touch-right").then(reserveVisionSpace("right")),
                 horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     HudIconButton(if (gelSelected) tr(Res.string.fire_one_gel_bead) else tr(Res.string.fire_infrared),
@@ -438,7 +471,7 @@ internal fun RemotePage(
                     { keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
                     tr(Res.string.gimbal)) { right = it }
             }
-            Box(Modifier.align(Alignment.BottomEnd).padding(end = touchInset + 76.dp, bottom = 180.dp).testTag("remote-ammo")) {
+            Box(Modifier.align(Alignment.BottomEnd).padding(end = touchInset + 76.dp, bottom = 180.dp).testTag("remote-ammo").then(reserveVisionSpace("ammo"))) {
                 HudIconButton(tr(Res.string.switch_ammo),
                     WorkbenchGlyph.PACKETS,
                     artwork = if (gelSelected) Res.drawable.official_ammo_gel else Res.drawable.official_ammo_infrared,

@@ -227,7 +227,7 @@ internal class ConsoleModel(
     override val robotHealth = cn.elonzh.hanppie.ui.robot.device.RobotHealthController(scope)
     override val robotArm: cn.elonzh.hanppie.ui.robot.arm.RobotArmController = cn.elonzh.hanppie.ui.robot.arm.RobotArmController(scope,
         ::changeArm, ::canObserveArm, { source -> canObserveArm(source) && remoteEnabled.value && !state.value.busy &&
-            !tracking.value.blocksManualControl && videoFrames.isFresh(state.value.connectedAddress) })
+            !tracking.value.blocksManualControl && !vision.value.ownsPipeline && videoFrames.isFresh(state.value.connectedAddress) })
     override val robotExtensions = cn.elonzh.hanppie.ui.robot.extensions.RobotExtensionController(scope, ::changeExtensions, ::canObserveExtensions)
     override val robotFirmware: RobotFirmwareController = RobotFirmwareController(scope, ::changeFirmware,
         { source -> if (session.load()?.firmware === source) {
@@ -313,6 +313,16 @@ internal class ConsoleModel(
     private val remoteRevision = AtomicLong(0L)
     override val tracking = MutableStateFlow(TrackingState())
     private var trackingObserver: Job? = null
+    override val vision = MutableStateFlow(cn.elonzh.hanppie.robot.vision.VisionState())
+    private var visionObserver: Job? = null
+    override fun startVision(mode: cn.elonzh.hanppie.robot.vision.VisionMode) {
+        val current = session.load() ?: return
+        if (!remoteEnabled.value || !isForeground || !acceptingWork.load() || state.value.busy || chat.state.value.running ||
+            tracking.value.blocksManualControl || !videoFrames.isFresh(state.value.connectedAddress)) return
+        gimbalCentering.cancel(); stopFiring()
+        runCatching { current.startVision(mode) }.onFailure { log(it.message.orEmpty()) }
+    }
+    override fun stopVision() { runCatching { session.load()?.stopVision() } }
     private fun trackingAction(action: (RobotSession) -> Unit) {
         val current = session.load() ?: return
         if (!remoteEnabled.value || !isForeground || state.value.busy || chat.state.value.running) return
@@ -382,7 +392,8 @@ internal class ConsoleModel(
     }
     private val gimbalCentering = cn.elonzh.hanppie.ui.robot.remote.GimbalCentering()
     override fun recenterGimbal() {
-        if (remoteEnabled.value && isForeground && acceptingWork.load() && !chat.state.value.running && !state.value.busy && !tracking.value.blocksManualControl) {
+        if (remoteEnabled.value && isForeground && acceptingWork.load() && !chat.state.value.running && !state.value.busy && !tracking.value.blocksManualControl &&
+            !(vision.value.ownsPipeline && vision.value.mode == cn.elonzh.hanppie.robot.vision.VisionMode.ROBOT_AIM)) {
             gimbalCentering.start(clock.now().toEpochMilliseconds())
         }
     }
@@ -425,7 +436,7 @@ internal class ConsoleModel(
         }
     }
     override fun startFiring() {
-        if (!remoteEnabled.value || !acceptingWork.load() || chat.state.value.running || state.value.busy || tracking.value.blocksManualControl) return
+        if (!remoteEnabled.value || !acceptingWork.load() || chat.state.value.running || state.value.busy || tracking.value.blocksManualControl || vision.value.blocksManualControl) return
         firingInternal.store(true)
         firing.value = true
         if (firingJob?.isActive == true) return
@@ -478,7 +489,7 @@ internal class ConsoleModel(
         }
     }
     override fun fireGel() {
-        if (!remoteEnabled.value || !acceptingWork.load() || chat.state.value.running || state.value.busy || tracking.value.blocksManualControl) return
+        if (!remoteEnabled.value || !acceptingWork.load() || chat.state.value.running || state.value.busy || tracking.value.blocksManualControl || vision.value.blocksManualControl) return
         scope.launch {
             val s = session.load() ?: return@launch
             gelFireMutex.withLock {
@@ -895,10 +906,16 @@ internal class ConsoleModel(
         trackingObserver = scope.launch {
             candidate.tracking.collect { value -> if (session.load() === candidate) tracking.value = value }
         }
+        visionObserver?.cancel()
+        vision.value = cn.elonzh.hanppie.robot.vision.VisionState()
+        visionObserver = scope.launch {
+            candidate.vision.collect { value -> if (session.load() === candidate) vision.value = value }
+        }
         return candidate
     }
 
     private fun connectionLost(candidate: RobotSession, reason: String) {
+        if (session.load() === candidate) vision.value = cn.elonzh.hanppie.robot.vision.VisionState()
         tracking.value = TrackingState()
         gimbalCentering.cancel()
         remoteEnabled.value = false
@@ -921,7 +938,7 @@ internal class ConsoleModel(
     private fun closeConnection(preserveNetworkRecovery: Boolean) {
         connectionRevision.addAndFetch(1)
         haltRemote()
-        session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState()
+        session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState()
         robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.detach(); robotArm.detach(); robotExtensions.detach(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(preserveNetworkRecovery); robotSdr.detach(preserveNetworkRecovery)
         state.update {
             val uncertain = it.scriptRunPhase.mayBeExecuting
@@ -1273,7 +1290,7 @@ internal class ConsoleModel(
         connectionRevision.addAndFetch(1)
         chat.cancelAndJoin()
         scope.coroutineContext[Job]?.children?.toList()?.forEach { it.cancelAndJoin() }
-        session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState()
+        session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState()
         robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.detach(); robotArm.detach(); robotExtensions.detach(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(); robotSdr.detach()
         state.update {
             val uncertain = it.scriptRunPhase.mayBeExecuting
@@ -1284,5 +1301,5 @@ internal class ConsoleModel(
                 scriptMessage = if (uncertain) uiText(Res.string.connection_closed_robot_state_unknown) else it.scriptMessage)
         }
     }
-    override fun close() { connectionRevision.addAndFetch(1); robotFiles.close(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.clear(); robotArm.clear(); robotExtensions.clear(); robotCalibration.clear(); robotAddressing.clear(); robotPower.clear(); robotWifi.close(); robotSdr.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
+    override fun close() { connectionRevision.addAndFetch(1); robotFiles.close(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.clear(); robotArm.clear(); robotExtensions.clear(); robotCalibration.clear(); robotAddressing.clear(); robotPower.clear(); robotWifi.close(); robotSdr.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
 }

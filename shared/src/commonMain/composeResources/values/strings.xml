@@ -1479,4 +1479,27 @@
     <string name="tracking_report_unknown">Status %1$s · Info %2$s</string>
     <string name="tracking_response_code">Request 0a:%1$s · response %2$s</string>
     <string name="tracking_retry">Retry tracking</string>
+    <string name="vision_tools">Aim &amp; markers</string>
+    <string name="vision_robot_aim">Robot aim</string>
+    <string name="vision_markers">Markers</string>
+    <string name="vision_checking">Checking vision availability</string>
+    <string name="vision_starting">Starting and verifying</string>
+    <string name="vision_stopping">Stopping and verifying</string>
+    <string name="vision_searching">Looking for targets</string>
+    <string name="vision_detecting">Showing detected targets</string>
+    <string name="vision_resource_busy">Vision is busy. End the other vision task and retry.</string>
+    <string name="vision_rejected">The robot rejected the request. Retry when ready.</string>
+    <string name="vision_mode_mismatch">Vision mode was not confirmed. This session has ended.</string>
+    <string name="vision_target_lost">Target lost. This session has ended.</string>
+    <string name="vision_device_error">The robot reported a vision error. This session has ended.</string>
+    <string name="vision_unsupported_report">The vision report could not be read. This session has ended.</string>
+    <string name="vision_stop_unconfirmed">Stopping is unconfirmed. Retry stopping.</string>
+    <string name="vision_timed_out">Vision response timed out. This session has ended.</string>
+    <string name="vision_retry_stop">Retry stopping</string>
+    <string name="vision_details">Details</string>
+    <string name="vision_report_details">Mask: %1$s · State: %2$s · Error: %3$s · Response: %4$s</string>
+    <string name="vision_target_count">Detection results: %1$s targets</string>
+    <string name="vision_marker_label">Marker %1$s · %2$s cm</string>
+    <string name="vision_retry">Retry</string>
+    <string name="vision_stop">Stop</string>
 </resources>

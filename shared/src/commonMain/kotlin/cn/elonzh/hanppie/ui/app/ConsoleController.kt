@@ -67,6 +67,9 @@ internal interface ConsoleController : AutoCloseable {
     fun selectTrackingTarget(x: Float, y: Float)
     fun confirmObjectTracking()
     fun stopObjectTracking()
+    val vision: StateFlow<cn.elonzh.hanppie.robot.vision.VisionState>
+    fun startVision(mode: cn.elonzh.hanppie.robot.vision.VisionMode)
+    fun stopVision()
     val remoteEnabled: MutableStateFlow<Boolean>
     val remoteInput: MutableStateFlow<List<Double>>
     val cameraYaw: MutableStateFlow<Double?>

@@ -169,7 +169,7 @@ class AppSession(private val target: RobotTarget,
         }
         override suspend fun switchCamera(index: Int) {
             txLock.withLock {
-                check(connected && !labRunning && !cameraViewChanging && !tracking.value.blocksManualControl && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl) { "请先退出跟随、脚本、编址、校准或固件任务" }
+                check(connected && !labRunning && !cameraViewChanging && !tracking.value.blocksManualControl && !vision.value.ownsPipeline && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl) { "请先退出跟随、脚本、编址、校准或固件任务" }
                 cameraViewChanging = true
             }
             try { cameraCommands.switchCamera(index) }
@@ -183,7 +183,7 @@ class AppSession(private val target: RobotTarget,
         override suspend fun setZoom(hundredths: Int) {
             require(hundredths in 100..400)
             txLock.withLock {
-                check(remote && connected && !labRunning && !cameraViewChanging && !tracking.value.blocksManualControl) { "请先退出跟随并启用遥控" }
+                check(remote && connected && !labRunning && !cameraViewChanging && !tracking.value.blocksManualControl && !vision.value.ownsPipeline) { "请先退出跟随并启用遥控" }
                 cameraViewChanging = true
                 if (hundredths > 100) cameraZoomMayBeActive = true
             }
@@ -205,7 +205,7 @@ class AppSession(private val target: RobotTarget,
         private set
     private val modeMutex = Mutex()
     private fun checkArmControl() {
-        check(remote && connected && !labRunning && !powerTransition && !tracking.value.blocksManualControl &&
+        check(remote && connected && !labRunning && !powerTransition && !tracking.value.blocksManualControl && !vision.value.ownsPipeline &&
             !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl &&
             robotNanoTime() - lastReceivedNanos < 500_000_000) { "请结束其他任务并检查连接后启用遥控" }
     }
@@ -223,7 +223,7 @@ class AppSession(private val target: RobotTarget,
     private suspend fun withIdleControl(allowFirmware: Boolean = false, action: suspend () -> Unit) {
         check(modeMutex.tryLock()) { "请等待控制模式切换结束" }
         try {
-            txLock.withLock { check(connected && !powerTransition && !remote && !labRunning && !tracking.value.blocksManualControl && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && (allowFirmware || !firmware.state.value.blocksControl)) { "请先退出遥控、脚本、编址、校准或固件任务" } }
+            txLock.withLock { check(connected && !powerTransition && !remote && !labRunning && !tracking.value.blocksManualControl && !vision.value.ownsPipeline && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && (allowFirmware || !firmware.state.value.blocksControl)) { "请先退出遥控、脚本、编址、校准或固件任务" } }
             action()
         } finally { modeMutex.unlock() }
     }
@@ -265,8 +265,33 @@ class AppSession(private val target: RobotTarget,
         },
     )
     val tracking get() = objectTracking.state
+    private val visionControl = cn.elonzh.hanppie.robot.vision.VisionControl(
+        send = { id, payload -> send(Protocol.HOST_VISION, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_VISION, id, payload) },
+        nowMillis = { robotNanoTime() / 1_000_000 },
+        stopGimbal = {
+            controlPayload = RemoteControl.velocity(0.0, 0.0, 0.0)
+            cameraInput = 0.0 to 0.0; chassisYawInput = 0.0
+            gimbalInput = 0.0 to 0.0
+            gimbalPayload = RemoteControl.gimbalVelocity(0.0, 0.0)
+            triggerDeadline = 0
+            send(Protocol.HOST_GIMBAL, Protocol.ATTR_NO_ACK, Protocol.CMDSET_GIMBAL, Protocol.CMD_GIMBAL_EXT_CTRL_ACCEL, gimbalPayload)
+        },
+    )
+    val vision get() = visionControl.state
+    fun startVision(mode: cn.elonzh.hanppie.robot.vision.VisionMode) = txLock.withLock {
+        check(remote && active.load() && !labRunning && !powerTransition && !tracking.value.blocksManualControl &&
+            !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl &&
+            robotNanoTime() - lastReceivedNanos < 500_000_000) { "请结束其他任务并检查连接后启用遥控" }
+        check(!cameraViewChanging && !cameraZoomMayBeActive) { "请先将相机恢复到 1 倍变焦" }
+        check(!vision.value.ownsPipeline) { "请先结束当前视觉模式" }
+        clearMotionInput()
+        inputDeadline = robotNanoTime() + 250_000_000
+        visionControl.start(mode)
+    }
+    fun stopVision() = txLock.withLock { visionControl.stop() }
     fun startTracking() = txLock.withLock {
         check(remote && active.load() && !labRunning && robotNanoTime() - lastReceivedNanos < 500_000_000)
+        check(!vision.value.ownsPipeline) { "请先结束当前视觉模式" }
         check(!cameraViewChanging && !cameraZoomMayBeActive) { "请先将相机恢复到 1 倍变焦" }
         armCommands.stopControl()
         inputDeadline = robotNanoTime() + 250_000_000
@@ -309,6 +334,11 @@ class AppSession(private val target: RobotTarget,
             inputDeadline = robotNanoTime() + 250_000_000
             return@withLock
         }
+        if (vision.value.blocksManualControl || vision.value.ownsGimbal && (pitch != 0.0 || yaw != 0.0)) {
+            if (pitch != 0.0 || yaw != 0.0) visionControl.stop()
+            inputDeadline = robotNanoTime() + 250_000_000
+            return@withLock
+        }
         controlPayload = RemoteControl.velocity(x, y, z)
         chassisYawInput = z
         gimbalInput = pitch to yaw
@@ -333,6 +363,7 @@ class AppSession(private val target: RobotTarget,
         }
     }
     private fun clearMotionInput() {
+        visionControl.stop()
         armCommands.stopControl()
         if (firmware.state.value.loaderMayBeActive) armCommands.retireIdentification() else armCommands.stopIdentification()
         if (firmware.state.value.loaderMayBeActive) extensionCommands.retireIdentification() else extensionCommands.stopIdentification()
@@ -348,7 +379,7 @@ class AppSession(private val target: RobotTarget,
         var blasterLedEnabled = false
         try {
             val fireSequence = txLock.withLock {
-                check(remote && active.load() && !labRunning && !tracking.value.blocksManualControl) { "遥控未启用" }
+                check(remote && active.load() && !labRunning && !tracking.value.blocksManualControl && !vision.value.blocksManualControl) { "遥控未启用" }
                 send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_LED_COLOR_SET, RemoteControl.muzzleFireLed(true))
                 fireLedEnabled = true
                 send(Protocol.HOST_GUN, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_GUN_LED_SET, RemoteControl.blasterLed(true))
@@ -402,7 +433,7 @@ class AppSession(private val target: RobotTarget,
         }
     }
     fun fireInfrared() = txLock.withLock {
-        check(remote && active.load() && !tracking.value.blocksManualControl) { "遥控未启用" }
+        check(remote && active.load() && !tracking.value.blocksManualControl && !vision.value.blocksManualControl) { "遥控未启用" }
         triggerDeadline = robotNanoTime() + 120_000_000
     }
     fun setLed(red: Int, green: Int, blue: Int, enabled: Boolean = true) = txLock.withLock {
@@ -641,6 +672,7 @@ class AppSession(private val target: RobotTarget,
         txLock.withLock {
         armCommands.close(sendCleanup = !firmware.state.value.loaderMayBeActive)
         extensionCommands.close(sendCleanup = !firmware.state.value.loaderMayBeActive)
+        txLock.withLock { visionControl.close(sendCleanup = !firmware.state.value.loaderMayBeActive) }
         calibrationCommands.close()
         addressingCommands.close()
         audioCommands.close()
@@ -666,33 +698,39 @@ class AppSession(private val target: RobotTarget,
         calibrationCommands.tick()
         firmwareCommands.tick()
         extensionCommands.tick()
-        armCommands.tick(remote && !labRunning && !powerTransition && !tracking.value.blocksManualControl &&
+        armCommands.tick(remote && !labRunning && !powerTransition && !tracking.value.blocksManualControl && !vision.value.ownsPipeline &&
             !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl,
             robotNanoTime() - lastReceivedNanos < 500_000_000)
         val seq = sequence
         sequence = (sequence + 1) and 65535
         val fresh = remote && robotNanoTime() < inputDeadline
         objectTracking.tick(fresh && robotNanoTime() - lastReceivedNanos < 500_000_000)
+        visionControl.tick(fresh && robotNanoTime() - lastReceivedNanos < 500_000_000)
         val payload = if (remote && robotNanoTime() < triggerDeadline) "0000042000010840000230".hexBytes()
             else Protocol.neutral
         sendPacket(envelope.control(Protocol.duss(Protocol.HOST_MOBILE, Protocol.HOST_HDVT_UAV, Protocol.ATTR_NO_ACK, Protocol.CMDSET_SPECIAL, Protocol.CMD_SPECIAL_RM_CONTROL, payload, seq)))
         if ((remote && !tracking.value.blocksManualControl) || forceActuatorStop) {
-            var velocity = if (fresh) controlPayload else RemoteControl.velocity(0.0,0.0,0.0)
-            var gimbal = if(fresh) gimbalPayload else RemoteControl.gimbalVelocity(0.0,0.0)
-            if (fresh && cameraRelative) {
+            val manualFresh = fresh && !vision.value.blocksManualControl
+            var velocity = if (manualFresh) controlPayload else RemoteControl.velocity(0.0,0.0,0.0)
+            var gimbal = if (manualFresh) gimbalPayload else RemoteControl.gimbalVelocity(0.0,0.0)
+            if (manualFresh && cameraRelative) {
                 val angle = cameraYaw
                 val body = angle?.let { RemoteControl.cameraVelocity(cameraInput.first, cameraInput.second, it) }
                     ?: (0.0 to 0.0)
-                val follow = RemoteControl.follow(angle, gimbalInput.second)
-                velocity = RemoteControl.velocity(body.first, body.second, chassisYawInput + follow.chassisYaw)
-                gimbal = RemoteControl.gimbalVelocity(gimbalInput.first, follow.gimbalYaw)
+                if (vision.value.ownsGimbal) velocity = RemoteControl.velocity(body.first, body.second, chassisYawInput)
+                else {
+                    val follow = RemoteControl.follow(angle, gimbalInput.second)
+                    velocity = RemoteControl.velocity(body.first, body.second, chassisYawInput + follow.chassisYaw)
+                    gimbal = RemoteControl.gimbalVelocity(gimbalInput.first, follow.gimbalYaw)
+                }
             }
             // S1 ChassisCtrl.stop uses wheel RPM zero, not body velocity zero.
             // Ignore the sign bit of each float so -0.0 also enters the stop path.
             if (velocity.indices.all { index -> velocity[index] == 0.toByte() || (index % 4 == 3 && velocity[index] == 0x80.toByte()) })
                 send(Protocol.HOST_CHASSIS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_WHEEL_SPEED_SET, ByteArray(8))
             else send(Protocol.HOST_CHASSIS, Protocol.ATTR_NO_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SPEED_SET, velocity)
-            send(Protocol.HOST_GIMBAL, Protocol.ATTR_NO_ACK, Protocol.CMDSET_GIMBAL, Protocol.CMD_GIMBAL_EXT_CTRL_ACCEL, gimbal)
+            if (!vision.value.ownsGimbal || forceActuatorStop)
+                send(Protocol.HOST_GIMBAL, Protocol.ATTR_NO_ACK, Protocol.CMDSET_GIMBAL, Protocol.CMD_GIMBAL_EXT_CTRL_ACCEL, gimbal)
         }
     }
 
@@ -703,7 +741,7 @@ class AppSession(private val target: RobotTarget,
 
     override fun labMode(running: Boolean) {
         txLock.withLock {
-            check(!powerTransition && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl && !arm.state.value.busy && !extensions.state.value.busy) { "请先结束电源、编址、校准、固件或扩展任务" }
+            check(!powerTransition && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl && !vision.value.ownsPipeline && !arm.state.value.busy && !extensions.state.value.busy) { "请先结束电源、编址、校准、固件或扩展任务" }
             mode = Protocol.MODE_LAB; labRunning = running
             armCommands.stopControl()
             armCommands.stopIdentification()
@@ -731,6 +769,7 @@ class AppSession(private val target: RobotTarget,
                             Telemetry.gimbalYaw(frame)?.let { yaw -> yawSample = yaw to robotNanoTime() }
                             txLock.withLock {
                                 objectTracking.receive(frame)
+                                visionControl.receive(frame)
                                 val revision = cameraCommands.state.value.revision
                                 cameraCommands.receive(frame)
                                 audioCommands.receive(frame)
@@ -801,6 +840,7 @@ class AppSession(private val target: RobotTarget,
         firmwareCommands.close()
         armCommands.close(sendCleanup = !firmware.state.value.loaderMayBeActive)
         extensionCommands.close(sendCleanup = !firmware.state.value.loaderMayBeActive)
+        txLock.withLock { visionControl.close(sendCleanup = !firmware.state.value.loaderMayBeActive) }
         txLock.withLock { calibrationCommands.close(); addressingCommands.close() }
         if (active.load() && remote) runCatching { send(Protocol.HOST_CHASSIS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_WORK_MODE_SET, byteArrayOf(0)) }
         active.store(false)

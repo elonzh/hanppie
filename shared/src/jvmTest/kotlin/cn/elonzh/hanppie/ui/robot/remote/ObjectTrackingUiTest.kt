@@ -17,6 +17,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.unit.dp
 import cn.elonzh.hanppie.robot.tracking.*
+import cn.elonzh.hanppie.robot.vision.*
 import cn.elonzh.hanppie.ui.app.ConsoleController
 import cn.elonzh.hanppie.ui.app.testConsoleModel
 import cn.elonzh.hanppie.ui.design.HanppieDesignTokens
@@ -36,11 +37,11 @@ class ObjectTrackingUiTest {
     @get:Rule val rule = createComposeRule()
 
     @Test fun videoFitCoordinatesRejectLetterboxes() {
-        val viewport = TrackingViewport.fit(1000f, 1000f, 1280, 720)
+        val viewport = VideoViewport.fit(1000f, 1000f, 1280, 720)
         assertNull(viewport.point(500f, 50f))
         assertEquals(.5f to .5f, viewport.point(500f, 500f))
         assertEquals(0f to 0f, viewport.point(viewport.left, viewport.top))
-        val pillarbox = TrackingViewport.fit(1600f, 600f, 1280, 720)
+        val pillarbox = VideoViewport.fit(1600f, 600f, 1280, 720)
         assertNull(pillarbox.point(10f, 300f))
         assertEquals(.5f to .5f, pillarbox.point(800f, 300f))
     }
@@ -49,7 +50,7 @@ class ObjectTrackingUiTest {
         Localization.initialize("zh", null)
         val model = testConsoleModel()
         val tracking = MutableStateFlow(TrackingState())
-        val rect = TrackingRect(.5f, .5f, .2f, .4f, 2)
+        val rect = VisionRect(.5f, .5f, .2f, .4f, 2)
         var selected: Pair<Float, Float>? = null
         var stopCount = 0
         var refreshVideo = true
@@ -97,7 +98,7 @@ class ObjectTrackingUiTest {
 
     @Test fun targetInfoActionsUseCurrentFramesAndIgnoreNonActionableSpace() {
         Localization.initialize("zh", null)
-        val rect = TrackingRect(.5f, .5f, .2f, .4f, 1)
+        val rect = VisionRect(.5f, .5f, .2f, .4f, 1)
         val tracking = MutableStateFlow(TrackingState(TrackingPhase.SEARCHING, candidates = listOf(rect, rect.copy(x = .15f, info = 0))))
         var selected: Pair<Float, Float>? = null
         var confirmed = 0
@@ -119,8 +120,8 @@ class ObjectTrackingUiTest {
         rule.onNodeWithTag("tracking-targets").performTouchInput { click(center) }
         assertEquals(1, confirmed)
         rule.onNodeWithTag("tracking-targets").performTouchInput {
-            val viewport = TrackingViewport.fit(width.toFloat(), height.toFloat(), 1280, 720)
-            click(viewport.bounds(rect.copy(info = 3)).center)
+            val viewport = VideoViewport.fit(width.toFloat(), height.toFloat(), 1280, 720)
+            click(viewport.bounds(rect.copy(info = 3), following = true).center)
         }
         assertEquals(1, stopped)
         rule.runOnIdle { tracking.value = TrackingState(TrackingPhase.SEARCHING, candidates = listOf(rect.copy(info = 0x80000000.toInt()))) }
@@ -130,7 +131,7 @@ class ObjectTrackingUiTest {
     @Test fun deviceFailuresKeepTheirCodesAndSpecificRecoveryControls() {
         Localization.initialize("zh", null)
         val tracking = MutableStateFlow(TrackingState(TrackingPhase.ERROR, problem = TrackingProblem.DEVICE_ERROR,
-            report = TrackingPush(6, 3, 4660, emptyList())))
+            report = VisionReport(6, 3, 4660, emptyList())))
         var retries = 0
         var stops = 0
         rule.setContent { TestWorkbenchTheme {
@@ -141,7 +142,7 @@ class ObjectTrackingUiTest {
         rule.onNodeWithText("视觉异常码：4660（类型 6）").assertIsDisplayed()
         rule.onNodeWithTag("tracking-start").performClick(); assertEquals(1, retries)
         rule.runOnIdle { tracking.value = TrackingState(TrackingPhase.ERROR, problem = TrackingProblem.UNSUPPORTED_REPORT,
-            report = TrackingPush(6, 255, 0, listOf(TrackingRect(.5f, .5f, .2f, .4f, -1)))) }
+            report = VisionReport(6, 255, 0, listOf(VisionRect(.5f, .5f, .2f, .4f, -1)))) }
         rule.onNodeWithText("状态 255 · Info -1").assertIsDisplayed()
         rule.runOnIdle { tracking.value = TrackingState(TrackingPhase.ERROR, problem = TrackingProblem.STOP_UNCONFIRMED,
             responseCode = 224, rejectedCommand = 0xa3) }
@@ -151,13 +152,13 @@ class ObjectTrackingUiTest {
     }
 
     @Test fun runningTargetUsesAPixelSquareAndAnUpwardQuarterHeightOffset() {
-        val viewport = TrackingViewport.fit(1000f, 1000f, 1280, 720)
-        val rect = TrackingRect(.5f, .5f, .2f, .4f, 3)
-        val marker = viewport.bounds(rect)
+        val viewport = VideoViewport.fit(1000f, 1000f, 1280, 720)
+        val rect = VisionRect(.5f, .5f, .2f, .4f, 3)
+        val marker = viewport.bounds(rect, following = true)
         assertEquals(200f, marker.width)
         assertEquals(marker.width, marker.height)
         assertEquals(500f - .1f * viewport.height, marker.center.y)
-        val clipped = viewport.bounds(rect.copy(x = 0f, y = 0f))
+        val clipped = viewport.bounds(rect.copy(x = 0f, y = 0f), following = true)
         assertTrue(clipped.left >= viewport.left && clipped.top >= viewport.top)
     }
 
@@ -174,7 +175,7 @@ class ObjectTrackingLayoutTest {
         runDesktopComposeUiTest(width = width, height = height) {
             Localization.initialize(language, null)
             val model = testConsoleModel()
-            val tracking = MutableStateFlow(TrackingState(TrackingPhase.TARGET_READY, listOf(TrackingRect(.5f, .52f, .2f, .4f, 2))))
+            val tracking = MutableStateFlow(TrackingState(TrackingPhase.TARGET_READY, listOf(VisionRect(.5f, .52f, .2f, .4f, 2))))
             val controller = object : ConsoleController by model {
                 override val tracking = tracking
                 override fun stopObjectTracking() = Unit
@@ -193,13 +194,13 @@ class ObjectTrackingLayoutTest {
                         }
                     }
                 } }
-                val ready = TrackingRect(.5f, .52f, .2f, .4f, 2)
+                val ready = VisionRect(.5f, .52f, .2f, .4f, 2)
                 val cases = listOf(
                     "candidate" to TrackingState(TrackingPhase.SEARCHING, candidates = listOf(ready.copy(x = .25f, info = 1), ready.copy(x = .75f, info = 1))),
                     "ready" to TrackingState(TrackingPhase.TARGET_READY, listOf(ready), listOf(ready.copy(info = 1), ready.copy(x = .8f, info = 1))),
                     "following" to TrackingState(TrackingPhase.FOLLOWING, listOf(ready.copy(info = 3))),
-                    "device-error" to TrackingState(TrackingPhase.ERROR, problem = TrackingProblem.DEVICE_ERROR, report = TrackingPush(6, 3, 4660, emptyList())),
-                    "unknown" to TrackingState(TrackingPhase.ERROR, problem = TrackingProblem.UNSUPPORTED_REPORT, report = TrackingPush(6, 255, 0, listOf(ready.copy(info = -1)))),
+                    "device-error" to TrackingState(TrackingPhase.ERROR, problem = TrackingProblem.DEVICE_ERROR, report = VisionReport(6, 3, 4660, emptyList())),
+                    "unknown" to TrackingState(TrackingPhase.ERROR, problem = TrackingProblem.UNSUPPORTED_REPORT, report = VisionReport(6, 255, 0, listOf(ready.copy(info = -1)))),
                     "rejected" to TrackingState(TrackingPhase.ERROR, problem = TrackingProblem.REJECTED, responseCode = 224, rejectedCommand = 0xa7),
                     "stop-unconfirmed" to TrackingState(TrackingPhase.ERROR, problem = TrackingProblem.STOP_UNCONFIRMED, responseCode = 224, rejectedCommand = 0xa3))
                 for ((name, state) in cases) {

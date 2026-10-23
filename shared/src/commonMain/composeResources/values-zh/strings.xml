@@ -1479,4 +1479,27 @@
     <string name="tracking_report_unknown">状态 %1$s · Info %2$s</string>
     <string name="tracking_response_code">请求 0a:%1$s · 应答码 %2$s</string>
     <string name="tracking_retry">重新跟随</string>
+    <string name="vision_tools">瞄准与标签</string>
+    <string name="vision_robot_aim">机器人瞄准</string>
+    <string name="vision_markers">识别标签</string>
+    <string name="vision_checking">正在检查视觉资源</string>
+    <string name="vision_starting">正在开启并确认</string>
+    <string name="vision_stopping">正在关闭并确认</string>
+    <string name="vision_searching">等待识别目标</string>
+    <string name="vision_detecting">正在显示识别结果</string>
+    <string name="vision_resource_busy">视觉资源正在使用，请结束其他视觉任务后重试</string>
+    <string name="vision_rejected">机器人未接受请求，可重试</string>
+    <string name="vision_mode_mismatch">视觉模式未确认，本轮已结束</string>
+    <string name="vision_target_lost">目标已丢失，本轮已结束</string>
+    <string name="vision_device_error">机器人报告视觉异常，本轮已结束</string>
+    <string name="vision_unsupported_report">无法识别视觉报告，本轮已结束</string>
+    <string name="vision_stop_unconfirmed">尚未确认关闭，请重试停止</string>
+    <string name="vision_timed_out">视觉响应超时，本轮已结束</string>
+    <string name="vision_retry_stop">重试停止</string>
+    <string name="vision_details">详情</string>
+    <string name="vision_report_details">检测位：%1$s · 状态：%2$s · 异常：%3$s · 请求返回：%4$s</string>
+    <string name="vision_target_count">识别结果：%1$s 个目标</string>
+    <string name="vision_marker_label">标签 %1$s · %2$s cm</string>
+    <string name="vision_retry">重试</string>
+    <string name="vision_stop">停止</string>
 </resources>
