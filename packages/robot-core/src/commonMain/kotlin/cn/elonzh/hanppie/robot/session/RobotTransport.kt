@@ -50,7 +50,12 @@ internal expect class RobotLock() { fun <T> withLock(action: () -> T): T }
 private val monotonicOrigin = kotlin.time.TimeSource.Monotonic.markNow()
 internal fun robotNanoTime(): Long = monotonicOrigin.elapsedNow().inWholeNanoseconds
 internal expect fun robotSleep(millis: Long)
-internal expect fun robotMd5(bytes: ByteArray): ByteArray
+internal fun robotMd5(bytes: ByteArray): ByteArray = RobotMd5().use { it.update(bytes, bytes.size); it.digest() }
+internal expect class RobotMd5() : AutoCloseable {
+    fun update(bytes: ByteArray, count: Int)
+    fun digest(): ByteArray
+    override fun close()
+}
 internal expect fun robotRandomBytes(size: Int): ByteArray
 internal expect fun robotDate(): String
 

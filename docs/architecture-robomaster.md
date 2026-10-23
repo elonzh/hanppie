@@ -927,7 +927,7 @@ sequenceDiagram
 
     Note over App,Robot: 3. 打包与机内刷写
     App->>App: 将 cfg.sig 与全部模块打包为 <version>.tar
-    App->>Robot: 推送 TAR 包至机内 /data/ftp/upgrade/ 并触发 DUSS 刷写
+    App->>Robot: 协商传输位置、上传 TAR 并提交传输完成，随后观测机内刷写
 ```
 
 #### 5.6.2 云端分发 REST API 与签名算法
@@ -981,7 +981,24 @@ sequenceDiagram
 
 #### 5.6.4 机内打包与刷写链路
 
-官方 App 下载完全部模块后，通过标准 POSIX TAR 打包为 `<version>.tar`（如 `00.06.0521.tar`，包含 27 个 `.sig` 文件及 `<version>.cfg.sig`，总归档大小 140.03 MB）。安装包通过匿名 FTP `21` 或 DUSS 流式传输推入 S1 持久存储的 `/data/ftp/upgrade/` 目录，随后向 DUSS 发送升级触发命令；设备端校验签名后进入升级模式，分别对各模块 MCU 进行 Flash 擦写与校验。**客户端静态分析/代码**
+官方 `SystemFirmwareUpgrade.StartTar` 将版本目录内的模块与配置签名文件按根目录文件名写入未压缩 TAR，再由 `DJIFirmwareUpgradeController.SendStartFirmwarmUpgrade` 将归档路径交给原生 `DJIRobomasterUpgradeEventHandler`。固定 macOS 1.1.5/build 239 的普通机器人路径使用 FTP 协商；GamePad 的 V1 流式升级是另一分支，不能直接作为 App UDP 会话的机器人上传实现。**客户端流程 / 原生构造**
+
+| 阶段 | 固定版本原生契约 | 证据地址 |
+| --- | --- | --- |
+| 当前配置分段查询 | 目的 `08/index 1`（编码节点 `28`），`00:4f`；9 字节为 `01 + uint32LE offset + ff ff ff ff` | `FetchDeviceCfgWithOffset 4bc70`，请求 `4bd11–4bd44` |
+| 配置响应 | byte0 结果，uint32LE@1 为本段长度，uint32LE@5 为续传字段，@9 开始为数据。原生仅以续传字段是否为 0 决定结束；下一 offset 为累计数据长度，不是回显 offset | 回调 `4f5b0`，读取 `4f5f7/4f6db/4f72a/4f783` |
+| 进入 loader | 节点 `28 / 00:07`，9 个零字节；该阶段之后的取消不能等同普通文件上传取消 | `RequestEnterLoaderMode 4c840`，`4c8bc–4c90e` |
+| 协商 FTP 接收 | 节点 `28 / 00:08`；13 字节：byte0=0，归档长度 uint32LE@1，@5–10 为 0，byte11=2、byte12=4 | `RequestReceiveWithFTPUpgrade 4d980`，`4d9f0–4dac6` |
+| FTP 接收响应 | 成功载荷至少 71 字节：byte0=0；uint32LE@1 以最高有效字节优先展开为 IPv4；uint16LE@5 为端口；@7 的 64 字节区含 NUL 结尾目标路径。IP、端口和路径均来自应答 | 回调 `50800`，`50925–509e9`；URL 格式字符串 `8caa14` 为 `FTP://%d.%d.%d.%d:%d%s` |
+| 传输完成 | 节点 `28 / 00:0a`；17 字节为 0 加完整归档的 16 字节原始 MD5。0 和 `f7` 均按传输接受处理，不能据此宣称刷写成功 | `SendWriteDataFinished 4cef0`，`4cfd0/4d068–4d0d3`，回调 `51b20` |
+| 升级报告 | `00:42` 完整注册 ID `40000042`；byte0 类型 2=确认、3=进行、4=结束、6=重启阶段，其他保留未知；进行态 byte1 为原始进度、byte2 的低 5 位为模块、高 3 位为步骤。结束态 byte1 为原始原因，公共界面只有值 1 显示成功；byte2 单独保留 | `StartListenPack 4eb10`、`OnReceiveUpgradeStatusPushPack 4f140` 及跳转表 `4f504`；`ViewFirmwareUpgrade.OnUpgradeStatus` |
+| 重启通知 / 停止报告 | `00:47` 的 byte0 为重启类型，公共客户端按类型选择等待时长；节点 `28 / 00:41` 空载荷仅停止自动报告，没有证据将其当作取消刷写 | `4edc0/4f070`、`SendUpgradeStopAutoPush 4e980` |
+
+FTP 地址数值的字节顺序不能按配置里的字符串或本地 UDP 目标猜测；例如应答的 IPv4 字节 `01 02 a8 c0` 经原生转换得到 `192.168.2.1`。协议当前没有设备抓包，升级报告来源预计为 `28 → 02`、属性 0，仍待实机核对；配置分段与每阶段应答的真实长度、路由、时间限制和拒绝码也未验收。原生 `MakeMD5ForFile 80b4a0` 的 raw 分支在 `80b70a–80b760` 返回 16 字节摘要；GamePad 路径传入不同起始偏移，不能套到普通机器人归档。
+
+公共安装视图 `ViewFirmwareUpgrade.OnUpdateWaitInstallInfo` 在电量 `>=50` 或 `<=0` 时使安装按钮可用；`SystemFirmwareUpgrade.OnDeviceRequestUpgrade` 的一致性升级入口另外检查电池在线状态。电池在线身份为工作模块 `Battery=778`（`030a`），不是电源请求的协议节点；四个电机为 `ESC0–3=788–791`（`0314–0317`）。手动安装时，缺少电机提供明确的继续确认；工作模块详情中完整码 `0100800a–0100800d` 被 `GetChassisAddressConflict` 视为编址冲突。当前本地实现保留 50% 阈值，并区分在线电池电量未知/零、以及未检测到在线电池的供电确认；不将原视图的零值放行当作电量充分的证明。**客户端条件 / 当前准入取舍，实际供电待验**
+
+本地保存的 `00.06.0521` 包有 27 个模块文件和一个配置签名文件，配置 XML 在二进制前缀之后，模块按 `(id, type)` 区分硬件批次，不能按 ID 去重或自行选择最高版本。配置内的大小/MD5 可用于文件完整性检查，不能替代厂商数字签名验证；设备实际验签、loader 接受、模块选择、Flash 擦写及断电恢复均未在本轮执行。当前 M03 已接本地文件检查、协议、会话任务、共享维护页面与实际导航/文件选择，并提供原目标重连后的显式观测与独立操作者恢复；不自动重放安装，停止本地传输不代表取消刷写。当前应用职责与状态归属见[本地固件维护实现](./architecture.md#134-遥控操纵镜头坐标系与安全联动)，桌面合成设备与横屏界面证据及实机待验项见[实施台账](./official-app-capability-implementation.md#m03-实施进度与设备待验)，原生反汇编保留在忽略目录的 `M03-native-*`。
 
 ## 6. 外部扩展机制与生态
 

@@ -31,6 +31,7 @@ import io.github.vinceglb.filekit.name
 import io.github.vinceglb.filekit.readString
 import io.github.vinceglb.filekit.sink
 import io.github.vinceglb.filekit.source
+import io.github.vinceglb.filekit.size
 import io.github.vinceglb.filekit.writeString
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
@@ -140,6 +141,11 @@ internal class WorkbenchViewModel(
             allowedExtensions = setOf("py"),
         ) ?: return@documentOperation
         file.writeString(document.value.source)
+    }
+
+    fun importRobotFirmware() = launchFileAction("select firmware package") {
+        val file = FileKit.openFilePicker(FileKitType.File("tar")) ?: return@launchFileAction
+        model.robotFirmware.selectPackage(file.name, { file.size() }) { file.source().buffered() }
     }
 
     fun uploadRobotFile(directory: String) = launchFileAction("select robot upload") {

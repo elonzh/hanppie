@@ -192,7 +192,7 @@ def start():
 
 ## 4. 移动端传感器 (`mobile_ctrl`)
 
-在移动设备（手机/平板/电脑）通过 App 或 Hanppie 与机器人建立会话期间，可读取移动设备本身的传感器姿态数据：
+以下是机载 Lab 的终端传感器读取接口，数据依赖终端实际采样、订阅和上行。当前 Hanppie 尚未接入这条终端数据链，不能仅因建立会话就依赖这些接口返回有效传感器值：
 
 - `mobile_ctrl.get_attitude(axis)`：获取移动设备姿态角（度），`axis` 可选 `rm_define.mobile_atti_pitch`、
   `rm_define.mobile_atti_roll`、`rm_define.mobile_atti_yaw`。

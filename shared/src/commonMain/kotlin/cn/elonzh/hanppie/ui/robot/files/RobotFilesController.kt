@@ -36,6 +36,7 @@ import kotlinx.io.Source
 
 internal class RobotFilesController(
     private val scope: CoroutineScope,
+    private val blockedReason: () -> String? = { null },
     private val available: () -> Boolean,
 ) : AutoCloseable {
     val state = MutableStateFlow(RobotFilesState())
@@ -141,6 +142,10 @@ internal class RobotFilesController(
     }
 
     private fun work(operation: UiText, action: suspend (RobotFileService) -> RobotFilesState) {
+        blockedReason()?.let { message ->
+            state.update { it.copy(error = message) }
+            return
+        }
         if (!available()) {
             state.update { it.copy(error = tr(Res.string.robot_is_not_connected)) }
             return

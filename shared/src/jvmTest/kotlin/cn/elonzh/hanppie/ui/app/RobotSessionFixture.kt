@@ -35,6 +35,16 @@ internal class RobotSessionFixture : RobotSession {
         override suspend fun end(): Unit = error("unused")
         override suspend fun recover(kind: ModuleAddressingKind): Unit = error("unused")
     }
+    override var firmware: cn.elonzh.hanppie.robot.maintenance.firmware.RobotFirmwareService = object : cn.elonzh.hanppie.robot.maintenance.firmware.RobotFirmwareService {
+        override val state = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.maintenance.firmware.RobotFirmwareState())
+        override suspend fun refreshConfiguration(): Unit = error("unused")
+        override suspend fun install(expected: cn.elonzh.hanppie.robot.maintenance.firmware.FirmwarePackageInspection,
+            configuration: cn.elonzh.hanppie.robot.maintenance.firmware.FirmwareManifest,
+            consent: cn.elonzh.hanppie.robot.maintenance.firmware.FirmwareInstallConsent, openArchive: () -> kotlinx.io.Source): Unit = error("unused")
+        override fun interruptTransfer(): Unit = error("unused")
+        override suspend fun observeInterrupted(previous: cn.elonzh.hanppie.robot.maintenance.firmware.RobotFirmwareState): Unit = error("unused")
+        override fun confirmRestartedAndChecked(): Unit = error("unused")
+    }
     override val health = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.telemetry.RobotHealth())
     override var information: cn.elonzh.hanppie.robot.product.RobotInformationService = object : cn.elonzh.hanppie.robot.product.RobotInformationService {
         override val systemStatus = kotlinx.coroutines.flow.MutableStateFlow<RobotSystemStatus?>(null)

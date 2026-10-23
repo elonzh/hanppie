@@ -93,7 +93,7 @@ private fun IosWorkbench(platform: IosPlatformServices) {
         }
         Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
             Console(holder.model, holder.document,
-                onImport = holder::importScript, onImportAudio = holder::importScriptAudio, onExport = holder::exportScript,
+                onImport = holder::importScript, onImportAudio = holder::importScriptAudio, onImportRobotFirmware = holder::importRobotFirmware, onExport = holder::exportScript,
                 onVoiceInput = { if (voiceDisclosureAccepted) startVoice() else voiceDisclosure = true },
                 onPushToTalkStart = holder.model::beginPushToTalk, onPushToTalkStop = holder.model::endPushToTalk,
                 fileError = holder.fileError, onFileError = holder::updateFileError,

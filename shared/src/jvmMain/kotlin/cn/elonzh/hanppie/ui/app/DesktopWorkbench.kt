@@ -206,7 +206,7 @@ private fun DesktopWorkbenchWindow(onExit: () -> Unit) {
                 document = document,
                 onImport = holder::importScript,
                 onExport = holder::exportScript,
-                onImportAudio = holder::importScriptAudio,
+                onImportAudio = holder::importScriptAudio, onImportRobotFirmware = holder::importRobotFirmware,
                 fileError = holder.fileError,
                 onFileError = holder::updateFileError,
                 onRobotFileUpload = holder::uploadRobotFile,

@@ -10,6 +10,15 @@ internal actual class RobotLock actual constructor() {
     actual fun <T> withLock(action: () -> T): T = synchronized(lock, action)
 }
 internal actual fun robotSleep(millis: Long) = Thread.sleep(millis)
-internal actual fun robotMd5(bytes: ByteArray): ByteArray = MessageDigest.getInstance("MD5").digest(bytes)
+internal actual class RobotMd5 actual constructor() : AutoCloseable {
+    private val md5 = MessageDigest.getInstance("MD5")
+    private var closed = false
+    actual fun update(bytes: ByteArray, count: Int) {
+        check(!closed); require(count in 0..bytes.size)
+        md5.update(bytes, 0, count)
+    }
+    actual fun digest(): ByteArray { check(!closed); return md5.digest().also { close() } }
+    actual override fun close() { closed = true }
+}
 internal actual fun robotRandomBytes(size: Int): ByteArray = ByteArray(size).also(SecureRandom()::nextBytes)
 internal actual fun robotDate(): String = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"))

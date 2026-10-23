@@ -78,6 +78,18 @@ class AppSession(private val target: RobotTarget,
         override suspend fun observeInterrupted(previous: cn.elonzh.hanppie.robot.maintenance.RobotCalibrationState) =
             maintenanceChange { calibrationCommands.observeInterrupted(previous) }
     }
+    private val firmwareCommands = cn.elonzh.hanppie.robot.maintenance.firmware.FirmwareCommands(txLock, target.ip,
+        { healthStore.state.value }, ::request, network::ftp,
+        { node, set, id, payload -> send(node, Protocol.ATTR_NEED_ACK, set, id, payload) })
+    val firmware: cn.elonzh.hanppie.robot.maintenance.firmware.RobotFirmwareService = object : cn.elonzh.hanppie.robot.maintenance.firmware.RobotFirmwareService by firmwareCommands {
+        override suspend fun refreshConfiguration() = maintenanceChange(allowFirmware = true) { firmwareCommands.refreshConfiguration() }
+        override suspend fun install(expected: cn.elonzh.hanppie.robot.maintenance.firmware.FirmwarePackageInspection,
+            configuration: cn.elonzh.hanppie.robot.maintenance.firmware.FirmwareManifest,
+            consent: cn.elonzh.hanppie.robot.maintenance.firmware.FirmwareInstallConsent, openArchive: () -> kotlinx.io.Source) =
+            maintenanceChange(allowFirmware = true) { firmwareCommands.install(expected, configuration, consent, openArchive) }
+        override suspend fun observeInterrupted(previous: cn.elonzh.hanppie.robot.maintenance.firmware.RobotFirmwareState) =
+            maintenanceChange(allowFirmware = true) { firmwareCommands.observeInterrupted(previous) }
+    }
     private val informationCommands = cn.elonzh.hanppie.robot.product.InformationCommands(::request)
     val information: cn.elonzh.hanppie.robot.product.RobotInformationService get() = informationCommands
     private val powerCommands = cn.elonzh.hanppie.robot.product.PowerCommands(::request)
@@ -113,14 +125,14 @@ class AppSession(private val target: RobotTarget,
     @Volatile private var cameraViewChanging = false
     @Volatile private var cameraZoomMayBeActive = false
     val camera: cn.elonzh.hanppie.robot.media.RobotCameraService = object : cn.elonzh.hanppie.robot.media.RobotCameraService by cameraCommands {
-        override suspend fun formatStorage() { check(!addressing.state.value.blocksControl && !calibration.state.value.blocksControl) { "请先结束编址或校准任务" }; cameraCommands.formatStorage() }
-        override suspend fun takePhoto() { check(!addressing.state.value.blocksControl && !calibration.state.value.blocksControl) { "请先结束编址或校准任务" }; cameraCommands.takePhoto() }
+        override suspend fun formatStorage() { check(!addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl) { "请先结束编址、校准或固件任务" }; cameraCommands.formatStorage() }
+        override suspend fun takePhoto() { check(!addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl) { "请先结束编址、校准或固件任务" }; cameraCommands.takePhoto() }
         override suspend fun setRecording(active: Boolean) {
-            check(!active || !addressing.state.value.blocksControl && !calibration.state.value.blocksControl) { "请先结束编址或校准任务" }; cameraCommands.setRecording(active)
+            check(!active || !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl) { "请先结束编址、校准或固件任务" }; cameraCommands.setRecording(active)
         }
         override suspend fun switchCamera(index: Int) {
             txLock.withLock {
-                check(connected && !labRunning && !cameraViewChanging && !tracking.value.blocksManualControl && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl) { "请先退出跟随、脚本、编址或校准任务" }
+                check(connected && !labRunning && !cameraViewChanging && !tracking.value.blocksManualControl && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl) { "请先退出跟随、脚本、编址、校准或固件任务" }
                 cameraViewChanging = true
             }
             try { cameraCommands.switchCamera(index) }
@@ -155,14 +167,14 @@ class AppSession(private val target: RobotTarget,
     @Volatile var product: RobotProduct = RobotProduct()
         private set
     private val modeMutex = Mutex()
-    private suspend fun withIdleControl(action: suspend () -> Unit) {
+    private suspend fun withIdleControl(allowFirmware: Boolean = false, action: suspend () -> Unit) {
         check(modeMutex.tryLock()) { "请等待控制模式切换结束" }
         try {
-            txLock.withLock { check(connected && !powerTransition && !remote && !labRunning && !tracking.value.blocksManualControl && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl) { "请先退出遥控、脚本、编址或校准任务" } }
+            txLock.withLock { check(connected && !powerTransition && !remote && !labRunning && !tracking.value.blocksManualControl && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && (allowFirmware || !firmware.state.value.blocksControl)) { "请先退出遥控、脚本、编址、校准或固件任务" } }
             action()
         } finally { modeMutex.unlock() }
     }
-    private suspend fun powerChange(action: suspend () -> Unit) = withIdleControl {
+    private suspend fun powerChange(allowFirmware: Boolean = false, action: suspend () -> Unit) = withIdleControl(allowFirmware) {
         txLock.withLock { check(robotNanoTime() - lastReceivedNanos < 500_000_000) { "数据已过期，请检查连接后重试" } }
         check(storageAccess.tryLock()) { "请等待存储任务结束" }
         try {
@@ -170,10 +182,11 @@ class AppSession(private val target: RobotTarget,
             action()
         } finally { storageAccess.unlock() }
     }
-    private suspend fun maintenanceChange(action: suspend () -> Unit) = powerChange {
+    private suspend fun maintenanceChange(allowFirmware: Boolean = false, action: suspend () -> Unit) = powerChange(allowFirmware) {
         txLock.withLock {
             check(!cameraViewChanging && cameraCommands.state.value.storage?.shooting != true) { "请等待相机任务结束" }
-            clearMotionInput(); media(false)
+            clearMotionInput()
+            if (!allowFirmware || !firmware.state.value.loaderMayBeActive) media(false)
         }
         action()
     }
@@ -216,7 +229,7 @@ class AppSession(private val target: RobotTarget,
 
     suspend fun enterRemote() = withContext(Dispatchers.IO) {
         modeMutex.withLock {
-        check(!labRunning && !powerTransition && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl) { "请先结束脚本、电源、编址或校准任务" }
+        check(!labRunning && !powerTransition && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl) { "请先结束脚本、电源、编址、校准或固件任务" }
         if (!remote) {
             mode = Protocol.MODE_REMOTE
             for (c in remoteSetup + remoteEffects) {
@@ -345,7 +358,7 @@ class AppSession(private val target: RobotTarget,
         send(Protocol.HOST_CAMERA, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SET_SPEAKER_VOLUME, byteArrayOf(clamped.toByte()))
     }
     fun media(start: Boolean, audio: Boolean = false, resolution: VideoResolution = VideoResolution.R720P) = txLock.withLock {
-        check(!start || !powerTransition && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl) { "电源、编址或校准操作期间不能开启媒体流" }
+        check(!start || !powerTransition && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl) { "电源、编址、校准或固件操作期间不能开启媒体流" }
         if (start) send(Protocol.HOST_CAMERA, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_CAMERA, Protocol.CMD_SET_VIDEO_FORMAT, resolution.payload)
         for (control in if (start) listOf(1, 2) else listOf(2, 1))
             send(Protocol.HOST_CAMERA, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_STREAM_CTRL, byteArrayOf(control.toByte(), if (start) 1 else 0, 0))
@@ -562,7 +575,9 @@ class AppSession(private val target: RobotTarget,
         }
     }
 
-    private fun failRequests() = txLock.withLock {
+    private fun failRequests() {
+        firmwareCommands.close()
+        txLock.withLock {
         calibrationCommands.close()
         addressingCommands.close()
         audioCommands.close()
@@ -575,6 +590,7 @@ class AppSession(private val target: RobotTarget,
         albumCommands.close()
         pendingRequests.values.forEach { it.reply.completeExceptionally(RobotRequestException(RequestProblem.DISCONNECTED)) }
         pendingRequests.clear()
+        }
     }
 
     private fun sendNeutral(forceActuatorStop: Boolean = false) = txLock.withLock {
@@ -585,6 +601,7 @@ class AppSession(private val target: RobotTarget,
         informationCommands.updateAge()
         addressingCommands.tick(robotNanoTime() - lastReceivedNanos < 500_000_000)
         calibrationCommands.tick()
+        firmwareCommands.tick()
         val seq = sequence
         sequence = (sequence + 1) and 65535
         val fresh = remote && robotNanoTime() < inputDeadline
@@ -619,7 +636,7 @@ class AppSession(private val target: RobotTarget,
 
     override fun labMode(running: Boolean) {
         txLock.withLock {
-            check(!powerTransition && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl) { "请先结束电源、编址或校准任务" }
+            check(!powerTransition && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl) { "请先结束电源、编址、校准或固件任务" }
             mode = Protocol.MODE_LAB; labRunning = running
         }
     }
@@ -651,6 +668,13 @@ class AppSession(private val target: RobotTarget,
                                 healthStore.receive(frame)
                                 addressingCommands.receive(frame)
                                 calibrationCommands.receive(frame)
+                                val firmwareWasBlocking = firmware.state.value.blocksControl
+                                firmwareCommands.receive(frame)
+                                if (!firmwareWasBlocking && firmware.state.value.blocksControl && remote) {
+                                    clearMotionInput()
+                                    runCatching { sendNeutral(forceActuatorStop = true) }
+                                    remote = false
+                                }
                                 informationCommands.receive(frame)
                                 albumCommands.receive(frame)
                                 if (cameraCommands.state.value.revision != revision &&
@@ -677,6 +701,7 @@ class AppSession(private val target: RobotTarget,
             }
         } catch (error: Exception) {
             if (active.load()) runCatching { safetyStop() }
+            firmwareCommands.close()
             txLock.withLock { calibrationCommands.close(); addressingCommands.close() }
             if (active.exchange(false)) onLost(error.message ?: error::class.simpleName.orEmpty())
         } finally { failRequests(); socket?.close() }
@@ -699,6 +724,7 @@ class AppSession(private val target: RobotTarget,
 
     override fun close() {
         if (active.load()) runCatching { safetyStop() }
+        firmwareCommands.close()
         txLock.withLock { calibrationCommands.close(); addressingCommands.close() }
         if (active.load() && remote) runCatching { send(Protocol.HOST_CHASSIS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_WORK_MODE_SET, byteArrayOf(0)) }
         active.store(false)

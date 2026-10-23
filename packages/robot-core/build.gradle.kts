@@ -29,6 +29,7 @@ kotlin {
             implementation(libs.coroutines.core)
             implementation(libs.kotlinx.io.core)
             implementation(libs.kotlinx.datetime)
+            implementation(libs.xmlutil.core)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

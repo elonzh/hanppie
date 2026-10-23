@@ -7,4 +7,6 @@ static inline unsigned short hanppie_htons(unsigned short value) { return htons(
 static inline unsigned short hanppie_ntohs(unsigned short value) { return ntohs(value); }
 static inline int hanppie_inet_pton(int family, const char *text, void *address) { return inet_pton(family, text, address); }
 static inline const char *hanppie_inet_ntop(int family, const void *address, char *text, unsigned int size) { return inet_ntop(family, address, text, size); }
-static inline unsigned char *hanppie_md5(const void *bytes, unsigned int size, unsigned char *digest) { return CC_MD5(bytes, size, digest); }
+static inline int hanppie_md5_init(CC_MD5_CTX *ctx) { return CC_MD5_Init(ctx); }
+static inline int hanppie_md5_update(CC_MD5_CTX *ctx, const void *bytes, unsigned int size) { return CC_MD5_Update(ctx, bytes, size); }
+static inline int hanppie_md5_final(CC_MD5_CTX *ctx, unsigned char *digest) { return CC_MD5_Final(digest, ctx); }
