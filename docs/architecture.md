@@ -185,6 +185,8 @@ flowchart LR
        `agent-runtime.db`）。JSONL 语义、幂等、游标和尾部隔离在 commonMain；JVM 用 NIO、iOS 用
        POSIX `fsync` / `flock` 实现 `JournalDirectory`。每个目录使用稳定的 `.sessions.lock`，不会随会话删除重建。
 
+**界面语言：** 共享 `AppLanguage` 统一语言选择、偏好合法值与平台目录列表。界面资源支持简体中文、繁体中文和英文，保留原有 `zh`/`en`/`system` 偏好，繁体使用 `zh-Hant` 偏好及 `values-b+zh+Hant` 目录。跟随系统时，显式 Hans/Hant 脚本优先于地区；未指定脚本的 TW/HK/MO 使用繁体，其余中文使用简体，不支持的语言使用英文。繁体目录统一使用 `zh-Hant-TW` 环境；没有另做港澳区域词表。选择在共享状态中即时生效，由 `WorkbenchViewModel` 持久化；已有 `UiText` 保留资源身份，语言切换时重新解析，不改用户输入、Python、原始设备错误或机器人语音。JVM/Android 共用不可变资源缓存，iOS 依同一语言清单预载目录；日期和语音输入继续使用当前语言标签。验证范围与其他语言/引导欠项见[实施台账 D02](./official-app-capability-implementation.md#d02-繁体中文阶段与剩余范围)。
+
 ---
 
 #### 1.3.3 网络拓扑与连接生命周期
@@ -665,7 +667,7 @@ iOS 与其他客户端共用导航、设置、脚本库、AI 工具及审批、J
 私有 Preferences DataStore，日志不包含密钥。
 
 - 宿主限定左右横屏，使用安全区域；共享输入布局通过 `imePadding` 处理软键盘，iOS 宿主关闭 Compose UIKit 的聚焦自动平移，避免重复位移将输入栏推离窗口。最低系统版本为 iOS 18.5，跟随当前渲染依赖的最低边界。
-- 宿主在模型后台任务启动前读取系统语言，并一次性初始化中英文不可变资源目录。目录加载时临时覆盖 Foundation 参数域并立即恢复；后续语言切换和后台诊断只读取目录，避免并发覆盖 `AppleLanguages` 或将应用语言误记为系统语言。
+- 宿主在模型后台任务启动前读取系统语言，并依共享语言清单一次性初始化不可变资源目录。目录加载时临时覆盖 Foundation 参数域并立即恢复；后续语言切换和后台诊断只读取目录，避免并发覆盖 `AppleLanguages` 或将应用语言误记为系统语言。
 - 本地网络权限用于 UDP/FTP。自动发现涉及广播，需要签名配置包含 Apple 批准的
   `com.apple.developer.networking.multicast` entitlement；手动 IPv4 不能替代系统局域网权限。Wi-Fi 引导使用公开系统设置操作，不依赖私有 URL scheme。
 - H.264 接收队列最多 4 个待处理 Access Unit，丢包后等待关键帧；下行 Opus 使用 Apple 编解码器，播放最多排队 25 帧。照片与 MP4 保存只申请相册添加权限；监听打开时录像包含收到的音频。

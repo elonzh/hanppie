@@ -6,30 +6,52 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.intl.Locale
 import org.jetbrains.compose.resources.StringResource
 
+/** One catalog list for selection, preference validation and native resource loading. */
+internal enum class AppLanguage(val preference: String, val languageTag: String, val nativeName: String) {
+    SIMPLIFIED_CHINESE("zh", "zh-CN", "简体中文"),
+    TRADITIONAL_CHINESE("zh-Hant", "zh-Hant-TW", "繁體中文"),
+    ENGLISH("en", "en-US", "English");
+
+    companion object {
+        fun isPreference(value: String) = value == "system" || entries.any { it.preference == value }
+
+        fun forSystem(languageTag: String): AppLanguage {
+            require(languageTag.isNotBlank()) { "System language tag must not be blank" }
+            val parts = languageTag.replace('_', '-').lowercase().split('-')
+            val locale = Locale(languageTag.replace('_', '-'))
+            if (!locale.language.equals("zh", ignoreCase = true)) return ENGLISH
+            return when {
+                parts.getOrNull(1) == "hant" -> TRADITIONAL_CHINESE
+                parts.getOrNull(1) == "hans" -> SIMPLIFIED_CHINESE
+                locale.region.lowercase() in listOf("tw", "hk", "mo") -> TRADITIONAL_CHINESE
+                else -> SIMPLIFIED_CHINESE
+            }
+        }
+    }
+}
+
 /** App language preference; translated content lives only in Compose XML resources. */
 internal object Localization {
     var choice by mutableStateOf("system"); private set
     var systemLanguageTag by mutableStateOf("zh-CN"); private set
     private var persist: (String) -> Unit = {}
-    val english get() = (if (choice == "system") resolveSupportedLanguage(systemLanguageTag) else choice) != "zh"
-    val languageTag get() = if (english) "en-US" else "zh-CN"
+    private val language get() = if (choice == "system") AppLanguage.forSystem(systemLanguageTag)
+        else AppLanguage.entries.first { it.preference == choice }
+    val english get() = language == AppLanguage.ENGLISH
+    val languageTag get() = language.languageTag
 
     fun initialize(systemLanguage: String, saved: String?, save: (String) -> Unit = {}) {
+        AppLanguage.forSystem(systemLanguage)
+        val selected = saved ?: "system"
+        require(AppLanguage.isPreference(selected)) { "Unsupported language preference: $selected" }
         systemLanguageTag = systemLanguage
-        resolveSupportedLanguage(systemLanguage)
-        choice = saved ?: "system"
-        require(choice in listOf("system", "zh", "en")) { "Unsupported language preference: $choice" }
+        choice = selected
         persist = save
         applyAppLocale(languageTag)
     }
 
-    private fun resolveSupportedLanguage(languageTag: String): String {
-        require(languageTag.isNotBlank()) { "System language tag must not be blank" }
-        return if (Locale(languageTag).language.equals("zh", ignoreCase = true)) "zh" else "en"
-    }
-
     fun select(value: String) {
-        require(value in listOf("system", "zh", "en"))
+        require(AppLanguage.isPreference(value))
         persist(value)
         choice = value
         applyAppLocale(languageTag)

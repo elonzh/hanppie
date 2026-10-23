@@ -135,7 +135,7 @@ import kotlin.math.roundToInt
 @OptIn(ExperimentalLayoutApi::class)
 internal fun GeneralSettingsContent(model: ConsoleController, onSpeechSettings: (() -> Unit)?) {
     SettingsDropdown(tr(Res.string.language), "language", Localization.choice,
-        listOf("system" to tr(Res.string.system_default), "zh" to "简体中文", "en" to "English")) { id ->
+        listOf("system" to tr(Res.string.system_default)) + cn.elonzh.hanppie.ui.i18n.AppLanguage.entries.map { it.preference to it.nativeName }) { id ->
         model.voiceInput.cancel()
         Localization.select(id)
     }

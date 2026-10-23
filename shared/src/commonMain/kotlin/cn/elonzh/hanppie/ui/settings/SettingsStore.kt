@@ -186,7 +186,7 @@ internal class DataStoreSettingsStore(
     }
 
     override suspend fun saveLanguage(language: String) {
-        require(language in listOf("system", "zh", "en"))
+        require(cn.elonzh.hanppie.ui.i18n.AppLanguage.isPreference(language))
         dataStore.edit { it[Keys.language] = language }
     }
 

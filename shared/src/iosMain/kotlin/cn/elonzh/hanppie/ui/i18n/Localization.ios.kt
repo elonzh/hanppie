@@ -11,10 +11,10 @@ import platform.Foundation.NSDateFormatter
 import platform.Foundation.NSLocale
 import platform.Foundation.dateWithTimeIntervalSince1970
 
-// Build both supported catalogs once, before model workers start. Kotlin's synchronized lazy
+// Build supported catalogs once, before model workers start. Kotlin's synchronized lazy
 // publishes an immutable lookup; changing app language never changes Foundation defaults again.
 private val catalogs by lazy {
-    listOf("en-US", "zh-CN").associateWith { languageTag ->
+    AppLanguage.entries.map { it.languageTag }.associateWith { languageTag ->
         val defaults = NSUserDefaults.standardUserDefaults
         val previous = defaults.volatileDomainForName(NSArgumentDomain)
         val environment = try {
