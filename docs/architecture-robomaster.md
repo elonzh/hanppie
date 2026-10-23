@@ -630,6 +630,29 @@ Android 平台边界依据 [USB accessory 官方指南](https://developer.androi
 
 证据位于忽略目录 `.hanppie/validation/2026-10-22-official-gap/I02-native-*.txt`、`I02-android-*.txt`，Android 原始条目在 `.hanppie/app-analysis/2026-10-24-android-1.2.0/`；初始文件指纹在 `2026-10-24-27a7293-audit.json`，后续原生补证在 `I02-link-native-contracts.json`。共享会话、信息页与驾驶输入的实施状态由台账维护；没有构建或运行 Hanppie Android，也未连接真实手柄。全部输入接入、升级与平台完成状态见[实施台账](./official-app-capability-implementation.md)，不以源码或合成字节流计作原生运行通过。
 
+#### 官方 GamePad 的本地 V1 升级
+
+固定 macOS 1.1.5/build 239 的 `DJIFirmwareUpgradeController.SendStartGamePadFirmwareUpgrade` 把文件路径通过 FirmwareUpgrade 子事件 10 交给原生，而非普通机器人的子事件 1。`SystemFirmwareUpgrade.UpdateGamePadVersionInfo` 从发布清单选择模块 ID `0600` 的版本和文件名。原生 `OnEventArrival`（`0x4ad70`）将该分支类型设为 1，再进入同一升级处理器的 GamePad 路径；因此本地模块文件和机器人 TAR 不是可互换输入。**固定版托管消费者 / 原生构造**
+
+以下构造通过 macOS 原生与官方 Android 1.2.0/build 382 arm64 库定向对照；没有真实手柄报文，表中长度是原生交给编码器的载荷长度，不是已验收的设备契约。
+
+| 阶段 | 已恢复的构造 / 回调 | 静态依据 |
+| --- | --- | --- |
+| 进入 loader | 独立 GamePad 链路，节点 `06 / 00:07`，9 字节全零 | macOS `RequestEnterLoaderMode 4c840` 的类型 1 分支；Android `507a30` |
+| 协商 V1 接收 | `06 / 00:08`，13 字节；uint32LE@1 为文件大小减 480，uint16LE@11 为 1，其余为零。响应成功后读取 uint16LE@1 作为分片大小 | macOS `RequestReceiveWithV1Upgrade 4dcd0`、回调 `50cc0`；Android `508f9c` |
+| 分片 | `06 / 00:09`；`GeneratePack` 分配并交付“协商分片大小 + 8”字节，byte0 为 0，uint32LE@1 为分片号，uint16LE@5 为协商大小，数据从 byte7 开始；最后不足一片的剩余数据区先填 byte `01` | macOS `GeneratePack 35b10`、`transferData 35730`；Android `4f03a0`、`4f0020` |
+| 分片应答 | retcode@0 为 0 时，读取 uint32LE@1，下一片号为回显值加 1；原生以“下一片号 × 协商大小”重新计算偏移 | macOS 分片回调 `35e70`；这不是单纯按已发送字节累加 |
+| 传输完成 | `06 / 00:0a`，17 字节为 0 加文件从偏移 480 到结尾的原始 MD5；`00` 与 `f7` 进入传输接受分支，随后请求重启 | macOS `SendWriteDataFinished 4cef0`、回调 `51b20`；Android `5080e0` |
+| 重启 | `06 / 00:0b`；观察到构造向 Buffer 交付 14 字节，但仅前 6 字节在该函数中被明确置零 | macOS `RebootDevice 4d690`；Android `508930`，尾区仍未定 |
+
+`djirobomasterv1session::v1_upload` 和完成摘要均跳过文件前 480 字节；该偏移不能解释为已验证的签名格式，也不能省略模块 ID、大小、完整性和设备适配检查。当前本地 `00.06.0521.tar` 的发布清单有 27 个模块，未含 `0600`；它只能作为机器人包的既有材料，不能作为本分支正向模块样本。**原生文件处理 / 本地归档核对**
+
+两个平台的 `GeneratePack` 均只在 byte7 起填充协商大小的数据区，再交付大小加 8 的载荷；最后一个字节未在该构造中明确初始化。重启构造也存在上述未定尾区。静态代码不能确定这些区域的设备语义或固定线上值，不将其自行补零或删短后称为恢复了完整报文；须由实际封包或更强的接收端证据补齐。编译成功或用相同猜测生成的模拟应答不能解决这个缺口。**静态未定边界**
+
+官方托管控制器建立 60 秒 GamePad 超时；收到状态 0 后把“正在升级/等待重启”标志置真，之后连接事件为真时提示成功并另外查询版本。该提示条件不包含“回读版本等于所选模块版本”，因此仅观察重连或传输接受不能证明目标固件已安装。后续接入还需分别表达本地传输、设备接受、重启和版本核对，并处理失联后不自动重放升级。**固定版 UI 生命周期 / 后续实现约束**
+
+本次原生片段与托管源指纹、两个库及本地归档身份保存在忽略目录 `I02-update-native-contracts.json`，核对脚本为 `I02-update-investigation.py`。当前没有新增 V1 发送器、升级入口、平台运行或设备结论；实施状态与剩余证据见[台账](./official-app-capability-implementation.md#i02-本地-v1-更新契约调查)。
+
 #### 模块健康与电池报告
 
 固定 macOS 1.1.5/build 239 的 `RobomasterSystemAbstraction::OnDeviceStatusPush`（`0x694f10`）同时生成 WorkingDevices 和 Exceptions，而不是两个独立报文。现有 `3f:12` 布局仍为数量 + 各组 `(uint16LE deviceId, uint8 count, count 个 uint16LE 状态字)`；原生在 `0x695159` 左移 deviceId 16 位，`0x6951a1/0x6951a6` 逐项读取状态字并按位合并，发布完整 32 位异常码。此前组件清单仅跳过的附加字节因此可命名为异常字；解析继续复用 `RobotProductProtocol`，保留原始值和未知模块。**原生/当前代码**
