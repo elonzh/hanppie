@@ -27,16 +27,27 @@ class LanguageSettingsUiTest {
     @Test fun desktopLandscape() = scenario(1280, 720, 1f, false)
     @Test fun largeTraditionalLandscape() = scenario(844, 390, 1.4f, true)
 
-    private fun scenario(width: Int, height: Int, scale: Float, dark: Boolean) =
+    @Test fun japaneseCompactLandscape() = scenario(844, 390, 1f, false, "ja")
+    @Test fun japaneseMediumDarkLandscape() = scenario(1024, 768, 1f, true, "ja")
+    @Test fun japaneseDesktopLandscape() = scenario(1280, 720, 1f, false, "ja")
+    @Test fun japaneseLargeLandscape() = scenario(844, 390, 1.4f, true, "ja")
+
+    private fun scenario(width: Int, height: Int, scale: Float, dark: Boolean, language: String = "zh-Hant") =
         runDesktopComposeUiTest(width = width, height = height) {
+            val japanese = language == "ja"
+            val nativeName = if (japanese) "日本語" else "繁體中文"
+            val languageLabel = if (japanese) "言語" else "語言"
+            val systemLabel = if (japanese) "システムに従う" else "跟隨系統"
+            val resetQuestion = if (japanese) "すべての設定を既定値に戻しますか？" else "恢復所有預設設定？"
+            val cancelLabel = if (japanese) "キャンセル" else "取消"
             val store = MemorySettingsStore()
             Localization.initialize("zh-CN", null) { runBlocking { store.saveLanguage(it) } }
             val model = testConsoleModel(settingsStore = store)
             val appearance = AppearanceController(AppearanceSettings(if (dark) NightMode.DARK else NightMode.LIGHT))
-            val prefix = "language-$width-$height-$scale-${if (dark) "dark" else "light"}"
+            val prefix = "language-${if (japanese) "ja-" else ""}$width-$height-$scale-${if (dark) "dark" else "light"}"
             fun capture(name: String, popup: Boolean = false) {
                 waitForIdle()
-                val node = if (popup) onNode(isRoot() and hasAnyDescendant(hasTestTag("language-zh-Hant")))
+                val node = if (popup) onNode(isRoot() and hasAnyDescendant(hasTestTag("language-$language")))
                     else onNode(isRoot() and hasAnyDescendant(hasTestTag("settings-page")))
                 val image = node.captureToImage()
                 val pixels = IntArray(image.width * image.height); image.readPixels(pixels)
@@ -60,30 +71,31 @@ class LanguageSettingsUiTest {
                 onNodeWithTag("language-selector").assertIsDisplayed().performClick()
                 onNodeWithTag("language-zh").assertIsDisplayed()
                 onNodeWithTag("language-en").assertIsDisplayed()
-                onNodeWithTag("language-zh-Hant").assertIsDisplayed(); capture("options", popup = true)
-                onNodeWithTag("language-zh-Hant").performClick()
-                onNodeWithText("繁體中文").assertIsDisplayed()
-                onNodeWithText("語言").assertIsDisplayed()
-                onNodeWithText("语言").assertDoesNotExist(); capture("traditional")
-                assertEquals("zh-Hant", runBlocking { store.loadUi() }.language)
+                onNodeWithTag("language-zh-Hant").assertIsDisplayed()
+                onNodeWithTag("language-ja").assertIsDisplayed(); capture("options", popup = true)
+                onNodeWithTag("language-$language").performClick()
+                onNodeWithText(nativeName).assertIsDisplayed()
+                onNodeWithText(languageLabel).assertIsDisplayed()
+                onNodeWithText("语言").assertDoesNotExist(); capture(if (japanese) "japanese" else "traditional")
+                assertEquals(language, runBlocking { store.loadUi() }.language)
                 runOnIdle { Localization.initialize("en-GB", runBlocking { store.loadUi() }.language) { runBlocking { store.saveLanguage(it) } } }
-                onNodeWithText("繁體中文").assertIsDisplayed()
-                assertEquals("zh-Hant-TW", Localization.languageTag)
+                onNodeWithText(nativeName).assertIsDisplayed()
+                assertEquals(if (japanese) "ja-JP" else "zh-Hant-TW", Localization.languageTag)
                 onNodeWithTag("language-selector").performClick(); onNodeWithTag("language-en").performClick()
                 onNodeWithText("Language").assertIsDisplayed()
                 onNodeWithTag("language-selector").performClick(); onNodeWithTag("language-zh").performClick()
                 onNodeWithText("语言").assertIsDisplayed()
-                runOnIdle { Localization.initialize("zh-HK", "system") { runBlocking { store.saveLanguage(it) } } }
-                onNodeWithText("語言").assertIsDisplayed()
-                onNodeWithText("跟隨系統").assertIsDisplayed()
+                runOnIdle { Localization.initialize(if (japanese) "ja-JP" else "zh-HK", "system") { runBlocking { store.saveLanguage(it) } } }
+                onNodeWithText(languageLabel).assertIsDisplayed()
+                onNodeWithText(systemLabel).assertIsDisplayed()
                 categories(); onNodeWithTag("settings-category-control").performScrollTo().performClick()
                 onNodeWithTag("settings-detail-control").assertIsDisplayed(); capture("control")
                 categories()
                 onNodeWithContentDescription("restore-default-settings").performClick()
-                onNodeWithText("恢復所有預設設定？").assertIsDisplayed(); capture("reset")
-                onNodeWithText("取消").performClick()
+                onNodeWithText(resetQuestion).assertIsDisplayed(); capture("reset")
+                onNodeWithText(cancelLabel).performClick()
                 assertEquals("system", Localization.choice)
-                onNodeWithText("恢復所有預設設定？").assertDoesNotExist()
+                onNodeWithText(resetQuestion).assertDoesNotExist()
             } finally { model.close(); Localization.initialize("zh", null) }
         }
 }

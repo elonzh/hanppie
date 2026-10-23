@@ -67,6 +67,28 @@ class LocalizationTest {
         assertEquals("Use {1}",tr(Res.string.use_value,"{1}"))
     }
 
+    @Test fun japaneseSystemSelectionAndSavedChoiceUpdateLiveState() {
+        for (tag in listOf("ja", "ja-JP", "ja_US")) {
+            Localization.initialize(tag, "system")
+            assertEquals("ja-JP", Localization.languageTag, tag)
+            assertEquals("設定", tr(Res.string.settings))
+        }
+        var saved: String? = null
+        Localization.initialize("zh-HK", "zh") { saved = it }
+        val state = ConsoleState().lost("raw device error")
+        Localization.select("ja")
+        assertEquals("ja", saved)
+        assertEquals("接続が切れました", state.status)
+        assertEquals("raw device error", state.error)
+        assertEquals("{1} を使用", tr(Res.string.use_value, "{1}"))
+        Localization.initialize("en-US", saved)
+        assertEquals("ja-JP", Localization.languageTag)
+        Localization.select("system")
+        assertEquals("Settings", tr(Res.string.settings))
+        Localization.initialize("de-DE", "system")
+        assertEquals("en-US", Localization.languageTag)
+    }
+
     @OptIn(ExperimentalResourceApi::class)
     @Test fun resourceParametersMatchAcrossLanguages() {
         fun templates(language: String): Map<String, String> {
@@ -78,7 +100,7 @@ class LocalizationTest {
             }
         }
         val english = templates("en")
-        val translated = listOf("zh", "zh-Hant").associateWith { templates(it) }
+        val translated = AppLanguage.entries.filter { it != AppLanguage.ENGLISH }.associate { it.preference to templates(it.preference) }
         val parameter = Regex("1234500[1-9]")
         for ((name, template) in english) {
             for ((language, catalog) in translated) assertEquals(parameter.findAll(template).map { it.value }.groupingBy { it }.eachCount(),

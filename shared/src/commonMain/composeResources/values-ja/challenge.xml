@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="challenge_entry">チャレンジ</string>
+    <string name="challenge_sounds">フィードバック音</string>
+    <string name="challenge_aimed">マーカー %1$s に照準中</string>
+    <string name="challenge_hit_unscored">マーカー %1$s · このラウンドでは得点なし</string>
+    <string name="challenge_hit_points">ターゲット %1$s · +100 点</string>
+    <string name="challenge_hit_completed">ターゲット %1$s を完了</string>
+    <string name="challenge_title">シングルプレイヤーチャレンジ</string>
+    <string name="challenge_practice">射撃練習</string>
+    <string name="challenge_race">ターゲットレース</string>
+    <string name="challenge_practice_guide">マーカー 1～5 を見える位置に置き、制限時間内に指定された標的を赤外線で狙います。1 回命中すると 100 点で、各ステージは 3 グループです。</string>
+    <string name="challenge_race_guide">番号付きマーカーの数を選び、好きな順番で完了させます。所要時間と各チェックポイントを記録します。</string>
+    <string name="challenge_gel_guide">倒れる標的を使ってください。発射報告後に最寄りの標的が消えたかどうかで判定します。</string>
+    <string name="challenge_marker_count">番号付き標的の数</string>
+    <string name="challenge_start">チャレンジを開始</string>
+    <string name="challenge_not_ready">開始前に操縦を有効にし、ライブ映像を確認してください。</string>
+    <string name="challenge_preparing">照準、ルール、認識を準備中…</string>
+    <string name="challenge_countdown">開始まで %1$s</string>
+    <string name="challenge_wave_clear">グループ完了</string>
+    <string name="challenge_level_change">ステージ %1$s を準備中</string>
+    <string name="challenge_stopping">操縦状態を復元中…</string>
+    <string name="challenge_practice_live">ステージ %1$s · %2$s/3 · %3$s 点 · %4$s</string>
+    <string name="challenge_race_live">タイム %1$s</string>
+    <string name="challenge_targets_left">残りの標的: %1$s</string>
+    <string name="challenge_stop">チャレンジを終了</string>
+    <string name="challenge_finished">チャレンジ結果</string>
+    <string name="challenge_completed">すべての標的を完了</string>
+    <string name="challenge_time_expired">時間切れ</string>
+    <string name="challenge_input_lost">操縦入力が中断されました。準備ができたら再開してください。</string>
+    <string name="challenge_vision_failed">認識が中断されました。ライブ映像を確認してから再試行してください。</string>
+    <string name="challenge_cancelled">チャレンジを終了しました</string>
+    <string name="challenge_cleanup_unknown">終了処理は未確認です。次のラウンドを始める前に停止を再試行してください。</string>
+    <string name="challenge_calibration_failed">ロボットの照準を読み取れませんでした。接続を確認して再試行してください。</string>
+    <string name="challenge_rules_rejected">ロボットがチャレンジのルールを拒否しました。</string>
+    <string name="challenge_rules_timed_out">チャレンジのルールは未確認です。接続を確認してから再試行してください。</string>
+    <string name="challenge_score">%1$s 点</string>
+    <string name="challenge_checkpoint">ターゲット %1$s · %2$s</string>
+    <string name="challenge_name">プレイヤー名</string>
+    <string name="challenge_save_score">今回のセッションに追加</string>
+    <string name="challenge_local_scores">今回のセッション · 上位 5 件</string>
+    <string name="challenge_replay">もう一度挑戦</string>
+    <string name="challenge_back_to_driving">操縦に戻る</string>
+</resources>

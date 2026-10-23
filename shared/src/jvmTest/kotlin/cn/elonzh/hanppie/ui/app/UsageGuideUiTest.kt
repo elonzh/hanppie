@@ -25,6 +25,7 @@ class UsageGuideUiTest {
     @Test fun mediumDarkLandscape() = scenario(1024, 768, "zh-Hant", 1f, true)
     @Test fun desktopLandscape() = scenario(1280, 720, "zh", 1f, false)
     @Test fun largeEnglishLandscape() = scenario(844, 390, "en", 1.4f, true)
+    @Test fun largeJapaneseLandscape() = scenario(844, 390, "ja", 1.4f, true)
 
     @Test fun destinationActionsUseExistingRoutesWithoutStartingControl() = runDesktopComposeUiTest(width = 1024, height = 768) {
         Localization.initialize("zh", "zh")
@@ -120,7 +121,7 @@ class UsageGuideUiTest {
                         if (topic == GuideTopic.FIRST_CONNECTION && index == 0) {
                             capture("first-step")
                             assertCompactDestinationVisible(GuideDestination.CONNECTION)
-                            if (language == "en") {
+                            if (language == "en" || language == "ja") {
                                 onNodeWithTag("usage-guide-more").assertIsDisplayed().assertHeightIsAtLeast(48.dp).performClick()
                                 onNodeWithTag("usage-guide-open-CONNECTION").assertIsDisplayed()
                                 capture("first-step-scrolled")
@@ -133,7 +134,7 @@ class UsageGuideUiTest {
                         if ((topic == GuideTopic.DRIVING || topic == GuideTopic.TRACKING || topic == GuideTopic.MAINTENANCE) && index == topic.steps.lastIndex) {
                             capture(topic.name.lowercase())
                             assertCompactDestinationVisible(topic.steps[index].destination!!)
-                            if (language == "en") {
+                            if (language == "en" || language == "ja") {
                                 onNodeWithTag("usage-guide-more").assertIsDisplayed().assertHeightIsAtLeast(48.dp).performClick()
                                 onNodeWithTag("usage-guide-open-${topic.steps[index].destination!!.name}").assertIsDisplayed()
                                 capture("${topic.name.lowercase()}-scrolled")

@@ -10,7 +10,8 @@ import org.jetbrains.compose.resources.StringResource
 internal enum class AppLanguage(val preference: String, val languageTag: String, val nativeName: String) {
     SIMPLIFIED_CHINESE("zh", "zh-CN", "简体中文"),
     TRADITIONAL_CHINESE("zh-Hant", "zh-Hant-TW", "繁體中文"),
-    ENGLISH("en", "en-US", "English");
+    ENGLISH("en", "en-US", "English"),
+    JAPANESE("ja", "ja-JP", "日本語");
 
     companion object {
         fun isPreference(value: String) = value == "system" || entries.any { it.preference == value }
@@ -19,7 +20,8 @@ internal enum class AppLanguage(val preference: String, val languageTag: String,
             require(languageTag.isNotBlank()) { "System language tag must not be blank" }
             val parts = languageTag.replace('_', '-').lowercase().split('-')
             val locale = Locale(languageTag.replace('_', '-'))
-            if (!locale.language.equals("zh", ignoreCase = true)) return ENGLISH
+            val language = locale.language.lowercase()
+            if (language != "zh") return entries.firstOrNull { it.preference == language } ?: ENGLISH
             return when {
                 parts.getOrNull(1) == "hant" -> TRADITIONAL_CHINESE
                 parts.getOrNull(1) == "hans" -> SIMPLIFIED_CHINESE

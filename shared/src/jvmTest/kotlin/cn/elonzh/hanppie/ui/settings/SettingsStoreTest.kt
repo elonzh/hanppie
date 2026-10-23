@@ -87,8 +87,10 @@ class SettingsStoreTest {
             assertEquals(UiPreferences("en", AppearanceSettings(NightMode.DARK), "test.service/.Recognizer", SavedWindowPosition(-320f, 72f)), store.loadUi())
             store.saveLanguage("zh-Hant")
             assertEquals("zh-Hant", store.loadUi().language)
+            store.saveLanguage("ja")
+            assertEquals("ja", store.loadUi().language)
             assertFailsWith<IllegalArgumentException> { store.saveLanguage("zh-Hans") }
-            assertEquals("zh-Hant", store.loadUi().language)
+            assertEquals("ja", store.loadUi().language)
             assertEquals(connection.copy(appId = "abcdef12", robots = listOf(connection.robots.single().copy(appId = "abcdef12"))), store.loadConnection())
             assertTrue(file.readBytes().toString(Charsets.ISO_8859_1).contains("secret-value"))
 
