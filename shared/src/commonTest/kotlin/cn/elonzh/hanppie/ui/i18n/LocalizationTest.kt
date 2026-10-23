@@ -85,7 +85,29 @@ class LocalizationTest {
         assertEquals("ja-JP", Localization.languageTag)
         Localization.select("system")
         assertEquals("Settings", tr(Res.string.settings))
-        Localization.initialize("de-DE", "system")
+        Localization.initialize("fr-FR", "system")
+        assertEquals("en-US", Localization.languageTag)
+    }
+
+    @Test fun germanSystemAndSavedChoiceKeepLiveStateAndParameters() {
+        for (tag in listOf("de", "de-DE", "de_AT", "de-CH")) {
+            Localization.initialize(tag, "system")
+            assertEquals("de-DE", Localization.languageTag, tag)
+            assertEquals("Einstellungen", tr(Res.string.settings))
+        }
+        var saved: String? = null
+        Localization.initialize("ja-JP", "ja") { saved = it }
+        val state = ConsoleState().lost("raw device error")
+        Localization.select("de")
+        assertEquals("de", saved)
+        assertEquals("Verbindung verloren", state.status)
+        assertEquals("raw device error", state.error)
+        assertEquals("{1} verwenden", tr(Res.string.use_value, "{1}"))
+        Localization.initialize("en-US", saved)
+        assertEquals("de-DE", Localization.languageTag)
+        Localization.select("system")
+        assertEquals("Settings", tr(Res.string.settings))
+        Localization.initialize("fr-FR", "system")
         assertEquals("en-US", Localization.languageTag)
     }
 

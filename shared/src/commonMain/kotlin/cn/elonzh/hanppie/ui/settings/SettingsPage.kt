@@ -61,7 +61,8 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
         title = tr(Res.string.restore_default_settings_question),
         summary = tr(Res.string.restore_default_settings_summary)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button({ confirmDefaults = false }, Modifier.weight(1f).heightIn(min = 48.dp)) {
+            Button({ confirmDefaults = false }, Modifier.weight(1f).heightIn(min = 48.dp),
+                insideMargin = PaddingValues(horizontal = 8.dp, vertical = 13.dp)) {
                 Text(tr(Res.string.cancel))
             }
             Button({
@@ -70,7 +71,8 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                 Localization.select("system")
                 appearance.update(AppearanceSettings())
                 model.restoreDefaultSettings()
-            }, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.buttonColorsPrimary()) {
+            }, Modifier.weight(1f).heightIn(min = 48.dp).testTag("restore-defaults-confirm"),
+                insideMargin = PaddingValues(horizontal = 8.dp, vertical = 13.dp), colors = ButtonDefaults.buttonColorsPrimary()) {
                 Text(tr(Res.string.restore_defaults))
             }
         }

@@ -6,6 +6,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -32,19 +34,25 @@ class LanguageSettingsUiTest {
     @Test fun japaneseDesktopLandscape() = scenario(1280, 720, 1f, false, "ja")
     @Test fun japaneseLargeLandscape() = scenario(844, 390, 1.4f, true, "ja")
 
+    @Test fun germanCompactLandscape() = scenario(844, 390, 1f, false, "de")
+    @Test fun germanMediumDarkLandscape() = scenario(1024, 768, 1f, true, "de")
+    @Test fun germanDesktopLandscape() = scenario(1280, 720, 1f, false, "de")
+    @Test fun germanLargeLandscape() = scenario(844, 390, 1.4f, true, "de")
+
     private fun scenario(width: Int, height: Int, scale: Float, dark: Boolean, language: String = "zh-Hant") =
         runDesktopComposeUiTest(width = width, height = height) {
-            val japanese = language == "ja"
-            val nativeName = if (japanese) "日本語" else "繁體中文"
-            val languageLabel = if (japanese) "言語" else "語言"
-            val systemLabel = if (japanese) "システムに従う" else "跟隨系統"
-            val resetQuestion = if (japanese) "すべての設定を既定値に戻しますか？" else "恢復所有預設設定？"
-            val cancelLabel = if (japanese) "キャンセル" else "取消"
+            val (nativeName, languageLabel, systemLabel, resetQuestion, cancelLabel) = when (language) {
+                "ja" -> listOf("日本語", "言語", "システムに従う", "すべての設定を既定値に戻しますか？", "キャンセル")
+                "de" -> listOf("Deutsch", "Sprache", "Systemsprache", "Alle Einstellungen zurücksetzen?", "Abbrechen")
+                else -> listOf("繁體中文", "語言", "跟隨系統", "恢復所有預設設定？", "取消")
+            }
+            val languageTag = when (language) { "ja" -> "ja-JP"; "de" -> "de-DE"; else -> "zh-Hant-TW" }
+            val captureLanguage = when (language) { "ja" -> "japanese"; "de" -> "german"; else -> "traditional" }
             val store = MemorySettingsStore()
             Localization.initialize("zh-CN", null) { runBlocking { store.saveLanguage(it) } }
             val model = testConsoleModel(settingsStore = store)
             val appearance = AppearanceController(AppearanceSettings(if (dark) NightMode.DARK else NightMode.LIGHT))
-            val prefix = "language-${if (japanese) "ja-" else ""}$width-$height-$scale-${if (dark) "dark" else "light"}"
+            val prefix = "language-${if (language == "zh-Hant") "" else "$language-"}$width-$height-$scale-${if (dark) "dark" else "light"}"
             fun capture(name: String, popup: Boolean = false) {
                 waitForIdle()
                 val node = if (popup) onNode(isRoot() and hasAnyDescendant(hasTestTag("language-$language")))
@@ -72,27 +80,37 @@ class LanguageSettingsUiTest {
                 onNodeWithTag("language-zh").assertIsDisplayed()
                 onNodeWithTag("language-en").assertIsDisplayed()
                 onNodeWithTag("language-zh-Hant").assertIsDisplayed()
-                onNodeWithTag("language-ja").assertIsDisplayed(); capture("options", popup = true)
+                onNodeWithTag("language-ja").assertIsDisplayed()
+                onNodeWithTag("language-de").assertIsDisplayed(); capture("options", popup = true)
                 onNodeWithTag("language-$language").performClick()
                 onNodeWithText(nativeName).assertIsDisplayed()
                 onNodeWithText(languageLabel).assertIsDisplayed()
-                onNodeWithText("语言").assertDoesNotExist(); capture(if (japanese) "japanese" else "traditional")
+                onNodeWithText("语言").assertDoesNotExist(); capture(captureLanguage)
                 assertEquals(language, runBlocking { store.loadUi() }.language)
                 runOnIdle { Localization.initialize("en-GB", runBlocking { store.loadUi() }.language) { runBlocking { store.saveLanguage(it) } } }
                 onNodeWithText(nativeName).assertIsDisplayed()
-                assertEquals(if (japanese) "ja-JP" else "zh-Hant-TW", Localization.languageTag)
+                assertEquals(languageTag, Localization.languageTag)
                 onNodeWithTag("language-selector").performClick(); onNodeWithTag("language-en").performClick()
                 onNodeWithText("Language").assertIsDisplayed()
                 onNodeWithTag("language-selector").performClick(); onNodeWithTag("language-zh").performClick()
                 onNodeWithText("语言").assertIsDisplayed()
-                runOnIdle { Localization.initialize(if (japanese) "ja-JP" else "zh-HK", "system") { runBlocking { store.saveLanguage(it) } } }
+                runOnIdle { Localization.initialize(if (language == "zh-Hant") "zh-HK" else languageTag, "system") { runBlocking { store.saveLanguage(it) } } }
                 onNodeWithText(languageLabel).assertIsDisplayed()
                 onNodeWithText(systemLabel).assertIsDisplayed()
                 categories(); onNodeWithTag("settings-category-control").performScrollTo().performClick()
                 onNodeWithTag("settings-detail-control").assertIsDisplayed(); capture("control")
                 categories()
                 onNodeWithContentDescription("restore-default-settings").performClick()
-                onNodeWithText(resetQuestion).assertIsDisplayed(); capture("reset")
+                onNodeWithText(resetQuestion).assertIsDisplayed()
+                onNodeWithTag("restore-defaults-confirm").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                if (language == "de") {
+                    val layouts = mutableListOf<TextLayoutResult>()
+                    onNode(hasText("Zurücksetzen") and hasAnyAncestor(hasTestTag("restore-defaults-confirm")), useUnmergedTree = true)
+                        .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+                    assertTrue(layouts.isNotEmpty())
+                    assertTrue(layouts.all { it.lineCount == 1 }, "The complete German action must fit without splitting its word")
+                }
+                capture("reset")
                 onNodeWithText(cancelLabel).performClick()
                 assertEquals("system", Localization.choice)
                 onNodeWithText(resetQuestion).assertDoesNotExist()
