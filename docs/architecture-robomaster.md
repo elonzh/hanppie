@@ -957,21 +957,51 @@ S1 的红外能力至少包含三层，不能把其中任意一层统称为“�
 | 身份与技能可配置 | `SetTeamInfo(0x3F/0x0B)`、`SetCarAndSkillID(0x3F/0x37)`、`SetPlayerColor(0x3F/0x34)` 实测 ACK；`GetTeamInfo(0x35)`、`GetPlayerColor(0x36)` 有返回；技能表/自定义技能/Scratch 技能桥接 key 见 key-index |
 | 0x3F 命令集扫出 53 条候选（全二进制 117 条） | 反汇编包常量模式 + 符号归属，方法与分级见[探测记录](./s1-ir-armor-hit-probe-2026-09-18.md) |
 
-#### 自定义技能（Lab 脚本作为技能）与命令载荷结构（2026-09-19 静态分析）
+#### 自主程序与自定义技能安装
+
+以下请求/响应结构来自固定 macOS 1.1.5/build 239 的原生构造与解码；属于静态证据，尚未进行本轮设备验证。`COMMON/DjiScratchProjectSkillType.cs` 定义普通程序 `-1`、FPV 技能槽 `0`、自主程序槽 `10`。`SystemUploadDsp` 在 DSP/音频摘要核对和必要上传后安装指定槽位；连接后 `AutoInstallSkill` 先卸载槽 10/0，再按本地 `SkillProjects` 重装。不能把临时运行、持久安装、对战技能 ID 和主机 AI skill 文档混为一体。
+
+| 用户任务 | 原生请求/响应 | 固定版本证据 |
+| --- | --- | --- |
+| 安装指定槽位 | `a9 / 3f:a3`；49 字节：`uint8((slot << 4) \| 8)`、GUID ASCII 32 字节、sign ASCII 16 字节 | `SendInstallSkillPack 1b270`；选择子 `1b2aa/1b2ad`、长度 `1b3ac`、节点 host 9/index 5 `1b394` |
+| 卸载指定槽位 | `a9 / 3f:a3`；34 字节：`uint8((slot << 4) \| 9)` 后接 33 个零 | `SendUninstallSkillPack 1b690`；选择子 `1b6d7/1b6db`、长度 `1b759` |
+| 启动/停止槽位技能 | `a9 / 3f:a3`；34 字节：启动低位 `0x0b`、停止低位 `0x0c`，与 `slot << 4` 合并，后接 33 个零 | `SendSkillControlPack 1b8c0`；动作 key `0/1` 分别进入启动/停止分支 `1b8f5..1b90c` |
+| 安装应答 | 首字节返回码；0 转换为 `InstallSkillSucceed`，非零为失败 | 安装回调 `1ff50`，`1ff8b/1ffa9` 分别发内部回调值 4/3；这些内部值不是无线返回码 |
+| 查询已安装技能表 | `a9 / 3f:a8` 空请求；成功响应首字节返回码、次字节数量，随后每条 73 字节：槽位 1、GUID ASCII 32、名称 40 | `GetCustomSkillInfo 698e00`、解码 `6b20f0`，数量 `6b214a`、步长 `6b2193`、字段 `6b21aa..6b225e`；名称截取至 NUL/换行 |
+
+因此槽位 10 安装/卸载/启动/停止的首字节分别为 `a8/a9/ab/ac`，槽位 0 为 `08/09/0b/0c`；相同的 `a3` 命令有不同选择子、长度和用途，不能仅按 opcode 认定任务已实现。官方 [EP Core 支持页](https://www.dji.com/support/product/robomaster-ep-core)也区分普通程序、FPV 自定义技能和机器人按钮启动的自主程序；按钮行为和持久性须由实际硬件验证。
+
+Hanppie 的 `RemoteCommands.remoteSetup` 已含 `a9`/`09` 卸载选择子及 `a8`/`08` 固定 GUID/sign 安装包；`AppSession.enterRemote` 的循环实际发送所有这些非 control 项。当前两个卸载包均为 35 字节（选择子后 34 个零），比原生构造多一零，不能据首字节相同便称载荷完全一致。进入 FPV 会发送这些包是代码事实；是否接受、是否成功卸载/改绑、固定种子是否仍为固件所需及跨客户端影响均待设备验证。保持旧序列，不以静态恢复代替更改授权，取舍统一记录于[台账 C15](./official-app-capability-implementation.md#冲突记录保持现状留待决策)。
+
+原生片段及来源摘要在忽略目录 `.hanppie/validation/2026-10-22-official-gap/P01-native-*` 与 `P01-native-contracts.json`；库 SHA-256 为 `66e5ff67a64931ca492af448216cac3ee34323c3442bc72cd7acdcf19bf96e80`。当前实现未新增安装、卸载或槽位控制入口。
+
+#### 程序与音频资源摘要查询
+
+官方 `SystemUploadDsp.UploadDspWithFTP` 先核对 DSP 的 GUID/sign；不匹配时查询音频摘要，只对设备明确匹配的音频省略正文，查询失败保留完整正文。DSP 匹配时普通运行可跳过重传，安装任务仍需请求指定槽位。主机本地计算 MD5 或 FTP 返回不能替代这两种机内核对。
+
+| 查询 | 原生请求与响应 | 固定版本证据 |
+| --- | --- | --- |
+| DSP 匹配 | `a9 / 3f:a3`；49 字节 `01 + GUID ASCII32 + sign ASCII16`。原生回调将响应首字节 0 转换为桥接 `retCode=0, match=1`，非零转换为 `retCode=0, match=0`；不能猜成无线返回码后另有 match 字节 | `SendInquiryDspMd5Pack 1a220`，选择子 `1a25b`、节点/长度 `1a340/1a358`；回调 `1e850`，读取首字节 `1e881`、分支 `1e8bb`、字段写入 `1e8cc/1e94d..1e957` |
+| 音频资源匹配 | 同节点/命令；`0d + GUID ASCII32 + resourceType u8 + count u8`，随后每项 `fileID u8 + digest 4 bytes`，总长 `35+5N`；音频 type 为 0。成功响应为 `00 + count u8` 后接 `fileID u8 + match u8` 的条目；type 从请求上下文带回桥接，线上没有已证明的 type 回显字段 | `SendInquiryDspResourceMd5Pack 1a4d0`；字段 `1a5bf/1a5c3`、长度 `1a51e..1a538`、节点 `1a6b4`；回调 `1ee10`，返回码 `1ee45`、数量 `1ef47`、两字节步长 `1eff7/1effd`、上下文 type `1ef8e` |
+
+`DJIDspResourceMd5Struct` 将八位十六进制摘要逐字节装入 little-endian int，原生再写回四个字节；不是完整 MD5 的 16 字节，也不是八字节 ASCII。客户端仅将 `match == 1` 当作音频命中。当前 Hanppie 每次上传生成新的 GUID/sign，只使用会话内音频槽缓存，未接入这些查询；后续不能仅添加一个永远针对新 GUID 查询的接口便声称实现跨会话 DSP 复用。注册阶段还需保留既有实机验证过的 FTP 路径和完整运行状态关联，不能混用原生分片与 FTP 完成包的不同前缀。
+
+原生请求/回调、C# 资源摘要转换和当前源文件的摘要保留于忽略目录 `P04-native-*` 与 `P04-native-contracts.json`。这使 P04 的查询调查有据可循，但未改变上传行为、未新增设备证据，也不代表 P04 已实施。
+
+#### 对战技能与其他桥接结构
 
 | 结论 | 证据 |
 | --- | --- |
-| 客户端有将 Lab 脚本安装为技能的流程，桥接字段为 `{guid, sign, SkillIndex}` | 反编译 `Module.LAB.System/SystemUploadDsp.cs` 构造 `DJIInstallScratchSkillParamValue{guid, sign, SkillIndex}` 后 `performAction(SystemInstallScratchSkill)`；原生 `RMInstallScratchSkillMsg::FromJson` + 构造函数 `(string, string, int)`；尚不能将桥接 JSON 当作无线载荷 |
+| 安装桥接字段为 `{guid, sign, SkillIndex}`，无线布局现已单独恢复 | `SystemUploadDsp.cs`、`RMInstallScratchSkillMsg::FromJson` 说明进程内调用；线上结构以本节上方原生构造为依据，不以 JSON 字段直接推导 |
 | 技能表的 C# 互操作结构包含 `{playerCount, skillCount}` 及每项 `{playerId, teamId, skillA(u16), …}` | `DJISkillTableParamValue` 的 `StructLayout(Explicit, Pack=1)` 字段偏移；线上封包仍需追原生构造 |
 | `SetCarAndSkillID` 的进程内参数为 `{"list": [int…]}` | `DJIListParamValue.List<int>` 带 `[JsonProperty]`；原生侧对应 `CommonListValue`，不据此确定线上编码 |
 | 技能状态可读：`SkillStatus` 返回 `DJISkillInfo{skillID, skillCD}` 列表 | `RealController` 用 `StartListeningOnKey(SystemSkillStatus)` 并遍历 `skillStatus` |
 | 参数类可确定桥接字段，不能单独确定无线载荷 | `decompiled/RobotService/DJI/*ParamValue.cs` 的 `[JsonProperty]` 和 `StructLayout` 分别描述进程内 JSON 与互操作结构；节点、命令号、选择子、字节序和响应还须追到原生封包/解码 |
 | 释放技能走 `SendSkillControlPack(DJICustomSkillControlKey, int)` | 原生符号 `UnityBridge::DJIRobomasterScratchControlProcessor::SendSkillControlPack` |
 
-客户端流程可确认上传 Lab 脚本、以 guid/sign/SkillIndex 请求安装、绑定技能表/本车技能 ID 及释放技能。自定义技能与红外帧/事件的完整映射尚未验收，不能由上述桥接字段宣称已支持任意自定义红外载荷或端到端技能安装。
+客户端流程可确认上传 Lab 脚本、以 guid/sign/SkillIndex 请求安装、绑定技能表/本车技能 ID 及释放技能。槽位安装契约已恢复，但与对战技能表、红外帧/事件的完整映射尚未验收，不能据此宣称已支持任意自定义红外载荷或端到端技能安装。
 
-**未验证**：安装/释放/技能表的线上命令号（`SendSkillControlPack` 的包常量尚未提取）；写入 `CarAndSkillID` 的正确取值；
-`GetCustomSkillInfo(0x3F/0xA8)` 的请求结构（二进制与 JSON 形式均被拒 224）。
+**未验证**：上述安装、卸载、槽位控制与技能表查询的设备接受和持久性；对战技能表的完整线上布局、写入 `CarAndSkillID` 的正确取值及冷却/触发关联。历史 `GetCustomSkillInfo` 探测被拒 224 不证明功能不存在；目前恢复了 `a9 / 3f:a8` 空请求和响应布局，尚未据此重新进行设备验证。
 **未验证（红外链路）**：位图与 `0x3F/0x51` 发射参数（`mode`/`count`）的对应；`recv_dev`/`recv_ir_pin`/`role_id`
 与装甲编号的对照试验（`role_id` 左 `0x02`/右 `0x04` 来自现场说明 + 实测）；HP 是否可写；
 `ActionAddressing(0x3F/0x66)`、`ActionSkipCurrentID(0x3F/0x62)` 会重分配模块编号，未实测。

@@ -462,8 +462,8 @@ Hanppie 采用纯原生方式打包与管理机内离线 Python 3.6 算法：
 ```mermaid
 flowchart TD
     SCRIPT["Python 源码 (标准 def start())"] --> PACK["生成 DSP 容器 XML"]
-    AUDIO["自定义音频切片 (Opus 48kHz)"] --> CACHE_CHECK{"检查 uploadedAudioSlots<br/>(slotId & MD5)"}
-    CACHE_CHECK -- " 已在机载缓存 " --> XML_STUB["标记 modify='false'<br/>省略 Base64 正文"]
+    AUDIO["自定义音频切片 (Opus 48kHz)"] --> CACHE_CHECK{"检查主机会话 uploadedAudioSlots<br/>(slotId & MD5)"}
+    CACHE_CHECK -- " 本会话曾上传相同摘要 " --> XML_STUB["标记 modify='false'<br/>省略 Base64 正文"]
     CACHE_CHECK -- " 新增或内容变更 " --> XML_FULL["标记 modify='true'<br/>包含 Base64 正文"]
     XML_STUB --> PACK
     XML_FULL --> PACK
@@ -475,10 +475,11 @@ flowchart TD
     MONITOR -->|status = 5| FAILED["FAILED (带原生完整 Traceback)"]
 ```
 
-- **秒级增量上传机制**：通过槽位与 MD5 追踪已上传音频。未变更的音频在 DSP 中仅保留元数据节点并省略
-  Base64 内容，将上传耗时缩短至数十毫秒；
+- **会话内增量上传**：通过主机内存中的槽位与 MD5 追踪曾上传的音频；摘要相同则仅保留元数据并省略 Base64 正文。当前没有查询机器人资源摘要，缓存不跨会话，也不能识别其他客户端对机内音频的替换；FTP 返回不等于设备已注册资源。远端核对仍属实施台账 P04，不能把本地缓存命中称为机内确认或承诺固定上传耗时；
 - **原生生命周期驱动**：原样上传用户代码，完全由固件原厂 `0x3F/0xA5`
   状态机接管执行、完成与异常 Traceback 追踪。
+
+当前 Lab 仅提供主机管理的单次上传/运行，不提供持久自主程序或自定义技能安装。进入 FPV 的既有初始化实际发送槽位 10/0 的卸载选择子与固定 GUID/sign 安装序列；当前卸载包长 35 字节，原生构造为 34 字节，接受及绑定结果未知，不能保证另行安装的程序得以保留。本轮只记录，不改变该序列。安装原生契约见[上游调查](./architecture-robomaster.md#自主程序与自定义技能安装)，实施取舍见[台账 C15](./official-app-capability-implementation.md#冲突记录保持现状留待决策)。状态原值 `3/4` 分别表示自定义技能/脱机技能运行，当前主机脚本状态只将 `2` 认作本轮运行，不能据此承诺跨模式停止或脱机程序生命周期已受主机管理。
 
 ---
 
