@@ -602,6 +602,8 @@ Hanppie 采用显式单页启用、Escape 释放和原有速度控制，保留�
 
 固定 macOS 原生 `DJIRobomasterRealControlProcessor::Initialize`（`0x15e80`）观察单独的 `get_game_pad_link_id`，注册键为 `0x403f0090`；这是原生观察者键，不能将高字节 `0x40` 当作线上 ACK 属性。`OnGamePadDataPush`（macOS `0x16090`、Android `0x4cf76c`）消费 19 字节输入体，已建立的字段如下。没有抓到真实手柄报文，线上完整封装、属性、实际周期与未列字段仍待核对。**原生构造 / 解码**
 
+进一步沿 Android `DjiProtocolEncoder::GetFullCmdId`（`0x541acc`）恢复该键为 `version << 30 | cmdset << 16 | cmdid`，因此前缀 `0x40` 对应版本 1。`SessionMgr::DecodeCommand`（`0x52c84c`）进入 `DecodeV1`（`0x5404d4`），后者验证 `0x55`、10 位长度、版本 1、CRC8 与 CRC16，从偏移 6 取序号、9/10 取命令、11 起取载荷；AOA 原生读线程将 USB 原始字节交给通用接收器，没有此处另加的 HID 或 JSON 封装。共享信息会话据此复用既有 DUML 帧算法；当前仅准入 `06 → 02`、属性 0 的 `3f:90`，设备真实源/目的和属性尚无抓包确认，其他属性不能因观察键前缀推断。**原生编码 / 解码与初始实现边界**
+
 | 输入体位置 | 已建立的用途 |
 | --- | --- |
 | byte 1 bit 4 / bit 3 | 挂载鼠标 / 键盘；bit 7 / bit 6 控制两组输入分支 |
@@ -618,7 +620,11 @@ byte 1 的低三位进入校准/居中/电量告警相关分支，但两份原�
 
 `RobomasterGamePadAbstraction::GetFirmwareVersion`（`0x74c6f0`）向独立手柄链路的节点 `06` 发 `00:01` 空请求。`GetActivationSettings`（`0x74c970`）向同一节点发 `00:32`、单字节 `11`；这与机器人只读激活请求的载荷不同。账号激活写入仍不在 Hanppie 范围，不能套用内部工具或第三方绕过流程。手柄 V1 流式升级仍是未接入的独立分支。**原生构造 / 范围**
 
-证据位于忽略目录 `.hanppie/validation/2026-10-22-official-gap/I02-native-*.txt`、`I02-android-*.txt`，Android 原始条目在 `.hanppie/app-analysis/2026-10-24-android-1.2.0/`；文件指纹统一记录在 `2026-10-24-27a7293-audit.json`。本次仅静态调查，没有构建或运行 Hanppie Android，也未连接真实手柄；当前接入状态见[实施台账](./official-app-capability-implementation.md)。
+激活响应转换器（macOS `0x74e750`）以 `payload[1] & 3 == 1` 判定已激活，并读取偏移 2 的年份、4 的月份、5 起的时间及 9 的序列号长度、10 起的序列号。信息阶段只输出可解释的只读状态，不导出身份或时间；低两位 2/3 保留为未知，不用单 bit 将 3 误判为已激活。固件版本继续沿已有 26 字节版本布局读取 25/24/23/22 四字段。新反汇编、API 依据及指纹记录在 `I02-link-native-contracts.json`。**原生转换器 / 当前消费范围**
+
+Android 平台边界依据 [USB accessory 官方指南](https://developer.android.com/develop/connectivity/usb/accessory)、[UsbManager](https://developer.android.com/reference/android/hardware/usb/UsbManager) 与 [AOSP UsbAccessory 源码](https://github.com/aosp-mirror/platform_frameworks_base/blob/main/core/java/android/hardware/usb/UsbAccessory.java)：枚举可以替代自动启动过滤；权限在拔出后失效，读取缓冲可采用 16384 字节。`UsbAccessory.equals` 会调用权限保护的 `getSerial`，因此不能在授权前用它做发现匹配。Hanppie 使用公开描述字段保留临时句柄，打开仍校验原始配件的系统权限；没有将描述匹配当作设备认证或持久身份。没有新增自动启动 Activity/Intent 转发，现有 AndroidX Core 提供非导出动态接收器和安全 Parcelable 提取，无新增依赖。**平台官方依据 / 未运行边界**
+
+证据位于忽略目录 `.hanppie/validation/2026-10-22-official-gap/I02-native-*.txt`、`I02-android-*.txt`，Android 原始条目在 `.hanppie/app-analysis/2026-10-24-android-1.2.0/`；初始文件指纹在 `2026-10-24-27a7293-audit.json`，后续原生补证在 `I02-link-native-contracts.json`。信息阶段有共享会话与设置入口，但没有构建或运行 Hanppie Android，也未连接真实手柄；全部输入接入、升级与平台完成状态见[实施台账](./official-app-capability-implementation.md)，不以源码或合成字节流计作原生运行通过。
 
 #### 模块健康与电池报告
 

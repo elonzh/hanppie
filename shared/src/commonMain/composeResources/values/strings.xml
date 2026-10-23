@@ -1650,4 +1650,26 @@
     <string name="aim_sensor_failed">Gyroscope unavailable. Check motion access and try again.</string>
     <string name="aim_sensor_stale">Gyroscope stopped updating. Tap to restart.</string>
     <string name="aim_orientation_changed">Screen direction changed. Tap to restart.</string>
+    <string name="gamepad_information">Gamepad information</string>
+    <string name="gamepad_information_help">View the official Gamepad battery, connected mouse and keyboard, and read-only device information.</string>
+    <string name="gamepad_refresh">Find accessories</string>
+    <string name="gamepad_none">No supported accessory found. Connect the Gamepad by USB, then refresh.</string>
+    <string name="gamepad_connect">Connect %1$s</string>
+    <string name="gamepad_opening">Waiting for accessory access…</string>
+    <string name="gamepad_link_open">Accessory link open</string>
+    <string name="gamepad_query_firmware">Read firmware version</string>
+    <string name="gamepad_query_activation">Read activation status</string>
+    <string name="gamepad_waiting_report">Waiting for Gamepad data</string>
+    <string name="gamepad_report_stale">Gamepad data is out of date. Check the USB connection.</string>
+    <string name="gamepad_battery">Gamepad battery: %1$s</string>
+    <string name="gamepad_accessories">Mouse: %1$s · Keyboard: %2$s</string>
+    <string name="gamepad_firmware">Firmware: %1$s</string>
+    <string name="gamepad_activation">Activation status: %1$s</string>
+    <string name="gamepad_missing">The accessory is no longer available. Refresh and reconnect.</string>
+    <string name="gamepad_permission_denied">Accessory access was not granted. Connect again to request access.</string>
+    <string name="gamepad_open_failed">Could not open the accessory. Check USB and reconnect.</string>
+    <string name="gamepad_link_lost">Accessory connection interrupted. Check USB and reconnect.</string>
+    <string name="gamepad_query_timeout">No reply received. Check the connection and retry the query.</string>
+    <string name="gamepad_query_invalid">The reply could not be read. Retry the query.</string>
+    <string name="gamepad_query_rejected">The accessory rejected the query.</string>
 </resources>
