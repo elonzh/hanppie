@@ -155,6 +155,28 @@ class LocalizationTest {
         assertEquals("en-US", Localization.languageTag)
     }
 
+    @Test fun koreanSystemAndSavedChoiceKeepLiveStateAndParameters() {
+        for (tag in listOf("ko", "ko-KR", "ko_US")) {
+            Localization.initialize(tag, "system")
+            assertEquals("ko-KR", Localization.languageTag, tag)
+            assertEquals("설정", tr(Res.string.settings))
+        }
+        var saved: String? = null
+        Localization.initialize("fr-FR", "fr") { saved = it }
+        val state = ConsoleState().lost("raw device error")
+        Localization.select("ko")
+        assertEquals("ko", saved)
+        assertEquals("연결이 끊어졌습니다", state.status)
+        assertEquals("raw device error", state.error)
+        assertEquals("{1} 사용", tr(Res.string.use_value, "{1}"))
+        Localization.initialize("en-US", saved)
+        assertEquals("ko-KR", Localization.languageTag)
+        Localization.select("system")
+        assertEquals("Settings", tr(Res.string.settings))
+        Localization.initialize("it-IT", "system")
+        assertEquals("en-US", Localization.languageTag)
+    }
+
     @OptIn(ExperimentalResourceApi::class)
     @Test fun resourceParametersMatchAcrossLanguages() {
         fun templates(language: String): Map<String, String> {

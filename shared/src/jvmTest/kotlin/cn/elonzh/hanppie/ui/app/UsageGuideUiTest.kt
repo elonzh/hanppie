@@ -29,6 +29,7 @@ class UsageGuideUiTest {
     @Test fun largeGermanLandscape() = scenario(844, 390, "de", 1.4f, true)
     @Test fun largeSpanishLandscape() = scenario(844, 390, "es", 1.4f, true)
     @Test fun largeFrenchLandscape() = scenario(844, 390, "fr", 1.4f, true)
+    @Test fun largeKoreanLandscape() = scenario(844, 390, "ko", 1.4f, true)
 
     @Test fun destinationActionsUseExistingRoutesWithoutStartingControl() = runDesktopComposeUiTest(width = 1024, height = 768) {
         Localization.initialize("zh", "zh")
@@ -98,12 +99,13 @@ class UsageGuideUiTest {
                 onNodeWithTag("usage-guide-next").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
                 onNodeWithTag("usage-guide-previous").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
             }
-            fun assertCompactDestinationVisible(target: GuideDestination) {
-                if (width == 844 && language == "zh") {
-                    onNodeWithTag("usage-guide-more").assertDoesNotExist()
-                    val action = onNodeWithTag("usage-guide-open-${target.name}").assertIsDisplayed()
-                    assertTrue(action.fetchSemanticsNode().boundsInRoot.height >= 52f, "Destination must retain its full visible target")
-                }
+            fun inspectDestination(target: GuideDestination, captureName: String) {
+                if (width == 844 && language == "zh") onNodeWithTag("usage-guide-more").assertDoesNotExist()
+                val overflows = onAllNodesWithTag("usage-guide-more").fetchSemanticsNodes().isNotEmpty()
+                if (overflows) onNodeWithTag("usage-guide-more").assertIsDisplayed().assertHeightIsAtLeast(48.dp).performClick()
+                val action = onNodeWithTag("usage-guide-open-${target.name}").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                assertTrue(action.fetchSemanticsNode().boundsInRoot.height >= 52f, "Destination must retain its full visible target")
+                if (overflows) capture("$captureName-scrolled")
             }
             try {
                 waitUntil(timeoutMillis = 5_000) { !model.settingsBusy.value }
@@ -123,12 +125,7 @@ class UsageGuideUiTest {
                         step(topic, index)
                         if (topic == GuideTopic.FIRST_CONNECTION && index == 0) {
                             capture("first-step")
-                            assertCompactDestinationVisible(GuideDestination.CONNECTION)
-                            if (language in listOf("en", "ja", "de", "es", "fr")) {
-                                onNodeWithTag("usage-guide-more").assertIsDisplayed().assertHeightIsAtLeast(48.dp).performClick()
-                                onNodeWithTag("usage-guide-open-CONNECTION").assertIsDisplayed()
-                                capture("first-step-scrolled")
-                            }
+                            inspectDestination(GuideDestination.CONNECTION, "first-step")
                             onNodeWithTag("usage-guide-open-CONNECTION").performScrollTo().performClick()
                             onNodeWithTag("connection-guide-page").assertIsDisplayed(); capture("connection-handoff")
                             onNodeWithTag("connection-guide-back").performClick(); step(topic, index)
@@ -136,12 +133,7 @@ class UsageGuideUiTest {
                         if (topic == GuideTopic.ACCESSORIES && index == 0) onNodeWithTag("usage-guide-open-GAMEPAD").assertDoesNotExist()
                         if ((topic == GuideTopic.DRIVING || topic == GuideTopic.TRACKING || topic == GuideTopic.MAINTENANCE) && index == topic.steps.lastIndex) {
                             capture(topic.name.lowercase())
-                            assertCompactDestinationVisible(topic.steps[index].destination!!)
-                            if (language in listOf("en", "ja", "de", "es", "fr")) {
-                                onNodeWithTag("usage-guide-more").assertIsDisplayed().assertHeightIsAtLeast(48.dp).performClick()
-                                onNodeWithTag("usage-guide-open-${topic.steps[index].destination!!.name}").assertIsDisplayed()
-                                capture("${topic.name.lowercase()}-scrolled")
-                            }
+                            inspectDestination(topic.steps[index].destination!!, topic.name.lowercase())
                         }
                     }
                     onNodeWithTag("usage-guide-restart").assertIsDisplayed().performClick(); step(topic, 0)

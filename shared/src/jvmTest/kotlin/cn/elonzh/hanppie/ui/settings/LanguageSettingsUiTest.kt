@@ -49,6 +49,11 @@ class LanguageSettingsUiTest {
     @Test fun frenchDesktopLandscape() = scenario(1280, 720, 1f, false, "fr")
     @Test fun frenchLargeLandscape() = scenario(844, 390, 1.4f, true, "fr")
 
+    @Test fun koreanCompactLandscape() = scenario(844, 390, 1f, false, "ko")
+    @Test fun koreanMediumDarkLandscape() = scenario(1024, 768, 1f, true, "ko")
+    @Test fun koreanDesktopLandscape() = scenario(1280, 720, 1f, false, "ko")
+    @Test fun koreanLargeLandscape() = scenario(844, 390, 1.4f, true, "ko")
+
     private fun scenario(width: Int, height: Int, scale: Float, dark: Boolean, language: String = "zh-Hant") =
         runDesktopComposeUiTest(width = width, height = height) {
             val (nativeName, languageLabel, systemLabel, resetQuestion, cancelLabel) = when (language) {
@@ -56,10 +61,11 @@ class LanguageSettingsUiTest {
                 "de" -> listOf("Deutsch", "Sprache", "Systemsprache", "Alle Einstellungen zurücksetzen?", "Abbrechen")
                 "es" -> listOf("Español", "Idioma", "Idioma del sistema", "¿Restablecer todos los ajustes?", "Cancelar")
                 "fr" -> listOf("Français", "Langue", "Langue du système", "Réinitialiser tous les paramètres ?", "Annuler")
+                "ko" -> listOf("한국어", "언어", "시스템 설정 따르기", "모든 설정을 초기화할까요?", "취소")
                 else -> listOf("繁體中文", "語言", "跟隨系統", "恢復所有預設設定？", "取消")
             }
-            val languageTag = when (language) { "ja" -> "ja-JP"; "de" -> "de-DE"; "es" -> "es-ES"; "fr" -> "fr-FR"; else -> "zh-Hant-TW" }
-            val captureLanguage = when (language) { "ja" -> "japanese"; "de" -> "german"; "es" -> "spanish"; "fr" -> "french"; else -> "traditional" }
+            val languageTag = when (language) { "ja" -> "ja-JP"; "de" -> "de-DE"; "es" -> "es-ES"; "fr" -> "fr-FR"; "ko" -> "ko-KR"; else -> "zh-Hant-TW" }
+            val captureLanguage = when (language) { "ja" -> "japanese"; "de" -> "german"; "es" -> "spanish"; "fr" -> "french"; "ko" -> "korean"; else -> "traditional" }
             val store = MemorySettingsStore()
             Localization.initialize("zh-CN", null) { runBlocking { store.saveLanguage(it) } }
             val model = testConsoleModel(settingsStore = store)
@@ -89,10 +95,10 @@ class LanguageSettingsUiTest {
                 }
                 onNodeWithTag("settings-category-general").performClick()
                 onNodeWithTag("language-selector").assertIsDisplayed().performClick()
-                for (choice in listOf("system", "zh", "en", "zh-Hant", "ja", "de", "es", "fr")) {
+                for (choice in listOf("system", "zh", "en", "zh-Hant", "ja", "de", "es", "fr", "ko")) {
                     onNodeWithTag("language-$choice").assertExists()
                 }
-                if (language == "fr") onNodeWithTag("language-fr").performScrollTo().assertIsDisplayed()
+                if (language in listOf("fr", "ko")) onNodeWithTag("language-$language").performScrollTo().assertIsDisplayed()
                 capture("options", popup = true)
                 onNodeWithTag("language-$language").performScrollTo().performClick()
                 onNodeWithText(nativeName).assertIsDisplayed()
@@ -115,8 +121,8 @@ class LanguageSettingsUiTest {
                 onNodeWithContentDescription("restore-default-settings").performClick()
                 onNodeWithText(resetQuestion).assertIsDisplayed()
                 onNodeWithTag("restore-defaults-confirm").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
-                if (language in listOf("de", "es", "fr")) {
-                    val confirmText = when (language) { "fr" -> "Réinitialiser"; "es" -> "Restablecer"; else -> "Zurücksetzen" }
+                if (language in listOf("de", "es", "fr", "ko")) {
+                    val confirmText = when (language) { "ko" -> "초기화"; "fr" -> "Réinitialiser"; "es" -> "Restablecer"; else -> "Zurücksetzen" }
                     val layouts = mutableListOf<TextLayoutResult>()
                     onNode(hasText(confirmText) and hasAnyAncestor(hasTestTag("restore-defaults-confirm")), useUnmergedTree = true)
                         .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
