@@ -69,6 +69,12 @@ class RobotArmLayoutTest {
             onNodeWithTag("arm-hold-forward").assertIsDisplayed().assertIsEnabled()
             onNodeWithTag("arm-hold-close").assertIsDisplayed().assertIsEnabled()
             saveArm("$prefix-remote", onNodeWithTag("remote-surface"))
+            runOnIdle { model.displaySettings.value = model.displaySettings.value.copy(showArmPosition = true) }
+            onNodeWithTag("remote-arm-position").assertIsDisplayed()
+            saveArm("display-$prefix-arm-position", onNodeWithTag("remote-surface"))
+            runOnIdle { model.displaySettings.value = model.displaySettings.value.copy(showArmPosition = false) }
+            onNodeWithTag("remote-arm-position").assertDoesNotExist()
+            onNodeWithTag("remote-arm-status").assertIsDisplayed()
             runOnIdle { service.state.value = service.state.value.copy(position = ArmPosition(1, 100, 120)) }
             waitUntil(timeoutMillis = 3000) { model.robotArm.state.value.task.position?.limitX == true }
             saveArm("$prefix-remote-limit", onNodeWithTag("remote-surface"))

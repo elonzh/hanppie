@@ -466,6 +466,7 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
     var audioStatus by remember { mutableStateOf("") }
     val state by model.state.collectAsState()
     val cachedFrame = model.videoFrames.image(state.connectedAddress)
+    val display by model.displaySettings.collectAsState()
     val mediaSettings by model.mediaSettings.collectAsState()
     val resolution = mediaSettings.videoResolution
     val requests by controls.requests.collectAsState()
@@ -550,16 +551,18 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
         }
     }
     Box(modifier) {
-        AndroidView(factory = { viewContext -> SurfaceView(viewContext).apply {
-            surfaceView = this
-            holder.addCallback(object : SurfaceHolder.Callback {
-                override fun surfaceCreated(holder: SurfaceHolder) { surface = holder.surface }
-                override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
-                override fun surfaceDestroyed(holder: SurfaceHolder) { surface = null }
-            })
-        } }, modifier = Modifier.fillMaxSize())
-        if (!mediaState.videoReady) cachedFrame?.let {
-            Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+        VideoPicture(resolution.width, resolution.height, display.fillVideo) {
+            AndroidView(factory = { viewContext -> SurfaceView(viewContext).apply {
+                surfaceView = this
+                holder.addCallback(object : SurfaceHolder.Callback {
+                    override fun surfaceCreated(holder: SurfaceHolder) { surface = holder.surface }
+                    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
+                    override fun surfaceDestroyed(holder: SurfaceHolder) { surface = null }
+                })
+            } }, modifier = Modifier.fillMaxSize())
+            if (!mediaState.videoReady) cachedFrame?.let {
+                Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            }
         }
         if (!preview) Column(Modifier.align(Alignment.TopEnd).padding(end = HanppieDesignTokens.RemoteEdgePadding,
             top = HanppieDesignTokens.RemoteEdgePadding), horizontalAlignment = Alignment.End) {

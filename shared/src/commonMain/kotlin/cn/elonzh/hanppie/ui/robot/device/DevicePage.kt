@@ -35,6 +35,7 @@ internal fun DevicePage(model: ConsoleController, state: ConsoleState, compact: 
     onRemote: () -> Unit, onConnectionDetails: () -> Unit = {},
     showScene: Boolean = true, preparing: Boolean = false,
     onNavigate: (Int) -> Unit = {}, onHealth: (() -> Unit)? = null) {
+    val display by model.displaySettings.collectAsState()
     val preferences by model.connectionPreferences.collectAsState()
     val connectionMode = preferences.robots.firstOrNull { it.ip == state.connectedAddress }?.mode ?: cn.elonzh.hanppie.ui.settings.ConnectionMode.UNKNOWN
     var now by remember { mutableLongStateOf(Clock.System.now().toEpochMilliseconds()) }
@@ -44,7 +45,7 @@ internal fun DevicePage(model: ConsoleController, state: ConsoleState, compact: 
     BoxWithConstraints(modifier.fillMaxSize().testTag("device-page")) {
         val dense = compact || maxHeight < 480.dp
         val inset = if (dense) 16.dp else 28.dp
-        if (showScene) RobotScene(RobotSceneState.from(state, now), Modifier.matchParentSize())
+        if (showScene) RobotScene(RobotSceneState.from(state, now), Modifier.matchParentSize(), quality = display.sceneQuality)
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(
             Color.Black.copy(alpha = .42f), Color.Transparent, Color.Transparent, Color.Black.copy(alpha = .52f)))))
         Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(horizontal = inset, vertical = if (dense) 10.dp else 20.dp),

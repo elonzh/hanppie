@@ -148,6 +148,8 @@ internal fun RemotePage(
     val tracking by model.tracking.collectAsState()
     val vision by model.vision.collectAsState()
     val health by model.robotHealth.state.collectAsState()
+    val display by model.displaySettings.collectAsState()
+    val displayDevice by model.robotDisplay.state.collectAsState()
     val zoom by model.cameraZoom.state.collectAsState()
     val arm by model.robotArm.state.collectAsState()
     var armMode by remember(arm.connection) { mutableStateOf(false) }
@@ -348,12 +350,20 @@ internal fun RemotePage(
         }
         if (videoContent == null) RobotVideo(model, mediaControls, Modifier.fillMaxSize()) else videoContent()
         if (tracking.active && videoFrame != null) ObjectTrackingTargets(tracking, videoFrame.width, videoFrame.height,
-            enabled, model::selectTrackingTarget, model::confirmObjectTracking, model::stopObjectTracking)
+            enabled, model::selectTrackingTarget, model::confirmObjectTracking, model::stopObjectTracking, display.fillVideo)
         if (vision.phase == cn.elonzh.hanppie.robot.vision.VisionPhase.ACTIVE && videoFresh && videoFrame != null)
             VisionTargets(vision, videoFrame.width, videoFrame.height, visionOcclusions.filterKeys {
                 it !in listOf("left", "right", "ammo") || !keyboardHints && !armMode
-            }.values.map { it.translate(-surfaceOrigin) })
-        if (!tracking.blocksManualControl && !armMode) RemoteCrosshair(model, Modifier.align(Alignment.Center))
+            }.values.map { it.translate(-surfaceOrigin) }, fillVideo = display.fillVideo)
+        if (!tracking.blocksManualControl && !armMode) {
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val viewport = VideoViewport.forImage(with(density) { maxWidth.toPx() }, with(density) { maxHeight.toPx() },
+                videoFrame?.width ?: 1280, videoFrame?.height ?: 720, display.fillVideo)
+            val offset = viewport.sightOffset(displayDevice.sight?.zoomOut, zoom.hundredths ?: 100)
+            RemoteCrosshair(model, Modifier.align(Alignment.Center).offset {
+                androidx.compose.ui.unit.IntOffset(offset.x.toInt(), offset.y.toInt())
+            })
+        }
         Row(Modifier.align(Alignment.TopStart).padding(HanppieDesignTokens.RemoteEdgePadding),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             onBack?.let { back -> HudIconButton(tr(Res.string.back_to_console), WorkbenchGlyph.BACK, enabled = navigationEnabled && foreground, action = back) }
@@ -392,11 +402,15 @@ internal fun RemotePage(
                             color = HanppieDesignTokens.RemoteHudContent, style = MiuixTheme.textStyles.footnote1)
                     }
                     SignalIndicator(connected.signalQuality)
-                    HeadingIndicator(connected.gimbal?.yawDegrees, Modifier.heightIn(min = 48.dp)
+                    if (display.showGimbalAngle) HeadingIndicator(connected.gimbal?.yawDegrees, Modifier.heightIn(min = 48.dp)
                         .testTag("recenter-gimbal")
                         .clickable(enabled = enabled && manualActionsEnabled && !vision.ownsGimbal && connected.gimbal != null, onClickLabel = tr(Res.string.recenter_gimbal)) {
                             model.recenterGimbal(); focus.requestFocus()
                         })
+                    else HudIconButton(tr(Res.string.recenter_gimbal), WorkbenchGlyph.CROSSHAIR,
+                        enabled = enabled && manualActionsEnabled && !vision.ownsGimbal && connected.gimbal != null) {
+                        model.recenterGimbal(); focus.requestFocus()
+                    }
                 }
         }
         if (!landscapeReady) {
@@ -429,7 +443,7 @@ internal fun RemotePage(
         val touchInset = (maxWidth * .06f).coerceIn(32.dp, 80.dp)
         if (armMode) cn.elonzh.hanppie.ui.robot.arm.RobotArmControls(model.robotArm,
             enabled && !connected.busy, videoFresh,
-            Modifier.align(Alignment.BottomCenter).padding(start = HanppieDesignTokens.RemoteEdgePadding, end = HanppieDesignTokens.RemoteEdgePadding, bottom = 20.dp))
+            Modifier.align(Alignment.BottomCenter).padding(start = HanppieDesignTokens.RemoteEdgePadding, end = HanppieDesignTokens.RemoteEdgePadding, bottom = 20.dp), showPosition = display.showArmPosition)
         if (!keyboardHints && !armMode) {
             Column(Modifier.align(Alignment.BottomStart).padding(start = touchInset, bottom = 32.dp).testTag("remote-touch-left").then(reserveVisionSpace("left")),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {

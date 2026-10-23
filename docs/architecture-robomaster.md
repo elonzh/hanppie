@@ -958,11 +958,23 @@ Hanppie 当前将上述包接入 App 会话请求与接收通道，过滤相机�
 
 局部证据保留在 `.hanppie/validation/2026-10-22-official-gap/native-System-SoundStreamEnabled.txt`、`native-System-SoundStreamReply.txt`、`native-Camera-AntiLarsen.txt`、`native-System-PlaySoundStatus.txt`、`native-System-PlaySoundObserver.txt` 与 `native-System-PlaySoundRequest.txt`。本轮没有设备，声音流开关真实含义/应答、防啸叫的声学效果、播放推送属性/频率/来源/任务关联、延迟和并发结果均待验证；清单见[实施台账 A08](./official-app-capability-implementation.md#a08-验证入口与设备待验)。
 
+#### 准星落点与校准
+
+固定 App 1.1.5/build 239 的原生 `GetSightBeadPosition`（`0x6a27d0`）使用 `09 / 3f:57` 空请求，成功应答为 9 字节：返回码及四个小端 uint16；`SetSightBeadPosition`（`0x6a2e60`）使用 `09 / 3f:56`，8 字节承载四个 uint16。原生 JSON 写出器（`0x5ddae0`）及字段名地址将顺序确定为 zoomIn X/Y、zoomOut X/Y；不能仅根据四个相同的中心值推断字段。getter 回调 `0x6be650` 逐项零扩展。上述是固定二进制的静态构造/解码证据，不是实机报文。
+
+`Base.CONTROL/RealController.cs:2678` 把归一化坐标通过 `(v+1)*0.5*10000` 转换，并将同一点写入两对字段；`ReticleSettingView` 读取普通/zoomOut 点作为草稿，提供方向微调、1×/4×（原始值 100/400）、归零及 OK 写入。原始 5000 为中心，正 Y 对应向上；坐标界限、实际视频落点和设备保存效果仍需真机核对。`Element.S1/Reticle.cs` 的 `SetReticleOffset` 按图像尺寸和倍率缩放，而 `SetZoomReticle` 另有 `(400-zoom)/300` 的不同映射，结果可能依回调次序改变，不能据静态代码宣称唯一稳定的变焦标定效果。
+
+官方校准页还会发送无限制射击安全模式和单人裁判配置。Hanppie 保持既有发射策略，校准页没有复制这些写入；采用稳定的图像偏移变换并保留两对读取值，但当前 UI 与上述官方写入消费者一样统一写入一个点，没有独立两点编辑。相应当前职责和未验证边界见[应用架构](./architecture.md#134-遥控操纵镜头坐标系与安全联动)。定向反汇编及字段映射保存在忽略目录的 `D01-native-Sight*`、`D01-sight-field-map.json`，不得当作已完成物理校准。
+
 #### 头灯亮度
 
 固定 App 的 `Module.Setting.View/ViewSettingDisplay.cs:40/213/323` 从左头灯读值、回填滑条并调用 `SendRobotHeadLightBrightness`；`Base.CONTROL/RealController.cs:2012` 将同一亮度写入左右头灯两个 key。右侧 key 没有非 `Base.CONTROL` 具名引用，不代表没有生产写入链。该项不在 `SettingManager` 的 75 个默认字段内，也不等于装甲灯颜色或终端屏幕亮度。
 
-原生左侧 setter/getter 入口为 `0x6a03c0/0x6a08f0`，右侧为 `0x6a0c10/0x6a0d80`；最终共享配置构造在 `0x6a0685/0x6a0696` 写 `c3 / 3f:3c`，查询在 `0x6a0a58/0x6a0a69` 写 `c3 / 3f:3d`。写入构造复制 13 字节的多路配置，不能将单个亮度值直接视作完整载荷；字段/范围、同通道缓存、设备与硬件适用性仍需进一步恢复和设备验证。定向反汇编保留于忽略目录 `audit-cd4287c-native-Headlights.txt`。Hanppie 尚未接入该设置，交付归属见[实施台账 D01](./official-app-capability-implementation.md#实施清单)。
+原生左侧 setter/getter 入口为 `0x6a03c0/0x6a08f0`，右侧为 `0x6a0c10/0x6a0d80`；共享 `SetPWMPercent`（`0x6a0530`）使用 `c3 / 3f:3c`，13 字节由一字节通道 mask 和六个小端 uint16 构成。左侧通道 5：mask `0x20`、数值偏移 11；右侧通道 4：mask `0x10`、数值偏移 9。原生消费者先左后右分别写入，未选中通道由 mask 排除，不能把亮度直接作为完整载荷，也没有必要凭猜测增加同通道缓存。`GetPWMPercent`（`0x6a09e0`）使用 `c3 / 3f:3d` 空请求，成功应答为返回码加六路 uint16，共 13 字节；回调 `0x6bca40` 的跳转表确认左右读取偏移。**固定二进制静态证据，未实机验证。**
+
+`resources.assets` 的 `HeadLightNode`（11778）所关联 Slider（GameObject 12613、组件 48904）序列化最小值 0、最大值 100、整数步进；脚本指向 `UnityEngine.UI.Slider`，含 `OnHeadLightBrightness` 回调。该节点初始 inactive，不能据存在滑条就推导所有硬件或模式均显示头灯入口。范围不来自 75 项默认偏好，也不能把六路 PWM 当作全型号均已安装的执行器。
+
+Hanppie 已接入左右读取、0..100 同亮度的两次显式写入及双侧回读；左侧已 ACK 后右侧拒绝不能解释为整体回滚。左右独立亮度编辑没有官方上层消费者依据，当前不新增。字段/路由证据为忽略目录 `audit-cd4287c-native-Headlights.txt`、`D01-native-PWMGet.txt`、`D01-native-PWMReply.txt`，Slider 原始证据及摘要为 `D01-slider-48904.bin`、`D01-headlight-slider.json`。硬件适用性、其他通道不受影响、真实亮度和持久性全部待验；进度统一见[实施台账 D01](./official-app-capability-implementation.md#d01-准星显示偏好与头灯实施进度及设备待验)。
 
 ### 5.5 红外发射与命中链路
 

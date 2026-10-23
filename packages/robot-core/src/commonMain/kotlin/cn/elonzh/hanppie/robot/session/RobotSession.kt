@@ -61,6 +61,7 @@ interface RobotSession : AutoCloseable {
     fun stopVision()
     val health: StateFlow<cn.elonzh.hanppie.robot.telemetry.RobotHealth>
     val power: cn.elonzh.hanppie.robot.product.RobotPowerService
+    val display: cn.elonzh.hanppie.robot.display.RobotDisplayService
     val motion: cn.elonzh.hanppie.robot.remote.RobotMotionService
     val information: cn.elonzh.hanppie.robot.product.RobotInformationService
     val addressing: cn.elonzh.hanppie.robot.maintenance.RobotAddressingService

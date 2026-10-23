@@ -112,19 +112,19 @@ internal fun VisionModeControls(vision: VisionState, tracking: TrackingState, en
 
 /** Passive overlays: marker taps do not start the conflicting Lab PID aim path. */
 @Composable
-internal fun VisionTargets(state: VisionState, videoWidth: Int, videoHeight: Int, occlusions: List<Rect> = emptyList()) {
+internal fun VisionTargets(state: VisionState, videoWidth: Int, videoHeight: Int, occlusions: List<Rect> = emptyList(), fillVideo: Boolean = false) {
     val ink = MiuixTheme.colorScheme.primary
     val density = LocalDensity.current
     val description = if (state.mode == VisionMode.LINES) tr(Res.string.vision_line_samples, state.linePoints.size.toString())
         else tr(Res.string.vision_target_count, state.rectangles.size.toString())
     BoxWithConstraints(Modifier.fillMaxSize().testTag("vision-targets").semantics { contentDescription = description }) {
-        val viewport = VideoViewport.fit(with(density) { maxWidth.toPx() }, with(density) { maxHeight.toPx() }, videoWidth, videoHeight)
+        val viewport = VideoViewport.forImage(with(density) { maxWidth.toPx() }, with(density) { maxHeight.toPx() }, videoWidth, videoHeight, fillVideo)
         Canvas(Modifier.fillMaxSize()) {
             for (rect in state.rectangles) {
                 val bounds = viewport.bounds(rect)
                 drawRect(ink, bounds.topLeft, bounds.size, style = Stroke(2.dp.toPx()))
             }
-            clipRect(viewport.left, viewport.top, viewport.left + viewport.width, viewport.top + viewport.height) {
+            clipRect(viewport.visibleLeft, viewport.visibleTop, viewport.visibleRight, viewport.visibleBottom) {
                 for (line in state.linePoints.chunked(10)) {
                     val points = line.map { Offset(viewport.left + it.x * viewport.width, viewport.top + it.y * viewport.height) }
                     for ((a, b) in points.zipWithNext()) drawLine(ink, a, b, strokeWidth = 2.dp.toPx())
@@ -142,6 +142,9 @@ internal fun VisionTargets(state: VisionState, videoWidth: Int, videoHeight: Int
                 Rect(x, y, x, y) to lineTitle(line.first().info and 0xffff)
             }
             else -> emptyList()
+        }.filter { (bounds, _) ->
+            if (state.mode == VisionMode.LINES) bounds.left in viewport.visibleLeft..viewport.visibleRight && bounds.top in viewport.visibleTop..viewport.visibleBottom
+            else bounds.width > 0 && bounds.height > 0
         }
         if (labels.isNotEmpty()) Layout(content = {
             labels.forEachIndexed { index, (_, text) ->
@@ -151,12 +154,12 @@ internal fun VisionTargets(state: VisionState, videoWidth: Int, videoHeight: Int
                     color = HanppieDesignTokens.RemoteHudContent, fontSize = 12.sp, maxLines = 2)
             }
         }, modifier = Modifier.fillMaxSize()) { measurables, constraints ->
-            val image = Rect(viewport.left, viewport.top, viewport.left + viewport.width, viewport.top + viewport.height)
+            val image = Rect(viewport.visibleLeft, viewport.visibleTop, viewport.visibleRight, viewport.visibleBottom)
             val gap = 4.dp.toPx()
             val placed = mutableListOf<Rect>()
             val labels = measurables.mapIndexed { index, measurable ->
-                val label = measurable.measure(Constraints(maxWidth = minOf(160.dp.roundToPx(), viewport.width.toInt()).coerceAtLeast(0),
-                    maxHeight = viewport.height.toInt().coerceAtLeast(0)))
+                val label = measurable.measure(Constraints(maxWidth = minOf(160.dp.roundToPx(), image.width.toInt()).coerceAtLeast(0),
+                    maxHeight = image.height.toInt().coerceAtLeast(0)))
                 val target = labels[index].first
                 val position = markerLabelBounds(target, label.width.toFloat(), label.height.toFloat(), image, occlusions + placed, gap, occlusions)
                     ?: markerLabelBounds(target, label.width.toFloat(), label.height.toFloat(), image, occlusions, gap)

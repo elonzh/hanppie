@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import cn.elonzh.hanppie.ui.app.AmmoType
 import cn.elonzh.hanppie.ui.app.ConsoleController
+import cn.elonzh.hanppie.ui.settings.ReticleStyle
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -41,6 +42,7 @@ internal fun RemoteCrosshair(
     model: ConsoleController,
     modifier: Modifier = Modifier,
 ) {
+    val display by model.displaySettings.collectAsState()
     val firing by model.firing.collectAsState()
     val gelSelected by model.gelSelected.collectAsState()
 
@@ -99,7 +101,15 @@ internal fun RemoteCrosshair(
             lastFiredAmmo = lastFiredAmmo,
             gelSelected = gelSelected,
             isFiring = firing,
+            style = display.reticle,
         )
+    }
+}
+
+@Composable
+internal fun StaticReticle(style: ReticleStyle, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(64.dp)) {
+        drawCrosshair(0f, 0f, 1f, 0f, AmmoType.INFRARED, false, false, style)
     }
 }
 
@@ -111,6 +121,7 @@ private fun DrawScope.drawCrosshair(
     lastFiredAmmo: AmmoType,
     gelSelected: Boolean,
     isFiring: Boolean,
+    style: ReticleStyle,
 ) {
     val c = center
 
@@ -168,7 +179,7 @@ private fun DrawScope.drawCrosshair(
         },
     )
 
-    bracketPaths.forEach { p ->
+    if (style == ReticleStyle.CROSS) bracketPaths.forEach { p ->
         drawPath(
             p,
             Color.Black.copy(alpha = bracketAlpha * 0.6f),
@@ -197,11 +208,16 @@ private fun DrawScope.drawCrosshair(
         Offset(c.x, c.y + currentGap) to Offset(c.x, c.y + currentEdge),
     )
 
-    segments.forEach { (a, b) ->
+    if (style == ReticleStyle.CROSS) segments.forEach { (a, b) ->
         // Dark halo for high contrast over any bright video feed
         drawLine(Color.Black.copy(alpha = 0.58f), a, b, 3.dp.toPx(), StrokeCap.Round)
         // High visibility white reticle line
         drawLine(Color.White.copy(alpha = 0.90f), a, b, 1.2.dp.toPx(), StrokeCap.Round)
+    }
+
+    if (style == ReticleStyle.ROUND) {
+        drawCircle(Color.Black.copy(alpha = .58f), currentEdge, c, style = Stroke(3.dp.toPx()))
+        drawCircle(Color.White.copy(alpha = .90f), currentEdge, c, style = Stroke(1.2.dp.toPx()))
     }
 
     // 4. Center aim pip

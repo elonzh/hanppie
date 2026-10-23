@@ -30,6 +30,7 @@ internal fun RobotExperience(
     onAlbum: (() -> Unit)? = null,
     onHealth: (() -> Unit)? = null,
 ) {
+    val display by model.displaySettings.collectAsState()
     var requested by remember { mutableStateOf(false) }
     var active by remember { mutableStateOf(false) }
     var interactive by remember { mutableStateOf(false) }
@@ -99,7 +100,7 @@ internal fun RobotExperience(
     }
     Box(modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalSceneEntryProgress provides travel.value) {
-            RobotScene(RobotSceneState.from(state, now), Modifier.fillMaxSize(), horizontalFocus = 0f)
+            RobotScene(RobotSceneState.from(state, now), Modifier.fillMaxSize(), horizontalFocus = 0f, quality = display.sceneQuality)
         }
         if (mediaStarted) key(media) {
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = reveal.value }) {

@@ -39,6 +39,8 @@ internal interface ConsoleController : AutoCloseable {
     val modelCatalogState: MutableStateFlow<ModelCatalogState>
     val modelTestState: MutableStateFlow<ModelTestState>
     val mediaSettings: MutableStateFlow<MediaSettings>
+    val displaySettings: kotlinx.coroutines.flow.MutableStateFlow<cn.elonzh.hanppie.ui.settings.DisplaySettings>
+    val robotDisplay: cn.elonzh.hanppie.ui.robot.display.RobotDisplayController
     val controlSettings: MutableStateFlow<ControlSettings>
     val connectionPreferences: MutableStateFlow<ConnectionPreferences>
     val settingsBusy: MutableStateFlow<Boolean>

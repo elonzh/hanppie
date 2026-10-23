@@ -23,7 +23,7 @@ import top.yukonga.miuix.kmp.basic.*
 
 @Composable
 internal fun RobotArmControls(controller: RobotArmController, enabled: Boolean, videoFresh: Boolean,
-    modifier: Modifier = Modifier) {
+    modifier: Modifier = Modifier, showPosition: Boolean = false) {
     val ui by controller.state.collectAsState()
     val task = ui.task
     val observing = task.observation == ArmObservation.ACTIVE && !ui.busy
@@ -51,6 +51,9 @@ internal fun RobotArmControls(controller: RobotArmController, enabled: Boolean, 
                 ArmControlPair(controller, ui, ArmDirection.UP, ArmDirection.DOWN, canArm, Modifier.weight(1f))
                 ArmControlPair(controller, ui, ArmDirection.OPEN, ArmDirection.CLOSE, canClaw, Modifier.weight(1f))
             }
+            if (showPosition && task.armOnline) Text(tr(Res.string.arm_position_raw,
+                task.position?.xRaw?.toString() ?: "—", task.position?.yRaw?.toString() ?: "—", task.positionAgeSeconds?.toString() ?: "—"),
+                Modifier.testTag("remote-arm-position"), fontSize = 12.sp, color = HanppieDesignTokens.RemoteHudContent)
             if (task.clawOnline) Text(tr(if (task.clawFresh) when (task.clawStatusRaw) {
                 1 -> Res.string.arm_claw_opened
                 2 -> Res.string.arm_claw_closed

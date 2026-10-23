@@ -49,9 +49,14 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
     var capturing by remember { mutableStateOf<ControlAction?>(null) }
     var selectedCategory by rememberSaveable(showRobotMaintenance) { mutableStateOf<SettingsCategory?>(if (showRobotMaintenance) SettingsCategory.ROBOT else null) }
     LaunchedEffect(showRobotMaintenance) { if (showRobotMaintenance) selectedCategory = SettingsCategory.ROBOT }
+    var calibratingReticle by remember { mutableStateOf(false) }
     var confirmDefaults by remember { mutableStateOf(false) }
     val shortcutFocus = remember { FocusRequester() }
     val buildInfo = remember { cn.elonzh.hanppie.ui.app.getPlatformBuildInfo() }
+    if (calibratingReticle) {
+        cn.elonzh.hanppie.ui.robot.display.ReticleCalibrationPage(model, modifier) { calibratingReticle = false }
+        return
+    }
     WorkbenchDialog(show = confirmDefaults, onDismissRequest = { confirmDefaults = false },
         title = tr(Res.string.restore_default_settings_question),
         summary = tr(Res.string.restore_default_settings_summary)) {
@@ -107,6 +112,7 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                             val summary = when (category) {
                                 SettingsCategory.GENERAL -> "${tr(Res.string.language)} · ${appearance.settings.nightMode.label()}"
                                 SettingsCategory.MODEL -> tr(Res.string.settings_model_summary)
+                                SettingsCategory.DISPLAY -> tr(Res.string.display_settings_summary)
                                 SettingsCategory.MEDIA -> "${media.videoResolution.label} · ${media.speakerVolume}%"
                                 SettingsCategory.ROBOT -> tr(Res.string.robot_maintenance_summary)
                                 SettingsCategory.CONTROL -> tr(Res.string.control_settings_summary)
@@ -150,6 +156,7 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                             when (activeCategory) {
                                 SettingsCategory.GENERAL -> GeneralSettingsContent(model, onSpeechSettings)
                                 SettingsCategory.MODEL -> ModelSettingsContent(model)
+                                SettingsCategory.DISPLAY -> DisplaySettingsContent(model) { calibratingReticle = true }
                                 SettingsCategory.MEDIA -> MediaSettingsContent(model)
                                 SettingsCategory.ROBOT -> RobotMaintenanceContent(model, onAlbum, onWifi, onAddressing, onCalibration, onFirmware, onArm, onExtensions)
                                 SettingsCategory.CONTROL -> ControlSettingsContent(model)
@@ -173,6 +180,7 @@ private enum class SettingsCategory(
 ) {
     GENERAL("general", Res.string.general_settings, WorkbenchGlyph.SETTINGS),
     MODEL("model", Res.string.model_service, WorkbenchGlyph.CHAT, canSave = true),
+    DISPLAY("display", Res.string.display_settings, WorkbenchGlyph.CROSSHAIR, canSave = true),
     MEDIA("media", Res.string.audio_video, WorkbenchGlyph.VIDEO, canSave = true),
     ROBOT("robot", Res.string.robot_maintenance, WorkbenchGlyph.ROBOT),
     CONTROL("control", Res.string.control, WorkbenchGlyph.CROSSHAIR, canSave = true),

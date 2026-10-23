@@ -37,11 +37,11 @@ class ObjectTrackingUiTest {
     @get:Rule val rule = createComposeRule()
 
     @Test fun videoFitCoordinatesRejectLetterboxes() {
-        val viewport = VideoViewport.fit(1000f, 1000f, 1280, 720)
+        val viewport = VideoViewport.forImage(1000f, 1000f, 1280, 720)
         assertNull(viewport.point(500f, 50f))
         assertEquals(.5f to .5f, viewport.point(500f, 500f))
         assertEquals(0f to 0f, viewport.point(viewport.left, viewport.top))
-        val pillarbox = VideoViewport.fit(1600f, 600f, 1280, 720)
+        val pillarbox = VideoViewport.forImage(1600f, 600f, 1280, 720)
         assertNull(pillarbox.point(10f, 300f))
         assertEquals(.5f to .5f, pillarbox.point(800f, 300f))
     }
@@ -120,7 +120,7 @@ class ObjectTrackingUiTest {
         rule.onNodeWithTag("tracking-targets").performTouchInput { click(center) }
         assertEquals(1, confirmed)
         rule.onNodeWithTag("tracking-targets").performTouchInput {
-            val viewport = VideoViewport.fit(width.toFloat(), height.toFloat(), 1280, 720)
+            val viewport = VideoViewport.forImage(width.toFloat(), height.toFloat(), 1280, 720)
             click(viewport.bounds(rect.copy(info = 3), following = true).center)
         }
         assertEquals(1, stopped)
@@ -152,7 +152,7 @@ class ObjectTrackingUiTest {
     }
 
     @Test fun runningTargetUsesAPixelSquareAndAnUpwardQuarterHeightOffset() {
-        val viewport = VideoViewport.fit(1000f, 1000f, 1280, 720)
+        val viewport = VideoViewport.forImage(1000f, 1000f, 1280, 720)
         val rect = VisionRect(.5f, .5f, .2f, .4f, 3)
         val marker = viewport.bounds(rect, following = true)
         assertEquals(200f, marker.width)

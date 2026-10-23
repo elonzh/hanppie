@@ -60,6 +60,7 @@ private class PlatformRobotSession(
     override fun stopVision() = app.stopVision()
     override val health get() = app.health
     override val power get() = app.power
+    override val display get() = app.display
     override val motion get() = app.motion
     override val information get() = app.information
     override val addressing get() = app.addressing

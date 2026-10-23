@@ -33,6 +33,7 @@ internal class SettingsController(
     val model = MutableStateFlow(runtimeDefaults())
     val control = MutableStateFlow(ControlSettings())
     val media = MutableStateFlow(MediaSettings())
+    val display = MutableStateFlow(DisplaySettings())
     val busy = MutableStateFlow(false)
     val message = MutableStateFlow<UiText?>(null)
 
@@ -55,7 +56,7 @@ internal class SettingsController(
     }
 
     fun save() {
-        val snapshot = SavedSettings(model.value, control.value, media.value)
+        val snapshot = SavedSettings(model.value, control.value, media.value, display.value)
         enqueue(Command.Save(snapshot, Res.string.settings_saved))
     }
 
@@ -108,6 +109,7 @@ internal class SettingsController(
         model.value = settings.model
         control.value = settings.control
         media.value = settings.media
+        display.value = settings.display
     }
 
     override fun close() {

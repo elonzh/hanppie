@@ -150,6 +150,17 @@ class AppSession(private val target: RobotTarget,
     private val informationCommands = cn.elonzh.hanppie.robot.product.InformationCommands(::request)
     val information: cn.elonzh.hanppie.robot.product.RobotInformationService get() = informationCommands
     private val powerCommands = cn.elonzh.hanppie.robot.product.PowerCommands(::request)
+    private val displayCommands = cn.elonzh.hanppie.robot.display.DisplayCommands(::requestChecked)
+    val display: cn.elonzh.hanppie.robot.display.RobotDisplayService = object : cn.elonzh.hanppie.robot.display.RobotDisplayService by displayCommands {
+        override suspend fun setSight(value: cn.elonzh.hanppie.robot.display.SightCalibration, onDispatch: () -> Unit) = withIdleControl {
+            txLock.withLock { check(robotNanoTime() - lastReceivedNanos < 500_000_000) { "数据已过期，请检查连接后重试" } }
+            displayCommands.setSight(value, onDispatch)
+        }
+        override suspend fun setHeadlights(percent: Int, onDispatch: () -> Unit) = withIdleControl {
+            txLock.withLock { check(robotNanoTime() - lastReceivedNanos < 500_000_000) { "数据已过期，请检查连接后重试" } }
+            displayCommands.setHeadlights(percent, onDispatch)
+        }
+    }
     private val motionCommands = cn.elonzh.hanppie.robot.remote.MotionCommands(::requestChecked)
     val motion: cn.elonzh.hanppie.robot.remote.RobotMotionService = object : cn.elonzh.hanppie.robot.remote.RobotMotionService {
         override suspend fun read() = withIdleControl { motionCommands.read() }
@@ -722,6 +733,7 @@ class AppSession(private val target: RobotTarget,
         informationCommands.close()
         powerCommands.close()
         motionCommands.close()
+        displayCommands.close()
         sdrCommands.close()
         cameraCommands.close()
         albumCommands.close()

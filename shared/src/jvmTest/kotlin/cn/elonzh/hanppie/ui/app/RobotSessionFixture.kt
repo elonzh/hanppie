@@ -87,6 +87,12 @@ internal class RobotSessionFixture : RobotSession {
         override suspend fun setPolicy(policy: LowPowerPolicy, onDispatch: () -> Unit) = error("unused")
         override suspend fun perform(action: RobotPowerAction, onDispatch: () -> Unit) = error("unused")
     }
+    override var display: cn.elonzh.hanppie.robot.display.RobotDisplayService = object : cn.elonzh.hanppie.robot.display.RobotDisplayService {
+        override suspend fun readSight(): cn.elonzh.hanppie.robot.display.SightCalibration = error("unused")
+        override suspend fun setSight(value: cn.elonzh.hanppie.robot.display.SightCalibration, onDispatch: () -> Unit): cn.elonzh.hanppie.robot.display.SightCalibration = error("unused")
+        override suspend fun readHeadlights(): cn.elonzh.hanppie.robot.display.HeadlightBrightness = error("unused")
+        override suspend fun setHeadlights(percent: Int, onDispatch: () -> Unit): cn.elonzh.hanppie.robot.display.HeadlightBrightness = error("unused")
+    }
     override var motion: cn.elonzh.hanppie.robot.remote.RobotMotionService = object : cn.elonzh.hanppie.robot.remote.RobotMotionService {
         override suspend fun read(): cn.elonzh.hanppie.robot.remote.RobotMotionConfiguration = error("unused")
         override suspend fun setSpeedLevel(level: Int, onDispatch: () -> Unit): cn.elonzh.hanppie.robot.remote.RobotMotionConfiguration = error("unused")
@@ -109,8 +115,10 @@ internal class RobotSessionFixture : RobotSession {
     val labStartCount = AtomicInteger(0)
     var labStartError: Exception? = null
 
+    val cameraState = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.media.CameraState(100))
+    var zoomRequest: suspend (Int) -> Unit = {}
     override val camera = object : cn.elonzh.hanppie.robot.media.RobotCameraService {
-        override val state = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.media.CameraState(100))
+        override val state = cameraState
         override suspend fun formatStorage() { error("unused") }
         override suspend fun takePhoto() { error("unused") }
         override suspend fun setRecording(active: Boolean) { error("unused") }
@@ -122,7 +130,7 @@ internal class RobotSessionFixture : RobotSession {
         override suspend fun setTransmissionRate(rate: cn.elonzh.hanppie.robot.media.VideoTransmissionRate) = error("unused")
         override suspend fun switchCamera(index: Int) = error("unused")
         override suspend fun requestKeyFrame() = error("unused")
-        override suspend fun setZoom(hundredths: Int) {}
+        override suspend fun setZoom(hundredths: Int) { zoomRequest(hundredths) }
     }
     override var sdr: cn.elonzh.hanppie.robot.network.RobotSdrService = object : cn.elonzh.hanppie.robot.network.RobotSdrService {
         override suspend fun read(): cn.elonzh.hanppie.robot.network.SdrSettings? = null

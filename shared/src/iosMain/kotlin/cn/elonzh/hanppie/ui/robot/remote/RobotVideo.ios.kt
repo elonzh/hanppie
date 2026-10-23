@@ -35,6 +35,7 @@ import top.yukonga.miuix.kmp.basic.Text
     val state by model.state.collectAsState()
     val media by controls.state.collectAsState()
     val requests by controls.requests.collectAsState()
+    val display by model.displaySettings.collectAsState()
     val settings by model.mediaSettings.collectAsState()
     var playing by remember { mutableStateOf(true) }
     var sound by remember { mutableStateOf(false) }
@@ -84,9 +85,11 @@ import top.yukonga.miuix.kmp.basic.Text
         }
     }
     Box(modifier) {
-        UIKitView(factory = platform::videoView, modifier = Modifier.fillMaxSize())
-        if (!media.videoReady) model.videoFrames.image(state.connectedAddress)?.let {
-            Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+        VideoPicture(settings.videoResolution.width, settings.videoResolution.height, display.fillVideo) {
+            UIKitView(factory = platform::videoView, modifier = Modifier.fillMaxSize())
+            if (!media.videoReady) model.videoFrames.image(state.connectedAddress)?.let {
+                Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            }
         }
         if (!preview) Column(Modifier.align(Alignment.TopEnd).padding(HanppieDesignTokens.RemoteEdgePadding), horizontalAlignment = Alignment.End) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

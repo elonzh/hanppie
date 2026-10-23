@@ -87,7 +87,7 @@ class VisionUiTest {
 
     @Test fun markersUseTheirOwnGeometryAndIdentityInsteadOfTrackingDrawCodes() {
         val rect = VisionRect(.5f, .5f, .2f, .4f, 3)
-        val viewport = VideoViewport.fit(1000f, 1000f, 1280, 720)
+        val viewport = VideoViewport.forImage(1000f, 1000f, 1280, 720)
         val bounds = viewport.bounds(rect)
         assertEquals(200f, bounds.width)
         assertEquals(.4f * viewport.height, bounds.height)

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -90,19 +91,21 @@ internal val LocalRobotSceneRenderer = staticCompositionLocalOf<SceneRenderer> {
     }
 }
 
+internal val LocalSceneQuality = staticCompositionLocalOf { cn.elonzh.hanppie.ui.settings.SceneQuality.HIGH }
+
 internal val LocalSceneEntryProgress = staticCompositionLocalOf { 0f }
 // Native surfaces choose their compositing mode at the platform entry point.
 internal val LocalRobotSceneTransparency = staticCompositionLocalOf { true }
 
 /** A read-only scene: gestures change the viewing camera, never the robot. */
 @Composable
-internal fun RobotScene(state: RobotSceneState, modifier: Modifier = Modifier, horizontalFocus: Float = 0f) {
+internal fun RobotScene(state: RobotSceneState, modifier: Modifier = Modifier, horizontalFocus: Float = 0f, quality: cn.elonzh.hanppie.ui.settings.SceneQuality = cn.elonzh.hanppie.ui.settings.SceneQuality.HIGH) {
     var azimuth by remember { mutableFloatStateOf(28f) }
     var elevation by remember { mutableFloatStateOf(16f) }
     var distance by remember { mutableFloatStateOf(3.1f) }
     var attempt by remember { mutableIntStateOf(0) }
-    var failed by remember(attempt) { mutableStateOf(false) }
-    var ready by remember(attempt, state.appearance) { mutableStateOf(false) }
+    var failed by remember(attempt, quality) { mutableStateOf(false) }
+    var ready by remember(attempt, quality, state.appearance) { mutableStateOf(false) }
     val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     LaunchedEffect(lifecycle) {
         if (!lifecycle.isAtLeast(Lifecycle.State.STARTED)) ready = false
@@ -168,9 +171,11 @@ internal fun RobotScene(state: RobotSceneState, modifier: Modifier = Modifier, h
                     zoom(1f / scale)
                 }
             }, contentAlignment = Alignment.Center) {
-            if (!failed && lifecycle.isAtLeast(Lifecycle.State.STARTED)) key(attempt) {
-                LocalRobotSceneRenderer.current(state, azimuth, elevation, distance, horizontalFocus,
-                    { ready = true }, { failed = true })
+            if (!failed && lifecycle.isAtLeast(Lifecycle.State.STARTED)) key(attempt, quality) {
+                CompositionLocalProvider(LocalSceneQuality provides quality) {
+                    LocalRobotSceneRenderer.current(state, azimuth, elevation, distance, horizontalFocus,
+                        { ready = true }, { failed = true })
+                }
             }
         }
         if (failed) Button({ attempt++ }, Modifier.align(Alignment.Center).padding(16.dp).heightIn(min = 48.dp)) {
@@ -184,6 +189,7 @@ private fun RobotSceneRenderer(
     state: RobotSceneState, azimuth: Float, elevation: Float, distance: Float, horizontalFocus: Float,
     onReady: () -> Unit, onError: () -> Unit,
 ) {
+    val quality = LocalSceneQuality.current
     val engineResult = remember { runCatching { Filament.init(); Engine.create() } }
     val engine = engineResult.getOrNull()
     if (engine == null) {
@@ -228,7 +234,7 @@ private fun RobotSceneRenderer(
         DirectionalLight(direction = Direction(-0.5f, -1f, -0.6f),
             intensity = LightIntensity.LuminousPower(65_000f),
             shadow = ShadowConfig(
-                mapSize = 2048,
+                mapSize = when (quality) { cn.elonzh.hanppie.ui.settings.SceneQuality.LOW -> 512; cn.elonzh.hanppie.ui.settings.SceneQuality.MEDIUM -> 1024; else -> 2048 },
                 normalBias = 0.005f,
                 shadowFar = 8f,
                 lispsm = false,
@@ -258,6 +264,6 @@ private fun RobotSceneRenderer(
     }
     // Alpha-capable surfaces use TextureView on Android, preserving Compose clipping and transitions.
     FilamentView(scene = scene, cameraState = camera, modifier = Modifier.fillMaxSize(), transparent = LocalRobotSceneTransparency.current, screenSpaceRefractionEnabled = true, shadows = Shadows.Pcss(),
-        postProcessing = PostProcessing(antiAliasing = AntiAliasing(fxaaEnabled = true, msaaEnabled = true),
-            ambientOcclusion = AmbientOcclusion()))
+        postProcessing = PostProcessing(antiAliasing = AntiAliasing(fxaaEnabled = true, msaaEnabled = quality == cn.elonzh.hanppie.ui.settings.SceneQuality.HIGH),
+            ambientOcclusion = if (quality == cn.elonzh.hanppie.ui.settings.SceneQuality.LOW) null else AmbientOcclusion()))
 }

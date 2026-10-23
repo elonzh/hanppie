@@ -19,6 +19,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Activity
 import com.composables.icons.lucide.ArrowLeft
+import com.composables.icons.lucide.ArrowRight
+import com.composables.icons.lucide.ArrowUp
+import com.composables.icons.lucide.ArrowDown
 import com.composables.icons.lucide.ArrowLeftRight
 import com.composables.icons.lucide.BatteryMedium
 import com.composables.icons.lucide.Bot
@@ -72,7 +75,7 @@ internal enum class WorkbenchGlyph {
     BACK, ADD, IMPORT, EXPORT, UPLOAD, DOWNLOAD, SAVE, EDIT, DELETE, STOP, ACTIVITY, CHEVRON_RIGHT,
     FILE, FILE_TEXT, FOLDER, REFRESH, MORE, OPEN, VIDEO, VIDEO_OFF, SPEAKER, MUTED, CAMERA, RECORD,
     CROSSHAIR, SEARCH, CONNECT, WIFI, ROUTER, BATTERY, SIGNAL, SIGNAL_LOW, SIGNAL_MEDIUM, SIGNAL_UNKNOWN, PACKETS, MICROPHONE, SEND, ROBOT, CODE, CHAT, SETTINGS,
-    PLAY, PAUSE, GRIP_VERTICAL, INFO, COPY,
+    PLAY, PAUSE, GRIP_VERTICAL, INFO, COPY, ARROW_LEFT, ARROW_RIGHT, ARROW_UP, ARROW_DOWN,
 }
 
 internal val WorkbenchGlyph.icon: ImageVector get() = when (this) {
@@ -122,6 +125,10 @@ internal val WorkbenchGlyph.icon: ImageVector get() = when (this) {
     WorkbenchGlyph.GRIP_VERTICAL -> Lucide.GripVertical
     WorkbenchGlyph.INFO -> Lucide.Info
     WorkbenchGlyph.COPY -> Lucide.Copy
+    WorkbenchGlyph.ARROW_LEFT -> Lucide.ArrowLeft
+    WorkbenchGlyph.ARROW_RIGHT -> Lucide.ArrowRight
+    WorkbenchGlyph.ARROW_UP -> Lucide.ArrowUp
+    WorkbenchGlyph.ARROW_DOWN -> Lucide.ArrowDown
 }
 
 internal val navigationIcons = listOf(

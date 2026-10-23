@@ -39,6 +39,7 @@ import top.yukonga.miuix.kmp.basic.*
     val uiScope = rememberCoroutineScope()
     val state by model.state.collectAsState()
     val frame = model.videoFrames.image(state.connectedAddress)
+    val display by model.displaySettings.collectAsState()
     val mediaSettings by model.mediaSettings.collectAsState()
     val resolution = mediaSettings.videoResolution
     val requests by controls.requests.collectAsState()
@@ -160,7 +161,7 @@ import top.yukonga.miuix.kmp.basic.*
         onDispose { model.audioSink = null; audio?.close() }
     }
     Box(modifier.background(Color.Black)) {
-        Box(Modifier.fillMaxSize()) {
+        VideoPicture(frame?.width ?: resolution.width, frame?.height ?: resolution.height, display.fillVideo) {
             frame?.let { Image(it,tr(Res.string.robot_live_video),Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
         }
         if (!preview) Column(Modifier.align(Alignment.TopEnd).graphicsLayer { alpha = hudAlpha }.padding(end = HanppieDesignTokens.RemoteEdgePadding,

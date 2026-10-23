@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
@@ -29,6 +32,8 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.elonzh.hanppie.resources.*
@@ -52,7 +57,9 @@ private fun VisionRect.actionable(phase: TrackingPhase): Boolean = when (kind) {
 
 @Composable
 internal fun ObjectTrackingTargets(state: TrackingState, videoWidth: Int, videoHeight: Int,
-    enabled: Boolean, onSelect: (Float, Float) -> Unit, onConfirm: () -> Unit, onStop: () -> Unit) {
+    enabled: Boolean, onSelect: (Float, Float) -> Unit, onConfirm: () -> Unit, onStop: () -> Unit, fillVideo: Boolean = false) {
+    var measured by remember { mutableStateOf(IntSize.Zero) }
+    val view = VideoViewport.forImage(measured.width.toFloat(), measured.height.toFloat(), videoWidth, videoHeight, fillVideo)
     val ink = MiuixTheme.colorScheme.primary
     val muted = HanppieDesignTokens.RemoteHudMuted
     val current by rememberUpdatedState(state)
@@ -67,23 +74,24 @@ internal fun ObjectTrackingTargets(state: TrackingState, videoWidth: Int, videoH
     val currentActivate by rememberUpdatedState(activate)
     val description = tr(Res.string.tracking_target_frames)
     val actions = if (!enabled) emptyList() else state.targets.mapIndexedNotNull { index, rect ->
-        if (!rect.actionable(state.phase)) null else CustomAccessibilityAction(when (rect.kind) {
+        val bounds = view.bounds(rect, rect.kind == TrackingTargetKind.FOLLOWING)
+        if (!rect.actionable(state.phase) || bounds.width <= 0 || bounds.height <= 0) null else CustomAccessibilityAction(when (rect.kind) {
             TrackingTargetKind.CANDIDATE -> tr(Res.string.tracking_candidate_action, (index + 1).toString())
             TrackingTargetKind.READY -> tr(Res.string.tracking_start_follow)
             else -> tr(Res.string.tracking_stop)
         }) { activate(rect); true }
     }
-    Canvas(Modifier.fillMaxSize().testTag("tracking-targets")
+    Canvas(Modifier.fillMaxSize().onSizeChanged { measured = it }.testTag("tracking-targets")
         .semantics { contentDescription = description; customActions = actions }
-        .pointerInput(enabled, videoWidth, videoHeight) {
+        .pointerInput(enabled, videoWidth, videoHeight, fillVideo) {
             if (enabled) detectTapGestures { offset ->
-                val viewport = VideoViewport.fit(size.width.toFloat(), size.height.toFloat(), videoWidth, videoHeight)
+                val viewport = VideoViewport.forImage(size.width.toFloat(), size.height.toFloat(), videoWidth, videoHeight, fillVideo)
                 if (viewport.point(offset.x, offset.y) != null) current.targets.asReversed().firstOrNull {
                     it.actionable(current.phase) && viewport.bounds(it, it.kind == TrackingTargetKind.FOLLOWING).contains(offset)
                 }?.let(currentActivate)
             }
         }) {
-        val viewport = VideoViewport.fit(size.width, size.height, videoWidth, videoHeight)
+        val viewport = VideoViewport.forImage(size.width, size.height, videoWidth, videoHeight, fillVideo)
         for (rect in state.targets) {
             val bounds = viewport.bounds(rect, rect.kind == TrackingTargetKind.FOLLOWING)
             val candidate = rect.kind == TrackingTargetKind.CANDIDATE

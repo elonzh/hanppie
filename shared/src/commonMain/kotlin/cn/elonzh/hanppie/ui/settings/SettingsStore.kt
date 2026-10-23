@@ -70,6 +70,7 @@ internal data class SavedSettings(
     val model: ModelSettings = ModelSettings(),
     val control: ControlSettings = ControlSettings(),
     val media: MediaSettings = MediaSettings(),
+    val display: DisplaySettings = DisplaySettings(),
 )
 
 @Serializable
