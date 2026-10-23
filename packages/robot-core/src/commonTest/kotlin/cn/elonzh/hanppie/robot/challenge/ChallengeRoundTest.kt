@@ -225,4 +225,39 @@ class ChallengeRoundTest {
         for (bad in listOf(frame.copy(valid=false),frame.copy(sender=9),frame.copy(receiver=9),frame.copy(attr=0x80),
             frame.copy(set=0),frame.copy(id=0x51),frame.copy(payload=frame.payload.copyOf(5)))) assertNull(challengeFireReport(bad))
     }
+
+    @Test fun infraredAimAndImpactIncludeNonScoringOccludersWithoutAwardingPoints() {
+        val r = Rig(); r.play(ChallengeMode.TARGET_RACE, count = 2)
+        r.rects(marker(20), marker(11)); r.advance(0)
+        assertEquals(20, r.state.aimedMarkerId)
+        r.fire()
+        assertEquals(20, r.state.hit?.markerId); assertFalse(checkNotNull(r.state.hit).credited)
+        assertEquals(0, r.state.hit?.scoreDelta); assertTrue(r.state.checkpoints.isEmpty())
+        val first = checkNotNull(r.state.hit).sequence
+        r.advance(1); assertEquals(11, r.state.aimedMarkerId)
+        r.fire()
+        assertEquals(listOf(11), r.state.checkpoints.map { it.markerId })
+        assertTrue(checkNotNull(r.state.hit).credited); assertTrue(checkNotNull(r.state.hit).sequence > first)
+        r.advance(500); assertEquals(20, r.state.aimedMarkerId)
+        r.rects(marker(12, .9f)); r.advance(0); assertNull(r.state.aimedMarkerId)
+    }
+
+    @Test fun finalImpactSurvivesCleanupAndExpiresWithoutReplayingIntoANewRound() {
+        val r = Rig(); r.play(ChallengeMode.TARGET_RACE, count = 1); r.rects(marker(11)); r.fire()
+        assertEquals(ChallengePhase.STOPPING, r.state.phase)
+        val hit = checkNotNull(r.state.hit); assertTrue(hit.credited); assertNull(r.state.aimedMarkerId)
+        r.advance(400); assertEquals(hit, r.state.hit); assertEquals(400L, r.state.hitAgeMillis)
+        r.confirmStop(); r.advance(600); assertNull(r.state.hit); assertNull(r.state.hitAgeMillis)
+        r.vision = Rig().vision
+        r.play(ChallengeMode.TARGET_RACE, count = 1); assertNull(r.state.hit)
+        r.rects(marker(11)); r.fire(); assertTrue(checkNotNull(r.state.hit).sequence > hit.sequence)
+    }
+
+    @Test fun targetPracticeImpactAddsOneHundredButAnOldFrameCannotCreateFeedback() {
+        val r = Rig(); r.play(); r.rects(marker(11)); r.fire()
+        assertEquals(100, r.state.hit?.scoreDelta)
+        r.advance(1_000); assertNull(r.state.hit)
+        r.vision = r.vision.copy(reportAgeMillis = 750); r.fire(); assertNull(r.state.hit)
+        r.round.cancel(); assertNull(r.state.aimedMarkerId)
+    }
 }

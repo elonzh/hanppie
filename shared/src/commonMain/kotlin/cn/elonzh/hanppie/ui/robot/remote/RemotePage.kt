@@ -144,6 +144,7 @@ internal fun RemotePage(
     manageSession: Boolean = true,
     onAlbum: (() -> Unit)? = null,
     onHealth: (() -> Unit)? = null,
+    challengeSoundFactory: () -> ChallengeSoundPlayer = ::createChallengeSoundPlayer,
 ) {
     RemoteOrientation(onBack)
     var keyboardHints by remember { mutableStateOf(false) }
@@ -156,6 +157,7 @@ internal fun RemotePage(
     val tracking by model.tracking.collectAsState()
     val vision by model.vision.collectAsState()
     val challenge by model.challenge.collectAsState()
+    var challengeSoundEnabled by remember { mutableStateOf(true) }
     var challengeChoosing by remember { mutableStateOf(false) }
     val health by model.robotHealth.state.collectAsState()
     val display by model.displaySettings.collectAsState()
@@ -481,6 +483,8 @@ internal fun RemotePage(
                 androidx.compose.ui.unit.IntOffset(offset.x.toInt(), offset.y.toInt())
             })
         }
+        ChallengeFeedback(challenge, vision, videoFrame?.width ?: 1280, videoFrame?.height ?: 720,
+            display.fillVideo, enabled && videoFresh, challengeSoundEnabled, challengeSoundFactory)
         Row(Modifier.align(Alignment.TopStart).padding(HanppieDesignTokens.RemoteEdgePadding),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             onBack?.let { back -> HudIconButton(tr(Res.string.back_to_console), WorkbenchGlyph.BACK, enabled = navigationEnabled && foreground, action = back) }
@@ -569,7 +573,8 @@ internal fun RemotePage(
                 aimInput.stop(); gamepadInput.stop(); model.clearRemoteInputs()
                 challengeChoosing = true
             })
-        ChallengeDialogs(challengeChoosing, challenge, enabled && videoFresh && !connected.busy,
+        ChallengeDialogs(challengeChoosing, challenge, enabled && videoFresh && !connected.busy, challengeSoundEnabled,
+            { challengeSoundEnabled = it },
             (maxHeight - 144.dp).coerceAtLeast(128.dp), { challengeChoosing = false }, model::startChallenge, model::stopChallenge,
             { model.dismissChallenge(); focus.requestFocus() })
         val touchInset = (maxWidth * .06f).coerceIn(32.dp, 80.dp)

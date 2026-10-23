@@ -1,5 +1,10 @@
 <resources>
     <string name="challenge_entry">挑战</string>
+    <string name="challenge_sounds">提示音</string>
+    <string name="challenge_aimed">瞄准标签 %1$s</string>
+    <string name="challenge_hit_unscored">标签 %1$s · 本轮不计分</string>
+    <string name="challenge_hit_points">目标 %1$s · +100 分</string>
+    <string name="challenge_hit_completed">目标 %1$s 已完成</string>
     <string name="challenge_title">单机挑战</string>
     <string name="challenge_practice">靶场挑战</string>
     <string name="challenge_race">竞速挑战</string>

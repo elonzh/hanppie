@@ -1,5 +1,10 @@
 <resources>
     <string name="challenge_entry">Challenge</string>
+    <string name="challenge_sounds">Feedback sounds</string>
+    <string name="challenge_aimed">Aiming at marker %1$s</string>
+    <string name="challenge_hit_unscored">Marker %1$s · No score this round</string>
+    <string name="challenge_hit_points">Target %1$s · +100 pts</string>
+    <string name="challenge_hit_completed">Target %1$s completed</string>
     <string name="challenge_title">Single-player challenge</string>
     <string name="challenge_practice">Target Practice</string>
     <string name="challenge_race">Target Race</string>

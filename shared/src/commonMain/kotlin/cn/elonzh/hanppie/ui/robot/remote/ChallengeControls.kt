@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,7 +55,7 @@ private data class Score(val configuration: ChallengeConfiguration, val name: St
 
 /** Scores live with this cockpit, matching the fixed component's local list rather than inventing cloud persistence. */
 @Composable
-internal fun ChallengeDialogs(choosing: Boolean, state: ChallengeState, enabled: Boolean, maxContentHeight: Dp,
+internal fun ChallengeDialogs(choosing: Boolean, state: ChallengeState, enabled: Boolean, sounds: Boolean, onSoundsChange: (Boolean) -> Unit, maxContentHeight: Dp,
     onChooseClose: () -> Unit, onStart: (ChallengeConfiguration) -> String?, onStop: () -> Unit, onDismiss: () -> Unit) {
     var mode by remember { mutableStateOf(ChallengeMode.TARGET_PRACTICE) }
     var firing by remember { mutableStateOf(ChallengeFiring.INFRARED) }
@@ -99,6 +100,14 @@ internal fun ChallengeDialogs(choosing: Boolean, state: ChallengeState, enabled:
                     } }
                 }
                 if (firing == ChallengeFiring.GEL) Text(tr(Res.string.challenge_gel_guide), fontSize = 14.sp)
+            }
+            val soundsLabel = tr(Res.string.challenge_sounds)
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("challenge-sounds")
+                .toggleable(sounds, role = Role.Switch, onValueChange = onSoundsChange)
+                .semantics { contentDescription = soundsLabel },
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(soundsLabel, Modifier.weight(1f), fontSize = 14.sp)
+                Switch(checked = sounds, onCheckedChange = null, modifier = Modifier.clearAndSetSemantics {})
             }
             }
             startError?.let { Text(it, Modifier.testTag("challenge-start-error"), fontSize = 14.sp) }

@@ -17,6 +17,8 @@ import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
 import cn.elonzh.hanppie.ui.robot.display.displayFixtureVideo
 import cn.elonzh.hanppie.ui.robot.remote.RemotePage
+import cn.elonzh.hanppie.ui.robot.remote.ChallengeCue
+import cn.elonzh.hanppie.ui.robot.remote.ChallengeSoundPlayer
 import cn.elonzh.hanppie.ui.settings.*
 import kotlinx.coroutines.delay
 import java.awt.image.BufferedImage
@@ -83,7 +85,11 @@ class ChallengeUiTest {
                         val owner = remember { InputLifecycle() }; SideEffect { lifecycle = owner }
                         val density = LocalDensity.current
                         CompositionLocalProvider(LocalLifecycleOwner provides owner, LocalDensity provides Density(density.density, scale)) {
-                            RemotePage(model, videoContent = { Image(video, "Synthetic validation scene", Modifier.fillMaxSize()) })
+                            RemotePage(model, videoContent = { Image(video, "Synthetic validation scene", Modifier.fillMaxSize()) },
+                                challengeSoundFactory = { object : ChallengeSoundPlayer {
+                                    override fun play(cue: ChallengeCue) = Unit
+                                    override fun close() = Unit
+                                } })
                         }
                     }
                 }

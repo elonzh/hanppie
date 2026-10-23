@@ -19,11 +19,15 @@ data class ChallengeConfiguration(val mode: ChallengeMode, val firing: Challenge
 }
 data class ChallengeTarget(val markerId: Int, val completed: Boolean = false)
 data class ChallengeCheckpoint(val markerId: Int, val elapsedMillis: Long)
+/** A host-rule impact, distinct from whether that marker earns this round's score. */
+data class ChallengeHit(val sequence: Long, val markerId: Int, val rectangle: VisionRect?, val credited: Boolean,
+    val scoreDelta: Int = 0)
 data class ChallengeState(val phase: ChallengePhase = ChallengePhase.IDLE, val configuration: ChallengeConfiguration? = null,
     val stage: Int = 11, val wave: Int = 1, val score: Int = 0, val targets: List<ChallengeTarget> = emptyList(),
     val elapsedMillis: Long = 0, val remainingMillis: Long = 0, val checkpoints: List<ChallengeCheckpoint> = emptyList(),
     val lastHitId: Int? = null, val end: ChallengeEnd? = null, val stopConfirmed: Boolean = true,
-    val sight: SightPoint? = null, val problem: ChallengeProblem? = null, val roundId: Long = 0) {
+    val sight: SightPoint? = null, val problem: ChallengeProblem? = null, val roundId: Long = 0,
+    val aimedMarkerId: Int? = null, val hit: ChallengeHit? = null, val hitAgeMillis: Long? = null) {
     val ownsRound: Boolean get() = phase !in listOf(ChallengePhase.IDLE, ChallengePhase.CLOSED)
     val firing: ChallengeFiring? get() = configuration?.firing.takeIf { ownsRound }
     val blocksControl: Boolean get() = ownsRound && phase !in listOf(ChallengePhase.PLAYING, ChallengePhase.WAVE_CLEAR, ChallengePhase.LEVEL_CHANGE)
@@ -51,7 +55,9 @@ internal class ChallengeRound(private val nowMillis: () -> Long, private val sto
     private var lastHitAt = 0L
     private var leaving = false
     private var roundId = 0L
-    private data class GelWindow(val readyAt: Long, var expiresAt: Long, var absentAt: Long? = null)
+    private var hitSequence = 0L
+    private var feedbackAt = 0L
+    private data class GelWindow(val readyAt: Long, var expiresAt: Long, val rectangle: VisionRect, var absentAt: Long? = null)
     private val gel = mutableMapOf<Int, GelWindow>()
 
     fun prepare(configuration: ChallengeConfiguration) {
@@ -63,6 +69,12 @@ internal class ChallengeRound(private val nowMillis: () -> Long, private val sto
     }
 
     fun tick(operatorPresent: Boolean, vision: VisionState, environment: ChallengeEnvironment) {
+        val now = nowMillis()
+        if (state.value.hit != null) {
+            val age = (now - feedbackAt).coerceAtLeast(0)
+            mutable.value = state.value.copy(hit = state.value.hit.takeIf { age < 1_000 },
+                hitAgeMillis = age.takeIf { it < 1_000 })
+        }
         val current = state.value
         if (current.phase in listOf(ChallengePhase.IDLE, ChallengePhase.CLOSED)) return
         if (current.phase == ChallengePhase.STOPPING || current.phase == ChallengePhase.RESULT) {
@@ -84,7 +96,6 @@ internal class ChallengeRound(private val nowMillis: () -> Long, private val sto
         if (vision.phase == VisionPhase.ERROR || vision.mode != VisionMode.MARKERS || !vision.ownsPipeline) {
             finish(ChallengeEnd.VISION_FAILED); return
         }
-        val now = nowMillis()
         val fresh = vision.phase == VisionPhase.ACTIVE && vision.report?.type == VisionMode.MARKERS.reportType &&
             vision.reportAgeMillis?.let { it in 0..749 } == true
         if (current.phase == ChallengePhase.PREPARING) {
@@ -123,6 +134,9 @@ internal class ChallengeRound(private val nowMillis: () -> Long, private val sto
                 else mutable.value = state.value.copy(remainingMillis = deadline - now)
             else -> Unit
         }
+        mutable.value = state.value.copy(aimedMarkerId = if (state.value.phase == ChallengePhase.PLAYING &&
+            state.value.configuration?.firing == ChallengeFiring.INFRARED)
+            state.value.sight?.let { infraredTarget(vision, it, now)?.markerId } else null)
     }
 
     /** Called only for an admitted device notification; never from a command-send callback. */
@@ -132,23 +146,27 @@ internal class ChallengeRound(private val nowMillis: () -> Long, private val sto
             vision.mode != VisionMode.MARKERS || vision.report?.type != VisionMode.MARKERS.reportType ||
             vision.reportAgeMillis?.let { it in 0..749 } != true) return
         if (isPractice() && now >= deadline) { finish(ChallengeEnd.TIME_EXPIRED); return }
-        val x = sight.x / 10000f
-        val y = 1f - sight.y / 10000f
         val rectangles = vision.rectangles
         val target = if (state.value.configuration?.firing == ChallengeFiring.INFRARED)
-            rectangles.firstOrNull { (it.markerId != state.value.lastHitId || now - lastHitAt >= 500) &&
-                x > it.x - it.width / 2 && x < it.x + it.width / 2 &&
-                y > it.y - it.height / 2 && y < it.y + it.height / 2 }
-        else rectangles.minByOrNull { (it.x - x) * (it.x - x) + (it.y - y) * (it.y - y) }
+            infraredTarget(vision, sight, now)
+        else rectangles.minByOrNull { (it.x - sight.x / 10000f) * (it.x - sight.x / 10000f) +
+            (it.y - (1f - sight.y / 10000f)) * (it.y - (1f - sight.y / 10000f)) }
         val id = target?.markerId ?: return
-        if (state.value.targets.none { it.markerId == id && !it.completed }) return
-        if (state.value.configuration?.firing == ChallengeFiring.INFRARED) hit(id, now)
+        if (state.value.configuration?.firing == ChallengeFiring.INFRARED) hit(id, now, target)
         else {
+            if (state.value.targets.none { it.markerId == id && !it.completed }) return
             // At most one overlapping observation window per physical marker; a target scores once.
             val pending = gel[id]
-            if (pending == null || pending.expiresAt <= now) gel[id] = GelWindow(now + 100, now + 2_600)
+            if (pending == null || pending.expiresAt <= now) gel[id] = GelWindow(now + 100, now + 2_600, target)
             else { pending.expiresAt = now + 2_600; pending.absentAt = null }
         }
+    }
+
+    private fun infraredTarget(vision: VisionState, sight: SightPoint, now: Long): VisionRect? {
+        val x = sight.x / 10000f; val y = 1f - sight.y / 10000f
+        return vision.rectangles.firstOrNull { (it.markerId != state.value.lastHitId || now - lastHitAt >= 500) &&
+            x > it.x - it.width / 2 && x < it.x + it.width / 2 &&
+            y > it.y - it.height / 2 && y < it.y + it.height / 2 }
     }
 
     private fun checkGel(now: Long, vision: VisionState) {
@@ -159,7 +177,7 @@ internal class ChallengeRound(private val nowMillis: () -> Long, private val sto
             else {
                 if (window.absentAt == null) window.absentAt = now
                 if (now - checkNotNull(window.absentAt) > 300) {
-                    gel.remove(id); hit(id, now)
+                    gel.remove(id); hit(id, now, window.rectangle)
                     if (state.value.phase != ChallengePhase.PLAYING) return
                 }
             }
@@ -177,10 +195,14 @@ internal class ChallengeRound(private val nowMillis: () -> Long, private val sto
             targets = ids.map(::ChallengeTarget), lastHitId = null, remainingMillis = if (isPractice()) stage.timeMillis else 0)
     }
 
-    private fun hit(id: Int, now: Long) {
-        val current = state.value
-        if (current.targets.none { it.markerId == id && !it.completed }) return
+    private fun hit(id: Int, now: Long, rectangle: VisionRect? = null) {
+        val credited = state.value.targets.any { it.markerId == id && !it.completed }
         lastHitAt = now
+        feedbackAt = now
+        mutable.value = state.value.copy(lastHitId = id, aimedMarkerId = null, hitAgeMillis = 0,
+            hit = ChallengeHit(++hitSequence, id, rectangle, credited, if (credited && isPractice()) 100 else 0))
+        if (!credited) return
+        val current = state.value
         val elapsed = (now - startedAt).coerceAtLeast(0)
         val targets = current.targets.map { if (it.markerId == id) it.copy(completed = true) else it }
         mutable.value = current.copy(targets = targets, lastHitId = id, elapsedMillis = elapsed,
@@ -210,7 +232,7 @@ internal class ChallengeRound(private val nowMillis: () -> Long, private val sto
     }
     private fun finish(reason: ChallengeEnd) {
         gel.clear()
-        mutable.value = state.value.copy(phase = ChallengePhase.STOPPING, end = reason, remainingMillis = 0,
+        mutable.value = state.value.copy(phase = ChallengePhase.STOPPING, end = reason, remainingMillis = 0, aimedMarkerId = null,
             elapsedMillis = if (startedAt == 0L) 0 else (nowMillis() - startedAt).coerceAtLeast(0), lastHitId = null)
         stop()
     }
