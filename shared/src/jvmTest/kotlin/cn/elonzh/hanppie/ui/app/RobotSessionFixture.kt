@@ -12,6 +12,15 @@ import kotlinx.io.Source
 import java.util.concurrent.atomic.AtomicInteger
 
 internal class RobotSessionFixture : RobotSession {
+    override var calibration: RobotCalibrationService = object : RobotCalibrationService {
+        override val state = kotlinx.coroutines.flow.MutableStateFlow(RobotCalibrationState())
+        override suspend fun begin(kind: CalibrationKind): Unit = error("unused")
+        override suspend fun startGimbal(): Unit = error("unused")
+        override suspend fun cancel(): Unit = error("unused")
+        override suspend fun retryArm(): Unit = error("unused")
+        override fun confirmRestarted(): Unit = error("unused")
+        override suspend fun observeInterrupted(previous: RobotCalibrationState): Unit = error("unused")
+    }
     override var addressing: RobotAddressingService = object : RobotAddressingService {
         override val state = kotlinx.coroutines.flow.MutableStateFlow(RobotAddressingState())
         override suspend fun begin(kind: ModuleAddressingKind): Unit = error("unused")

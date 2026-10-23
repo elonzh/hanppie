@@ -54,6 +54,8 @@ internal interface ConsoleController : AutoCloseable {
     val robotHealth: cn.elonzh.hanppie.ui.robot.device.RobotHealthController
     val robotAddressing: cn.elonzh.hanppie.ui.robot.maintenance.RobotAddressingController
     fun reconnectAddressing()
+    val robotCalibration: cn.elonzh.hanppie.ui.robot.maintenance.RobotCalibrationController
+    fun reconnectCalibration()
     val chat: ChatAgent
     val foregroundState: MutableStateFlow<Boolean>
     val tracking: StateFlow<TrackingState>

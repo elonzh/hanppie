@@ -22,6 +22,9 @@ import cn.elonzh.hanppie.agent.tools.SaveLabScriptTool
 import cn.elonzh.hanppie.agent.tools.StopLabTool
 import cn.elonzh.hanppie.resources.robot_power_task_active
 import cn.elonzh.hanppie.resources.robot_power_target_changed
+import cn.elonzh.hanppie.resources.calibration_finish_first
+import cn.elonzh.hanppie.resources.calibration_task_active
+import cn.elonzh.hanppie.resources.calibration_target_changed
 import cn.elonzh.hanppie.resources.addressing_finish_first
 import cn.elonzh.hanppie.resources.addressing_task_active
 import cn.elonzh.hanppie.resources.addressing_target_changed
@@ -211,6 +214,8 @@ internal class ConsoleModel(
         { source -> if (session.load()?.power === source) closeConnection(preserveNetworkRecovery = false) })
     override val robotInformation = cn.elonzh.hanppie.ui.robot.device.RobotInformationController(scope)
     override val robotHealth = cn.elonzh.hanppie.ui.robot.device.RobotHealthController(scope)
+    override val robotCalibration = cn.elonzh.hanppie.ui.robot.maintenance.RobotCalibrationController(scope, ::changeCalibration,
+        { source -> isForeground && session.load()?.calibration === source && !state.value.busy && !chat.state.value.running })
     override val robotAddressing = cn.elonzh.hanppie.ui.robot.maintenance.RobotAddressingController(scope, ::changeAddressing,
         { source -> isForeground && session.load()?.addressing === source && !state.value.busy && !chat.state.value.running })
     override val robotWifi = RobotWifiController(scope,
@@ -264,7 +269,7 @@ internal class ConsoleModel(
     init {
         mediaScope.launch {
             for (request in mediaRequests) if (request.session === session.load() && request.session.connected &&
-                (!request.start || robotPower.state.value.phase != cn.elonzh.hanppie.ui.robot.device.PowerPhase.ACTION && !robotAddressing.state.value.blocksControl)) {
+                (!request.start || robotPower.state.value.phase != cn.elonzh.hanppie.ui.robot.device.PowerPhase.ACTION && !robotAddressing.state.value.blocksControl && !robotCalibration.state.value.blocksControl)) {
                 runCatching { request.session.media(request.start, request.audio, request.resolution) }
                     .onFailure { log(tr(Res.string.media_request_failed_value,it.message)) }
             }
@@ -337,6 +342,7 @@ internal class ConsoleModel(
         val revision = remoteRevision.load()
         work {
             if (revision != remoteRevision.load() || !isForeground || session.load() !== target) return@work
+            check(!robotCalibration.state.value.blocksControl) { tr(Res.string.calibration_finish_first) }
             check(!robotAddressing.state.value.blocksControl) { tr(Res.string.addressing_finish_first) }
             check(!state.value.scriptRunPhase.mayBeExecuting) { tr(Res.string.stop_the_lab_script_first) }
             checkNotNull(target).enterRemote()
@@ -501,7 +507,7 @@ internal class ConsoleModel(
     }
     override fun startMedia(audio: Boolean) {
         val current = session.load() ?: return
-        if (robotPower.state.value.phase == cn.elonzh.hanppie.ui.robot.device.PowerPhase.ACTION || robotAddressing.state.value.blocksControl) return
+        if (robotPower.state.value.phase == cn.elonzh.hanppie.ui.robot.device.PowerPhase.ACTION || robotAddressing.state.value.blocksControl || robotCalibration.state.value.blocksControl) return
         if (acceptingWork.load() && mediaRequests.trySend(MediaRequest(current, true, audio, mediaSettings.value.videoResolution)).isFailure) {
             log(tr(Res.string.media_request_queue_is_full))
         }
@@ -615,7 +621,7 @@ internal class ConsoleModel(
     override fun setForeground(foreground: Boolean) {
         acceptingWork.store(foreground)
         foregroundState.value = foreground
-        if (!foreground) { robotAddressing.holdWheel(null); haltRemote(); voiceInput.cancel() }
+        if (!foreground) { robotCalibration.stopAutomaticContinuation(); robotAddressing.holdWheel(null); haltRemote(); voiceInput.cancel() }
     }
 
     override fun log(message: String) {
@@ -670,7 +676,7 @@ internal class ConsoleModel(
                 connectionRevision.addAndFetch(1)
                 session.exchange(null)?.close()
                 lab.store(null)
-                robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(); robotSdr.detach()
+                robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(); robotSdr.detach()
                 state.update { it.copy(connected = false, connectedAddress = null, connecting = false,
                     statusMessage = uiText(Res.string.connection_failed)) }
                 throw error
@@ -799,6 +805,7 @@ internal class ConsoleModel(
             robotHealth.attach(candidate.health)
             robotInformation.attach(candidate.information, candidate.health)
             robotPower.attach(candidate.power, candidate.information.systemStatus)
+            robotCalibration.attach(candidate.calibration, target)
             robotAddressing.attach(candidate.addressing, target)
             robotWifi.attach(candidate.wifi, target)
             robotSdr.attach(candidate.sdr, target, verifiedSdr)
@@ -825,7 +832,7 @@ internal class ConsoleModel(
             candidate.close()
             session.compareAndSet(candidate, null)
             if (revision == connectionRevision.load()) {
-                robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(); robotSdr.detach()
+                robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(); robotSdr.detach()
                 state.update { it.lost(tr(Res.string.connection_failed)).copy(connecting = false, statusMessage = uiText(Res.string.connection_failed)) }
             }
             throw error
@@ -848,7 +855,7 @@ internal class ConsoleModel(
     }
 
     private fun newSession(target: RobotTarget): RobotSession {
-        robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(); robotSdr.detach()
+        robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(); robotSdr.detach()
         val candidate = robotRuntime.open(target, ::receive, ::log, ::connectionLost)
         candidate.onVideo = { videoConsumer.load()?.invoke(it) }
         candidate.onAudio = { audioConsumer.load()?.invoke(it) }
@@ -871,7 +878,7 @@ internal class ConsoleModel(
             if (session.load() !== candidate) return@launch
             session.store(null)
             lab.store(null)
-            robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(); robotSdr.detach()
+            robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(); robotSdr.detach()
             candidate.close()
             log(reason)
             state.update { it.lost(reason).copy(busy = false, connecting = false) }
@@ -884,7 +891,7 @@ internal class ConsoleModel(
         connectionRevision.addAndFetch(1)
         haltRemote()
         session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState()
-        robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(preserveNetworkRecovery); robotSdr.detach(preserveNetworkRecovery)
+        robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(preserveNetworkRecovery); robotSdr.detach(preserveNetworkRecovery)
         state.update {
             val uncertain = it.scriptRunPhase.mayBeExecuting
             it.copy(connected = false, connectedAddress = null, connecting = false,
@@ -904,7 +911,23 @@ internal class ConsoleModel(
     private suspend fun changeAddressing(source: cn.elonzh.hanppie.robot.maintenance.RobotAddressingService, action: suspend () -> Unit) {
         check(robotWifi.state.value.recovery == null) { tr(Res.string.addressing_task_active) }
         changeDevice({ it.addressing === source }, Res.string.addressing_task_active, Res.string.addressing_target_changed,
-            action, allowAddressing = true)
+            action, maintenanceOwner = MaintenanceOwner.ADDRESSING)
+    }
+
+    private suspend fun changeCalibration(source: cn.elonzh.hanppie.robot.maintenance.RobotCalibrationService, action: suspend () -> Unit) {
+        check(robotWifi.state.value.recovery == null) { tr(Res.string.calibration_task_active) }
+        changeDevice({ it.calibration === source }, Res.string.calibration_task_active, Res.string.calibration_target_changed,
+            action, maintenanceOwner = MaintenanceOwner.CALIBRATION)
+    }
+
+    override fun reconnectCalibration() {
+        val origin = robotCalibration.state.value.recovery?.target ?: return
+        work(connecting = true) {
+            awaitConnectionPreferences()
+            check(session.load() == null) { tr(Res.string.disconnect_the_current_session_first) }
+            val revision = connectionRevision.addAndFetch(1)
+            prepareNetwork(); connectTarget(origin, revision, ConnectionMode.UNKNOWN)
+        }
     }
 
     override fun reconnectAddressing() {
@@ -925,12 +948,15 @@ internal class ConsoleModel(
     private suspend fun changeNetwork(matches: (RobotSession) -> Boolean, action: suspend () -> Unit) =
         changeDevice(matches, Res.string.wifi_task_active, Res.string.wifi_target_changed, action)
 
+    private enum class MaintenanceOwner { ADDRESSING, CALIBRATION }
+
     private suspend fun changeDevice(matches: (RobotSession) -> Boolean,
         activeMessage: org.jetbrains.compose.resources.StringResource,
-        changedMessage: org.jetbrains.compose.resources.StringResource, action: suspend () -> Unit, allowAddressing: Boolean = false) {
+        changedMessage: org.jetbrains.compose.resources.StringResource, action: suspend () -> Unit, maintenanceOwner: MaintenanceOwner? = null) {
         val current = checkNotNull(session.load()) { tr(changedMessage) }
         val snapshot = state.value
-        check((allowAddressing || !robotAddressing.state.value.blocksControl && !current.addressing.state.value.blocksControl) &&
+        check((maintenanceOwner == MaintenanceOwner.ADDRESSING || !robotAddressing.state.value.blocksControl && !current.addressing.state.value.blocksControl) &&
+            (maintenanceOwner == MaintenanceOwner.CALIBRATION || !robotCalibration.state.value.blocksControl && !current.calibration.state.value.blocksControl) &&
             acceptingWork.load() && current.connected && matches(current) && robotSdr.state.value.recovery == null && !chat.state.value.running &&
             !snapshot.scriptRunPhase.mayBeExecuting && !robotAlbum.state.value.nativeBusy && !robotCamera.state.value.storageBusy &&
             robotCamera.state.value.storage?.recording != true && !talkBusy.value && !talking.value) { tr(activeMessage) }
@@ -977,6 +1003,7 @@ internal class ConsoleModel(
     }
 
     private suspend fun startScript(source: String, title: String, audio: List<LabAudioClip> = emptyList()): String {
+        check(!robotCalibration.state.value.blocksControl) { tr(Res.string.calibration_finish_first) }
         check(!robotAddressing.state.value.blocksControl) { tr(Res.string.addressing_finish_first) }
         val controller = checkNotNull(lab.load()) { tr(Res.string.robot_is_not_connected) }
         val startedAt = clock.now().toEpochMilliseconds()
@@ -1163,7 +1190,7 @@ internal class ConsoleModel(
         chat.cancelAndJoin()
         scope.coroutineContext[Job]?.children?.toList()?.forEach { it.cancelAndJoin() }
         session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState()
-        robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(); robotSdr.detach()
+        robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(); robotSdr.detach()
         state.update {
             val uncertain = it.scriptRunPhase.mayBeExecuting
             it.copy(connected = false, connectedAddress = null, connecting = false, busy = false,
@@ -1173,5 +1200,5 @@ internal class ConsoleModel(
                 scriptMessage = if (uncertain) uiText(Res.string.connection_closed_robot_state_unknown) else it.scriptMessage)
         }
     }
-    override fun close() { connectionRevision.addAndFetch(1); robotFiles.close(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotAddressing.clear(); robotPower.clear(); robotWifi.close(); robotSdr.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
+    override fun close() { connectionRevision.addAndFetch(1); robotFiles.close(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotCalibration.clear(); robotAddressing.clear(); robotPower.clear(); robotWifi.close(); robotSdr.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
 }
