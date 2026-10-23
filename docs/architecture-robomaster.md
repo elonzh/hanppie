@@ -1106,6 +1106,25 @@ S1 的红外能力至少包含三层，不能把其中任意一层统称为“�
 | 身份与技能可配置 | `SetTeamInfo(0x3F/0x0B)`、`SetCarAndSkillID(0x3F/0x37)`、`SetPlayerColor(0x3F/0x34)` 实测 ACK；`GetTeamInfo(0x35)`、`GetPlayerColor(0x36)` 有返回；技能表/自定义技能/Scratch 技能桥接 key 见 key-index |
 | 0x3F 命令集扫出 53 条候选（全二进制 117 条） | 反汇编包常量模式 + 符号归属，方法与分级见[探测记录](./s1-ir-armor-hit-probe-2026-09-18.md) |
 
+#### 单机靶场与竞速挑战的主机判定
+
+以下为固定 macOS 1.1.5/build 239 的托管消费者和原生静态证据；不是固件命中确认或当前设备验收。来源位于忽略目录 `Assembly-CSharp/Module.Challenger/`、`Module.SinglePlayer.System/SystemSinglePlayer.cs` 和同一固定原生库。官方玩法至少需要设置、准备/控制锁、视觉、发射事件、判定、结束/重试与配置恢复；只有普通标签识别或发送发射命令不构成挑战模式。
+
+| 契约 | 固定版本实际行为与边界 |
+| --- | --- |
+| 靶场规则 | `JudgeShoot.cs` 的 15 个阶段为 11–13、21–23、31–33、41–43、51–53；每阶段三组，目标数量依次为 1–5。五组阶段的时限分别是 10/7/4、10/7/4、10/8/5、13/10/7、14/11/8 秒；命中一次加 100，组间 1 秒、阶段间 3 秒，53 之后仍钳制在最后阶段。存在 `Marker.HP` 定义不代表实际要求三次命中 |
+| 竞速规则 | `JudgeRace.cs:34–114/191–198` 根据配置创建编号 1..N（视觉 ID 11..10+N）的目标，允许任意命中次序，记录检查点与总耗时；该实际状态机没有另设比赛总时限。准备动画结束后计时；动画自身长度尚未在此建立精确契约 |
+| 红外判定 | `IrShootMarker.cs:67–167` 使用真实绘制准星与活动标签框的严格内部相交，取第一个可用框；刚命中的 ID 暂时排除，约 500 ms 后恢复。设备发射事件才触发判定，通知参数未作为命中数量；命中提示、声音与碎片是 App 反馈，不能称为装甲确认 |
+| 水弹判定 | `WgShootMarker.cs:31–113` 启用时读取机内准星，发射事件选取离准星最近的标签，不要求框内；100 ms 后开始最多 2.5 秒的观察，持续消失超过 300 ms 则产生主机命中事件，重新出现会重置消失计时。未调用的 `CheckSteadyDown` 不作为实际判定步骤 |
+| 发射通知消费者 | `SystemSinglePlayer.cs:131/174/378–380` 监听/取消 `DJIRobomasterWaterGunShootFrequency`，转为 `Event_RobotFire`；不能复用 Hanppie 的“命令已发送”反馈来计分 |
+| 原生发射报告 | `GunListening` 的 `0x7d06b6` 注册观察键 `0x403f0050`；`OnFireStatusPush`（`0x7d0890`）检查正文至少 6 字节，将偏移 0 的四字节位型写入 ShootSpeed、偏移 4 的 u8 写入 ShootFrequency。观察键前缀不是 wire 属性；偏移 5 的语义、真实来源/属性/周期、重复通知及缓存更新策略仍待补证，不能将频率原值乘入分数 |
+| 规则配置与恢复 | `ViewChallenger.cs:74–114` 保存并关闭 Armor/BloodCalc，退出恢复，切换 OffControlFunction；`JudgeShoot.cs:350–376` 与 `JudgeRace.cs:191–244` 临时切换 Gun 和 OverheatIncrease，销毁时恢复 Gun 并将热量增长设回 0。必须追原生封包及现有初始化关系，不能照搬 C# 参数名猜报文 |
+| 结束与成绩 | 两个 Judge 的 `StateEnd` 锁控制并停止自定义技能；结果输入姓名，分别按分数降序/用时升序显示前五。记录存在当前组件的 `List<Record>`，未在这两类建立跨组件销毁或应用重启持久化；不能把内存榜单写成官方云榜或持久成绩契约 |
+
+靶场的单次命中和竞速的标签完成均是主机规则；水弹标签消失还可能受遮挡和检测丢失影响。此前红外光学/装甲探测与本节发射通知、主机判定是不同证据层级。自动竞速的用户程序/技能依赖继续纳入 G01，并保留安装槽冲突 C15；不因手动规则可以独立实现而删除该范围。
+
+原生材料为忽略目录 `.hanppie/validation/2026-10-22-official-gap/G01-native-*`；通用缓存更新函数已定位，但 ShootFrequency 对应 characteristic 的通知条件尚未完整恢复。本节不宣称一包对应一次物理发射，也没有修改固定初始化序列或新增设备验证。Hanppie 的开发进度、未提交边界和待验项只在[实施台账 G01](./official-app-capability-implementation.md#g01-规则与会话开发状态)维护。
+
 #### 自主程序与自定义技能安装
 
 以下请求/响应结构来自固定 macOS 1.1.5/build 239 的原生构造与解码；属于静态证据，尚未进行本轮设备验证。`COMMON/DjiScratchProjectSkillType.cs` 定义普通程序 `-1`、FPV 技能槽 `0`、自主程序槽 `10`。`SystemUploadDsp` 在 DSP/音频摘要核对和必要上传后安装指定槽位；连接后 `AutoInstallSkill` 先卸载槽 10/0，再按本地 `SkillProjects` 重装。不能把临时运行、持久安装、对战技能 ID 和主机 AI skill 文档混为一体。
