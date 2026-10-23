@@ -637,7 +637,19 @@ class AppSession(private val target: RobotTarget,
     private suspend fun request(receiver: Int, set: Int, id: Int, payload: ByteArray): ByteArray =
         requestChecked(receiver, set, id, payload) {}
 
+    override suspend fun requestLab(id: Int, payload: ByteArray): ByteArray {
+        require(id == Protocol.CMD_RM_SCRIPT_CTRL || id == Protocol.CMD_RM_SCRIPT_DOWNLOAD_FINSH)
+        return requestRaw(Protocol.HOST_SCRATCH_SYS, Protocol.CMDSET_RM, id, payload) {}
+    }
+
     private suspend fun requestChecked(receiver: Int, set: Int, id: Int, payload: ByteArray, beforeSend: () -> Unit): ByteArray {
+        val reply = requestRaw(receiver, set, id, payload, beforeSend)
+        if (reply.isEmpty()) throw RobotRequestException(RequestProblem.INVALID_RESPONSE)
+        if (reply.u8(0) != 0) throw RobotRequestException(RequestProblem.REJECTED, reply.u8(0))
+        return reply
+    }
+
+    private suspend fun requestRaw(receiver: Int, set: Int, id: Int, payload: ByteArray, beforeSend: () -> Unit): ByteArray {
         val pending = PendingRequest(receiver, set, id)
         val seq = txLock.withLock {
             if (!connected) throw RobotRequestException(RequestProblem.DISCONNECTED)
@@ -660,11 +672,7 @@ class AppSession(private val target: RobotTarget,
             frame.attr !in listOf(Protocol.ATTR_ACK, Protocol.ATTR_RESP_NEED_ACK) ||
             frame.set != pending.set || frame.id != pending.id) return
         pendingRequests.remove(frame.sequence)
-        when {
-            frame.payload.isEmpty() -> pending.reply.completeExceptionally(RobotRequestException(RequestProblem.INVALID_RESPONSE))
-            frame.payload.u8(0) != 0 -> pending.reply.completeExceptionally(RobotRequestException(RequestProblem.REJECTED, frame.payload.u8(0)))
-            else -> pending.reply.complete(frame.payload)
-        }
+        pending.reply.complete(frame.payload)
     }
 
     private fun failRequests() {

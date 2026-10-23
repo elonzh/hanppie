@@ -984,9 +984,11 @@ Hanppie 的 `RemoteCommands.remoteSetup` 已含 `a9`/`09` 卸载选择子及 `a8
 | DSP 匹配 | `a9 / 3f:a3`；49 字节 `01 + GUID ASCII32 + sign ASCII16`。原生回调将响应首字节 0 转换为桥接 `retCode=0, match=1`，非零转换为 `retCode=0, match=0`；不能猜成无线返回码后另有 match 字节 | `SendInquiryDspMd5Pack 1a220`，选择子 `1a25b`、节点/长度 `1a340/1a358`；回调 `1e850`，读取首字节 `1e881`、分支 `1e8bb`、字段写入 `1e8cc/1e94d..1e957` |
 | 音频资源匹配 | 同节点/命令；`0d + GUID ASCII32 + resourceType u8 + count u8`，随后每项 `fileID u8 + digest 4 bytes`，总长 `35+5N`；音频 type 为 0。成功响应为 `00 + count u8` 后接 `fileID u8 + match u8` 的条目；type 从请求上下文带回桥接，线上没有已证明的 type 回显字段 | `SendInquiryDspResourceMd5Pack 1a4d0`；字段 `1a5bf/1a5c3`、长度 `1a51e..1a538`、节点 `1a6b4`；回调 `1ee10`，返回码 `1ee45`、数量 `1ef47`、两字节步长 `1eff7/1effd`、上下文 type `1ef8e` |
 
-`DJIDspResourceMd5Struct` 将八位十六进制摘要逐字节装入 little-endian int，原生再写回四个字节；不是完整 MD5 的 16 字节，也不是八字节 ASCII。客户端仅将 `match == 1` 当作音频命中。当前 Hanppie 每次上传生成新的 GUID/sign，只使用会话内音频槽缓存，未接入这些查询；后续不能仅添加一个永远针对新 GUID 查询的接口便声称实现跨会话 DSP 复用。注册阶段还需保留既有实机验证过的 FTP 路径和完整运行状态关联，不能混用原生分片与 FTP 完成包的不同前缀。
+`DJIDspResourceMd5Struct` 将八位十六进制摘要逐字节装入 little-endian int，原生再写回四个字节；不是完整 MD5 的 16 字节，也不是八字节 ASCII。客户端仅将 `match == 1` 当作音频命中。DSP 查询在线上携带 GUID/sign，不是向设备读取完整文件的 16 字节 MD5；完整文件摘要由注册载荷发送。
 
-原生请求/回调、C# 资源摘要转换和当前源文件的摘要保留于忽略目录 `P04-native-*` 与 `P04-native-contracts.json`。这使 P04 的查询调查有据可循，但未改变上传行为、未新增设备证据，也不代表 P04 已实施。
+官方 `DJIScratchProject` 在构造新项目时生成 GUID（`584`），从项目内容读取已有身份并在内容变化时重新生成 sign（`708..713`），`SystemUploadDsp` 对已有 GUID/sign 匹配的项目跳过重传。Hanppie 每次上传生成新身份并用 GUID 隔离本轮状态；完整 DSP 免传会改变这一消息归属，取舍记录于台账 C16。当前 P04 仅在传输/注册后核对本轮程序，并以远端音频查询替换主机缓存；不改变项目身份或已有 FTP 注册前缀，不把针对新 GUID 的查询称为跨会话 DSP 复用。
+
+原生请求/回调及 C# 资源摘要转换的固定证据保留于忽略目录 `P04-native-*` 与 `P04-native-contracts.json`；当前实现、错误恢复及验证见[应用架构](./architecture.md#136-机载-lab-脚本与增量-dsp-部署)和[实施台账 P04](./official-app-capability-implementation.md#p04-远端程序与音频核对及设备待验)。字节构造和合成应答不证明固件已接受这些查询，跨新 GUID 的音频资源范围、持久性和真实核对结果仍待设备。
 
 #### 对战技能与其他桥接结构
 

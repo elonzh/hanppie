@@ -5,15 +5,7 @@ import cn.elonzh.hanppie.robot.session.robotMd5
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
-/**
- * Renders the DSP `<audio-list>` payload that carries Lab custom audio resources.
- *
- * The RoboMaster client writes one `<audio>` node per resource: `id` 0..9, the user-visible `name`,
- * `type="opus"`, the integer `duration` in seconds, an eight-character MD5, a `modify` flag, and the
- * base64 body inside CDATA. Hanppie always sends the body with `modify="true"` because the native
- * "does this resource already exist" query (`0x0500_001C`) is not implemented; the MD5 therefore only
- * documents the body, and its exact casing against the machine-side comparison is unverified.
- */
+/** First four MD5 bytes of the Base64 body, encoded as eight lowercase hex characters. */
 @OptIn(ExperimentalEncodingApi::class)
 internal fun labAudioDigest(packets: ByteArray): String {
     val body = Base64.Default.encode(packets)
@@ -27,9 +19,8 @@ internal fun labAudioDigest(packets: ByteArray): String {
  * `type="opus"`, the integer `duration` in seconds, an eight-character MD5, a `modify` flag, and the
  * base64 body inside CDATA.
  *
- * When [isSlotCached] returns true for a given slot and MD5, the resource is marked with
- * `modify="false"` and the heavy `<audio_data>` body is omitted, enabling incremental uploads
- * of only ~700-1500 bytes for re-runs and code edits.
+ * Only a current device digest match may authorize [isSlotCached] to omit the body with
+ * `modify="false"`. Host history and FTP completion do not establish a device cache hit.
  */
 @OptIn(ExperimentalEncodingApi::class)
 fun labAudioListXml(

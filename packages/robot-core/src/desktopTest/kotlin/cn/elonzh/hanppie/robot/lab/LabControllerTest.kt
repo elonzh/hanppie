@@ -2,11 +2,14 @@ package cn.elonzh.hanppie.robot.lab
 
 import cn.elonzh.hanppie.robot.protocol.hex
 import cn.elonzh.hanppie.robot.protocol.hexBytes
+import cn.elonzh.hanppie.robot.protocol.u8
+import cn.elonzh.hanppie.robot.session.RequestProblem
+import cn.elonzh.hanppie.robot.session.RobotRequestException
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.security.MessageDigest
 import javax.xml.parsers.DocumentBuilderFactory
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import kotlin.test.*
 
 class LabControllerTest {
@@ -17,6 +20,8 @@ class LabControllerTest {
         val commands = mutableListOf<Command>()
         var running = false
         var failId: Int? = null
+        var storedAudio = emptyMap<Int, String>()
+        var respond: (suspend (Int, ByteArray) -> ByteArray)? = null
         override fun labMode(running: Boolean) { this.running = running }
         override fun send(receiver: Int, attr: Int, set: Int, id: Int, payload: ByteArray,
                           sender: Int, flags: ByteArray): Int {
@@ -24,6 +29,17 @@ class LabControllerTest {
             commands.add(Command(receiver, attr, set, id, payload.copyOf(), sender))
             if (id == failId) throw IOException("simulated uncertain delivery")
             return commands.size
+        }
+        override suspend fun requestLab(id: Int, payload: ByteArray): ByteArray {
+            send(0xa9, 0x40, 0x3f, id, payload, 2, byteArrayOf(0x40, 0))
+            respond?.let { return it(id, payload) }
+            return if (id == 0xa3 && payload.u8(0) == 0x0d) {
+                byteArrayOf(0, payload[34]) + (0 until payload.u8(34)).flatMap { index ->
+                    val offset = 35 + index * 5
+                    val slot = payload.u8(offset)
+                    listOf(slot.toByte(), if (storedAudio[slot] == payload.copyOfRange(offset + 1, offset + 5).hex()) 1.toByte() else 0.toByte())
+                }.toByteArray()
+            } else byteArrayOf(0)
         }
     }
 
@@ -46,7 +62,8 @@ class LabControllerTest {
         assertEquals(upload.runId, controller.start())
         assertTrue(channel.running)
         assertContentEquals(byteArrayOf(1, 0) + hash.hexBytes(), channel.commands.single { it.id == 0xa2 }.payload)
-        assertEquals(listOf(0xa2, 0xa3, 0xba, 0xab), channel.commands.takeLast(4).map { it.id })
+        assertEquals(listOf(0xa2, 0xa3, 0xa3, 0xba, 0xab), channel.commands.takeLast(5).map { it.id })
+        assertEquals(1, channel.commands.takeLast(4).first().payload.u8(0))
         assertContentEquals(metadata.copyOfRange(1, metadata.size), channel.commands.takeLast(3).first().payload.drop(1).toByteArray())
         assertFailsWith<IllegalStateException> { controller.start() }
         assertFailsWith<IllegalStateException> { controller.upload("def start():\n    pass\n", "replacement") }
@@ -145,7 +162,8 @@ class LabControllerTest {
         val initialSize = uploaded.size
         assertTrue(initialSize > 2000)
 
-        // Second upload: warm slot -> modify="false" without audio body (~1 KB)
+        // Only a current device match authorizes omission, even in the same host session.
+        channel.storedAudio = mapOf(0 to labAudioDigest(clipA.packets))
         val upload2 = controller.upload("def start():\n    # modified code\n    pass\n", "fixture", listOf(clipA))
         val doc2 = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(ByteArrayInputStream(uploaded))
         val node2 = doc2.getElementsByTagName("audio").item(0)
@@ -164,7 +182,7 @@ class LabControllerTest {
         assertTrue(uploaded.size > 3000)
     }
 
-    @Test fun invalidateModeClearsCachedAudioSlots() = runBlocking {
+    @Test fun resourceReuseSurvivesNewHostControllersButNeverIgnoresDeviceChanges() = runBlocking {
         val channel = Channel()
         var uploaded = byteArrayOf()
         val controller = LabController(channel, { uploaded = it.copyOf() })
@@ -175,18 +193,135 @@ class LabControllerTest {
         val doc1 = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(ByteArrayInputStream(uploaded))
         assertEquals("true", doc1.getElementsByTagName("audio").item(0).attributes.getNamedItem("modify").nodeValue)
 
-        // Repeat -> cached
+        channel.storedAudio = mapOf(0 to labAudioDigest(clip.packets))
         controller.upload(script, "fixture", listOf(clip))
         val doc2 = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(ByteArrayInputStream(uploaded))
         assertEquals("false", doc2.getElementsByTagName("audio").item(0).attributes.getNamedItem("modify").nodeValue)
 
-        // Invalidate mode (reconnect / exit lab)
         controller.invalidateMode()
-
-        // After invalidation -> must upload full audio again
-        controller.upload(script, "fixture", listOf(clip))
+        val replacement = LabController(channel, { uploaded = it.copyOf() })
+        replacement.upload(script, "fixture", listOf(clip))
         val doc3 = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(ByteArrayInputStream(uploaded))
-        assertEquals("true", doc3.getElementsByTagName("audio").item(0).attributes.getNamedItem("modify").nodeValue)
-        assertEquals(1, doc3.getElementsByTagName("audio_data").length)
+        assertEquals("false", doc3.getElementsByTagName("audio").item(0).attributes.getNamedItem("modify").nodeValue)
+        channel.storedAudio = emptyMap() // Another client removed/replaced the global slot.
+        replacement.upload(script, "fixture", listOf(clip))
+        assertTrue(uploaded.decodeToString().contains("modify=\"true\""))
+    }
+
+    @Test fun failedOrMalformedResourceQueriesAlwaysKeepFullBodies() = runBlocking {
+        val channel = Channel()
+        var uploaded = byteArrayOf()
+        val controller = LabController(channel, { uploaded = it.copyOf() })
+        val clip = LabAudioClip(0, "clip", 1000, byteArrayOf(1, 2, 3))
+        controller.upload("pass", "fixture", listOf(clip))
+        channel.storedAudio = mapOf(0 to labAudioDigest(clip.packets))
+        for (problem in listOf(RequestProblem.TIMED_OUT, RequestProblem.REJECTED, RequestProblem.INVALID_RESPONSE)) {
+            channel.respond = { _, _ -> throw RobotRequestException(problem) }
+            controller.upload("pass", "fixture", listOf(clip))
+            assertTrue(uploaded.decodeToString().contains("modify=\"true\""))
+        }
+        channel.respond = { _, _ -> byteArrayOf(0, 2, 0, 1, 0, 1) } // Duplicate IDs cannot omit a body.
+        controller.upload("pass", "fixture", listOf(clip))
+        assertTrue(uploaded.decodeToString().contains("<audio_data>"))
+    }
+
+    @Test fun unconfirmedRegistrationOrProgramNeverSendsExecuteAndRequiresExplicitStop() = runBlocking {
+        val channel = Channel()
+        val controller = LabController(channel, {})
+        controller.upload("pass", "fixture")
+        val cases: List<suspend (Int, ByteArray) -> ByteArray> = listOf(
+            { _, _ -> byteArrayOf(7) },
+            { id, _ -> if (id == 0xa2) byteArrayOf(0) else byteArrayOf(1) },
+            { id, _ -> if (id == 0xa2) byteArrayOf(0) else byteArrayOf(0, 1) },
+            { id, _ -> if (id == 0xa2) byteArrayOf(0) else throw RobotRequestException(RequestProblem.TIMED_OUT) },
+        )
+        for ((index, response) in cases.withIndex()) {
+            channel.respond = response
+            val failure = assertFailsWith<Exception> { controller.start() }
+            if (index == 1) assertTrue(failure is IllegalStateException && failure.message.orEmpty().contains("程序摘要不匹配"))
+            else assertEquals(listOf(RequestProblem.REJECTED, RequestProblem.NOT_APPLIED,
+                RequestProblem.INVALID_RESPONSE, RequestProblem.TIMED_OUT)[index], (failure as RobotRequestException).problem)
+            assertFalse(channel.commands.any { it.id == 0xab || it.id == 0xa3 && it.payload.u8(0) == 0x52 })
+            assertFailsWith<IllegalStateException> { controller.start() }
+            controller.stop()
+        }
+        channel.respond = null
+        controller.start()
+        assertEquals(1, channel.commands.count { it.id == 0xab })
+        controller.stop()
+    }
+
+    @Test fun resourcesAreVerifiedAgainBeforeExecutionAndReplacementCanBeUploaded() = runBlocking {
+        val channel = Channel()
+        val clip = LabAudioClip(3, "clip", 1000, byteArrayOf(1, 2, 3))
+        channel.storedAudio = mapOf(3 to labAudioDigest(clip.packets))
+        var uploaded = byteArrayOf()
+        val controller = LabController(channel, { uploaded = it.copyOf() })
+        controller.upload("pass", "fixture", listOf(clip))
+        assertTrue(uploaded.decodeToString().contains("modify=\"false\""))
+        channel.storedAudio = emptyMap()
+        assertFailsWith<IllegalStateException> { controller.start() }
+        assertFalse(channel.commands.any { it.id == 0xab })
+        controller.stop()
+        controller.upload("pass", "fixture", listOf(clip))
+        assertTrue(uploaded.decodeToString().contains("modify=\"true\""))
+        channel.storedAudio = mapOf(3 to labAudioDigest(clip.packets))
+        controller.start()
+        assertEquals(1, channel.commands.count { it.id == 0xab })
+        assertEquals(4, channel.commands.count { it.id == 0xa3 && it.payload.u8(0) == 0x0d })
+        controller.stop()
+    }
+
+    @Test fun cancelledQueriesCannotUploadOrRestoreAnOlderProgram(): Unit = runBlocking {
+        val channel = Channel()
+        var uploads = 0
+        val controller = LabController(channel, { uploads++ })
+        controller.upload("pass", "old")
+        val requested = CompletableDeferred<Unit>()
+        channel.respond = { _, _ -> requested.complete(Unit); awaitCancellation() }
+        val upload = launch { controller.upload("pass", "replacement", listOf(LabAudioClip(0, "clip", 1000, byteArrayOf(1)))) }
+        requested.await()
+        val sent = channel.commands.size
+        upload.cancelAndJoin()
+        assertEquals(sent, channel.commands.size)
+        assertEquals(1, uploads)
+        assertFailsWith<IllegalStateException> { controller.start() }
+    }
+
+    @Test fun disconnectedOrInvalidatedQueriesCannotContinueAndInputsAreSnapshotted() = runBlocking {
+        val channel = Channel()
+        var uploaded = byteArrayOf()
+        val controller = LabController(channel, { uploaded = it.copyOf() })
+        controller.upload("pass", "old")
+        val packets = byteArrayOf(1, 2, 3)
+        val originalDigest = labAudioDigest(packets)
+        val clip = LabAudioClip(0, "clip", 1000, packets)
+        channel.respond = { _, _ -> packets[0] = 9; byteArrayOf(0, 1, 0, 0) }
+        controller.upload("pass", "snapshot", listOf(clip))
+        assertTrue(uploaded.decodeToString().contains("md5=\"$originalDigest\""))
+        for (invalidate in listOf(false, true)) {
+            uploaded = byteArrayOf()
+            channel.respond = { _, _ ->
+                if (invalidate) controller.invalidateMode() else channel.connected = false
+                byteArrayOf(0, 1, 0, 1)
+            }
+            assertFailsWith<IllegalStateException> { controller.upload("pass", "retired", listOf(clip)) }
+            assertTrue(uploaded.isEmpty())
+            channel.connected = true
+        }
+    }
+
+    @Test fun cancelledStartCannotExecuteOrAutomaticallyRetry() = runBlocking {
+        val channel = Channel()
+        val controller = LabController(channel, {})
+        controller.upload("pass", "fixture")
+        val requested = CompletableDeferred<Unit>()
+        channel.respond = { _, _ -> requested.complete(Unit); awaitCancellation() }
+        val start = launch { controller.start() }
+        requested.await(); start.cancelAndJoin()
+        assertFalse(channel.commands.any { it.id == 0xab })
+        assertFailsWith<IllegalStateException> { controller.start() }
+        channel.respond = null
+        controller.stop()
     }
 }

@@ -100,7 +100,7 @@ flowchart TD
   原则，所有界面、导航、ViewModel、本地持久化与智能体逻辑均位于共享层；平台 source set（`androidMain`、
   `jvmMain`、`iosMain`）仅提供平台能力注入（如 Android `MediaCodec`、桌面 FFmpeg 管道、文件选择器适配等）。
 - **`androidApp` / `desktopApp` / `iosApp`**：无业务逻辑的轻量平台入口，负责宿主初始化、窗口管理与应用打包。
-- **`src/hanppie`**：纯 Python 实现的直接控制与 Lab 脚本部署库，提供与 KMP 核心对等的协议能力。
+- **`src/hanppie`**：纯 Python 实现的直接控制与 Lab 脚本部署工具；与 KMP 应用各有独立接口，新增的 KMP 远端资源核对不表示 Python 工具同步获得相同流程。
 
 ---
 
@@ -462,24 +462,31 @@ Hanppie 采用纯原生方式打包与管理机内离线 Python 3.6 算法：
 ```mermaid
 flowchart TD
     SCRIPT["Python 源码 (标准 def start())"] --> PACK["生成 DSP 容器 XML"]
-    AUDIO["自定义音频切片 (Opus 48kHz)"] --> CACHE_CHECK{"检查主机会话 uploadedAudioSlots<br/>(slotId & MD5)"}
-    CACHE_CHECK -- " 本会话曾上传相同摘要 " --> XML_STUB["标记 modify='false'<br/>省略 Base64 正文"]
-    CACHE_CHECK -- " 新增或内容变更 " --> XML_FULL["标记 modify='true'<br/>包含 Base64 正文"]
+    AUDIO["自定义音频快照 (Opus 48kHz)"] --> CACHE_CHECK{"查询机内音频摘要<br/>3f:a3 / 0d"}
+    CACHE_CHECK -- " 本次设备明确匹配 " --> XML_STUB["标记 modify='false'<br/>省略 Base64 正文"]
+    CACHE_CHECK -- " 缺失、不同或查询失败 " --> XML_FULL["标记 modify='true'<br/>包含 Base64 正文"]
     XML_STUB --> PACK
     XML_FULL --> PACK
     PACK --> FTP_UP["FTP 写入 /python/python_raw.dsp<br/>(音频未改动时仅 700~1500 字节)"]
-    FTP_UP --> DUSS_RUN["DUSS 启动序列 (0xA2, 0xA3, 0xBA, 0xAB)"]
+    FTP_UP --> REGISTER["发送原有 3f:a2 注册载荷<br/>等待关联应答"]
+    REGISTER --> VERIFY{"查询程序 GUID/sign<br/>及全部音频摘要"}
+    VERIFY -- " 均匹配 " --> DUSS_RUN["发送执行序列 (0xA3, 0xBA, 0xAB)"]
+    VERIFY -- " 不匹配或无法确认 " --> WAIT["不发送执行命令<br/>显式停止后重新上传"]
     DUSS_RUN --> MONITOR["监听 DUSS 0x3F/0xA5 原生状态机"]
     MONITOR -->|status = 2| RUNNING["RUNNING (确认启动)"]
     MONITOR -->|status = 0| COMPLETED["COMPLETED (自然退出)"]
     MONITOR -->|status = 5| FAILED["FAILED (带原生完整 Traceback)"]
 ```
 
-- **会话内增量上传**：通过主机内存中的槽位与 MD5 追踪曾上传的音频；摘要相同则仅保留元数据并省略 Base64 正文。当前没有查询机器人资源摘要，缓存不跨会话，也不能识别其他客户端对机内音频的替换；FTP 返回不等于设备已注册资源。远端核对仍属实施台账 P04，不能把本地缓存命中称为机内确认或承诺固定上传耗时；
+- **远端资源核对（离线实现，设备待验）**：`robot-core/lab/LabResourceProtocol` 按原生构造编码程序及音频查询，分别解析单字节匹配结果、音频 ID/匹配列表。`LabController` 在上传前复制音频输入并校验完整载荷上限，按本次设备明确匹配的音频省略正文；删除旧 `uploadedAudioSlots` 主机会话缓存，新的控制器或会话也必须查询。预查询拒绝、超时或响应畸形时保留完整音频，取消/失联则终止，不能把历史上传当作命中；
+- **启动前确认**：FTP 返回仅代表文件传输。启动沿用 `3f:a2 / 01 00 + MD5(16)` 注册载荷，等待关联应答后查询本次 GUID/sign 及全部音频摘要，全部匹配才发送 `52` 执行请求及既有 `ba/ab` 序列。确认失败或取消不发送执行请求，不自动重试，保留原先部分启动后的显式停止要求；共享状态沿用 `UNKNOWN` 和停止入口，日志说明未发执行及需重新上传。设备核对是当时快照，不锁定其他客户端之后的修改；
+- **状态与会话归属**：`AppSession` 统一关联序号、节点、命令/属性和 CRC，原始 Lab 应答交由专用解析器，其他设备请求继续检查返回码。模式失效与协程取消不能把晚到查询结果发布为新上传；已经完成的 FTP 写入不能撤回。每次上传仍生成新 GUID/sign，并以 GUID 关联运行消息；完整 DSP 免传复用涉及 C16，未改变现有运行隔离策略；
 - **原生生命周期驱动**：原样上传用户代码，完全由固件原厂 `0x3F/0xA5`
   状态机接管执行、完成与异常 Traceback 追踪。
 
 当前 Lab 仅提供主机管理的单次上传/运行，不提供持久自主程序或自定义技能安装。进入 FPV 的既有初始化实际发送槽位 10/0 的卸载选择子与固定 GUID/sign 安装序列；当前卸载包长 35 字节，原生构造为 34 字节，接受及绑定结果未知，不能保证另行安装的程序得以保留。本轮只记录，不改变该序列。安装原生契约见[上游调查](./architecture-robomaster.md#自主程序与自定义技能安装)，实施取舍见[台账 C15](./official-app-capability-implementation.md#冲突记录保持现状留待决策)。状态原值 `3/4` 分别表示自定义技能/脱机技能运行，当前主机脚本状态只将 `2` 认作本轮运行，不能据此承诺跨模式停止或脱机程序生命周期已受主机管理。
+
+P04 的字节向量、真实 App 会话 UDP 回环、上传/启动/取消回归及设备待验见[实施记录](./official-app-capability-implementation.md#p04-远端程序与音频核对及设备待验)。没有设备验证过新增查询/应答与资源确认效果；既有 FTP/Lab 实机记录不自动扩展到这条新门禁。
 
 ---
 
@@ -692,7 +699,7 @@ SDK。
 |-------------|-----------------------------------------|-------------|------------------------------------------------|
 | S1 App 会话握手 | `AppConnection` / `packages/robot-core` | **实测通过**    | UDP `45678/56789` 身份交换与 UDP `10609/10607` 会话维持 |
 | 原生直接控制      | `Robot` / `packages/robot-core`         | **实测通过**    | 50Hz 周期控制与底盘/云台零速制动                            |
-| 机载 Lab 脚本部署 | `hanppie.lab` / `RobotLabSession`       | **实测通过**    | XML 容器构建、秒级增量 Opus 缓存上传及原生状态机监听                |
+| 机载 Lab 脚本部署 | `hanppie.lab` / `RobotLabSession`       | 既有路径实测；P04 离线 | XML/FTP 与原生生命周期曾实测；新增注册等待及远端程序/音频核对仍待设备，见 P04 |
 | 实时遥测订阅      | `Robot` / `packages/robot-core`         | **实测通过**    | 10Hz 解析电量、姿态角及底盘/云台原始遥测                        |
 | 实时视频与分辨率切换  | `Camera` / `RemoteMediaController`      | **实测通过**    | 720p/1080p DUSS 动态协商与双端流畅解码呈现                  |
 | 机身麦克风下行     | `Audio` / `RemoteMediaController`       | **实测通过**    | Opus 解码为 48kHz 单声道 PCM 播放                      |

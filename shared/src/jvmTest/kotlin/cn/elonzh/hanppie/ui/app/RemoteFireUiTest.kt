@@ -82,6 +82,33 @@ class RemoteFireUiTest {
     }
 
     @Test
+    fun failedResourceConfirmationExposesStopAndRequiresItBeforeRetry() = runBlocking {
+        val session = RobotSessionFixture().apply { labStartError = IllegalStateException("机内程序摘要不匹配，请停止后重新上传") }
+        val model = testConsoleModel(robotRuntime = FakeRobotRuntime(session))
+        val source = "def start():\n    pass\n"
+        try {
+            model.connect("127.0.0.1", "12345678")
+            withTimeout(5_000) { while (!model.state.value.connected || model.state.value.busy) delay(10) }
+            model.runScript(source, "resource mismatch")
+            withTimeout(5_000) { while (model.state.value.scriptRunPhase != ScriptRunPhase.UNKNOWN || model.state.value.busy) delay(10) }
+            assertTrue(model.state.value.canStop)
+            assertFalse(model.state.value.canRun(source))
+            assertEquals(1, session.labStartCount.get())
+            assertTrue(model.state.value.logs.any { it.contains("机内程序摘要不匹配") })
+            model.stop()
+            withTimeout(5_000) { while (model.state.value.scriptRunPhase != ScriptRunPhase.STOP_UNCONFIRMED || model.state.value.busy) delay(10) }
+            assertEquals(1, session.labStopCount.get())
+            assertTrue(model.state.value.canRun(source))
+            session.labStartError = null
+            model.runScript(source, "replacement")
+            withTimeout(5_000) { while (session.labStartCount.get() != 2 || model.state.value.busy) delay(10) }
+            assertEquals(ScriptRunPhase.STARTING, model.state.value.scriptRunPhase)
+        } finally {
+            model.close()
+        }
+    }
+
+    @Test
     fun stopCommandKeepsTheRobotRunStateUnconfirmed() = runBlocking {
         val session = RobotSessionFixture()
         val model = testConsoleModel(robotRuntime = FakeRobotRuntime(session))

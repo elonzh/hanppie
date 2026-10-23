@@ -90,6 +90,8 @@ internal class RobotSessionFixture : RobotSession {
     val mediaStarts = AtomicInteger(0)
     val mediaStops = AtomicInteger(0)
     val labStopCount = AtomicInteger(0)
+    val labStartCount = AtomicInteger(0)
+    var labStartError: Exception? = null
 
     override val camera = object : cn.elonzh.hanppie.robot.media.RobotCameraService {
         override val state = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.media.CameraState(100))
@@ -149,7 +151,11 @@ internal class RobotSessionFixture : RobotSession {
         override fun invalidateMode() {}
         override suspend fun upload(source: String, title: String, audio: List<LabAudioClip>): LabUpload =
             LabUpload("hash", "0123456789abcdef0123456789abcdef")
-        override suspend fun start(): String = "0123456789abcdef0123456789abcdef"
+        override suspend fun start(): String {
+            labStartCount.incrementAndGet()
+            labStartError?.let { throw it }
+            return "0123456789abcdef0123456789abcdef"
+        }
         override suspend fun stop() { labStopCount.incrementAndGet() }
         override suspend fun complete(runId: String): Boolean = true
     }
