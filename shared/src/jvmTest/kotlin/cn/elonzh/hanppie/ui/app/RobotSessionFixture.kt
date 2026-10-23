@@ -1,6 +1,7 @@
 package cn.elonzh.hanppie.ui.app
 
 import cn.elonzh.hanppie.robot.telemetry.RobotSystemStatus
+import cn.elonzh.hanppie.robot.maintenance.*
 import cn.elonzh.hanppie.robot.files.*
 import cn.elonzh.hanppie.robot.lab.*
 import cn.elonzh.hanppie.robot.product.*
@@ -11,6 +12,20 @@ import kotlinx.io.Source
 import java.util.concurrent.atomic.AtomicInteger
 
 internal class RobotSessionFixture : RobotSession {
+    override var addressing: RobotAddressingService = object : RobotAddressingService {
+        override val state = kotlinx.coroutines.flow.MutableStateFlow(RobotAddressingState())
+        override suspend fun begin(kind: ModuleAddressingKind): Unit = error("unused")
+        override suspend fun assign(id: Int, candidate: Int): Unit = error("unused")
+        override suspend fun skipArmor(step: Int): Unit = error("unused")
+        override suspend fun prepareVerification(): Unit = error("unused")
+        override suspend fun identify(id: Int): Unit = error("unused")
+        override fun holdWheel(wheel: AddressingWheel?) {}
+        override fun renewWheel() {}
+        override fun confirmWheel(wheel: AddressingWheel): Unit = error("unused")
+        override fun confirmModule(id: Int): Unit = error("unused")
+        override suspend fun end(): Unit = error("unused")
+        override suspend fun recover(kind: ModuleAddressingKind): Unit = error("unused")
+    }
     override val health = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.telemetry.RobotHealth())
     override var information: cn.elonzh.hanppie.robot.product.RobotInformationService = object : cn.elonzh.hanppie.robot.product.RobotInformationService {
         override val systemStatus = kotlinx.coroutines.flow.MutableStateFlow<RobotSystemStatus?>(null)

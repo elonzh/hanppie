@@ -68,6 +68,7 @@ private val workbenchNavigationConfiguration = SavedStateConfiguration {
             subclass(SettingsRoute.serializer())
             subclass(RobotAlbumRoute.serializer())
             subclass(RobotWifiRoute.serializer())
+            subclass(RobotAddressingRoute.serializer())
             subclass(ConnectionGuideRoute.serializer())
             subclass(DirectConnectionGuideRoute.serializer())
             subclass(RouterConnectionGuideRoute.serializer())
@@ -113,7 +114,21 @@ internal fun Console(
         if (backStack.lastOrNull() != RobotWifiRoute) backStack.add(RobotWifiRoute)
     }
     var showRobotMaintenance by rememberSaveable { mutableStateOf(false) }
+    var addressingExitRequested by remember { mutableStateOf(false) }
+    fun requestAddressingExit(): Boolean {
+        if (backStack.lastOrNull() != RobotAddressingRoute) return false
+        val addressing = model.robotAddressing.state.value
+        if (!addressing.task.blocksControl && !addressing.busy) return false
+        model.robotAddressing.holdWheel(null)
+        addressingExitRequested = true
+        return true
+    }
+    fun openAddressing() {
+        model.haltRemote(); focus.clearFocus(); keyboard?.hide()
+        if (backStack.lastOrNull() != RobotAddressingRoute) backStack.add(RobotAddressingRoute)
+    }
     fun navigate(index: Int) {
+        if (requestAddressingExit()) return
         showRobotMaintenance = false
         focus.clearFocus()
         keyboard?.hide()
@@ -162,6 +177,7 @@ internal fun Console(
         if (appId.isBlank()) appId = connectionPreferences.appId
     }
     fun goBack() {
+        if (requestAddressingExit()) return
         if (backStack.lastOrNull() == RobotWifiRoute && model.robotWifi.state.value.busy) return
         if (backStack.size > 1) backStack.removeLastOrNull()
         else if (backStack.lastOrNull() != RobotRoute) backStack[0] = RobotRoute
@@ -234,14 +250,14 @@ internal fun Console(
                         val compact = maxWidth < HanppieDesignTokens.CompactBreakpoint
                         val useNavigationRail = !compact || maxWidth > maxHeight
                         val shortWindow = maxHeight < 480.dp
-                        val workspacePage = route == ScriptRoute || route == ChatRoute || route == RobotAlbumRoute || route == RobotWifiRoute
+                        val workspacePage = route == ScriptRoute || route == ChatRoute || route == RobotAlbumRoute || route == RobotWifiRoute || route == RobotAddressingRoute
                         val compressedHeight = maxHeight < 240.dp
                         val compressedChat = route == ChatRoute && compressedHeight
                         val compressedSettings = route == SettingsRoute && compressedHeight
                         val isConnectionGuide = route == ConnectionGuideRoute ||
                             route == DirectConnectionGuideRoute || route == RouterConnectionGuideRoute
                         Row(Modifier.fillMaxSize()) {
-                            if (route != RobotRoute && useNavigationRail) NavigationRail(color = MiuixTheme.colorScheme.surfaceVariant,
+                            if (route != RobotRoute && route != RobotAddressingRoute && useNavigationRail) NavigationRail(color = MiuixTheme.colorScheme.surfaceVariant,
                                 defaultWindowInsetsPadding = false,
                                 header = { if (!shortWindow) Image(painterResource(HanppieBrandAssets.avatar), null,
                                     Modifier.padding(vertical = 18.dp).size(36.dp)) }) {
@@ -263,7 +279,7 @@ internal fun Console(
                                     .padding(horizontal = if (route == RobotRoute) 0.dp else if (compact) HanppieDesignTokens.PagePaddingCompact
                                     else HanppieDesignTokens.PagePaddingExpanded)
                                     .padding(bottom = if (workspacePage && compressedHeight) 4.dp else if (workspacePage) HanppieDesignTokens.PagePaddingCompact else 0.dp)) {
-                                    if (routeTab != 1 && route != RobotRoute && route != RobotAlbumRoute && route != RobotWifiRoute && !isConnectionGuide && !compressedSettings) {
+                                    if (routeTab != 1 && route != RobotRoute && route != RobotAlbumRoute && route != RobotWifiRoute && route != RobotAddressingRoute && !isConnectionGuide && !compressedSettings) {
                                         Row(Modifier.fillMaxWidth().height(if (compressedChat) 48.dp else 72.dp), verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.SpaceBetween) {
                                             Text(if (routeTab == 0) tr(Res.string.my_robot) else labels[routeTab],
@@ -302,7 +318,12 @@ internal fun Console(
                                                 if (document.value.dirty) pendingChatScript = scriptId else openChatScript(scriptId)
                                             }, onSettings = { navigate(4) })
                                         SettingsRoute -> SettingsPage(model, Modifier.weight(1f), onSpeechSettings, onAlbum = ::openAlbum, onWifi = ::openWifi,
-                                            showRobotMaintenance = showRobotMaintenance)
+                                            showRobotMaintenance = showRobotMaintenance, onAddressing = ::openAddressing)
+                                        RobotAddressingRoute -> cn.elonzh.hanppie.ui.robot.maintenance.RobotAddressingPage(model, Modifier.weight(1f),
+                                            ::goBack, addressingExitRequested, { addressingExitRequested = false }, {
+                                                addressingExitRequested = false
+                                                if (backStack.lastOrNull() == RobotAddressingRoute) backStack.removeLastOrNull()
+                                            })
                                         RobotWifiRoute -> cn.elonzh.hanppie.ui.robot.network.RobotWifiPage(model, Modifier.weight(1f),
                                             ::goBack, onOpenWifiSettings)
                                         RobotAlbumRoute -> cn.elonzh.hanppie.ui.robot.album.RobotAlbumPage(model, Modifier.weight(1f),
@@ -351,7 +372,7 @@ internal fun Console(
                                     }
                                 }
                                 if (routeTab != 1 && route != RobotRoute) ScriptRunBanner(state, onOpen = { navigate(1) }, onStop = model::stop)
-                                if (route != RobotRoute && !useNavigationRail) NavigationBar(Modifier.testTag("bottom-navigation"),
+                                if (route != RobotRoute && route != RobotAddressingRoute && !useNavigationRail) NavigationBar(Modifier.testTag("bottom-navigation"),
                                     mode = NavigationBarDisplayMode.IconOnly,
                                     color = MiuixTheme.colorScheme.surfaceVariant, defaultWindowInsetsPadding = false) {
                                     navigationOrder.forEach { index ->

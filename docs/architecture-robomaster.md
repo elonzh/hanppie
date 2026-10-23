@@ -597,6 +597,39 @@ SDK `EscSubject` 的 `<hhhhhhhhIIIIBBBB`：四项有符号 RPM、四项编码器
 
 当前低功耗报告与统计共用上一节的 `3f:03` 解析及年龄，不以策略 enable、请求 ACK 或主机计时推导设备已经休眠/唤醒。电池命令不能与 Wi-Fi 节点的 `07:15` 无线重启混用。真实待机、唤醒、整机重启/断电、电池电源返回、模式间联动和多客户端行为均待实机验收；模拟应答只证明当前主机流程。原生片段为忽略目录 `.hanppie/validation/2026-10-22-official-gap/H03-native-*`，离线结果和设备检查见[实施台账 H03](./official-app-capability-implementation.md#h03-验证入口与设备待验)。
 
+
+#### 部件编址：原生协议与硬件步骤
+
+以下为固定 macOS 1.1.5/build 239 的静态契约和协议向量。M01 已接入会话任务、独占/停止、发现与确认、断连恢复及五种流程的共享界面，设置中的机器人维护提供真实导航入口；当前实现与验证边界见[Hanppie 当前架构](./architecture.md#134-遥控操纵镜头坐标系与安全联动)。不能将固定初始化中的相关片段当成完整编址，也不能将离线流程当作设备验收。**静态证据 / 当前离线实现 / 设备待验**
+
+| 操作 | 目的 / 命令 / 载荷 | 原生依据 |
+| --- | --- | --- |
+| 电机编址 | `c3 / 3f:3e / 02` 结束旧轮次，成功后再 `01` 开始；结束为 `02` | `SetEscEncodeFlag 788960`，节点 `788a37`；客户端 `SendEscEncodingFlag` 明确先 2 后 1 |
+| 装甲开始 / 跳过 / 结束 | `18 / 3f:62 / 00` / `fe` / `ff` | `ActionResetID 70add0`、`ActionSkipCurrentID 70b740`、`ActionCancelResetID 70b530`；构造最后将 host9 改为 host24，不能停在中间值 |
+| 舵机编址 | `c3 / 3f:66 / uint8 Step, uint8 ID` | `ActionAddressing 78a260`，字段 `78a2cd/78a2d3`、节点 `78a341` |
+| ToF 编址 | `09 / 3f:66 / uint8 Step, uint8 ID` | 系统 `ActionAddressing 6abe40`，字段 `6abead/6abeb3`、节点 `6abf21` |
+| 机械臂舵机编号读取 | `c3 / 33:68 / 空`；应答至少 3 字节，编号位于 `uint8@1/@2` | `GetArmServoID 789860`，`792070` 转换回调，读取 `7920bb/7920c4` |
+| 电机测试模式与速度 | `03 / 3f:19 / 01` 进入 SDK 模式；`03 / 3f:20 / 4 个 int16LE RPM`，顺序右前/左前/左后/右后 | `SetControlMode 785f40`、`SetWheelSpeed 7881d0`；测试值来自客户端 `SystemMotorAddress` 的 200 RPM。与固件/编址目的节点 `c3` 不同 |
+| 舵机 / ToF 识别灯 | `host25 / host18` 与模块编号组合为目的字节；`00:60 / ff, mode, R, G, B` 共 5 字节 | `Servo.SetLEDColor 7aa130`、`ToF.SetLEDColor 7b45c0`；模式 2/3 都规范成线上值 2，常亮为 1 |
+
+`DJIAddressingStep` 为 Begin=0、Addressing=1、End=2；开始/结束时 ID 为默认 0，指定编号为 Step1 + ID。`RMSystemAddressingMsg::ToJson` 在 `5e5d6b/5e5d6f` 将字段 +8 绑定 `Step`（字符串 `9198fa`），在 `5e5da4/5e5da8` 将 +12 绑定 `ID`（`9198ff`），与两字节复制顺序吻合。`RealController.SendAddressing` 只把 Servo 路由到主控 key、ToF 路由到系统 key，没有传感器转接板分支。**原生 / 客户端**
+
+电机进度 observer `783a10` 在 `783b16` 注册 full-command `0x403f002f`；解码 `OnEscEncodeStatusPush 783cf0` 至少需要两字节，顺序是 `state@0`、`percent@1`。`RMMainControllerParamEscEncodeMsg::ToJson` 的 +8/+12 绑定字符串 `state`（`9191a1`）和 `percent`（`919557`），不能交换两字段。原厂界面在 state1/percent100 时进入核对环节，其他状态也结束正常编码等待；Hanppie 协议基础保留未知状态和范围外百分比，不将它们当完成。**原生 / 客户端**
+
+装甲 observer `709d20` 在 `709e26` 注册 `0x403f0063`，`OnResetStatusPush 70a3c0` 读取首字节。客户端每次非零回调推进一步，共四块底盘装甲；该字节没有足够依据解释为已分配的物理位置。当前任务已处理重复事件与断线，不能将 ACK 或回调计数当作实际位置已经正确。当前协议基础严格预期电机来源 `c3`、装甲来源 `18`、目的 02、attr0；这些来源/属性尚未由本次设备报文确认。**原生 / 当前代码 / 待实机验证**
+
+装甲物理引导顺序已有独立的界面证据：`ViewArmorAddress.CurrStep` 的步骤 1–4 播放 `RobotArmorPlateState1–4`，各动画的缩放绑定分别匹配 `ArmorPlate01–04/Curr` 的 CRC32（`3296829111/1108732953/2303279036/2488012548`）。对应 prefab 位于后/前/左/右：`ArmorPlate01` 在图上方、02 在下方、03 在右侧、04 在左侧；实际 `RobotImage` sprite `3689` 为 `img-car-01-760_760`，机头朝下，另有同方向 EP 图。由动画、层级坐标和原图交叉确认顺序为**后、前、左、右**，不是直接按屏幕左右命名。引导顺序与推送字节的含义仍是两项证据，不能将首字节当作此位置枚举。层级与核对信息保存在忽略目录 `M01-armor-view-hierarchy.json`、`M01-armor-order.json`。**客户端动画 / 界面素材静态证据**
+
+识别灯的目的字节为 `host | (id << 5)`；其单模块指令不触及机体状态灯。固定包中 `ViewServoAddress` 和 `ViewTOFAddress` 的旧版视图都用绿色 `00 ff 00` 闪烁约 3 秒后发同色常亮；其他视图变体的颜色并非都相同。常亮不是恢复此前颜色，也没有已确认的读取旧色契约。ToF 调用通用 setter 时的 `r9d=0x40` 与 Servo 的 `2` 是 `AccessType` 参数：`SendSetPack<DJIRMLEDCtrlPack> 7b4900` 在 `7b4a55/7b4a5b` 将其放入应答 lambda，`7b4aa9` 调用 `SendPack` 时仍传原始请求对象；二者构造头均为 `0x02600001`。不能把该内部访问类型直接解释为线上“无需应答”。当前任务与共享页面已接入识别期限、人工核对及结束/连接关闭的同节点常亮请求；真实闪烁效果、3 秒间隔及恢复结果仍待实机。**原生 / 客户端 / 当前代码 / 待实机**
+
+在线编号有现成来源：`RoboMasterProductManager::fetchProductInfo 7e7da0` 在 `7e80a7` 监听同一 `0x403f0012` 工作模块报告，`onRecv1860Push 7e8ba0` 分类包含舵机、ToF 和转接板的模块 ID。`UpdateRobomasterComponents 64de40` 接收 `DJI_RM_DEVICE_ID` 列表，分别在 `64ef82/64f0c3/64f204` 调用 ToF/Servo/Adapter 的 `setOnlineModules`。当前 M01 复用现有健康报告，不增加发现 opcode；任务中静默、重新接入与报告变化仍需实机验证，不能把缺席当作硬件不支持。**原生静态证据 / 当前代码 / 待实机**
+
+官方 [EP 用户手册 v1.2](https://dl.djicdn.com/downloads/ROBOMASTER_EP/20220429UM/RoboMaster_EP_User_Manual_v1.2_EN_1.pdf)第 15–17 页要求舵机/ToF 逐个接入并选择不重复编号：舵机安装选择 1–3、ToF 1–4。固定客户端仍有 Servo4 枚举/版本路径，且舵机编址代码对发现值 4 特别处理；协议基础因此保留发现/版本对象，但不把 4 当作舵机可分配编号。不能由版本 getter 数量扩大用户可选安装编号。**官方手册 / 客户端 / 当前约束**
+
+同一手册第 17 页图示给出转接板的物理编址：长按板载按钮约 3 秒，按键循环选择编号，停止操作并等待约 5 秒保存，灯转常亮；六个编号用四个指示灯的组合区分。它不需要舵机/ToF 的远程编号指令。macOS 的两份转接板编址视图只有导航，没有远程写号实现；不能因此制造一个同名 opcode。M01 已接入完整引导、灯图与在线编号核对，不把关闭软件引导当作撤销硬件更改；实际按键、保存与灯效仍待实机。**官方手册 / 客户端 / 当前代码 / 待实机**
+
+原厂 `SystemMotorAddress.OnUIViewClose` 写 FPV 模式 0；复核 Hanppie `AppSession.exitRemote`，现有路径同样回写 0，只是使用既有 `c3` 节点，原厂轮速/模式 setter 使用 `03`。没有依据将这点列为控制策略冲突；M01 当前对自身的轮速节点归零并释放测试模式，保留现有遥控路径，两种节点路由仍待实机对照。证据文件 `M01-native-*`、手册原件与相关页渲染位于忽略目录，当前进度和验证边界见[实施台账 M01](./official-app-capability-implementation.md#m01-实施进度与设备待验)。
+
 #### 对象追踪跟随
 
 macOS 官方 App 的 `VisionFollow` 使用 `DJIDetectionType.HumanTracking = 0x40`，状态依次为搜索、锁定、跟随。点击目标调用 `SendAutoFollowTracking`，发送归一化中心坐标 `(x,y)`、宽高为零；锁定后用户确认才发送跟随启动，取消使用同一指令的关闭位。它与上述 `3f:22` 调试速度分支不同；通用物体种类、识别范围和固件支持程度不能从名称推断。**代码**

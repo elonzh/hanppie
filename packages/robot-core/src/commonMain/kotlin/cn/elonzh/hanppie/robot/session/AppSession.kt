@@ -65,6 +65,12 @@ class AppSession(private val target: RobotTarget,
     val audio: cn.elonzh.hanppie.robot.media.RobotAudioService get() = audioCommands
     private val wifiCommands = WifiCommands(request = ::request)
     private val healthStore = cn.elonzh.hanppie.robot.telemetry.RobotHealthStore()
+    private val addressingCommands = cn.elonzh.hanppie.robot.maintenance.AddressingCommands(txLock, { healthStore.state.value }, ::request,
+        { node, set, id, payload -> send(node, Protocol.ATTR_NEED_ACK, set, id, payload) })
+    val addressing: cn.elonzh.hanppie.robot.maintenance.RobotAddressingService = object : cn.elonzh.hanppie.robot.maintenance.RobotAddressingService by addressingCommands {
+        override suspend fun begin(kind: cn.elonzh.hanppie.robot.maintenance.ModuleAddressingKind) = maintenanceChange { addressingCommands.begin(kind) }
+        override suspend fun recover(kind: cn.elonzh.hanppie.robot.maintenance.ModuleAddressingKind) = maintenanceChange { addressingCommands.recover(kind) }
+    }
     private val informationCommands = cn.elonzh.hanppie.robot.product.InformationCommands(::request)
     val information: cn.elonzh.hanppie.robot.product.RobotInformationService get() = informationCommands
     private val powerCommands = cn.elonzh.hanppie.robot.product.PowerCommands(::request)
@@ -100,9 +106,14 @@ class AppSession(private val target: RobotTarget,
     @Volatile private var cameraViewChanging = false
     @Volatile private var cameraZoomMayBeActive = false
     val camera: cn.elonzh.hanppie.robot.media.RobotCameraService = object : cn.elonzh.hanppie.robot.media.RobotCameraService by cameraCommands {
+        override suspend fun formatStorage() { check(!addressing.state.value.blocksControl) { "请先结束编址任务" }; cameraCommands.formatStorage() }
+        override suspend fun takePhoto() { check(!addressing.state.value.blocksControl) { "请先结束编址任务" }; cameraCommands.takePhoto() }
+        override suspend fun setRecording(active: Boolean) {
+            check(!active || !addressing.state.value.blocksControl) { "请先结束编址任务" }; cameraCommands.setRecording(active)
+        }
         override suspend fun switchCamera(index: Int) {
             txLock.withLock {
-                check(connected && !labRunning && !cameraViewChanging && !tracking.value.blocksManualControl) { "请先退出跟随或脚本任务" }
+                check(connected && !labRunning && !cameraViewChanging && !tracking.value.blocksManualControl && !addressing.state.value.blocksControl) { "请先退出跟随、脚本或编址任务" }
                 cameraViewChanging = true
             }
             try { cameraCommands.switchCamera(index) }
@@ -140,7 +151,7 @@ class AppSession(private val target: RobotTarget,
     private suspend fun withIdleControl(action: suspend () -> Unit) {
         check(modeMutex.tryLock()) { "请等待控制模式切换结束" }
         try {
-            txLock.withLock { check(connected && !powerTransition && !remote && !labRunning && !tracking.value.blocksManualControl) { "请先退出遥控或停止脚本" } }
+            txLock.withLock { check(connected && !powerTransition && !remote && !labRunning && !tracking.value.blocksManualControl && !addressing.state.value.blocksControl) { "请先退出遥控、脚本或编址任务" } }
             action()
         } finally { modeMutex.unlock() }
     }
@@ -151,6 +162,13 @@ class AppSession(private val target: RobotTarget,
             check(cameraCommands.state.value.storage?.let { !it.recording && !it.formatting } != false) { "请先停止机内拍录或格式化" }
             action()
         } finally { storageAccess.unlock() }
+    }
+    private suspend fun maintenanceChange(action: suspend () -> Unit) = powerChange {
+        txLock.withLock {
+            check(!cameraViewChanging && cameraCommands.state.value.storage?.shooting != true) { "请等待相机任务结束" }
+            clearMotionInput(); media(false)
+        }
+        action()
     }
     private var controlPayload = RemoteControl.velocity(0.0,0.0,0.0)
     private var gimbalPayload = RemoteControl.gimbalVelocity(0.0, 0.0)
@@ -191,7 +209,7 @@ class AppSession(private val target: RobotTarget,
 
     suspend fun enterRemote() = withContext(Dispatchers.IO) {
         modeMutex.withLock {
-        check(!labRunning && !powerTransition) { "请先停止 Lab 脚本或完成电源操作" }
+        check(!labRunning && !powerTransition && !addressing.state.value.blocksControl) { "请先结束脚本、电源或编址任务" }
         if (!remote) {
             mode = Protocol.MODE_REMOTE
             for (c in remoteSetup + remoteEffects) {
@@ -226,6 +244,7 @@ class AppSession(private val target: RobotTarget,
         inputDeadline = robotNanoTime() + 250_000_000
     }
     fun halt() = txLock.withLock {
+        addressingCommands.stopWheel()
         objectTracking.stop()
         clearMotionInput()
         if (active.load()) sendNeutral()
@@ -235,7 +254,7 @@ class AppSession(private val target: RobotTarget,
         require(repetitions in 1..10)
         txLock.withLock { objectTracking.stop(); clearMotionInput() }
         repeat(repetitions) { index ->
-            txLock.withLock { if (active.load()) sendNeutral(forceActuatorStop = true) }
+            txLock.withLock { if (active.load()) { addressingCommands.stopWheel(); sendNeutral(forceActuatorStop = true) } }
             if (index + 1 < repetitions) robotSleep(20)
         }
     }
@@ -319,7 +338,7 @@ class AppSession(private val target: RobotTarget,
         send(Protocol.HOST_CAMERA, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SET_SPEAKER_VOLUME, byteArrayOf(clamped.toByte()))
     }
     fun media(start: Boolean, audio: Boolean = false, resolution: VideoResolution = VideoResolution.R720P) = txLock.withLock {
-        check(!start || !powerTransition) { "电源操作期间不能开启媒体流" }
+        check(!start || !powerTransition && !addressing.state.value.blocksControl) { "电源或编址操作期间不能开启媒体流" }
         if (start) send(Protocol.HOST_CAMERA, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_CAMERA, Protocol.CMD_SET_VIDEO_FORMAT, resolution.payload)
         for (control in if (start) listOf(1, 2) else listOf(2, 1))
             send(Protocol.HOST_CAMERA, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_STREAM_CTRL, byteArrayOf(control.toByte(), if (start) 1 else 0, 0))
@@ -537,6 +556,7 @@ class AppSession(private val target: RobotTarget,
     }
 
     private fun failRequests() = txLock.withLock {
+        addressingCommands.close()
         audioCommands.close()
         wifiCommands.close()
         healthStore.close()
@@ -555,6 +575,7 @@ class AppSession(private val target: RobotTarget,
         wifiCommands.expire()
         healthStore.expire()
         informationCommands.updateAge()
+        addressingCommands.tick(robotNanoTime() - lastReceivedNanos < 500_000_000)
         val seq = sequence
         sequence = (sequence + 1) and 65535
         val fresh = remote && robotNanoTime() < inputDeadline
@@ -587,7 +608,12 @@ class AppSession(private val target: RobotTarget,
         udp.send(data, destination, target.remotePort)
     }
 
-    override fun labMode(running: Boolean) { check(!powerTransition) { "电源操作期间不能进入脚本模式" }; mode = Protocol.MODE_LAB; labRunning = running }
+    override fun labMode(running: Boolean) {
+        txLock.withLock {
+            check(!powerTransition && !addressing.state.value.blocksControl) { "请先结束电源或编址任务" }
+            mode = Protocol.MODE_LAB; labRunning = running
+        }
+    }
     fun normalMode() { mode = Protocol.MODE_NORMAL; labRunning = false }
 
     private fun receiveLoop() {
@@ -614,6 +640,7 @@ class AppSession(private val target: RobotTarget,
                                 audioCommands.receive(frame)
                                 wifiCommands.receive(frame)
                                 healthStore.receive(frame)
+                                addressingCommands.receive(frame)
                                 informationCommands.receive(frame)
                                 albumCommands.receive(frame)
                                 if (cameraCommands.state.value.revision != revision &&
@@ -640,6 +667,7 @@ class AppSession(private val target: RobotTarget,
             }
         } catch (error: Exception) {
             if (active.load()) runCatching { safetyStop() }
+            txLock.withLock { addressingCommands.close() }
             if (active.exchange(false)) onLost(error.message ?: error::class.simpleName.orEmpty())
         } finally { failRequests(); socket?.close() }
     }
@@ -661,6 +689,7 @@ class AppSession(private val target: RobotTarget,
 
     override fun close() {
         if (active.load()) runCatching { safetyStop() }
+        txLock.withLock { addressingCommands.close() }
         if (active.load() && remote) runCatching { send(Protocol.HOST_CHASSIS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_WORK_MODE_SET, byteArrayOf(0)) }
         active.store(false)
         failRequests()
