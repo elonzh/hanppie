@@ -96,6 +96,12 @@ import cn.elonzh.hanppie.resources.switch_ammo
 import cn.elonzh.hanppie.resources.talking
 import cn.elonzh.hanppie.resources.value_joystick
 import cn.elonzh.hanppie.ui.app.ConsoleController
+import cn.elonzh.hanppie.ui.robot.remote.input.*
+import kotlin.time.TimeSource
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import cn.elonzh.hanppie.ui.robot.device.BatteryIcon
 import cn.elonzh.hanppie.resources.recenter_gimbal
 import cn.elonzh.hanppie.ui.design.HanppieDesignTokens
@@ -162,6 +168,20 @@ internal fun RemotePage(
     val gelSelected by model.gelSelected.collectAsState()
     val gear by model.driveGear.collectAsState()
     val control by model.controlSettings.collectAsState()
+    val relativePointer = LocalRelativePointer.current
+    val gyroFactory = LocalAimGyroscope.current
+    val gyroSource = remember(gyroFactory) { gyroFactory() }
+    val aimClock = remember { TimeSource.Monotonic.markNow() }
+    val aimInput = remember(model, relativePointer, gyroSource) { GimbalAimInput(relativePointer, gyroSource,
+        nowMillis = { aimClock.elapsedNow().inWholeMilliseconds }, controlRevision = { model.remoteInputRevision }, onPrimaryPress = model::fireSelected,
+        onSecondaryPress = {
+            val current = model.cameraZoom.state.value
+            if (model.remoteEnabled.value && model.isForeground && !model.state.value.busy && !current.busy)
+                model.cameraZoom.setZoom(if ((current.hundredths ?: 100) > 100) 100 else 400)
+        }) }
+    val aimState by aimInput.state.collectAsState()
+    val inputLifecycle = LocalLifecycleOwner.current.lifecycle
+    val inputLifecycleState by inputLifecycle.currentStateAsState()
     val talking by model.talking.collectAsState()
     val microphoneReady by model.microphoneReady.collectAsState()
     val talkBusy by model.talkBusy.collectAsState()
@@ -185,12 +205,26 @@ internal fun RemotePage(
         if (connected.connected) model.setRemoteLed(control.remoteLeds.color(ledState))
     }
     DisposableEffect(model) { onDispose {
+        aimInput.stop()
         model.robotArm.stopControl()
         model.stopFiring()
         (onPushToTalkStop ?: model::endPushToTalk)()
         model.setRemoteLed(null)
         if (manageSession) { model.leaveRemote(); model.stopMedia() }
     } }
+    DisposableEffect(aimInput) { onDispose { aimInput.close() } }
+    DisposableEffect(aimInput, inputLifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event in listOf(Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP) && aimInput.state.value.mode != AimInputMode.OFF) {
+                aimInput.stop()
+                suppressedKeys = suppressedKeys + physicalKeys
+                keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+                model.clearRemoteInputs()
+            }
+        }
+        inputLifecycle.addObserver(observer)
+        onDispose { inputLifecycle.removeObserver(observer) }
+    }
     var appliedSensitivities by remember { mutableStateOf(control.inputSensitivities) }
     LaunchedEffect(control.inputSensitivities) {
         if (appliedSensitivities == control.inputSensitivities) return@LaunchedEffect
@@ -199,6 +233,7 @@ internal fun RemotePage(
         keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
         model.clearRemoteInputs()
     }
+    LaunchedEffect(control.aimInput) { aimInput.stop(); right = Offset.Zero; model.stopFiring() }
     LaunchedEffect(hasArmControls) {
         if (!hasArmControls && armMode) { armMode = false; model.clearRemoteInputs(); keys = emptySet(); left = Offset.Zero; right = Offset.Zero }
     }
@@ -253,15 +288,17 @@ internal fun RemotePage(
                 currentGear, currentControl)
             val rotation = axis(ControlAction.RotateClockwise, ControlAction.RotateCounterclockwise) *
                 DriveSpeed.rotation(currentGear, currentControl)
+            val aim = aimInput.frame(currentControl.aimInput, currentControl.gimbalSpeed)
+            val limit = currentControl.gimbalSpeed.toDouble()
             model.drive(translation.first, translation.second, rotation,
-                sensitivity.combine(cn.elonzh.hanppie.ui.settings.InputAxis.PITCH, -currentRight.y.toDouble(), axis(ControlAction.GimbalUp, ControlAction.GimbalDown).toDouble()) * currentControl.gimbalSpeed,
-                sensitivity.combine(cn.elonzh.hanppie.ui.settings.InputAxis.YAW, currentRight.x.toDouble(), axis(ControlAction.GimbalRight, ControlAction.GimbalLeft).toDouble()) * currentControl.gimbalSpeed)
+                (sensitivity.combine(cn.elonzh.hanppie.ui.settings.InputAxis.PITCH, -currentRight.y.toDouble(), axis(ControlAction.GimbalUp, ControlAction.GimbalDown).toDouble()) * limit + aim.pitch).coerceIn(-limit, limit),
+                (sensitivity.combine(cn.elonzh.hanppie.ui.settings.InputAxis.YAW, currentRight.x.toDouble(), axis(ControlAction.GimbalRight, ControlAction.GimbalLeft).toDouble()) * limit + aim.yaw).coerceIn(-limit, limit))
             delay(50)
         }
     }
     val currentShiftHeld = Key.ShiftLeft in currentKeys || Key.ShiftRight in currentKeys
     val fireKeyHeld = currentControl.shortcuts.isHeld(ControlAction.Fire, currentKeys, currentShiftHeld)
-    val shouldFire = enabled && manualActionsEnabled && (fireKeyHeld || firePointerHeld)
+    val shouldFire = enabled && manualActionsEnabled && (fireKeyHeld || firePointerHeld || aimState.repeatPrimary)
     LaunchedEffect(shouldFire) {
         if (shouldFire) model.startFiring() else model.stopFiring()
     }
@@ -278,6 +315,7 @@ internal fun RemotePage(
     }.focusRequester(focus).onFocusChanged {
         pageFocused = it.hasFocus
         if (!it.hasFocus) {
+            aimInput.stop()
             if (armMode) suppressedKeys = suppressedKeys + physicalKeys
             keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
             model.robotArm.stopControl()
@@ -290,6 +328,14 @@ internal fun RemotePage(
         else if (it.type == KeyEventType.KeyDown) physicalKeys = physicalKeys + it.key
         if (awaitingRelease) return@onPreviewKeyEvent true
         if (!inputEnabled || !foreground) return@onPreviewKeyEvent false
+        if (it.key == Key.Escape && aimState.mode != AimInputMode.OFF) {
+            if (it.type == KeyEventType.KeyDown) {
+                aimInput.stop(); suppressedKeys = suppressedKeys + physicalKeys
+                keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+                model.clearRemoteInputs(); focus.requestFocus()
+            }
+            return@onPreviewKeyEvent true
+        }
         if (armMode) {
             if (it.key == Key.Escape) {
                 if (it.type == KeyEventType.KeyDown) {
@@ -336,6 +382,11 @@ internal fun RemotePage(
         supported
     }.focusable().onGloballyPositioned { surfaceOrigin = it.positionInRoot() }) {
         val landscapeReady = maxWidth >= maxHeight
+        LaunchedEffect(enabled, foreground, connected.connectedAddress, connected.busy, landscapeReady,
+            manualActionsEnabled, vision.ownsGimbal, pageFocused) {
+            if (!enabled || !foreground || connected.busy || !landscapeReady || !manualActionsEnabled || vision.ownsGimbal || !pageFocused)
+                aimInput.stop()
+        }
         val compactHud = maxWidth < 800.dp
         LaunchedEffect(landscapeReady) { if (!landscapeReady) { firePointerHeld = false; model.stopFiring(); model.haltRemote() } }
         LaunchedEffect(landscapeReady, foreground, connected.connected) {
@@ -371,6 +422,7 @@ internal fun RemotePage(
             if (connected.connected && onHealth != null && navigationEnabled && foreground)
                 cn.elonzh.hanppie.ui.robot.device.RobotHealthAlertButton(model, onHealth)
             if (hasArmControls) Button({
+                aimInput.stop()
                 keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; keyboardHints = false
                 suppressedKeys = suppressedKeys + physicalKeys
                 model.clearRemoteInputs(); armMode = !armMode; focus.requestFocus()
@@ -431,10 +483,12 @@ internal fun RemotePage(
         if (!armMode) VisionModeControls(vision, tracking, enabled && videoFrame != null && videoFresh && !zoom.busy && (zoom.hundredths == null || zoom.hundredths == 100),
             Modifier.align(Alignment.TopCenter).padding(top = 76.dp).then(reserveVisionSpace("vision")),
             onStart = { mode, color ->
+                aimInput.stop()
                 keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
                 model.startVision(mode, color); focus.requestFocus()
             }, onStop = { model.stopVision(); focus.requestFocus() },
             onStartTracking = {
+                aimInput.stop()
                 keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
                 model.startObjectTracking(); focus.requestFocus()
             }, onConfirmTracking = { model.confirmObjectTracking(); focus.requestFocus() },
@@ -495,7 +549,7 @@ internal fun RemotePage(
                 }
                 key(control.inputSensitivities) {
                     Stick("${tr(Res.string.gimbal)} · ${control.gimbalSpeed}°/s", foreground && enabled,
-                        { keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
+                        { aimInput.stop(); keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
                         tr(Res.string.gimbal)) { right = it }
                 }
             }
@@ -517,6 +571,25 @@ internal fun RemotePage(
                     androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp)
                 .testTag("keyboard-hints"), color = HanppieDesignTokens.RemoteHudMuted, fontSize = 10.sp, maxLines = 2)
         }
+        if (!armMode) AimInputControls(aimInput, aimState,
+            enabled && manualActionsEnabled && !vision.ownsGimbal && !connected.busy && inputLifecycleState.isAtLeast(Lifecycle.State.RESUMED),
+            Modifier.align(Alignment.BottomCenter).padding(bottom = if (keyboardHints) 76.dp else 28.dp)
+                .then(reserveVisionSpace("aim-input"))) inputStart@ { mode ->
+            if (!inputLifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@inputStart
+            model.clearRemoteInputs(); keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+            suppressedKeys = suppressedKeys + physicalKeys
+            // Transfer focus before acquisition: the button-to-cockpit transition retires old input.
+            focus.requestFocus()
+            when (mode) {
+                AimInputMode.OFF -> aimInput.stop()
+                AimInputMode.MOUSE -> { keyboardHints = true; aimInput.startMouse() }
+                AimInputMode.GYROSCOPE -> aimInput.startGyroscope()
+            }
+        }
+        // Captured clicks belong to the native relative input, never to a control behind the cursor.
+        if (aimState.mode == AimInputMode.MOUSE) Box(Modifier.fillMaxSize().pointerInput(aimInput) {
+            awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
+        })
 
     }
 }

@@ -201,26 +201,29 @@ private fun DesktopWorkbenchWindow(onExit: () -> Unit) {
         }
         DesktopVideoAspect(window, mediaSettings.videoResolution.width.toDouble() / mediaSettings.videoResolution.height)
         WorkbenchTheme(holder.appearance) {
-            Console(
-                model = model,
-                document = document,
-                onImport = holder::importScript,
-                onExport = holder::exportScript,
-                onImportAudio = holder::importScriptAudio, onImportRobotFirmware = holder::importRobotFirmware,
-                fileError = holder.fileError,
-                onFileError = holder::updateFileError,
-                onRobotFileUpload = holder::uploadRobotFile,
-                onRobotFileDownload = holder::downloadRobotFile,
-                onRobotFileOpen = holder::openRobotFile,
-                onRobotMediaOpen = holder::openRobotMedia,
-                onRobotMediaExport = holder::exportRobotMedia,
-                onOpenWifiSettings = wifiSettingsCommand?.let { command ->
-                    {
-                        try { ProcessBuilder(command).start() }
-                        catch (_: Exception) { holder.updateFileError(tr(Res.string.could_not_open_wifi_settings)) }
-                    }
-                },
-            )
+            val pointer = remember(window) { cn.elonzh.hanppie.ui.robot.remote.input.DesktopRelativePointer(window) }
+            CompositionLocalProvider(cn.elonzh.hanppie.ui.robot.remote.input.LocalRelativePointer provides pointer) {
+                Console(
+                    model = model,
+                    document = document,
+                    onImport = holder::importScript,
+                    onExport = holder::exportScript,
+                    onImportAudio = holder::importScriptAudio, onImportRobotFirmware = holder::importRobotFirmware,
+                    fileError = holder.fileError,
+                    onFileError = holder::updateFileError,
+                    onRobotFileUpload = holder::uploadRobotFile,
+                    onRobotFileDownload = holder::downloadRobotFile,
+                    onRobotFileOpen = holder::openRobotFile,
+                    onRobotMediaOpen = holder::openRobotMedia,
+                    onRobotMediaExport = holder::exportRobotMedia,
+                    onOpenWifiSettings = wifiSettingsCommand?.let { command ->
+                        {
+                            try { ProcessBuilder(command).start() }
+                            catch (_: Exception) { holder.updateFileError(tr(Res.string.could_not_open_wifi_settings)) }
+                        }
+                    },
+                )
+            }
             WorkbenchDialog(
                 show = confirmExit,
                 onDismissRequest = { confirmExit = false },

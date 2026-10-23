@@ -327,6 +327,7 @@ internal class ConsoleModel(
     private val connectionPreferencesLoaded = AtomicBoolean(false)
     override val foregroundState = MutableStateFlow(true)
     private val remoteRevision = AtomicLong(0L)
+    override val remoteInputRevision: Long get() = remoteRevision.load()
     override val tracking = MutableStateFlow(TrackingState())
     private var trackingObserver: Job? = null
     override val vision = MutableStateFlow(cn.elonzh.hanppie.robot.vision.VisionState())

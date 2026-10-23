@@ -23,6 +23,7 @@ import cn.elonzh.hanppie.ui.robot.scene.LocalRobotSceneTransparency
 import cn.elonzh.hanppie.ui.speech.IosSpeechInput
 import platform.Foundation.*
 import platform.UIKit.UIViewController
+import platform.UIKit.UIInterfaceOrientationUnknown
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Text
@@ -34,7 +35,12 @@ fun MainViewController(platform: IosPlatformServices): UIViewController = Compos
     },
 ) {
     // Filament's transparent UIKit surface is placed above Compose, hiding home controls.
-    CompositionLocalProvider(LocalIosPlatformServices provides platform, LocalRobotSceneTransparency provides false) { IosWorkbench(platform) }
+    val controller = androidx.compose.ui.uikit.LocalUIViewController.current
+    val gyroscope = remember(controller) { { IosAimGyroscope {
+        controller.view.window?.windowScene?.interfaceOrientation ?: UIInterfaceOrientationUnknown
+    } } }
+    CompositionLocalProvider(LocalIosPlatformServices provides platform, LocalRobotSceneTransparency provides false,
+        cn.elonzh.hanppie.ui.robot.remote.input.LocalAimGyroscope provides gyroscope) { IosWorkbench(platform) }
 }
 
 private fun createIosWorkbench(platform: IosPlatformServices): WorkbenchViewModel {

@@ -50,6 +50,7 @@ class SettingsStoreTest {
             joystickDeadZone = .2,
             shortcuts = ControlShortcuts().bind(ControlAction.Fire, KeyBinding(ControlKey.F)),
             remoteLeds = RemoteLedSettings(active = RobotLedColor(1, 2, 3)),
+            aimInput = AimInputSettings(73, true, 25, true),
         )
         val restored = settingsJson.decodeFromString<SavedSettings>(settingsJson.encodeToString(SavedSettings(control = control)))
         assertEquals(control, restored.control)

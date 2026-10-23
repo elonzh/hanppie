@@ -1633,4 +1633,21 @@
     <string name="display_picture_zoom">Picture zoom</string>
     <string name="display_zoom_unknown">Unconfirmed</string>
     <string name="display_sight_pairs_differ">Normal and zoom calibration differ. Applying will align both to this draft.</string>
+    <string name="aim_mouse_sensitivity">Mouse gimbal sensitivity</string>
+    <string name="aim_gyro_sensitivity">Gyroscope gimbal sensitivity</string>
+    <string name="aim_vertical_direction">Vertical direction</string>
+    <string name="aim_direction_normal">Normal</string>
+    <string name="aim_direction_inverted">Inverted</string>
+    <string name="aim_preferences_help">Start mouse or gyroscope control in the cockpit. Changing these preferences releases active input.</string>
+    <string name="aim_mouse_start">Mouse gimbal</string>
+    <string name="aim_mouse_active">Mouse aiming active</string>
+    <string name="aim_gyro_start">Gyroscope</string>
+    <string name="aim_gyro_stop">Stop gyroscope</string>
+    <string name="aim_mouse_hint">Esc releases · Left fires · Right zooms</string>
+    <string name="aim_gyro_hint">Rotate the device to aim · Tap again to stop</string>
+    <string name="aim_preparing">Preparing input…</string>
+    <string name="aim_pointer_failed">Mouse capture ended. Select Mouse gimbal to retry.</string>
+    <string name="aim_sensor_failed">Gyroscope unavailable. Check motion access and try again.</string>
+    <string name="aim_sensor_stale">Gyroscope stopped updating. Tap to restart.</string>
+    <string name="aim_orientation_changed">Screen direction changed. Tap to restart.</string>
 </resources>

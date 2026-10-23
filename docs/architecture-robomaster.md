@@ -584,6 +584,14 @@ SDK `EscSubject` 的 `<hhhhhhhhIIIIBBBB`：四项有符号 RPM、四项编码器
 
 `GetChassisSpeedLevel`（`0x6a4410`）使用 `3f:4f` 空请求，回调 `0x6c0d70` 取响应偏移 1 的字节；`SetChassisSpeedLevel`（`0x6a4aa0`）使用 `3f:3f` 单字节写入。托管 UI 将低/中/高/自定义映射为 1/2/3/4；选择自定义后，原客户端另外按七次参数写入恢复本地值。Hanppie 沿既有 System `0x09` 请求路由单独读取/设置档位，不自动恢复一套本地设备参数。允许范围、档位切换后的实际参数、数值单位、持久性与地区/固件差异尚无新增实机证据。来源指纹、原生片段和字段对应保存在忽略目录 `I01-native-contracts.json` 与 `I01-native-*.txt`；不提交厂商二进制。**原生 / 当前实现边界**
 
+#### 桌面鼠标与终端陀螺仪输入
+
+固定 macOS 1.1.5/build 239 的 `COMMON/StandaloneControl.cs` 在进入 FPV 时设置 `CursorLockMode.Locked` 并隐藏指针，退出/销毁时释放；按住 Tab 暂时解锁，松开后重新捕获。`Element.S1/RightJoystick.cs` 的 KeyboardMouse 分支取 Unity `Mouse X/Y`，乘对应云台轴灵敏度 ×0.01；方向键附加 0.6 ×该轴灵敏度 ×0.01，指针可见时整组输出归零。这是终端输入逻辑，不是新增机器人指令；Unity 输入轴值不能直接解释为 AWT 逻辑像素或线上角速度。**固定版消费者**
+
+同一 `RightJoystick` 的 Touch 分支在 `Control.Gyro` 启用时读取 `Input.gyro.rotationRateUnbiased`，X/Y 向零截断至两位小数，水平为负 Y ×1.4、俯仰为 X，均乘 `GyroSensitivity ×0.1 ×Time.deltaTime` 后加入摇杆结果；启用状态来自持久设置，监听设置更改时同步启停传感器。不能把该帧增量公式直接当成机器人度/秒，也不能用 Lab 的原始角速度上行替代驾驶链路。`Module.Battle.View/ViewBattleFPV.OnGamePadMouseRightButton` 在按下且对局未结束时调用变焦按钮，提供配件鼠标右键的场景语义；它不能证明官方独立手柄已经接入 Hanppie。**固定版消费者 / 适用边界**
+
+Hanppie 采用显式单页启用、Escape 释放和原有速度控制，保留默认键盘/屏幕输入，未复制自动捕获、Tab 松开重捕获或持久启用，记录为[冲突 C17](./official-app-capability-implementation.md#冲突记录保持现状留待决策)。其灵敏度/反向、屏幕轴补偿与角速度换算见[当前实现](./architecture.md#134-遥控操纵镜头坐标系与安全联动)，不宣称 Unity 触感等价。原生 API 依据为 [Java Robot](https://docs.oracle.com/en/java/javase/25/docs/api/java.desktop/java/awt/Robot.html)、[Android SensorEvent](https://developer.android.com/reference/android/hardware/SensorEvent#sensor.type_gyroscope)、[Apple rotationRate](https://developer.apple.com/documentation/coremotion/cmdevicemotion/rotationrate)；真实捕获、权限、朝向/偏置、输入频率和机械动作均未验收。**API / 当前边界**
+
 #### 官方 GamePad 的独立链路与输入
 
 [官方手册](https://dl.djicdn.com/downloads/robomaster-s1/20220429UM/RoboMaster_S1_User_Manual_v1.8_EN.pdf)第 27、37–39 页把 GamePad 定义为连接移动终端的配件，可以再挂鼠标和键盘；接入后手柄拥有底盘输入，触屏仍可执行其他操作。这与电脑直接使用键鼠是不同的连接路径。手册还描述手柄固件更新，不能拿普通机器人升级流程抵扣。**官方用户流程**

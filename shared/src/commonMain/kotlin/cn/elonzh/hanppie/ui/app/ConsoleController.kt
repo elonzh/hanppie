@@ -80,6 +80,7 @@ internal interface ConsoleController : AutoCloseable {
     fun startVision(mode: cn.elonzh.hanppie.robot.vision.VisionMode, color: cn.elonzh.hanppie.robot.vision.VisionColor? = null)
     fun stopVision()
     val remoteEnabled: MutableStateFlow<Boolean>
+    val remoteInputRevision: Long
     val remoteInput: MutableStateFlow<List<Double>>
     val cameraYaw: MutableStateFlow<Double?>
     val gelSelected: MutableStateFlow<Boolean>

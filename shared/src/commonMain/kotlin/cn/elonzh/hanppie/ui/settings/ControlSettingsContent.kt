@@ -48,6 +48,10 @@ internal fun ControlSettingsContent(model: ConsoleController) {
             Text(tr(Res.string.input_custom_default))
         }
     }
+    AimInputPreferences(control.aimInput, !busy) { value ->
+        model.settingsMessage.value = null
+        model.controlSettings.value = control.copy(aimInput = value)
+    }
     Text(tr(Res.string.input_host_limits), fontSize = 15.sp)
     SettingsDropdown(tr(Res.string.gimbal_sensitivity), "gimbal-sensitivity", control.gimbalSpeed.toString(),
         listOf(15, 30, 45, 60, 90, 120).map { it.toString() to tr(Res.string.degrees_per_second_value, it) }, !busy) { value ->
@@ -74,6 +78,38 @@ internal fun ControlSettingsContent(model: ConsoleController) {
     }
     val connected by model.state.collectAsState()
     RobotMotionSettingsContent(model.robotMotion, connected.connected)
+}
+
+@Composable
+private fun AimInputPreferences(value: AimInputSettings, enabled: Boolean, change: (AimInputSettings) -> Unit) {
+    val pointer = cn.elonzh.hanppie.ui.robot.remote.input.LocalRelativePointer.current
+    val factory = cn.elonzh.hanppie.ui.robot.remote.input.LocalAimGyroscope.current
+    val gyro = remember(factory) { factory() }
+    if (pointer != null) {
+        AimSensitivity(tr(Res.string.aim_mouse_sensitivity), "aim-mouse-sensitivity", value.mouseSensitivity, enabled) { change(value.copy(mouseSensitivity = it)) }
+        SettingsDropdown(tr(Res.string.aim_vertical_direction), "aim-mouse-direction", value.mouseInvertY.toString(),
+            listOf("false" to tr(Res.string.aim_direction_normal), "true" to tr(Res.string.aim_direction_inverted)), enabled) {
+            change(value.copy(mouseInvertY = it.toBoolean()))
+        }
+    }
+    if (gyro.available) {
+        AimSensitivity(tr(Res.string.aim_gyro_sensitivity), "aim-gyro-sensitivity", value.gyroSensitivity, enabled) { change(value.copy(gyroSensitivity = it)) }
+        SettingsDropdown(tr(Res.string.aim_vertical_direction), "aim-gyro-direction", value.gyroInvertY.toString(),
+            listOf("false" to tr(Res.string.aim_direction_normal), "true" to tr(Res.string.aim_direction_inverted)), enabled) {
+            change(value.copy(gyroInvertY = it.toBoolean()))
+        }
+    }
+    if (pointer != null || gyro.available) Text(tr(Res.string.aim_preferences_help), fontSize = 13.sp,
+        color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+}
+
+@Composable
+private fun AimSensitivity(label: String, tag: String, current: Int, enabled: Boolean, onChange: (Int) -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f), fontSize = 14.sp); Text(current.toString(), fontSize = 14.sp)
+    }
+    Slider(current.toFloat(), { onChange(it.roundToInt()) }, valueRange = 0f..100f, enabled = enabled,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag(tag))
 }
 
 @Composable

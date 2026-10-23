@@ -1,5 +1,5 @@
 "NSLocalNetworkUsageDescription" = "Hanppie 通过 Wi-Fi 发现并连接你的 RoboMaster 机器人。";
 "NSMicrophoneUsageDescription" = "仅在你使用对讲或语音输入时录制音频。";
-"NSMotionUsageDescription" = "在你的 Python 程序请求时，将此设备的运动传感器读数发送给机器人。";
+"NSMotionUsageDescription" = "使用终端运动进行陀螺仪瞄准，并在你的 Python 程序请求时向机器人提供运动读数。";
 "NSSpeechRecognitionUsageDescription" = "将语音转换为可编辑的聊天文本。Apple 服务可能在线处理音频。";
 "NSPhotoLibraryAddUsageDescription" = "按你的操作保存机器人摄像头的照片和录像。";

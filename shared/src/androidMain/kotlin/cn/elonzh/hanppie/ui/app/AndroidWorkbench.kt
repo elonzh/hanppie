@@ -206,20 +206,23 @@ fun AndroidWorkbench(autoConnectOnStart: Boolean = true) {
                 Button({ (context as? Activity)?.finish() }, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.buttonColorsPrimary()) { Text(tr(Res.string.quit_anyway)) }
             }
         }
-        Console(holder.model, holder.document, onImport = holder::importScript, onImportAudio = holder::importScriptAudio, onImportRobotFirmware = holder::importRobotFirmware,
-            onVoiceInput = { if (voiceDisclosureAccepted) startVoice() else voiceDisclosure = true },
-            onPushToTalkStart = ::startTalk, onPushToTalkStop = ::stopTalk,
-            onExport = holder::exportScript, fileError = holder.fileError, onFileError = holder::updateFileError,
-            onSpeechSettings = { audioSettings = true },
-            onRobotFileUpload = holder::uploadRobotFile,
-            onRobotFileDownload = holder::downloadRobotFile,
-            onRobotFileOpen = holder::openRobotFile,
-            onRobotMediaOpen = holder::openRobotMedia,
-            onRobotMediaExport = holder::exportRobotMedia,
-            onOpenWifiSettings = {
-                try { context.startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)) }
-                catch (_: Exception) { holder.updateFileError(tr(Res.string.could_not_open_wifi_settings)) }
-            })
+        val gyroscope = remember(context) { { cn.elonzh.hanppie.ui.platform.AndroidAimGyroscope(context) } }
+        CompositionLocalProvider(cn.elonzh.hanppie.ui.robot.remote.input.LocalAimGyroscope provides gyroscope) {
+            Console(holder.model, holder.document, onImport = holder::importScript, onImportAudio = holder::importScriptAudio, onImportRobotFirmware = holder::importRobotFirmware,
+                onVoiceInput = { if (voiceDisclosureAccepted) startVoice() else voiceDisclosure = true },
+                onPushToTalkStart = ::startTalk, onPushToTalkStop = ::stopTalk,
+                onExport = holder::exportScript, fileError = holder.fileError, onFileError = holder::updateFileError,
+                onSpeechSettings = { audioSettings = true },
+                onRobotFileUpload = holder::uploadRobotFile,
+                onRobotFileDownload = holder::downloadRobotFile,
+                onRobotFileOpen = holder::openRobotFile,
+                onRobotMediaOpen = holder::openRobotMedia,
+                onRobotMediaExport = holder::exportRobotMedia,
+                onOpenWifiSettings = {
+                    try { context.startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)) }
+                    catch (_: Exception) { holder.updateFileError(tr(Res.string.could_not_open_wifi_settings)) }
+                })
+        }
     }
 }
 internal fun Context.activity(): Activity? = when (this) {

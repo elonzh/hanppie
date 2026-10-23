@@ -54,6 +54,7 @@ internal data class ControlSettings(
     val shortcuts: ControlShortcuts = ControlShortcuts(),
     val remoteLeds: RemoteLedSettings = RemoteLedSettings(),
     val inputSensitivities: InputSensitivities = InputSensitivities(),
+    val aimInput: AimInputSettings = AimInputSettings(),
 ) {
     init {
         require(gimbalSpeed in 15..120)

@@ -1633,4 +1633,21 @@
     <string name="display_picture_zoom">画面倍率</string>
     <string name="display_zoom_unknown">未确认</string>
     <string name="display_sight_pairs_differ">普通与变焦校准不同。写入将以此草稿同步两者。</string>
+    <string name="aim_mouse_sensitivity">鼠标云台灵敏度</string>
+    <string name="aim_gyro_sensitivity">陀螺仪云台灵敏度</string>
+    <string name="aim_vertical_direction">垂直方向</string>
+    <string name="aim_direction_normal">正常</string>
+    <string name="aim_direction_inverted">反向</string>
+    <string name="aim_preferences_help">在操控页开启鼠标或陀螺仪。修改这些设置会释放当前输入。</string>
+    <string name="aim_mouse_start">鼠标云台</string>
+    <string name="aim_mouse_active">鼠标云台已开启</string>
+    <string name="aim_gyro_start">陀螺仪云台</string>
+    <string name="aim_gyro_stop">停止陀螺仪</string>
+    <string name="aim_mouse_hint">Esc 释放 · 左键发射 · 右键变焦</string>
+    <string name="aim_gyro_hint">转动终端瞄准 · 再次点击停止</string>
+    <string name="aim_preparing">正在准备输入…</string>
+    <string name="aim_pointer_failed">鼠标捕获已结束，可点击鼠标云台重试。</string>
+    <string name="aim_sensor_failed">陀螺仪不可用，请检查运动访问权限后重试。</string>
+    <string name="aim_sensor_stale">陀螺仪读数已过期，请点击重新开启。</string>
+    <string name="aim_orientation_changed">屏幕方向已改变，请点击重新开启。</string>
 </resources>
