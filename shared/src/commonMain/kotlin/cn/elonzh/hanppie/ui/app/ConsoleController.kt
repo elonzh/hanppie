@@ -5,6 +5,9 @@ import cn.elonzh.hanppie.ui.robot.network.RobotWifiController
 import cn.elonzh.hanppie.agent.provider.ModelCatalogState
 import cn.elonzh.hanppie.agent.provider.ModelTestState
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
+import cn.elonzh.hanppie.robot.lab.ui.LabUiState
+import cn.elonzh.hanppie.robot.lab.ui.LabUiValue
+import cn.elonzh.hanppie.robot.lab.ui.LabWidgetKey
 import cn.elonzh.hanppie.ui.chat.ChatAgent
 import cn.elonzh.hanppie.ui.i18n.UiText
 import cn.elonzh.hanppie.ui.robot.files.RobotFilesController
@@ -42,6 +45,9 @@ internal interface ConsoleController : AutoCloseable {
     val settingsMessage: MutableStateFlow<UiText?>
     val scriptLibrary: ScriptLibrary
     val scriptAudio: ScriptAudioLibrary
+    val labUi: StateFlow<LabUiState>
+    fun setLabUiVisible(runId: String, visible: Boolean)
+    fun labUiInteract(runId: String, key: LabWidgetKey, token: Long, event: Int, value: LabUiValue? = null, final: Boolean = false)
     val robotFiles: RobotFilesController
     val robotAudio: cn.elonzh.hanppie.ui.robot.audio.RobotAudioController
     val cameraZoom: cn.elonzh.hanppie.ui.robot.remote.CameraZoomController

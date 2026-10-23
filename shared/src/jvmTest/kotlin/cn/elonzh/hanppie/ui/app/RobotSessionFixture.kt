@@ -14,6 +14,17 @@ import kotlinx.io.Source
 import java.util.concurrent.atomic.AtomicInteger
 
 internal class RobotSessionFixture : RobotSession {
+    val labUiState = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.lab.ui.LabUiState())
+    val labUiVisibility = java.util.concurrent.CopyOnWriteArrayList<Pair<String, Boolean>>()
+    data class LabUiEvent(val runId: String, val key: cn.elonzh.hanppie.robot.lab.ui.LabWidgetKey, val token: Long,
+        val event: Int, val value: cn.elonzh.hanppie.robot.lab.ui.LabUiValue?, val final: Boolean)
+    val labUiEvents = java.util.concurrent.CopyOnWriteArrayList<LabUiEvent>()
+    override val labUi = object : cn.elonzh.hanppie.robot.lab.ui.RobotLabUiService {
+        override val state = labUiState
+        override fun setVisible(runId: String, visible: Boolean) { labUiVisibility += runId to visible }
+        override fun interact(runId: String, key: cn.elonzh.hanppie.robot.lab.ui.LabWidgetKey, token: Long,
+            event: Int, value: cn.elonzh.hanppie.robot.lab.ui.LabUiValue?, final: Boolean) { labUiEvents += LabUiEvent(runId, key, token, event, value, final) }
+    }
     override var extensions: RobotExtensionService = object : RobotExtensionService {
         override val state = kotlinx.coroutines.flow.MutableStateFlow(RobotExtensionState())
         override suspend fun setObserving(kind: ExtensionKind?) {}
@@ -148,7 +159,7 @@ internal class RobotSessionFixture : RobotSession {
     override var onVideo: ((ByteArray) -> Unit)? = null
     override var onAudio: ((ByteArray) -> Unit)? = null
     override val lab: RobotLabSession = object : RobotLabSession {
-        override fun invalidateMode() {}
+        override fun invalidateMode() { labUiState.value = cn.elonzh.hanppie.robot.lab.ui.LabUiState() }
         override suspend fun upload(source: String, title: String, audio: List<LabAudioClip>): LabUpload =
             LabUpload("hash", "0123456789abcdef0123456789abcdef")
         override suspend fun start(): String {
@@ -156,7 +167,7 @@ internal class RobotSessionFixture : RobotSession {
             labStartError?.let { throw it }
             return "0123456789abcdef0123456789abcdef"
         }
-        override suspend fun stop() { labStopCount.incrementAndGet() }
+        override suspend fun stop() { labStopCount.incrementAndGet(); labUiState.value = cn.elonzh.hanppie.robot.lab.ui.LabUiState() }
         override suspend fun complete(runId: String): Boolean = true
     }
     override val files: RobotFileService = object : RobotFileService {

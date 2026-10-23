@@ -1529,4 +1529,12 @@
     <string name="vision_line_t">T junction</string>
     <string name="vision_line_cross">Crossroads</string>
     <string name="vision_line_unknown">Line type %1$s</string>
+    <string name="program_panel">Program panel</string>
+    <string name="program_panel_close">Close program panel</string>
+    <string name="program_panel_center">Center program panel</string>
+    <string name="program_panel_input_long">Input is too long. Shorten it and try again.</string>
+    <string name="program_panel_send_failed">Could not send the action. Check the connection.</string>
+    <string name="program_panel_update_failed">Some controls could not update. Stop and rerun the program.</string>
+    <string name="program_panel_waiting">Waiting for the connection or program status to update.</string>
+    <string name="program_panel_empty">The program has no visible controls.</string>
 </resources>

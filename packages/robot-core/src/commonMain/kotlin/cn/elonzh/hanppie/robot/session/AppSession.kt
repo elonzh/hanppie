@@ -62,6 +62,26 @@ class AppSession(private val target: RobotTarget,
     private data class PendingRequest(val receiver: Int, val set: Int, val id: Int,
         val reply: CompletableDeferred<ByteArray> = CompletableDeferred())
     private val pendingRequests = mutableMapOf<Int, PendingRequest>()
+    private val labUiCommands = cn.elonzh.hanppie.robot.lab.ui.LabUiControl(
+        { robotNanoTime() / 1_000_000 },
+        { frame -> sendPacket(envelope.direct(Protocol.duss(Protocol.HOST_SCRATCH_CLIENT, frame.sender,
+            Protocol.ATTR_ACK, Protocol.CMDSET_RM, cn.elonzh.hanppie.robot.lab.ui.LabUiProtocol.ATTRIBUTE,
+            byteArrayOf(0), frame.sequence))) },
+        { payload ->
+            check(connected && labRunning) { "Lab 程序未在运行" }
+            send(Protocol.HOST_SCRATCH_SCRIPT, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM,
+                cn.elonzh.hanppie.robot.lab.ui.LabUiProtocol.EVENT, payload)
+        },
+    )
+    val labUi: cn.elonzh.hanppie.robot.lab.ui.RobotLabUiService = object : cn.elonzh.hanppie.robot.lab.ui.RobotLabUiService {
+        override val state get() = labUiCommands.state
+        override fun setVisible(runId: String, visible: Boolean) = txLock.withLock { labUiCommands.setVisible(runId, visible) }
+        override fun interact(runId: String, key: cn.elonzh.hanppie.robot.lab.ui.LabWidgetKey, token: Long, event: Int,
+            value: cn.elonzh.hanppie.robot.lab.ui.LabUiValue?, final: Boolean) = txLock.withLock {
+            labUiCommands.interact(runId, key, token, event, value, final)
+        }
+    }
+    override fun setLabUiRun(runId: String?) = txLock.withLock { labUiCommands.reset(runId) }
     private val audioCommands = SpeakerCommands(::request) { robotNanoTime() / 1_000_000 }
     val audio: cn.elonzh.hanppie.robot.media.RobotAudioService get() = audioCommands
     private val wifiCommands = WifiCommands(request = ::request)
@@ -678,6 +698,7 @@ class AppSession(private val target: RobotTarget,
     private fun failRequests() {
         firmwareCommands.close()
         txLock.withLock {
+        labUiCommands.close()
         armCommands.close(sendCleanup = !firmware.state.value.loaderMayBeActive)
         extensionCommands.close(sendCleanup = !firmware.state.value.loaderMayBeActive)
         txLock.withLock { visionControl.close(sendCleanup = !firmware.state.value.loaderMayBeActive) }
@@ -698,6 +719,7 @@ class AppSession(private val target: RobotTarget,
 
     private fun sendNeutral(forceActuatorStop: Boolean = false) = txLock.withLock {
         cameraCommands.expire()
+        labUiCommands.tick(labRunning && robotNanoTime() - lastReceivedNanos < 500_000_000)
         audioCommands.expire()
         wifiCommands.expire()
         healthStore.expire()
@@ -778,6 +800,7 @@ class AppSession(private val target: RobotTarget,
                             txLock.withLock {
                                 objectTracking.receive(frame)
                                 visionControl.receive(frame)
+                                labUiCommands.receive(frame)
                                 val revision = cameraCommands.state.value.revision
                                 cameraCommands.receive(frame)
                                 audioCommands.receive(frame)
@@ -844,6 +867,7 @@ class AppSession(private val target: RobotTarget,
     }
 
     override fun close() {
+        txLock.withLock { labUiCommands.state.value.runId?.let { labUiCommands.setVisible(it, false) } }
         if (active.load()) runCatching { safetyStop() }
         firmwareCommands.close()
         armCommands.close(sendCleanup = !firmware.state.value.loaderMayBeActive)

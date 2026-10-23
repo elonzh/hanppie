@@ -39,6 +39,7 @@ class LabController internal constructor(private val session: LabChannel,
     private var startRequested = false
     fun invalidateMode() {
         check(!startRequested)
+        session.setLabUiRun(null)
         modeToken = Any()
         entered = false
         program = null
@@ -70,6 +71,7 @@ class LabController internal constructor(private val session: LabChannel,
         checkCurrent(token)
         log("Lab 上传开始；guid=$candidateGuid audio=${clips.size}")
         program = null; digest = null; runId = null
+        session.setLabUiRun(null)
         audioDigests = emptyMap()
         if (!entered) {
             session.labMode()
@@ -145,6 +147,7 @@ class LabController internal constructor(private val session: LabChannel,
             throw error
         }
         log("机内程序与音频资源已核对；guid=${current.guid}")
+        session.setLabUiRun(current.guid)
         session.send(Protocol.HOST_SCRATCH_SYS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SCRIPT_CTRL, current.metadata(Protocol.SCRIPT_CTRL_START)); delay(20)
         session.send(Protocol.HOST_SCRATCH_SCRIPT, Protocol.ATTR_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_CUSTOM_UI_ATTRIBUTE_SET, byteArrayOf(0), sender = Protocol.HOST_SCRATCH_CLIENT); delay(20)
         session.send(Protocol.HOST_SCRATCH_SCRIPT, Protocol.ATTR_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SUB_MOBILE_INFO, byteArrayOf(1))
@@ -169,6 +172,7 @@ class LabController internal constructor(private val session: LabChannel,
     }
 
     private suspend fun finishLocked() {
+        session.setLabUiRun(null)
         program?.let {
             session.send(Protocol.HOST_SCRATCH_SYS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SCRIPT_CTRL, it.metadata(Protocol.SCRIPT_CTRL_STOP)); delay(52)
         }

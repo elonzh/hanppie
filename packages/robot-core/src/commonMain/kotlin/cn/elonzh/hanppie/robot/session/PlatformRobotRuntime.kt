@@ -55,6 +55,7 @@ private class PlatformRobotSession(
     override val product: RobotProduct get() = app.product
     override val tracking get() = app.tracking
     override val vision get() = app.vision
+    override val labUi get() = app.labUi
     override fun startVision(mode: cn.elonzh.hanppie.robot.vision.VisionMode, color: cn.elonzh.hanppie.robot.vision.VisionColor?) = app.startVision(mode, color)
     override fun stopVision() = app.stopVision()
     override val health get() = app.health

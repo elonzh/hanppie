@@ -96,6 +96,9 @@ import cn.elonzh.hanppie.resources.uploading
 import cn.elonzh.hanppie.resources.waiting_for_robot_to_scan_qr
 import cn.elonzh.hanppie.resources.waiting_for_script_start
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
+import cn.elonzh.hanppie.robot.lab.ui.LabUiState
+import cn.elonzh.hanppie.robot.lab.ui.LabUiValue
+import cn.elonzh.hanppie.robot.lab.ui.LabWidgetKey
 import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import cn.elonzh.hanppie.robot.media.VideoResolution
 import cn.elonzh.hanppie.robot.product.RobotProduct
@@ -315,6 +318,20 @@ internal class ConsoleModel(
     private var trackingObserver: Job? = null
     override val vision = MutableStateFlow(cn.elonzh.hanppie.robot.vision.VisionState())
     private var visionObserver: Job? = null
+    override val labUi = MutableStateFlow(LabUiState())
+    private var labUiObserver: Job? = null
+    private var labUiVisibleRun: String? = null
+    override fun setLabUiVisible(runId: String, visible: Boolean) {
+        if (visible && labUi.value.runId != runId) return
+        if (visible) labUiVisibleRun = runId else if (labUiVisibleRun == runId) labUiVisibleRun = null
+        session.load()?.labUi?.setVisible(runId, visible && isForeground &&
+            state.value.scriptRunPhase == ScriptRunPhase.RUNNING && !state.value.busy && !chat.state.value.running)
+    }
+    override fun labUiInteract(runId: String, key: LabWidgetKey, token: Long, event: Int, value: LabUiValue?, final: Boolean) {
+        if (labUi.value.runId != runId || !isForeground || state.value.busy || chat.state.value.running || state.value.scriptRunPhase != ScriptRunPhase.RUNNING) return
+        runCatching { session.load()?.labUi?.interact(runId, key, token, event, value, final) }
+            .onFailure { log(it.message.orEmpty()) }
+    }
     override fun startVision(mode: cn.elonzh.hanppie.robot.vision.VisionMode, color: cn.elonzh.hanppie.robot.vision.VisionColor?) {
         val current = session.load() ?: return
         if (!remoteEnabled.value || !isForeground || !acceptingWork.load() || state.value.busy || chat.state.value.running ||
@@ -659,6 +676,7 @@ internal class ConsoleModel(
     override fun setForeground(foreground: Boolean) {
         acceptingWork.store(foreground)
         foregroundState.value = foreground
+        if (!foreground) labUiVisibleRun?.let { session.load()?.labUi?.setVisible(it, false) }
         if (!foreground) { robotCalibration.stopAutomaticContinuation(); robotAddressing.holdWheel(null); haltRemote(); voiceInput.cancel() }
         robotArm.refreshVisibility(); robotExtensions.refreshVisibility()
     }
@@ -871,6 +889,7 @@ internal class ConsoleModel(
             }.onFailure { log(tr(Res.string.connection_preferences_save_failed_value, it.message)) }
             return verifiedWifi
         } catch (error: Exception) {
+            if (session.load() === candidate) clearLabUiBinding()
             candidate.close()
             session.compareAndSet(candidate, null)
             if (revision == connectionRevision.load()) {
@@ -911,10 +930,25 @@ internal class ConsoleModel(
         visionObserver = scope.launch {
             candidate.vision.collect { value -> if (session.load() === candidate) vision.value = value }
         }
+        clearLabUiBinding()
+        labUiObserver = scope.launch {
+            candidate.labUi.state.collect { value -> if (session.load() === candidate) {
+                if (value.issue != null && (labUi.value.runId != value.runId || labUi.value.issue != value.issue))
+                    log("程序面板更新失败：${value.issue}")
+                labUi.value = value
+            } }
+        }
         return candidate
     }
 
+    private fun clearLabUiBinding() {
+        labUiVisibleRun?.let { session.load()?.labUi?.setVisible(it, false) }
+        labUiObserver?.cancel(); labUiObserver = null
+        labUi.value = LabUiState(); labUiVisibleRun = null
+    }
+
     private fun connectionLost(candidate: RobotSession, reason: String) {
+        if (session.load() === candidate) clearLabUiBinding()
         if (session.load() === candidate) vision.value = cn.elonzh.hanppie.robot.vision.VisionState()
         tracking.value = TrackingState()
         gimbalCentering.cancel()
@@ -937,6 +971,7 @@ internal class ConsoleModel(
 
     private fun closeConnection(preserveNetworkRecovery: Boolean) {
         connectionRevision.addAndFetch(1)
+        clearLabUiBinding()
         haltRemote()
         session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState()
         robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.detach(); robotArm.detach(); robotExtensions.detach(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(preserveNetworkRecovery); robotSdr.detach(preserveNetworkRecovery)
@@ -1182,6 +1217,7 @@ internal class ConsoleModel(
     internal fun receive(frame: DussFrame) {
         val payload = when {
             frame.set == 0 && frame.id == 0x32 -> "<redacted ${frame.payload.size} B>"
+            frame.set == Protocol.CMDSET_RM && frame.id in listOf(0xba, 0xbb) -> "<program-ui ${frame.payload.size} B>"
             frame.set == Protocol.CMDSET_WIFI && frame.id in listOf(Protocol.CMD_WIFI_AP_GET_SSID, Protocol.CMD_WIFI_AP_SET_SSID,
                 Protocol.CMD_WIFI_AP_SET_PASSWORD, Protocol.CMD_WIFI_AP_GET_PASSWORD, Protocol.CMD_WIFI_CONFIG_BY_QRCODE) -> "<redacted ${frame.payload.size} B>"
             frame.set == 0 && frame.id == 0x27 -> "media=${frame.payload.size} B header=${frame.payload.copyOfRange(0, minOf(10, frame.payload.size)).hex()}"
@@ -1288,6 +1324,7 @@ internal class ConsoleModel(
     override fun clearLogs() { state.update { it.copy(logs = emptyList(), frames = emptyList()) } }
     override suspend fun pauseConnection() {
         connectionRevision.addAndFetch(1)
+        clearLabUiBinding()
         chat.cancelAndJoin()
         scope.coroutineContext[Job]?.children?.toList()?.forEach { it.cancelAndJoin() }
         session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState()
@@ -1301,5 +1338,5 @@ internal class ConsoleModel(
                 scriptMessage = if (uncertain) uiText(Res.string.connection_closed_robot_state_unknown) else it.scriptMessage)
         }
     }
-    override fun close() { connectionRevision.addAndFetch(1); robotFiles.close(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.clear(); robotArm.clear(); robotExtensions.clear(); robotCalibration.clear(); robotAddressing.clear(); robotPower.clear(); robotWifi.close(); robotSdr.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
+    override fun close() { connectionRevision.addAndFetch(1); clearLabUiBinding(); robotFiles.close(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.clear(); robotArm.clear(); robotExtensions.clear(); robotCalibration.clear(); robotAddressing.clear(); robotPower.clear(); robotWifi.close(); robotSdr.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
 }

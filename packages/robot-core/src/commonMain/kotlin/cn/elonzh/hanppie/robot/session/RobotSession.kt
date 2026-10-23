@@ -75,6 +75,7 @@ interface RobotSession : AutoCloseable {
     var onVideo: ((ByteArray) -> Unit)?
     var onAudio: ((ByteArray) -> Unit)?
     val lab: RobotLabSession
+    val labUi: cn.elonzh.hanppie.robot.lab.ui.RobotLabUiService
     val files: RobotFileService
     val audio: RobotAudioService
     val wifi: RobotWifiService

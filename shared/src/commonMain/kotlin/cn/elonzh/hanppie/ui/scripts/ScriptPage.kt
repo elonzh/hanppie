@@ -59,6 +59,7 @@ import cn.elonzh.hanppie.resources.new_program
 import cn.elonzh.hanppie.resources.new_script
 import cn.elonzh.hanppie.resources.no_saved_scripts
 import cn.elonzh.hanppie.resources.preset_scripts
+import cn.elonzh.hanppie.resources.program_panel
 import cn.elonzh.hanppie.resources.rename_script
 import cn.elonzh.hanppie.resources.replace_unsaved_script
 import cn.elonzh.hanppie.resources.run_script
@@ -121,6 +122,11 @@ internal fun ScriptPage(
     onBackToOrigin: (() -> Unit)? = null,
 ) {
     val robotState by model.state.collectAsState()
+    val programUi by model.labUi.collectAsState()
+    var programPanelOpen by remember(programUi.runId) { mutableStateOf(false) }
+    val hasProgramUi = programUi.runId != null && programUi.widgets.values.any {
+        it.key.type != cn.elonzh.hanppie.robot.lab.ui.LabWidgetType.STAGE && programUi.isVisible(it.key)
+    }
     val libraryState by model.scriptLibrary.state.collectAsState()
     val audioState by model.scriptAudio.state.collectAsState()
     val audioPlaybackState by model.scriptAudio.playbackState.collectAsState()
@@ -230,10 +236,10 @@ internal fun ScriptPage(
         if (onBackToOrigin != null) onBackToOrigin() else editorOpen = false
     } }
     PlatformBackHandler(
-        enabled = editorOpen && pendingReplacement == null && nameOperation == null &&
+        enabled = (editorOpen || programPanelOpen) && pendingReplacement == null && nameOperation == null &&
             audioRename == null && audioDelete == null &&
             !monitorOpen && !audioOpen,
-        onBack = navigateBack,
+        onBack = { if (programPanelOpen) programPanelOpen = false else navigateBack() },
     )
 
     WorkbenchDialog(
@@ -461,7 +467,7 @@ internal fun ScriptPage(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val shortWindow = maxHeight < 240.dp
         Column(Modifier.fillMaxSize()) {
-            if (!shortWindow || !editorOpen) {
+            if (!programPanelOpen && (!shortWindow || !editorOpen || hasProgramUi)) {
                 ScriptTopBar(
                     title = if (editorOpen) document.value.displayName ?: tr(Res.string.new_script) else tr(Res.string.script),
                     dirty = editorOpen && document.value.dirty,
@@ -476,13 +482,22 @@ internal fun ScriptPage(
                     onBack = navigateBack.takeIf { editorOpen },
                     backLabel = tr(if (onBackToOrigin != null) Res.string.back_to_chat else Res.string.back_to_script_library),
                     shortWindow = shortWindow,
+                    onProgramPanel = if (hasProgramUi && !programPanelOpen) ({ programPanelOpen = true }) else null,
                 )
             }
             fileError?.let {
                 Text(it, Modifier.padding(vertical = 8.dp), color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
             }
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) panel@{
                 val availableHeight = maxHeight
+                if (programPanelOpen && programUi.runId != null) {
+                    LabUiPanel(model, programUi,
+                        title = robotState.scriptTitle ?: document.value.displayName ?: tr(Res.string.program_panel),
+                        visible = !monitorOpen, onBack = { programPanelOpen = false },
+                        onMonitor = { monitorOpen = true }, onConnectionDetails = onConnectionDetails,
+                        modifier = Modifier.fillMaxSize())
+                    return@panel
+                }
                 // With the view already inline there is nothing left for a "monitor" entry to reveal.
                 val monitorInline = !compact && availableHeight >= 520.dp
                 val editor: @Composable (Modifier) -> Unit = { editorModifier ->
@@ -539,7 +554,7 @@ internal fun ScriptPage(
                 if (compact) {
                     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         // Keep code primary, while retaining a visible result/stop context.
-                        val consoleHeight = (availableHeight * 0.25f).coerceAtMost(160.dp)
+                        val consoleHeight = (availableHeight * 0.25f).coerceIn(96.dp, 160.dp)
                         Box(Modifier.weight(1f).fillMaxWidth()) { primary(Modifier.fillMaxSize()) }
                         if (monitoring) ScriptConsolePanel(robotState,
                             (if (editorOpen) Modifier.height(consoleHeight) else Modifier.weight(
@@ -655,6 +670,7 @@ private fun ScriptTopBar(
     onBack: (() -> Unit)?,
     backLabel: String,
     shortWindow: Boolean,
+    onProgramPanel: (() -> Unit)?,
 ) {
     Row(Modifier.fillMaxWidth().height(if (shortWindow) 48.dp else 72.dp), verticalAlignment = Alignment.CenterVertically) {
         if (onBack != null) {
@@ -685,6 +701,11 @@ private fun ScriptTopBar(
                     tag = "script-rename",
                 )
             }
+        }
+        onProgramPanel?.let {
+            Button(it, Modifier.heightIn(min = 48.dp).testTag("program-panel-open"),
+                insideMargin = PaddingValues(horizontal = 12.dp)) { Text(tr(Res.string.program_panel), fontSize = 14.sp) }
+            Spacer(Modifier.width(12.dp))
         }
         ConnectionStatusChip(state, onClick = onConnectionDetails)
     }

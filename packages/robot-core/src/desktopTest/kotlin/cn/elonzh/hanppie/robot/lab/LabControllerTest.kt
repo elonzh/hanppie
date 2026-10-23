@@ -23,6 +23,7 @@ class LabControllerTest {
         var storedAudio = emptyMap<Int, String>()
         var respond: (suspend (Int, ByteArray) -> ByteArray)? = null
         override fun labMode(running: Boolean) { this.running = running }
+        override fun setLabUiRun(runId: String?) {}
         override fun send(receiver: Int, attr: Int, set: Int, id: Int, payload: ByteArray,
                           sender: Int, flags: ByteArray): Int {
             check(connected)
