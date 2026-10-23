@@ -91,8 +91,10 @@ class SettingsStoreTest {
             assertEquals("ja", store.loadUi().language)
             store.saveLanguage("de")
             assertEquals("de", store.loadUi().language)
+            store.saveLanguage("es")
+            assertEquals("es", store.loadUi().language)
             assertFailsWith<IllegalArgumentException> { store.saveLanguage("zh-Hans") }
-            assertEquals("de", store.loadUi().language)
+            assertEquals("es", store.loadUi().language)
             assertEquals(connection.copy(appId = "abcdef12", robots = listOf(connection.robots.single().copy(appId = "abcdef12"))), store.loadConnection())
             assertTrue(file.readBytes().toString(Charsets.ISO_8859_1).contains("secret-value"))
 

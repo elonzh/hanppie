@@ -36,6 +36,7 @@ class ChallengeUiTest {
     @Test fun traditionalChineseLandscape() = scenario(844, 390, "zh-Hant", 1.4f, true)
     @Test fun japaneseLandscape() = scenario(844, 390, "ja", 1.4f, true)
     @Test fun germanLandscape() = scenario(844, 390, "de", 1.4f, true)
+    @Test fun spanishLandscape() = scenario(844, 390, "es", 1.4f, true)
 
     private class InputLifecycle : LifecycleOwner {
         val registry = LifecycleRegistry(this)
