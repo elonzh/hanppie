@@ -1141,6 +1141,72 @@ S1 的红外能力至少包含三层，不能把其中任意一层统称为“�
 
 原生材料为忽略目录 `.hanppie/validation/2026-10-22-official-gap/G01-native-*`，含配置、功能列表、ShootFrequency characteristic 与访问器片段。本节不宣称一包对应一次物理发射，也没有修改固定初始化序列或新增设备验证。Hanppie 的开发进度、阶段边界和待验项只在[实施台账 G01](./official-app-capability-implementation.md#g01-手动挑战阶段与设备待验)维护。
 
+#### 本地多人房间与裁判同步
+
+固定 macOS 1.1.5/build 239 的 `SystemBattle`、`AutoNetworkManager`、`NatDiscovery`、`AutoLobbyPlayer`、`BattleJudge*` 与 `BattlePlayer*` 构成独立于机器人 DUSS 会话的本地多人链路，含 Arena、Race、Team 消费者。房主运行 Unity `NetworkLobbyManager`，其他终端同步房间、准备、角色、规则、裁判阶段和结果；每个参赛终端仍连接自己的机器人。`ViewBattleAccounts*` 是对局结算视图，不是 DJI 账号服务。**固定版托管消费者；未完成房间互通验证**
+
+`NatDiscovery.RoomInfo.GetBaseInfo` 的文本字段依次为房间名、模式、时间、人数、人数上限、是否进行中、最大血量、各玩家的名字/头像 ID、房间 Guid 和 BattleVersion，以 `@@@` 分隔并以 NUL 结束。接收端另附来源地址；`ViewBattleLobby` 按人数解析玩家项，约 2 秒未更新就移除房间。`SystemBattle.OnEnterRoom` 对 BattleVersion 做相等检查，固定版值为 1。广播发现、版本匹配不等于入房或开始对局。
+
+网络预制体的两个 MonoBehaviour 原始载荷已提取：发现组件字段与官方 HLAPI 序列化字段顺序交叉核对，得到广播端口 47777、key 2222、version/subversion 1/1、间隔 500 ms、`UseNetworkManager=false`；派生 `NatDiscovery.mPort` 也为 47777。管理器首个网络端口字段为 7777，其余字段未完整解码，不能据此前缀推断信道或握手配置。Unity 官方 HLAPI 1.0.2/1.0.4 源码包已按注册表 SHA-1 校验，`StringToBytes` 复制 16 位字符而非编码 UTF-8，然后调用传输层广播 API；尚未证明参考包与 App 内 DLL 完全相同。官方文档也明确发现使用传输层 UDP 广播、连接信道与 QoS 另行配置，故上述文本不能直接视为线上 UDP 封包或完整入房协议。[Unity 网络发现](https://docs.unity3d.com/2018.1/Documentation/Manual/UNetDiscovery.html)、[2019.2 传输层](https://docs.unity3d.com/2019.2/Documentation/Manual/UNetUsingTransport.html)。
+
+`AutoNetworkManager.ConfigurationPlayerID` 按队伍和队内序号分配 16 槽角色 ID，`IControl.GetTeamID` 由角色 ID 和队伍数反解队伍，`-1` 单独处理；这不是 IP、序列号或机型编号。实际允许的人数/队伍组合仍须沿房间 UI 和线上状态验证。同步与开始的消费者链路如下：
+
+```mermaid
+sequenceDiagram
+    participant H as 房主裁判
+    participant A as 参赛终端
+    participant R as 该终端的机器人
+    A->>H: 房间准备与玩家信息
+    H-->>A: RpcSyncConfiguration
+    A->>R: GameConfigList 规则与 buff/skill 表
+    R-->>A: 写入应答
+    A->>H: ConfigReady
+    H-->>A: RpcSyncBattleInfo
+    A->>R: CarAndSkillID 玩家技能绑定表
+    R-->>A: 写入应答
+    A->>H: BattleInfoReady
+    H-->>A: Judge Ready
+    A->>R: GameRoleConfig 后 GameStart
+    H-->>A: Judge Playing
+    R-->>A: 血量、装甲命中、Buffs、SkillStatus
+    A->>H: 血量与伤害信息
+    H-->>A: 排名及结算
+```
+
+`GetConfigurationTable` 依次序列化裁判表的条目数与 ID/值、buff 表的条目数与 ID/时长、技能表的条目数与 ID/冷却/buff 数/buff ID。多人初始裁判表有 14 项，单人有 13 项，多人多出 `MaxSpeed=1006`。`RealController.SendJudgeConfiguration` 将其转成整数向量写 `GameConfigList`；`BattleJudge.JudgeReady` 另构造玩家数及每个玩家的 ID、技能数 2、A/B 技能 ID，写 `CarAndSkillID`。安装程序槽与这张对局技能表是两条链路；C15 仍限制自定义技能持久安装，不能因此省去普通房间及内置技能的完整范围。
+
+高级规则由 `CreateBattleParamConfiguration` 建立、可被本地文件覆盖，重置也回到该工厂；`BattleParamEntity` 构造器会重新读取这些值。**下表是新建/重置默认与串行顺序，不是类字段初值或实测范围。** 19 项中有 8 项与类字段初值不同，不能照抄字段声明作为实际默认。
+
+| 顺序 | 字段 | 新建/重置默认 |
+| --- | --- | --- |
+| 1 | `RadomSkillCd` | 3 |
+| 2 | `VertigoTime` | 1.5 |
+| 3 | `BlindnessTime` | 2.5 |
+| 4 | `SpeedUpTime` | 3 |
+| 5 | `InvincibleTime` | 3 |
+| 6 | `DeadToInjured` | 3 |
+| 7 | `ReviveGodTime` | 3 |
+| 8 | `GunSpeed` | 6 |
+| 9 | `ChaosModeSpeed` | 2 |
+| 10 | `KillScore` | 100 |
+| 11 | `HitScore` | 10 |
+| 12 | `DeadScore` | -50 |
+| 13 | `OverheatIncrease` | 130 |
+| 14 | `OverheatCool1` | 2000 |
+| 15 | `OverheatCool2` | 1000 |
+| 16 | `VertigoEnable` | 1 |
+| 17 | `BlindnessEnable` | 1 |
+| 18 | `SpeedUpEnable` | 1 |
+| 19 | `InvincibleEnable` | 1 |
+
+`BattleLobbyPlayerArena.ConfigueRobot` 根据房间时间、血量、发射类型和速度档覆盖多人表：时间按分钟转毫秒，血量值乘 100，速度写 `3-SpeedLevel`；四种内置技能冷却写 100，自定义技能冷却写 0，四种 buff 时长从高级规则秒值乘 1000。过热三项重新取高级规则；`GunSpeed` 用于 `ShootingFrequency`，水弹再加 2，不能解释成物理弹速。初始多人表的 `OverheatCool2=1500` 会被高级默认 1000 覆盖，属于不同阶段的值。Race 有独立配置路径；这些覆盖条件、滑块范围及实际固件单位尚未完成联机验收。
+
+血量不是根据主机每次发射自行扣除：`BattlePlayer` 监听机器人 CurrentHP 和装甲命中，将命中排队，血量变化后取出一次命中，按双方队伍关联伤害并向房主同步。Arena 分数为 `KillScore×击杀 + (int)伤害/100×HitScore + DeadScore×死亡`，其中除法先做整数截断；排序依次比较分数、击杀、死亡较少、伤害较多。Arena 的死亡/重伤/复活、标签随机技能，以及 Race 的检查点/圈数/完赛倒计时、Team 的据点/团灭/时间与暂停，均有独立消费者，不能用单机靶场计分替代。完整模式配置、事件关联和结算继续属于 G02 实现/验证范围。
+
+`BattleJudge.JudgeReady` 对玩家、配置和技能信息有有界等待，其中配置/技能阶段最多按秒循环四次，超时后仍可推进；`BattlePlayer.OnJudgeStateChange` 在 Playing 解开控制锁。这与当前 Hanppie 挑战必须取得配置确认和新鲜报告的准备条件不同，见[台账 C22](./official-app-capability-implementation.md#冲突记录保持现状留待决策)，不能照搬超时放行。房间心跳每秒发送、客户端计数约 4 秒，机器人断连消费者另有 10 秒返回大厅路径；网络存活、机器人新鲜度和操控输入租约必须分开，这些官方计时不替代当前输入失效后的归零。
+
+**未验证边界：** LLAPI 线上广播封包、连接握手、信道/CRC 配置、对象生成与 RPC/SyncVar 完整互通尚无本轮报文证明。固定 App 是 x86-64；本机尝试打开失败，独立 x86 执行检查返回 `Bad CPU type`，未创建官方房间、未采集运行报文，也未安装系统运行组件。51 项消费者/现有准备路径/参考源码哈希、两份原始预制体载荷、19 项规则与单人/多人初始表核对保存在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02/`。这些是静态和本机环境证据，不是 G02 产品实现、官方房间互通或多机物理验收；当前进度见[独立台账](./official-app-capability-implementation.md#g02-本地多人契约调查与互通边界)。
+
 #### 自主程序与自定义技能安装
 
 以下请求/响应结构来自固定 macOS 1.1.5/build 239 的原生构造与解码；属于静态证据，尚未进行本轮设备验证。`COMMON/DjiScratchProjectSkillType.cs` 定义普通程序 `-1`、FPV 技能槽 `0`、自主程序槽 `10`。`SystemUploadDsp` 在 DSP/音频摘要核对和必要上传后安装指定槽位；连接后 `AutoInstallSkill` 先卸载槽 10/0，再按本地 `SkillProjects` 重装。不能把临时运行、持久安装、对战技能 ID 和主机 AI skill 文档混为一体。
