@@ -50,7 +50,7 @@ private fun createIosWorkbench(platform: IosPlatformServices): WorkbenchViewMode
             speakerInput = IosSpeakerInput(platform) { message -> model.endPushToTalk(); model.log(message) },
             audioImporter = IosLabAudioImporter(platform),
             audioPlayer = IosLabAudioPlayer(platform),
-            robotRuntime = PlatformRobotRuntime(),
+            robotRuntime = PlatformRobotRuntime(mobileSensors = { IosMobileSensors() }),
             settingsStore = storage.settings,
             scriptRepository = storage.scripts,
             sessionHistory = storage.sessions,

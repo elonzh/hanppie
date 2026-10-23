@@ -53,6 +53,7 @@ class AppSession(private val target: RobotTarget,
                  private val onFrame: (DussFrame) -> Unit = {},
                  private val onLog: (String) -> Unit = {},
                  private val network: RobotTransport = RobotTransport.Default,
+                 mobileSensors: cn.elonzh.hanppie.robot.lab.mobile.MobileSensorSource = cn.elonzh.hanppie.robot.lab.mobile.NoMobileSensors,
                  private val onLost: (String) -> Unit = {}) : AutoCloseable, LabChannel {
     private val random = kotlin.random.Random.Default
     private val envelope = AppEnvelope(random.nextInt(65535) + 1, random.nextInt(8192) * 8)
@@ -62,6 +63,20 @@ class AppSession(private val target: RobotTarget,
     private data class PendingRequest(val receiver: Int, val set: Int, val id: Int,
         val reply: CompletableDeferred<ByteArray> = CompletableDeferred())
     private val pendingRequests = mutableMapOf<Int, PendingRequest>()
+    private var mobileSensorsActive = true
+    private val mobileInfo = cn.elonzh.hanppie.robot.lab.mobile.MobileInfoRelay(mobileSensors,
+        { robotNanoTime() / 1_000_000 },
+        { frame, result -> sendPacket(envelope.direct(Protocol.duss(Protocol.HOST_MOBILE, frame.sender,
+            Protocol.ATTR_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SUB_MOBILE_INFO,
+            byteArrayOf(result.toByte()), frame.sequence))) },
+        { payload -> send(Protocol.HOST_SCRATCH_SCRIPT, Protocol.ATTR_NO_ACK, Protocol.CMDSET_RM,
+            Protocol.CMD_RM_MOBILE_INFO_PUSH, payload) }, onLog)
+    private fun mobileInfoAllowed() = connected && labRunning && mobileSensorsActive &&
+        robotNanoTime() - lastReceivedNanos < 500_000_000
+    fun setMobileSensorsActive(active: Boolean) = txLock.withLock {
+        mobileSensorsActive = active
+        if (!active) mobileInfo.tick(false)
+    }
     private val labUiCommands = cn.elonzh.hanppie.robot.lab.ui.LabUiControl(
         { robotNanoTime() / 1_000_000 },
         { frame -> sendPacket(envelope.direct(Protocol.duss(Protocol.HOST_SCRATCH_CLIENT, frame.sender,
@@ -81,7 +96,7 @@ class AppSession(private val target: RobotTarget,
             labUiCommands.interact(runId, key, token, event, value, final)
         }
     }
-    override fun setLabUiRun(runId: String?) = txLock.withLock { labUiCommands.reset(runId) }
+    override fun setLabRun(runId: String?) = txLock.withLock { labUiCommands.reset(runId); mobileInfo.reset(runId) }
     private val audioCommands = SpeakerCommands(::request) { robotNanoTime() / 1_000_000 }
     val audio: cn.elonzh.hanppie.robot.media.RobotAudioService get() = audioCommands
     private val wifiCommands = WifiCommands(request = ::request)
@@ -722,6 +737,7 @@ class AppSession(private val target: RobotTarget,
         firmwareCommands.close()
         txLock.withLock {
         labUiCommands.close()
+        mobileInfo.close()
         armCommands.close(sendCleanup = !firmware.state.value.loaderMayBeActive)
         extensionCommands.close(sendCleanup = !firmware.state.value.loaderMayBeActive)
         txLock.withLock { visionControl.close(sendCleanup = !firmware.state.value.loaderMayBeActive) }
@@ -745,6 +761,7 @@ class AppSession(private val target: RobotTarget,
     private fun sendNeutral(forceActuatorStop: Boolean = false) = txLock.withLock {
         cameraCommands.expire()
         labUiCommands.tick(labRunning && robotNanoTime() - lastReceivedNanos < 500_000_000)
+        mobileInfo.tick(mobileInfoAllowed())
         audioCommands.expire()
         wifiCommands.expire()
         healthStore.expire()
@@ -798,12 +815,13 @@ class AppSession(private val target: RobotTarget,
         txLock.withLock {
             check(!powerTransition && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl && !vision.value.ownsPipeline && !arm.state.value.busy && !extensions.state.value.busy) { "请先结束电源、编址、校准、固件或扩展任务" }
             mode = Protocol.MODE_LAB; labRunning = running
+            if (!running) mobileInfo.reset()
             armCommands.stopControl()
             armCommands.stopIdentification()
             extensionCommands.retire()
         }
     }
-    fun normalMode() { mode = Protocol.MODE_NORMAL; labRunning = false }
+    fun normalMode() = txLock.withLock { mode = Protocol.MODE_NORMAL; labRunning = false; mobileInfo.reset() }
 
     private fun receiveLoop() {
         var nextControl = 0L
@@ -826,6 +844,7 @@ class AppSession(private val target: RobotTarget,
                                 objectTracking.receive(frame)
                                 visionControl.receive(frame)
                                 labUiCommands.receive(frame)
+                                mobileInfo.receive(frame, mobileInfoAllowed())
                                 val revision = cameraCommands.state.value.revision
                                 cameraCommands.receive(frame)
                                 audioCommands.receive(frame)

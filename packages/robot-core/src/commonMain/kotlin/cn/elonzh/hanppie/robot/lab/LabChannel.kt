@@ -7,7 +7,7 @@ interface LabChannel {
              sender: Int = 2, flags: ByteArray = byteArrayOf(attr.toByte(), 0)): Int
     /** Correlated scratch_sys reply, retaining its raw selector-specific response bytes. */
     suspend fun requestLab(id: Int, payload: ByteArray): ByteArray
-    /** A null owner clears the current script surface; a new owner precedes the execute packet. */
-    fun setLabUiRun(runId: String?)
+    /** Null retires run-scoped UI and sensor subscriptions; a new owner precedes the execute packet. */
+    fun setLabRun(runId: String?)
     fun labMode(running: Boolean = false)
 }

@@ -87,6 +87,8 @@ interface RobotSession : AutoCloseable {
 
     suspend fun connect()
     fun safetyStop()
+    /** Foreground admission for terminal sampling; a new subscription is required after suspension. */
+    fun setMobileSensorsActive(active: Boolean)
     suspend fun enterRemote()
     suspend fun exitRemote()
     fun drive(x: Double, y: Double, z: Double, pitch: Double, yaw: Double, cameraRelative: Boolean)

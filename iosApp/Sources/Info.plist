@@ -16,6 +16,7 @@
 <key>UIRequiresFullScreen</key><true/>
 <key>NSLocalNetworkUsageDescription</key><string>Hanppie discovers and connects to your RoboMaster robot on Wi-Fi.</string>
 <key>NSMicrophoneUsageDescription</key><string>Record audio only when you use push-to-talk or speech input.</string>
+<key>NSMotionUsageDescription</key><string>Share this device's motion readings with your robot while your Python program requests them.</string>
 <key>NSSpeechRecognitionUsageDescription</key><string>Turn your speech into editable chat text. Apple's service may process audio online.</string>
 <key>NSPhotoLibraryAddUsageDescription</key><string>Save photos and recordings from your robot camera when you choose.</string>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>

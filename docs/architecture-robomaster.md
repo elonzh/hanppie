@@ -517,6 +517,18 @@ S1 Lab 程序受固件内固定的 Python `3.6.6`、标准库和 DJI 注入模�
 
 原始来源与指纹保存在忽略目录 `.hanppie/app-analysis/2026-09-08/`，定向反汇编为 `.hanppie/validation/2026-10-22-official-gap/P03-native-Attributes.txt`、`P03-native-Events.txt`；本轮差距、构建结果和源码摘要见[日期化复核](./official-app-gap-review-2026-10-23-cd4287c.md)。
 
+#### 终端运动传感器与 mobile_ctrl
+
+恢复的机载 `rm_module.Mobile.sub_info` 向 `mobile_id=200`（线上节点 `02`）发送 `3f:ab`，载荷为 `info_id:u16 LE`；加速度/姿态/角速度订阅位依次为 `01/02/04`，`08` 为 GPS。`MobileCtrl.init` 请求 `0x000f`，exit 发送全零退订。`send_sync` 等待同序号应答，其返回值只判断传输是否完成；`Mobile.sub_info` 没有检查应答载荷的 retcode。通用 `resp_retcode` 的成功字节为 `00`。**恢复代码，未抓取新设备报文**
+
+客户端数据反向发送 `02 → c9 / 3f:ac`；`rm_ctrl.MobileCtrl.info_push_process` 按 `type:u8, length:u8, value:length` 遍历，可在同一载荷内接收多个字段。类型 1/2/3 分别为加速度/姿态/角速度，每项长度 12，值为三个 float32 LE。姿态字段被分别命名为 pitch/roll/yaw；读取器将每个大于等于 180 的值减去 360。GPS 解析为空，不构成位置服务需求。该读取器只有最后值缓存，初值零，没有时间戳、有效位或断流清空契约，不能据此判定数据新鲜。**恢复代码**
+
+固定 macOS App `1.1.5/build 239` 的 `DJISubscribeController` 监听三类订阅；姿态消费者直接发送 `Input.gyro.attitude.eulerAngles.x/y/z`，角速度直接发送 `Input.gyro.rotationRate.x/y/z`，陀螺仪采样间隔设置为 0.1 秒，发送位于 Unity Update 中，不能把它等同于已证明的 10 Hz 线上推送。加速度由原生事件 12 回填，托管 `UpdateAcceleratorInfo` 为空。`RealController.SendAcceleratorInfo/SendGyroAttitudeAngle/SendGyroRotationRate` 则将三个值写入对应服务 key。**固定客户端代码**
+
+该 macOS 原生库的 `OnSubscribeInfoPush`（`0x697ad0`）仅构造 `3f:ab` 应答：`0x697af3` 写单字节 `01`，沿用请求来源/目的和序号，`0x697b8d` 指定长度 1 后发送；没有在这条处理器中解析位图或启动传感器。它支持“该版本 macOS 返回不支持”的结论，不能拿来证明移动端采样单位、实际推送或所有平台均无此能力。Hanppie 的当前接入与验收状态见[实施台账 P05](./official-app-capability-implementation.md#p05-终端运动传感器与设备待验)。
+
+平台换算依据分别为 [Android Motion sensors](https://developer.android.com/develop/sensors-and-location/sensors/sensors_motion)、[Apple 原始加速度](https://developer.apple.com/documentation/coremotion/getting-raw-accelerometer-events)、[Core Motion](https://developer.apple.com/documentation/coremotion/cmmotionmanager)、[Unity Gyroscope](https://docs.unity3d.com/ja/current/ScriptReference/Gyroscope.html) 与 [Quaternion.Euler](https://docs.unity.cn/6000.6/Documentation/ScriptReference/Quaternion.Euler.html)。Android 加速度包含重力、单位 m/s²，角速度为 rad/s；Apple 原始加速度为 g。Unity 原始陀螺仪四元数采用右手系，消费者未作游戏场景左手系转换。坐标参照、屏幕方向补偿、原生移动端编码和首次采样时序仍需并排设备/报文验收，不由文档或数学测试推导等价。
+
 #### 5.3.5 macOS 客户端静态分析边界
 
 RoboMaster macOS `1.1.5`（build `239`）安装包采用 Unity `2019.2.3f1` / Mono，业务程序集包括 `Assembly-CSharp.dll`、`RobotService.dll` 和 `Native.dll`。Unity 资源包含机器人零件网格、纹理、材质和 Transform 层级；这些是应用显示资源，不是经标定的 CAD、URDF、碰撞或惯性模型。**代码**

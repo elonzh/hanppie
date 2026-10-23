@@ -13,6 +13,7 @@ import cn.elonzh.hanppie.robot.product.RobotProduct
 /** Platform transport composition. Common callers only observe [RobotRuntime]. */
 class PlatformRobotRuntime(
     private val networkProvider: () -> RobotTransport = { RobotTransport.Default },
+    private val mobileSensors: () -> cn.elonzh.hanppie.robot.lab.mobile.MobileSensorSource = { cn.elonzh.hanppie.robot.lab.mobile.NoMobileSensors },
 ) : RobotRuntime {
     override suspend fun discover(timeoutMillis: Long): List<DiscoveredRobot> =
         AppSession.discover(timeoutMillis = timeoutMillis, network = networkProvider())
@@ -36,6 +37,7 @@ class PlatformRobotRuntime(
             onFrame,
             onLog,
             network,
+            mobileSensors(),
         ) { reason -> onLost(result, reason) }
         result = PlatformRobotSession(
             app = app,
@@ -95,6 +97,7 @@ private class PlatformRobotSession(
 
     override suspend fun connect() = app.connect()
     override fun safetyStop() = app.safetyStop()
+    override fun setMobileSensorsActive(active: Boolean) = app.setMobileSensorsActive(active)
     override suspend fun enterRemote() = app.enterRemote()
     override suspend fun exitRemote() = app.exitRemote()
     override fun drive(x: Double, y: Double, z: Double, pitch: Double, yaw: Double, cameraRelative: Boolean) =

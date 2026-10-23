@@ -689,6 +689,7 @@ internal class ConsoleModel(
     override fun setForeground(foreground: Boolean) {
         acceptingWork.store(foreground)
         foregroundState.value = foreground
+        session.load()?.setMobileSensorsActive(foreground)
         if (!foreground) { robotMotion.cancelRead(); robotDisplay.cancelRead() }
         if (!foreground) labUiVisibleRun?.let { session.load()?.labUi?.setVisible(it, false) }
         if (!foreground) { robotCalibration.stopAutomaticContinuation(); robotAddressing.holdWheel(null); haltRemote(); voiceInput.cancel() }
@@ -934,6 +935,7 @@ internal class ConsoleModel(
     private fun newSession(target: RobotTarget): RobotSession {
         robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.detach(); robotArm.detach(); robotExtensions.detach(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotMotion.clear(); robotDisplay.clear(); robotWifi.detach(); robotSdr.detach()
         val candidate = robotRuntime.open(target, ::receive, ::log, ::connectionLost)
+        candidate.setMobileSensorsActive(isForeground)
         candidate.onVideo = { videoConsumer.load()?.invoke(it) }
         candidate.onAudio = { audioConsumer.load()?.invoke(it) }
         trackingObserver?.cancel()

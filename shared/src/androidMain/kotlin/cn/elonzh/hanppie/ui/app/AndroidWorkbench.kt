@@ -84,7 +84,7 @@ private fun createAndroidWorkbenchViewModel(
             speakerInput = AndroidSpeakerInput(app),
             audioImporter = AndroidLabAudioImporter(),
             audioPlayer = AndroidLabAudioPlayer(),
-            robotRuntime = PlatformRobotRuntime(network::network),
+            robotRuntime = PlatformRobotRuntime(network::network, { cn.elonzh.hanppie.ui.platform.AndroidMobileSensors(app) }),
             settingsStore = storage.settings,
             scriptRepository = storage.scripts,
             sessionHistory = storage.sessions,

@@ -498,6 +498,16 @@ flowchart TD
 
 P04 的字节向量、真实 App 会话 UDP 回环、上传/启动/取消回归及设备待验见[实施记录](./official-app-capability-implementation.md#p04-远端程序与音频核对及设备待验)。没有设备验证过新增查询/应答与资源确认效果；既有 FTP/Lab 实机记录不自动扩展到这条新门禁。
 
+##### 终端运动传感器
+
+`robot-core/lab/mobile` 持有机载程序的终端传感器订阅和上行。`AppSession` 用同一发送锁串行处理订阅、读取、退订与运行清理；只接受合法的脚本节点请求，动态回复原序号，不再在 Lab 启动时发送未关联请求的固定应答。`MobileSensorSource` 是唯一平台边界，由 `PlatformRobotRuntime` 为每个连接创建；共享层拥有订阅位图、运行归属、新鲜度、10 Hz 上行上限及线格式，不把业务规则复制到平台实现。原始契约见[上游调查](./architecture-robomaster.md#终端运动传感器与-mobile_ctrl)。
+
+Android 用 SensorManager 采样实际可用的加速度计、Game Rotation Vector 和陀螺仪；iOS 用 Core Motion 的加速度、设备姿态四元数和角速度快照。Android 支持力按负值除以标准重力换为 g，姿态统一按 Z-X-Y 欧拉角输出；iOS 不直接使用系统 roll/pitch/yaw。两端均保持设备轴，不按窗口方向旋转。无对应硬件时按能力返回不支持；桌面显式使用无传感器能力，不制造静止数据。GPS 不采样、不请求定位。
+
+仅在当前 Lab 运行拥有者、应用前台和 500 ms 内链路有效时采样；250 ms 以外、重复/倒序时间戳及非有限读数不发送。任一已订阅传感器持续 3 秒无新读数时停止并写入日志，平台注册/读取错误也停止并报告。退订、程序停止/匹配的结束状态、替换运行、断连或后台会清理原生资源和主机缓存，前台/链路恢复不重放订阅；需要脚本重新订阅。`ConsoleModel` 将前台状态传到当前连接。机内旧值没有清空或有效性协议，停止上行不等于让 `mobile_ctrl` 返回无效值，不向机器人发送伪零值。
+
+运行拥有者由 `LabChannel.setLabRun` 同时分发给程序面板和传感器，退出/替换时一并清理；订阅报文本身没有 GUID，本地运行归属不证明已排除跨运行晚到请求。用户通过既有 Python 运行流程使用这些接口，无需另开设置；[编程参考](../shared/src/commonMain/composeResources/files/skills/lab-python/references/sensors-and-vision.md#4-移动端传感器-mobile_ctrl)提供只打印读数的示例和真实常量名。当前验证限桌面合成采样、实际 UDP 回环、恢复的 Python 接收器互通和 iOS 编译；没有移动端真实采样、权限、方向或机器人验收，详见[台账 P05](./official-app-capability-implementation.md#p05-终端运动传感器与设备待验)。
+
 ##### 程序面板与脚本控件
 
 `robot-core/lab/ui` 负责机载程序自定义界面的线格式、属性状态和输入规则；`AppSession` 在同一发送锁下接收属性、确认收件和发送事件。`LabController` 在执行前设置本轮 GUID 所有者，上传替换、停止、模式失效和会话结束清空旧界面；匹配本轮的运行/终止回报更新可操作状态。`ConsoleModel` 按当前连接绑定状态流，连接失败、替换与断连退役观察者，旧运行回调不能作用于新连接。

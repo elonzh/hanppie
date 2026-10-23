@@ -24,7 +24,7 @@
 
 [D01 工作区完整复核](./official-app-gap-review-2026-10-24-93e8888-worktree.md)固定对照 `93e8888` 与未提交的 D01：26 个包离线完成，9 个未交付（2 个冲突待决策、1 个实施中、6 个待实施）。准星/显示/头灯已有协议、共享状态与真实入口，不能再整体列为完全缺失；本轮只调查和修正文档，不继续功能开发。全部 key/配置/桥接库存重新核对，C01–C16 保持不变。
 
-D01 随本次范围提交交付后，实施清单为 **27 个离线完成、6 个待实施、2 个冲突待决策**。D01 的校准、显示偏好与头灯已有完整离线路径和独立收尾，所有物理待验继续保留；上述开发期调查不作为当前交付状态。
+D01 已随 `39b8729` 完成范围交付。P05 随本次范围提交交付后，实施清单为 **28 个离线完成、5 个待实施、2 个冲突待决策**；所有物理待验继续保留，上述开发期调查不作为当前交付状态。
 
 用户已授权本目标内的代码提交，未要求推送。当前没有实机：不得把模拟应答、构建或桌面截图写成设备验证。Android 验证继续遵守项目的桌面优先要求。每项交付必须覆盖协议/业务、共享状态、实际入口、错误恢复和必要验证，不能仅添加未使用的指令常量。
 
@@ -73,7 +73,7 @@ D01 随本次范围提交交付后，实施清单为 **27 个离线完成、6 �
 | P02 | 自定义技能安装、槽位、触发、冷却与运行状态 | 冲突待决策 | 槽位 0 安装/卸载受 C15 影响；对战技能 ID、冷却和触发闭环仍未实现 | FPV 技能触发与执行/冷却、重连及其他客户端改绑 |
 | P03 | 脚本自定义 UI 属性、控件渲染与事件回传 | 离线完成 | `e962349`；真实脚本页入口、Stage/六类控件、事件回传及运行/连接/可见性清理；75 项定向测试、桌面 classes 和 core/shared iOS Simulator 编译通过，四组横屏 16 张合成渲染；下方 P03 记录 | 真实机载脚本初始化、控件几何/事件、停止/失焦/断连、晚到属性；全部未执行 |
 | P04 | 远端 DSP/音频资源 MD5 查询与确认 | 离线完成 | `cd4287c`；上传前音频查询、注册应答与启动前程序/音频核对，删除主机会话缓存；完整 DSP 免传保留 C16；下方 P04 记录 | 查询/注册接受、跨 GUID/会话的音频范围、资源失效与更新；全部未执行 |
-| P05 | 终端传感器采样、订阅与 mobile_ctrl 上行 | 待实施 | — | 坐标/量纲/频率、权限与断连清理 |
+| P05 | 终端传感器采样、订阅与 mobile_ctrl 上行 | 离线完成 | 随 `feat(lab): 补齐终端运动传感器订阅与上行` 范围提交；46 项定向测试、桌面 classes 与 core/shared iOS Simulator 编译通过，恢复的机载接收器互通通过；详见下方 P05 | 真实采样、坐标/量纲/频率、权限与断连清理；全部未执行 |
 | G01 | 单机靶场/竞速挑战：规则、计时、计分和结果 | 待实施 | — | 标签/装甲事件和裁判结果 |
 | G02 | 本地多人房间、队伍、规则、血量/伤害/增益、技能与结算 | 待实施 | — | 多机同步、裁判一致性、离线恢复 |
 | I01 | 输入配置、分轴增益与预设；机内速度/加速/制动参数闭环 | 离线完成 | 54 项定向测试、桌面 classes 与 core/shared iOS Simulator 编译通过；真实设置入口四组横屏共 28 张合成渲染，独立审查 ship；本项提交 `edff186`，下方 I01 记录 | 参数允许范围、不同输入配置、模式与既有限速叠加；全部未执行 |
@@ -141,6 +141,7 @@ D01 随本次范围提交交付后，实施清单为 **27 个离线完成、6 �
 | 2026-10-23 | V03 通用视觉与颜色 | 81 个不同用例通过（新增 7、回归 74）；desktop classes、core/shared iOS Simulator 编译通过；56 张真实操控页合成渲染，独立审查 ship；停止后状态收尾另复核 23 项，不重复累计；实机未执行 | `feat(vision): 补齐通用视觉检测与颜色配置` |
 | 2026-10-24 | I01 输入响应与运动参数 | 核心 12、共享 42，共 54 个不同用例通过（新增 20、回归 34）；desktop classes、core/shared iOS Simulator 编译通过；四组横屏 28 张真实设置页合成渲染，独立审查 ship，设计文档核对沿用既有系统；实机未执行 | `edff186` |
 | 2026-10-24 | D01 准星、显示偏好与头灯 | 核心 16、共享 64，共 80 个不同用例通过（新增 25、回归 55）；desktop classes、core/shared iOS Simulator 编译通过；51 张当前合成/Metal 渲染，独立完整审查的唯一确认提示问题已修复，复核 `resolved / ship`，文档核对保留既有系统；实机未执行 | `feat(display): 补齐准星校准与显示配置`（本项范围提交） |
+| 2026-10-24 | P05 终端运动传感器 | 核心 42、共享 4，共 46 个不同用例通过（新增 13、回归 33）；desktop classes、core/shared iOS Simulator 编译通过，Python 3.10 下恢复接收器与实际 UDP 回环载荷互通；当前物理采样、平台权限与真实机器人均未执行 | `feat(lab): 补齐终端运动传感器订阅与上行`（本项范围提交） |
 
 ### A01 验证入口与设备待验
 
@@ -869,3 +870,39 @@ HANPPIE_GPU_TESTS=1 ./gradlew :shared:jvmTest --tests '*RobotDisplayControllerTe
 4. 测试写入拒绝、左侧 ACK 后右侧失败、回读不匹配、超时、离页、后台、断连与晚到回调；结果未知后只能重读，确认没有自动重试、回滚或向新连接发布旧结果。实际机械停止仍独立验收。
 5. 与官方客户端交替更改，核对重新读取、重连/重启持久性、进入 FPV/脚本/维护/校准后的状态；验证保存/恢复默认不改设备校准或头灯、重连不重放配置，C01–C16 不被本项隐式改写。
 6. 核对真实云台角度、臂位置/年龄/限位/告警和显示开关、质量切换后的场景交互及 GPU 资源；在真实视频/输入和不同窗口/字体下验收。Android 验证继续等待用户明确确认功能完整，iOS 的编译通过不等于原生视频裁剪/触摸/系统返回已验收。
+
+### P05 终端运动传感器与设备待验
+
+- 状态：离线完成，随 `feat(lab): 补齐终端运动传感器订阅与上行` 范围提交；46 个不同定向用例通过（核心 42、共享 4；新增 13、回归 33），失败/错误/跳过为零，桌面 classes 与 core/shared iOS Simulator 编译通过。没有实机，不把 UDP 回环或源码接收器互通计为移动端/机器人运行通过。
+- 职责：`robot-core/lab/mobile` 负责动态订阅、应答关联、运行/前台/链路准入、采样新鲜度及数据编码；`MobileSensorSource` 仅承载平台采样。`LabChannel.setLabRun` 同时管理程序面板和传感器拥有者，移除原 UI 专用命名和 Lab 启动时未关联请求的固定 `3f:ab` 应答。现有临时运行、运行身份和 C01–C16 取舍不变。
+- 接入：Android 使用实际可用的加速度计、Game Rotation Vector 和陀螺仪，iOS 使用 Core Motion 的原始加速度、设备姿态四元数和角速度；每个连接独立创建采样源。桌面返回不支持，不发伪零。GPS 解析没有有效上游消费者，本项不收集位置。设备轴/单位和全部线格式只在[上游契约](./architecture-robomaster.md#终端运动传感器与-mobile_ctrl)维护，当前运行规则见[应用架构](./architecture.md#终端运动传感器)。
+- 用户路径：复用“脚本 → 运行脚本”和当前日志，无新开关或导航；更新编程参考的只读示例，修正真实常量 `mobile_accel_x/y/z`、`mobile_gyro_x/y/z`，不修改恢复的机内源码。iOS 补充中英文 Motion 用途说明。平台尚未构建/运行的层级不能由桌面入口测试抵扣。
+- 错误与清理：请求严格验证来源、目的、属性、长度和位图；同序号单字节回复。部分传感器缺失时回复不支持并记录日志，仅采样实际可用部分；注册/读取异常或任一订阅类型持续 3 秒无新读数停止采样。旧/非有限读数不发。停止、完成、替换、后台、断连和过期链路清理，前台/链路恢复不自动重放；机内最后值不会因此清空。
+- 原始证据：忽略目录 `.hanppie/validation/2026-10-22-official-gap/P05-native-contracts.json` 固定原生库、恢复代码和官方消费者指纹；`P05-native-Subscribe.txt` 保存 macOS 不支持应答的完整处理器。平台 API 采用 Android/Apple/Unity 官方资料，不用 macOS 未实现分支推断移动端支持。
+- 离线证据：`P05-validation.log`、`P05-final-validation.log` 与收尾 `P05-completion-validation.log`；归档 XML 和去重计数在 `P05-test-results/`、`P05-test-summary.json`。`P05-verify-receiver.py` 在 Python 3.10 下将实际 UDP 回环观察到的合成载荷交给未修改的 `MobileCtrl`、`tools.byte_to_float` 与真实 getter，结果记录在 `P05-receiver-interop.json`；它验证解码契约，不证明机内初始化或设备接受。
+- 范围核对：28 个任务相关文件；239 处本地文档链接及结构检查无新增错误，原生架构原有 4 处锚点和 1 处表格问题仍单独记录。范围钩子、iOS plist/用途字符串语法检查通过；未改页面布局或新增开关，不重复截图/视觉审查。DESIGN、恢复内容、FPV 固定初始化、P04 载荷及 C01–C16 保持原状，不推送。
+
+定向验证入口（按记录分批执行，重复用例不累计）：
+
+```bash
+./gradlew :packages:robot-core:desktopTest \
+  --tests 'cn.elonzh.hanppie.robot.lab.mobile.*' \
+  --tests 'cn.elonzh.hanppie.robot.session.MobileInfoSessionTest' \
+  --tests 'cn.elonzh.hanppie.robot.lab.LabControllerTest' \
+  --tests 'cn.elonzh.hanppie.robot.lab.ui.LabUiControlTest' \
+  --tests 'cn.elonzh.hanppie.robot.session.LabSessionTest' \
+  --tests 'cn.elonzh.hanppie.robot.session.AppSessionIntegrationTest.loopback*' \
+  --tests 'cn.elonzh.hanppie.robot.session.RobotDisplaySessionTest' \
+  :shared:jvmTest --tests 'cn.elonzh.hanppie.ui.app.LabUiBindingTest' \
+  :desktopApp:classes :shared:compileKotlinIosSimulatorArm64
+.venv/bin/python .hanppie/validation/2026-10-22-official-gap/P05-verify-receiver.py
+```
+
+| 待验内容 | 状态 |
+| --- | --- |
+| Android/iOS 实际硬件可用性、首个样本时延、权限允许/拒绝/撤销和错误反馈 | 未执行；Android 构建/模拟器/UI 也未执行，iOS 仅编译 |
+| 与官方移动端并排检查三轴、屏幕朝向、重力正负、g/rad/s、Z-X-Y 与机内 pitch/roll/yaw 对应 | 未执行；数学/文档依据不能替代方向验收 |
+| 原生脚本对象注入、实际订阅与 `3f:ac` 路由/接受、退订/更换位图和读取值 | 未执行；缺失的 script_manage 不能由主机回环补证 |
+| 真实采样/发送频率、延迟、掉帧、单一传感器停更和功耗；本实现不复制 Unity 每帧发送 | 未执行 |
+| 运行结束、显式停止、断连、后台、链路恢复与重连后原生采样资源释放/不自动重放 | 未执行；主机模拟流程已覆盖，平台实际效果待验 |
+| 无 GUID 的晚到订阅、跨运行/跨客户端；机内零初值和断流旧值对用户程序的影响 | 未执行；不承诺排除晚到请求或提供机内新鲜度 API |

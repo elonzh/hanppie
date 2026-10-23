@@ -57,7 +57,7 @@ class LabSessionTest {
 
     @Test fun customUiUsesNativeAckSequenceAndEventRouteAndClearsBetweenRuns(): Unit = runBlocking {
         Peer().use { peer -> peer.session().use { session ->
-            session.connect(); session.labMode(true); session.setLabUiRun(program.guid)
+            session.connect(); session.labMode(true); session.setLabRun(program.guid)
             peer.push("00000000".hexBytes())
             peer.push("01000000".hexBytes(), sequence = 0x5567)
             peer.push("00008002010401000000010400000000".hexBytes(), sequence = 0x5568)
@@ -76,7 +76,7 @@ class LabSessionTest {
             val events = peer.received.filter { it.id == 0xbb }
             assertEquals(listOf("01000100", "01000200"), events.map { it.payload.hex() })
             assertTrue(events.all { it.sender == 2 && it.receiver == 0xc9 && it.set == 0x3f && it.attr == 0x40 })
-            session.setLabUiRun(null)
+            session.setLabRun(null)
             peer.push("0100800103046c617465".hexBytes(), sequence = 0x5570)
             withTimeout(2_000) { while (peer.allFrames.none { it.id == 0xba && it.sequence == 0x5570 }) delay(5) }
             assertTrue(session.labUi.state.value.widgets.isEmpty())
@@ -85,7 +85,7 @@ class LabSessionTest {
 
     @Test fun closingAVisibleSessionReleasesAPressedProgramButtonBeforeSocketClose(): Unit = runBlocking {
         Peer().use { peer -> peer.session().use { session ->
-            session.connect(); session.labMode(true); session.setLabUiRun(program.guid)
+            session.connect(); session.labMode(true); session.setLabRun(program.guid)
             peer.push("00000000".hexBytes()); peer.push("01000000".hexBytes())
             peer.push("00008002010401000000010400000000".hexBytes())
             peer.push(byteArrayOf(2) + program.guid.encodeToByteArray(), id = 0xa5, attr = 0, sender = 9)

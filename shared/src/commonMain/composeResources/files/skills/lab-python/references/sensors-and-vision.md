@@ -192,14 +192,29 @@ def start():
 
 ## 4. 移动端传感器 (`mobile_ctrl`)
 
-以下是机载 Lab 的终端传感器读取接口，数据依赖终端实际采样、订阅和上行。当前 Hanppie 尚未接入这条终端数据链，不能仅因建立会话就依赖这些接口返回有效传感器值：
+以下是机载 Lab 的终端传感器读取接口。Hanppie 在程序订阅后采样 Android/iOS 的可用运动传感器并上行；桌面没有受支持的运动传感器，不发送替代读数。仅连接机器人不会开始采样。
 
 - `mobile_ctrl.get_attitude(axis)`：获取移动设备姿态角（度），`axis` 可选 `rm_define.mobile_atti_pitch`、
   `rm_define.mobile_atti_roll`、`rm_define.mobile_atti_yaw`。
-- `mobile_ctrl.get_accel(axis)`：获取移动设备加速度，`axis` 可选 `rm_define.mobile_info_accel_x`、
-  `rm_define.mobile_info_accel_y`、`rm_define.mobile_info_accel_z`。
-- `mobile_ctrl.get_gyro(axis)`：获取移动设备陀螺仪角速度，`axis` 可选 `rm_define.mobile_info_gyro_x`、
-  `rm_define.mobile_info_gyro_y`、`rm_define.mobile_info_gyro_z`。
+- `mobile_ctrl.get_accel(axis)`：获取移动设备加速度（含重力，单位 g），`axis` 可选 `rm_define.mobile_accel_x`、
+  `rm_define.mobile_accel_y`、`rm_define.mobile_accel_z`。
+- `mobile_ctrl.get_gyro(axis)`：获取移动设备陀螺仪角速度（rad/s），`axis` 可选 `rm_define.mobile_gyro_x`、
+  `rm_define.mobile_gyro_y`、`rm_define.mobile_gyro_z`。
+
+姿态对应官方 `Input.gyro.attitude.eulerAngles` 的 X/Y/Z，机载接口分别称为 pitch/roll/yaw，并将大于等于 180° 的值减去 360°；不能直接按系统原生 roll/pitch/yaw 顺序替换。坐标不跟随窗口方向旋转，三轴方向及与官方移动端的实际一致性仍待设备验收。
+
+停止/完成程序、断连、退后台或链路过期会停止采样；恢复前台不自动恢复订阅，重新运行程序后才重新订阅。不支持、拒绝权限或持续没有新读数时在日志中报告。机载读取器只缓存最后值，没有有效性/新鲜度 API；默认零值不证明终端采样成功，停止上行也不清除机内缓存。不要仅凭这些值启动自主运动。GPS 不采样、不请求位置权限。
+
+下面只打印读数，不控制执行器；在有传感器的移动设备上运行后查看日志：
+
+```python
+def start():
+    for _ in range(20):
+        log_ctrl.print_msg("accel x=" + str(mobile_ctrl.get_accel(rm_define.mobile_accel_x)))
+        log_ctrl.print_msg("pitch=" + str(mobile_ctrl.get_attitude(rm_define.mobile_atti_pitch)))
+        log_ctrl.print_msg("gyro z=" + str(mobile_ctrl.get_gyro(rm_define.mobile_gyro_z)))
+        time.sleep(0.2)
+```
 
 ---
 

@@ -197,6 +197,8 @@ internal class RobotSessionFixture : RobotSession {
 
     override suspend fun connect() {}
     override fun safetyStop() {}
+    val mobileSensorAdmission = mutableListOf<Boolean>()
+    override fun setMobileSensorsActive(active: Boolean) { mobileSensorAdmission += active }
     override suspend fun enterRemote() {}
     override suspend fun exitRemote() {}
     override fun drive(x: Double, y: Double, z: Double, pitch: Double, yaw: Double, cameraRelative: Boolean) {

@@ -23,7 +23,7 @@ class LabControllerTest {
         var storedAudio = emptyMap<Int, String>()
         var respond: (suspend (Int, ByteArray) -> ByteArray)? = null
         override fun labMode(running: Boolean) { this.running = running }
-        override fun setLabUiRun(runId: String?) {}
+        override fun setLabRun(runId: String?) {}
         override fun send(receiver: Int, attr: Int, set: Int, id: Int, payload: ByteArray,
                           sender: Int, flags: ByteArray): Int {
             check(connected)
@@ -63,9 +63,9 @@ class LabControllerTest {
         assertEquals(upload.runId, controller.start())
         assertTrue(channel.running)
         assertContentEquals(byteArrayOf(1, 0) + hash.hexBytes(), channel.commands.single { it.id == 0xa2 }.payload)
-        assertEquals(listOf(0xa2, 0xa3, 0xa3, 0xba, 0xab), channel.commands.takeLast(5).map { it.id })
-        assertEquals(1, channel.commands.takeLast(4).first().payload.u8(0))
-        assertContentEquals(metadata.copyOfRange(1, metadata.size), channel.commands.takeLast(3).first().payload.drop(1).toByteArray())
+        assertEquals(listOf(0xa2, 0xa3, 0xa3, 0xba), channel.commands.takeLast(4).map { it.id })
+        assertEquals(1, channel.commands.takeLast(3).first().payload.u8(0))
+        assertContentEquals(metadata.copyOfRange(1, metadata.size), channel.commands.takeLast(2).first().payload.drop(1).toByteArray())
         assertFailsWith<IllegalStateException> { controller.start() }
         assertFailsWith<IllegalStateException> { controller.upload("def start():\n    pass\n", "replacement") }
         controller.stop()
@@ -73,7 +73,7 @@ class LabControllerTest {
         assertEquals(0x55, channel.commands.takeLast(2).first().payload[0].toInt())
         assertEquals(0x42, channel.commands.last().sender)
         controller.start()
-        assertEquals(2, channel.commands.count { it.id == 0xab })
+        assertFalse(channel.commands.any { it.id == 0xab })
         controller.stop()
     }
 
@@ -248,7 +248,7 @@ class LabControllerTest {
         }
         channel.respond = null
         controller.start()
-        assertEquals(1, channel.commands.count { it.id == 0xab })
+        assertFalse(channel.commands.any { it.id == 0xab })
         controller.stop()
     }
 
@@ -268,7 +268,7 @@ class LabControllerTest {
         assertTrue(uploaded.decodeToString().contains("modify=\"true\""))
         channel.storedAudio = mapOf(3 to labAudioDigest(clip.packets))
         controller.start()
-        assertEquals(1, channel.commands.count { it.id == 0xab })
+        assertFalse(channel.commands.any { it.id == 0xab })
         assertEquals(4, channel.commands.count { it.id == 0xa3 && it.payload.u8(0) == 0x0d })
         controller.stop()
     }

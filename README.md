@@ -56,6 +56,7 @@ RoboMaster 开源工作台。在电脑、手机和平板上驾驶机器人、编
 | 收音与播放 | 在“设置 → 音视频 → 机器人收音与播放”查询收音开关、查看最近播放状态或发送防啸叫配置。驾驶舱“按住对讲”录制短片，松开后上传播放。[设备待验项](./docs/official-app-capability-implementation.md#a08-验证入口与设备待验) |
 | 编写脚本 | 在“脚本”页新建、导入 `.py`，或从预置脚本创建副本；保存到本机脚本库，再点击“运行脚本”。Lab 脚本使用机内 API 和 Python 3.6 语法，见 [Lab 编程指南](./shared/src/commonMain/composeResources/files/skills/lab-python/SKILL.md) |
 | 程序面板 | 机载程序创建可见控件后，点击脚本页的“程序面板”操作按钮、开关、滑条、选项或输入框；可滚动查看布局、打开监看或返回编辑。关闭面板不会停止程序，停止请使用面板上的停止按钮。[设备待验项](./docs/official-app-capability-implementation.md#p03-程序面板与设备待验) |
+| 终端运动读数 | Python 程序通过 `mobile_ctrl` 读取手机/平板的可用运动传感器；桌面不提供替代数据。[只打印读数的示例](./shared/src/commonMain/composeResources/files/skills/lab-python/references/sensors-and-vision.md#4-移动端传感器-mobile_ctrl)；[设备待验项](./docs/official-app-capability-implementation.md#p05-终端运动传感器与设备待验) |
 | AI 编程 | 在“设置 → 模型服务”选择供应商，填写 API Key、模型并测试配置；在“对话”页描述需求，检查完整脚本后确认执行 |
 | 停止脚本 | 使用“停止脚本”。退出编辑器或取消 AI 生成不会停止已经启动的机内脚本 |
 

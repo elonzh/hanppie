@@ -124,6 +124,7 @@ object Protocol {
     const val CMD_RM_SCRIPT_CUSTOM_INFO_PUSH = 0xa4
     const val CMD_RM_SCRIPT_BLOCK_STATUS_PUSH = 0xa5
     const val CMD_RM_SUB_MOBILE_INFO = 0xab
+    const val CMD_RM_MOBILE_INFO_PUSH = 0xac
     const val CMD_RM_PLAY_SOUND_TASK = 0xb3
     const val CMD_RM_CUSTOM_UI_ATTRIBUTE_SET = 0xba
     const val CMD_RM_STREAM_CTRL = 0xd2
