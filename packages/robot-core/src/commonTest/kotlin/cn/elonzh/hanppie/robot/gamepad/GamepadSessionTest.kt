@@ -3,6 +3,7 @@ package cn.elonzh.hanppie.robot.gamepad
 import cn.elonzh.hanppie.robot.protocol.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.collect
 import kotlin.test.*
 
 class GamepadSessionTest {
@@ -36,11 +37,46 @@ class GamepadSessionTest {
 
     @Test fun reportAdmissionIsExactAndUnknownBatteryRemainsUnknown() {
         val frame = Protocol.frames(report()).single()
-        assertEquals(GamepadReport(true, true, 88, 0x18), GamepadProtocol.report(frame))
+        assertEquals(GamepadReport(true, true, 88, 0x18, 0, 0, 0, 0, 0), GamepadProtocol.report(frame))
         for (bad in listOf(frame.copy(valid = false), frame.copy(sender = 9), frame.copy(receiver = 6),
             frame.copy(attr = 0x40), frame.copy(set = 0), frame.copy(id = 0x91), frame.copy(payload = ByteArray(18)), frame.copy(payload = ByteArray(20))))
             assertNull(GamepadProtocol.report(bad))
         assertNull(GamepadProtocol.report(Protocol.frames(report(battery = 255)).single())!!.batteryPercent)
+    }
+
+    @Test fun driveBodyDecodesSignedGimbalUnsignedChassisAndEveryKnownButton() {
+        val bytes = byteArrayOf(0, 0xd8.toByte(), 0x94.toByte(), 6, 0x6c, 1, 0x85.toByte(), 0xff.toByte(), 0x4a, 5,
+            0, 0, 0xc0.toByte(), 0xf0.toByte(), 0, 0, 0, 0, 59)
+        val report = checkNotNull(GamepadProtocol.report(Protocol.frames(Protocol.duss(6, 2, 0, 0x3f, 0x90, bytes, 1)).single()))
+        assertEquals(listOf(1684, 364, -123, 1354), listOf(report.lateral, report.forward, report.yaw, report.pitch))
+        assertTrue(report.chassisActive && report.gimbalActive && report.mouseConnected && report.keyboardConnected)
+        assertTrue(report.fire && report.mouseLeft && report.mouseRight && report.c1 && report.c2 && report.fn)
+        assertFalse(report.copy(rawFlags = 0, buttons = 0).chassisActive)
+        assertFalse(report.copy(rawFlags = 0, buttons = 0).gimbalActive)
+        assertFalse(report.copy(buttons = 0).fire)
+    }
+
+    @Test fun exactSnapshotAndButtonEdgesPreserveBurstButRetireOldConnections(): Unit = runBlocking {
+        var now = 0L; val connector = Connector(); val session = GamepadSession(connector, this, { now })
+        val events = Channel<GamepadButtonEvent>(Channel.UNLIMITED)
+        val collector = launch(start = CoroutineStart.UNDISPATCHED) { session.buttonEvents.collect { events.send(it) } }
+        try {
+            session.connect("one"); val wire = connector.opened.receive(); await { session.state.value.phase == GamepadPhase.CONNECTED }
+            wire.incoming.send(report()); val initial = withTimeout(2000) { events.receive() }
+            val down = report().let { original -> Protocol.frames(original).single().payload.copyOf().apply { this[13] = 0x80.toByte() } }
+            wire.incoming.send(Protocol.duss(6, 2, 0, 0x3f, 0x90, down, 8) + report())
+            val pressed = withTimeout(2000) { events.receive() }; val released = withTimeout(2000) { events.receive() }
+            assertTrue(pressed.report.fire); assertFalse(released.report.fire)
+            assertTrue(initial.number < pressed.number && pressed.number < released.number)
+            assertEquals(initial.connection, released.connection); assertTrue(session.accepts(pressed))
+            now = 251
+            assertFalse(session.snapshot().reportFresh); assertFalse(session.accepts(pressed))
+            session.disconnect(); now = 0
+            assertFalse(session.accepts(released))
+            session.connect("one"); connector.opened.receive(); await { session.state.value.phase == GamepadPhase.CONNECTED }
+            assertNotEquals(initial.connection, session.snapshot().connection)
+            assertFalse(session.accepts(initial)); assertNull(session.snapshot().report)
+        } finally { collector.cancel(); session.close() }
     }
 
     @Test fun activationUsesTwoBitsAndValidatesLengthWithoutExportingIdentity() {

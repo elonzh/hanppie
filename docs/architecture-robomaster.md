@@ -616,6 +616,10 @@ byte 1 的低三位进入校准/居中/电量告警相关分支，但两份原�
 
 24 个 GamePad key 中，八个轴增益/斜率/死区及 `ControlEnabled` 由原生事件更新进程内状态，没有为它们建立独立设备设置 opcode。构造默认值依次是 X/Y 增益 1/1，yaw 增益/斜率/死区 1/1/0，pitch 1/1/0；`GetExpValue`（macOS `0x17e40`）先令 `u=(raw-1024)/660`，计算 `sign(u) × min(pow(max(0,(1+deadZone)×abs(u)-deadZone),slope),1) × gain`，再映回中心 1024。该 deadZone 参数不能直接当作摇杆死区百分比。
 
+原生 timer 以 byte 1 bit 7/6 分别准入底盘/云台组；偏移 4/2 的输入进入左垂直/水平通道，偏移 8/6 进入右垂直/水平通道。`RealController.SendPose` 将对应标准化量按 `1024 + value ×660` 编码。平移使用线性增益，云台使用上述指数公式，最终截断并夹到 364–1684。该对应关系来自原生字段合并与客户端构造的静态追踪，真实方向、浮点量化和设备端响应仍待验。原生 `OnGamePadDataPush` 在每次报告时更新按键事件；不能只保留驾驶定时器最后一次布尔值就宣称保留快速短按。**原生合并 / 客户端构造**
+
+`SystemSetting.OnGamePadConnect`（固定版 C# 111–119 行）在连接事件为真时直接把 `Control.Controller` 设为 3；原生构造（macOS `0x144fa`）把本地控制使能设为真。与已有默认输入并存时，自动切换属于输入拥有者策略，不能据此将 Hanppie 的只读配件连接改为自动接管；当前取舍与 C18 见实施台账。**官方自动选择 / 当前差异**
+
 `OnTimerTicked`（macOS `0x17880`、Android `0x4d0fbc`）将输入合并进原生 `01:04` 高频控制帧，受控制使能、连接和超时状态约束；直接并发转发与 Hanppie 既有速度控制会产生执行器所有权问题。C2 在对战中触发随机技能，Fn 涉及自定义技能；普通 FPV 中的若干同名回调为空，不能为 C1/C2/Fn 猜测通用动作。**原生 / 客户端消费者**
 
 `RobomasterGamePadAbstraction::GetFirmwareVersion`（`0x74c6f0`）向独立手柄链路的节点 `06` 发 `00:01` 空请求。`GetActivationSettings`（`0x74c970`）向同一节点发 `00:32`、单字节 `11`；这与机器人只读激活请求的载荷不同。账号激活写入仍不在 Hanppie 范围，不能套用内部工具或第三方绕过流程。手柄 V1 流式升级仍是未接入的独立分支。**原生构造 / 范围**
@@ -624,7 +628,7 @@ byte 1 的低三位进入校准/居中/电量告警相关分支，但两份原�
 
 Android 平台边界依据 [USB accessory 官方指南](https://developer.android.com/develop/connectivity/usb/accessory)、[UsbManager](https://developer.android.com/reference/android/hardware/usb/UsbManager) 与 [AOSP UsbAccessory 源码](https://github.com/aosp-mirror/platform_frameworks_base/blob/main/core/java/android/hardware/usb/UsbAccessory.java)：枚举可以替代自动启动过滤；权限在拔出后失效，读取缓冲可采用 16384 字节。`UsbAccessory.equals` 会调用权限保护的 `getSerial`，因此不能在授权前用它做发现匹配。Hanppie 使用公开描述字段保留临时句柄，打开仍校验原始配件的系统权限；没有将描述匹配当作设备认证或持久身份。没有新增自动启动 Activity/Intent 转发，现有 AndroidX Core 提供非导出动态接收器和安全 Parcelable 提取，无新增依赖。**平台官方依据 / 未运行边界**
 
-证据位于忽略目录 `.hanppie/validation/2026-10-22-official-gap/I02-native-*.txt`、`I02-android-*.txt`，Android 原始条目在 `.hanppie/app-analysis/2026-10-24-android-1.2.0/`；初始文件指纹在 `2026-10-24-27a7293-audit.json`，后续原生补证在 `I02-link-native-contracts.json`。信息阶段有共享会话与设置入口，但没有构建或运行 Hanppie Android，也未连接真实手柄；全部输入接入、升级与平台完成状态见[实施台账](./official-app-capability-implementation.md)，不以源码或合成字节流计作原生运行通过。
+证据位于忽略目录 `.hanppie/validation/2026-10-22-official-gap/I02-native-*.txt`、`I02-android-*.txt`，Android 原始条目在 `.hanppie/app-analysis/2026-10-24-android-1.2.0/`；初始文件指纹在 `2026-10-24-27a7293-audit.json`，后续原生补证在 `I02-link-native-contracts.json`。共享会话、信息页与驾驶输入的实施状态由台账维护；没有构建或运行 Hanppie Android，也未连接真实手柄。全部输入接入、升级与平台完成状态见[实施台账](./official-app-capability-implementation.md)，不以源码或合成字节流计作原生运行通过。
 
 #### 模块健康与电池报告
 

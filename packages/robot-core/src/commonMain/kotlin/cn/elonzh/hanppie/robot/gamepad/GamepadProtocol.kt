@@ -4,7 +4,17 @@ import cn.elonzh.hanppie.robot.protocol.*
 
 /** Fixed official macOS 1.1.5 / Android 1.2.0 native consumers; no motion command is emitted here. */
 data class GamepadReport(val mouseConnected: Boolean, val keyboardConnected: Boolean,
-    val batteryPercent: Int?, val rawFlags: Int)
+    val batteryPercent: Int?, val rawFlags: Int,
+    val lateral: Int, val forward: Int, val yaw: Int, val pitch: Int, val buttons: Int) {
+    val chassisActive get() = rawFlags and 0x80 != 0
+    val gimbalActive get() = rawFlags and 0x40 != 0
+    val mouseLeft get() = buttons and 0x80 != 0
+    val mouseRight get() = buttons and 0x40 != 0
+    val c1 get() = buttons and 0x2000 != 0
+    val c2 get() = buttons and 0x4000 != 0
+    val fire get() = buttons and 0x8000 != 0
+    val fn get() = buttons and 0x1000 != 0
+}
 
 internal object GamepadProtocol {
     const val NODE = 0x06
@@ -16,7 +26,9 @@ internal object GamepadProtocol {
             frame.attr != Protocol.ATTR_NO_ACK || frame.set != INPUT_SET || frame.id != INPUT_ID || frame.payload.size != 19) return null
         val flags = frame.payload.u8(1)
         return GamepadReport(flags and 0x10 != 0, flags and 8 != 0,
-            frame.payload.u8(18).takeIf { it <= 100 }, flags)
+            frame.payload.u8(18).takeIf { it <= 100 }, flags,
+            frame.payload.u16(2), frame.payload.u16(4), frame.payload.u16(6).toShort().toInt(),
+            frame.payload.u16(8).toShort().toInt(), frame.payload.u16(12))
     }
 
     fun version(payload: ByteArray): String {

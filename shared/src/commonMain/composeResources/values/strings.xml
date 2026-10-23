@@ -1672,4 +1672,23 @@
     <string name="gamepad_query_timeout">No reply received. Check the connection and retry the query.</string>
     <string name="gamepad_query_invalid">The reply could not be read. Retry the query.</string>
     <string name="gamepad_query_rejected">The accessory rejected the query.</string>
+    <string name="gamepad_drive_start">Enable Gamepad</string>
+    <string name="gamepad_drive_stop">Release Gamepad</string>
+    <string name="gamepad_drive_recenter">Center the controls and release all buttons, then enable again.</string>
+    <string name="gamepad_drive_stale">Gamepad data expired. Reconnect or check USB, then enable again.</string>
+    <string name="gamepad_drive_retired">Gamepad control released. Enable again when ready.</string>
+    <string name="gamepad_drive_wait">Connect the Gamepad and wait for fresh input.</string>
+    <string name="gamepad_drive_ready">Center the controls and release all buttons before enabling.</string>
+    <string name="gamepad_drive_active">Gamepad driving · Escape releases control</string>
+    <string name="gamepad_response_title">Gamepad response</string>
+    <string name="gamepad_response_help">Local response only. Speed limits still apply. Changes release active Gamepad control.</string>
+    <string name="gamepad_lateral_gain">Lateral gain</string>
+    <string name="gamepad_forward_gain">Forward gain</string>
+    <string name="gamepad_yaw_response">Gamepad yaw</string>
+    <string name="gamepad_pitch_response">Gamepad pitch</string>
+    <string name="gamepad_axis_gain">%1$s gain</string>
+    <string name="gamepad_axis_exponent">%1$s response exponent</string>
+    <string name="gamepad_axis_deadzone">%1$s dead zone threshold</string>
+    <string name="gamepad_response_defaults">Reset Gamepad response</string>
+    <string name="gamepad_drive_recovered">Input restored. Center the controls and enable again.</string>
 </resources>

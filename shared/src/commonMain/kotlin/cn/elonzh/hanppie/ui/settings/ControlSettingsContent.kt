@@ -55,6 +55,10 @@ internal fun ControlSettingsContent(model: ConsoleController, onGamepad: (() -> 
     if (model.gamepad.available && onGamepad != null) Button(onGamepad, Modifier.heightIn(min = 48.dp).testTag("settings-gamepad-open")) {
         Text(tr(Res.string.gamepad_information))
     }
+    if (model.gamepad.available) GamepadInputPreferences(control.gamepadInput, !busy) { value ->
+        model.settingsMessage.value = null
+        model.controlSettings.value = control.copy(gamepadInput = value)
+    }
     Text(tr(Res.string.input_host_limits), fontSize = 15.sp)
     SettingsDropdown(tr(Res.string.gimbal_sensitivity), "gimbal-sensitivity", control.gimbalSpeed.toString(),
         listOf(15, 30, 45, 60, 90, 120).map { it.toString() to tr(Res.string.degrees_per_second_value, it) }, !busy) { value ->

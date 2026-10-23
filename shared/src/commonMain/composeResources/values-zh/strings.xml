@@ -1672,4 +1672,23 @@
     <string name="gamepad_query_timeout">未收到应答，请检查连接后重新查询。</string>
     <string name="gamepad_query_invalid">无法解析应答，请重新查询。</string>
     <string name="gamepad_query_rejected">配件拒绝了查询。</string>
+    <string name="gamepad_drive_start">启用手柄驾驶</string>
+    <string name="gamepad_drive_stop">释放手柄驾驶</string>
+    <string name="gamepad_drive_recenter">请回中并松开全部按键，再启用。</string>
+    <string name="gamepad_drive_stale">手柄数据已过期。检查 USB 或重连后重新启用。</string>
+    <string name="gamepad_drive_retired">手柄驾驶已释放，就绪后可重新启用。</string>
+    <string name="gamepad_drive_wait">请先连接手柄并等待新数据。</string>
+    <string name="gamepad_drive_ready">回中并松开全部按键后启用。</string>
+    <string name="gamepad_drive_active">手柄驾驶中 · Escape 释放</string>
+    <string name="gamepad_response_title">手柄输入响应</string>
+    <string name="gamepad_response_help">仅调整本机输入响应，继续遵守速度上限。修改后需重新启用手柄驾驶。</string>
+    <string name="gamepad_lateral_gain">横移增益</string>
+    <string name="gamepad_forward_gain">前后增益</string>
+    <string name="gamepad_yaw_response">手柄云台水平</string>
+    <string name="gamepad_pitch_response">手柄云台俯仰</string>
+    <string name="gamepad_axis_gain">%1$s增益</string>
+    <string name="gamepad_axis_exponent">%1$s响应指数</string>
+    <string name="gamepad_axis_deadzone">%1$s死区阈值</string>
+    <string name="gamepad_response_defaults">重置手柄响应</string>
+    <string name="gamepad_drive_recovered">数据已恢复。回中并松开按键后重新启用。</string>
 </resources>

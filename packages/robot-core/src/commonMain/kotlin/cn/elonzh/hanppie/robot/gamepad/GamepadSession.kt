@@ -4,12 +4,16 @@ import cn.elonzh.hanppie.robot.protocol.*
 import cn.elonzh.hanppie.robot.session.RobotLock
 import cn.elonzh.hanppie.robot.session.robotNanoTime
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 enum class GamepadPhase { DISCONNECTED, CONNECTING, CONNECTED }
 enum class GamepadProblem { NOT_FOUND, PERMISSION_DENIED, OPEN_FAILED, LINK_LOST, TIMEOUT, INVALID_RESPONSE, REJECTED }
-data class GamepadState(val phase: GamepadPhase = GamepadPhase.DISCONNECTED,
+data class GamepadButtonEvent(val connection: Long, val number: Long, val receivedAtMillis: Long, val report: GamepadReport)
+data class GamepadState(val connection: Long = 0, val reportNumber: Long = 0, val phase: GamepadPhase = GamepadPhase.DISCONNECTED,
     val accessories: List<GamepadAccessory> = emptyList(), val selected: GamepadAccessory? = null,
     val report: GamepadReport? = null, val reportAgeMillis: Long? = null,
     val firmware: String? = null, val activated: Boolean? = null, val activationRead: Boolean = false,
@@ -24,6 +28,9 @@ class GamepadSession(private val connector: GamepadConnector, private val scope:
     private val lock = RobotLock()
     private val mutable = MutableStateFlow(GamepadState())
     val state = mutable.asStateFlow()
+    private val edges = MutableSharedFlow<GamepadButtonEvent>(extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    val buttonEvents = edges.asSharedFlow()
+    private var reportNumber = 0L
     val available get() = connector.available
     private var epoch = 0L
     private var closed = false
@@ -48,7 +55,7 @@ class GamepadSession(private val connector: GamepadConnector, private val scope:
             val device = state.value.accessories.singleOrNull { it.id == id }
             if (device == null) { mutable.value = state.value.copy(problem = GamepadProblem.NOT_FOUND); return@withLock null }
             val generation = epoch
-            mutable.value = state.value.copy(phase = GamepadPhase.CONNECTING, selected = device, problem = null)
+            mutable.value = state.value.copy(connection = generation, phase = GamepadPhase.CONNECTING, selected = device, problem = null)
             scope.launch(start = CoroutineStart.LAZY) { runLink(generation, device.id) }.also { job = it }
         }
         launch?.start()
@@ -99,12 +106,26 @@ class GamepadSession(private val connector: GamepadConnector, private val scope:
     private fun receive(generation: Long, frame: DussFrame) = lock.withLock {
         if (closed || generation != epoch) return@withLock
         GamepadProtocol.report(frame)?.let {
-            reportAt = nowMillis(); mutable.value = state.value.copy(report = it, reportAgeMillis = 0)
+            val previous = state.value.report
+            val at = nowMillis(); reportAt = at
+            mutable.value = state.value.copy(reportNumber = ++reportNumber, report = it, reportAgeMillis = 0)
+            if (previous == null || previous.buttons != it.buttons || previous.mouseConnected != it.mouseConnected)
+                edges.tryEmit(GamepadButtonEvent(generation, reportNumber, at, it))
         }
         val query = pending ?: return@withLock
         if (frame.valid && frame.sender == GamepadProtocol.NODE && frame.receiver == Protocol.HOST_MOBILE &&
             frame.attr == Protocol.ATTR_ACK && frame.set == Protocol.CMDSET_COMMON && frame.id == query.id &&
             frame.sequence == query.sequence && query.epoch == generation) query.reply.complete(frame.payload)
+    }
+
+    fun accepts(event: GamepadButtonEvent): Boolean = lock.withLock {
+        !closed && state.value.phase == GamepadPhase.CONNECTED && epoch == event.connection &&
+            state.value.reportNumber >= event.number && nowMillis() - event.receivedAtMillis in 0..250
+    }
+
+    /** Exact monotonic age for a control frame; UI observation updates are deliberately less frequent. */
+    fun snapshot(): GamepadState = lock.withLock {
+        state.value.copy(reportAgeMillis = reportAt?.let { (nowMillis() - it).coerceAtLeast(0) })
     }
 
     fun updateAge() = lock.withLock {
