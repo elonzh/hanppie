@@ -28,6 +28,7 @@ class UsageGuideUiTest {
     @Test fun largeJapaneseLandscape() = scenario(844, 390, "ja", 1.4f, true)
     @Test fun largeGermanLandscape() = scenario(844, 390, "de", 1.4f, true)
     @Test fun largeSpanishLandscape() = scenario(844, 390, "es", 1.4f, true)
+    @Test fun largeFrenchLandscape() = scenario(844, 390, "fr", 1.4f, true)
 
     @Test fun destinationActionsUseExistingRoutesWithoutStartingControl() = runDesktopComposeUiTest(width = 1024, height = 768) {
         Localization.initialize("zh", "zh")
@@ -123,7 +124,7 @@ class UsageGuideUiTest {
                         if (topic == GuideTopic.FIRST_CONNECTION && index == 0) {
                             capture("first-step")
                             assertCompactDestinationVisible(GuideDestination.CONNECTION)
-                            if (language in listOf("en", "ja", "de", "es")) {
+                            if (language in listOf("en", "ja", "de", "es", "fr")) {
                                 onNodeWithTag("usage-guide-more").assertIsDisplayed().assertHeightIsAtLeast(48.dp).performClick()
                                 onNodeWithTag("usage-guide-open-CONNECTION").assertIsDisplayed()
                                 capture("first-step-scrolled")
@@ -136,7 +137,7 @@ class UsageGuideUiTest {
                         if ((topic == GuideTopic.DRIVING || topic == GuideTopic.TRACKING || topic == GuideTopic.MAINTENANCE) && index == topic.steps.lastIndex) {
                             capture(topic.name.lowercase())
                             assertCompactDestinationVisible(topic.steps[index].destination!!)
-                            if (language in listOf("en", "ja", "de", "es")) {
+                            if (language in listOf("en", "ja", "de", "es", "fr")) {
                                 onNodeWithTag("usage-guide-more").assertIsDisplayed().assertHeightIsAtLeast(48.dp).performClick()
                                 onNodeWithTag("usage-guide-open-${topic.steps[index].destination!!.name}").assertIsDisplayed()
                                 capture("${topic.name.lowercase()}-scrolled")

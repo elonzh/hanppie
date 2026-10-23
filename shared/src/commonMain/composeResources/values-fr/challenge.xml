@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="challenge_entry">Défi</string>
+    <string name="challenge_sounds">Sons de retour</string>
+    <string name="challenge_aimed">Visée sur le marqueur %1$s</string>
+    <string name="challenge_hit_unscored">Marqueur %1$s · Aucun point cette manche</string>
+    <string name="challenge_hit_points">Cible %1$s · +100 pts</string>
+    <string name="challenge_hit_completed">Cible %1$s terminée</string>
+    <string name="challenge_title">Défi solo</string>
+    <string name="challenge_practice">Entraînement sur cibles</string>
+    <string name="challenge_race">Course aux cibles</string>
+    <string name="challenge_practice_guide">Placez les marqueurs 1 à 5 dans le champ de vision. Utilisez l’infrarouge pour toucher les cibles demandées avant la fin du temps. Chaque impact rapporte 100 points ; chaque niveau compte trois groupes.</string>
+    <string name="challenge_race_guide">Choisissez le nombre de marqueurs numérotés, puis terminez-les dans l’ordre voulu. Votre temps et chaque point de passage sont enregistrés.</string>
+    <string name="challenge_gel_guide">Utilisez des cibles debout pouvant tomber. Le score suit la disparition de la cible la plus proche après un rapport de tir.</string>
+    <string name="challenge_marker_count">Cibles numérotées</string>
+    <string name="challenge_start">Démarrer le défi</string>
+    <string name="challenge_not_ready">Activez le pilotage et vérifiez la vidéo en direct avant de commencer.</string>
+    <string name="challenge_preparing">Préparation de la visée, des règles et de la reconnaissance…</string>
+    <string name="challenge_countdown">Départ dans %1$s</string>
+    <string name="challenge_wave_clear">Groupe terminé</string>
+    <string name="challenge_level_change">Préparation du niveau %1$s</string>
+    <string name="challenge_stopping">Rétablissement des commandes…</string>
+    <string name="challenge_practice_live">Niveau %1$s · %2$s/3 · %3$s pts · %4$s</string>
+    <string name="challenge_race_live">Temps %1$s</string>
+    <string name="challenge_targets_left">Cibles restantes : %1$s</string>
+    <string name="challenge_stop">Terminer le défi</string>
+    <string name="challenge_finished">Résultat du défi</string>
+    <string name="challenge_completed">Toutes les cibles terminées</string>
+    <string name="challenge_time_expired">Temps écoulé</string>
+    <string name="challenge_input_lost">Entrée de pilotage interrompue. Recommencez lorsque vous êtes prêt.</string>
+    <string name="challenge_vision_failed">Reconnaissance interrompue. Vérifiez la vidéo en direct avant de réessayer.</string>
+    <string name="challenge_cancelled">Défi terminé</string>
+    <string name="challenge_cleanup_unknown">Nettoyage non confirmé. Réessayez d’arrêter avant de lancer une autre manche.</string>
+    <string name="challenge_calibration_failed">Impossible de lire la visée du robot. Vérifiez la connexion et réessayez.</string>
+    <string name="challenge_rules_rejected">Le robot a refusé les règles du défi.</string>
+    <string name="challenge_rules_timed_out">Règles du défi non confirmées. Vérifiez la connexion avant de réessayer.</string>
+    <string name="challenge_score">%1$s points</string>
+    <string name="challenge_checkpoint">Cible %1$s · %2$s</string>
+    <string name="challenge_name">Nom du joueur</string>
+    <string name="challenge_save_score">Ajouter à cette session</string>
+    <string name="challenge_local_scores">Cette session · cinq meilleurs</string>
+    <string name="challenge_replay">Réessayer</string>
+    <string name="challenge_back_to_driving">Revenir au pilotage</string>
+</resources>

@@ -85,7 +85,7 @@ class LocalizationTest {
         assertEquals("ja-JP", Localization.languageTag)
         Localization.select("system")
         assertEquals("Settings", tr(Res.string.settings))
-        Localization.initialize("fr-FR", "system")
+        Localization.initialize("it-IT", "system")
         assertEquals("en-US", Localization.languageTag)
     }
 
@@ -107,7 +107,7 @@ class LocalizationTest {
         assertEquals("de-DE", Localization.languageTag)
         Localization.select("system")
         assertEquals("Settings", tr(Res.string.settings))
-        Localization.initialize("fr-FR", "system")
+        Localization.initialize("it-IT", "system")
         assertEquals("en-US", Localization.languageTag)
     }
 
@@ -129,7 +129,29 @@ class LocalizationTest {
         assertEquals("es-ES", Localization.languageTag)
         Localization.select("system")
         assertEquals("Settings", tr(Res.string.settings))
-        Localization.initialize("fr-FR", "system")
+        Localization.initialize("it-IT", "system")
+        assertEquals("en-US", Localization.languageTag)
+    }
+
+    @Test fun frenchSystemAndSavedChoiceKeepLiveStateAndParameters() {
+        for (tag in listOf("fr", "fr-FR", "fr_CA", "fr-BE")) {
+            Localization.initialize(tag, "system")
+            assertEquals("fr-FR", Localization.languageTag, tag)
+            assertEquals("Paramètres", tr(Res.string.settings))
+        }
+        var saved: String? = null
+        Localization.initialize("es-ES", "es") { saved = it }
+        val state = ConsoleState().lost("raw device error")
+        Localization.select("fr")
+        assertEquals("fr", saved)
+        assertEquals("Connexion perdue", state.status)
+        assertEquals("raw device error", state.error)
+        assertEquals("Utiliser {1}", tr(Res.string.use_value, "{1}"))
+        Localization.initialize("en-US", saved)
+        assertEquals("fr-FR", Localization.languageTag)
+        Localization.select("system")
+        assertEquals("Settings", tr(Res.string.settings))
+        Localization.initialize("it-IT", "system")
         assertEquals("en-US", Localization.languageTag)
     }
 
