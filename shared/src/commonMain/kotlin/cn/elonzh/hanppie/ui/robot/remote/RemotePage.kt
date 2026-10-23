@@ -313,7 +313,7 @@ internal fun RemotePage(
         }
         if (videoContent == null) RobotVideo(model, mediaControls, Modifier.fillMaxSize()) else videoContent()
         if (tracking.active && videoFrame != null) ObjectTrackingTargets(tracking, videoFrame.width, videoFrame.height,
-            enabled, model::selectTrackingTarget)
+            enabled, model::selectTrackingTarget, model::confirmObjectTracking, model::stopObjectTracking)
         if (!tracking.blocksManualControl && !armMode) RemoteCrosshair(model, Modifier.align(Alignment.Center))
         Row(Modifier.align(Alignment.TopStart).padding(HanppieDesignTokens.RemoteEdgePadding),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

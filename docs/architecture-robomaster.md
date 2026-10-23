@@ -719,7 +719,20 @@ macOS 官方 App 的 `VisionFollow` 使用 `DJIDetectionType.HumanTracking = 0x4
 
 `0a:a4` 视觉推送的公共头长 9 字节：偏移 0 是类型（`1` 人体候选、`6` 跟随），偏移 1 是状态（`0` 存在、`1` 初始化、`2` 等待确认、`3` 运行），偏移 6 是 uint16 异常码，偏移 8 是目标数量。上述类型每项 20 字节，包含四项归一化中心位置与宽高 float 以及 uint32 Info。坐标原点在视频左上角；矩形按中心和宽高显示。**代码**
 
-这些字段来自固定版本原生构造函数和推送解码器的静态分析，尚无本次真实设备抓包或物理跟随证据。Hanppie 已按用户要求接入离线实现，当前状态机与验证边界见[当前实现](./architecture.md#134-遥控操纵镜头坐标系与安全联动)，输入指纹、反汇编地址及测试记录见[2026-10-22 离线记录](./object-tracking-validation-2026-10-22.md)。**待验证**
+V01 进一步闭合了 `Info` 的来源与消费者：`OnRecvRunningStatusPush 7c3b31–7c3b4c` 按 `9 + 20 × i` 复制四项 float，再从项内 +16 复制完整 32 位值；`DetectionRect::ToJson 5ea566–5ea59a` 将成员 +0x18 以 int 写入 `Info`。`DJIVisionRect.Info` 是 C# int，保留原始位模式；不能把它统一解释为对象 ID 或距离。后两种解释由该类 `GetID/GetDistance` 为标签等其他消费者提供，不是跟随页面的语义。**原生 / 客户端代码**
+
+| 跟随页面的完整 Info 值 | `UI/VisionDrawType` 与实际消费者 |
+| --- | --- |
+| `0` | `None`，无有效点击动作 |
+| `1` | `HeadAndShoulder`；`VisionFollow.OnConfirmAutoFollow` 的动作 1 发送目标中心选点 |
+| `2` | `Follow_1`；动作 2 显式确认开始跟随 |
+| `3` | `Follow_2`；动作 3 发送取消。`VisionRect.ShowRect` 在 Unity 向上的坐标中将中心上移源框高的四分之一，再将显示高度设为像素宽度，形成方框 |
+
+`VisionFollow.SendVisionRect2UI` 保留跟随框，并过滤与第一跟随框交集面积大于等于其面积一半的人体候选，再合并其余候选。`VisionDetection` 另按几何重叠分配临时显示对象编号，它不是设备报告的目标 ID。原始框仍按中心及宽高解释；运行方框的显示调整不改变选点载荷。Unity 显示/点击映射、实际帧纵轴与设备接受的坐标方向仍须设备核对，不能用静态布局证明物理选点准确。**客户端显示 / 待设备**
+
+`DJIVisionRunningStatus` 仅定义 Exist、Initializing、WaitingConfirm、Running 四项；`VisionFollow.OnVisionTrackingRunningStatus` 在状态变化时检查非零异常码，发送选取失败事件并转搜索。当前材料没有建立异常码逐值含义表，不能将所有非零码命名为“目标丢失”，也不能编造未出现的错误名称。原始报告状态/异常与命令拒绝应答是不同来源。官方自动转搜索与 Hanppie 不自动恢复机械动作的取舍继续由实施台账 C05 记录。新增静态来源摘要保留在忽略目录 `V01-native-contracts.json` 与 `V01-native-rect-json.txt`。**代码 / 未建立逐码含义**
+
+这些字段来自固定版本原生构造函数、推送解码器与客户端消费者的静态分析，尚无本次真实设备抓包或物理跟随证据。Hanppie 当前离线实现与安全边界见[当前实现](./architecture.md#134-遥控操纵镜头坐标系与安全联动)，V01 的来源摘要、验证与设备待验项见[实施台账](./official-app-capability-implementation.md#v01-跟随报告与设备待验)；初次接入的输入指纹与反汇编地址保留在[2026-10-22 离线记录](./object-tracking-validation-2026-10-22.md)。桌面合成验证与平台编译不证明原生报文被设备接受、纵轴选点正确或机器人已物理停止。**静态依据 / 待设备**
 
 ### 5.4 原生媒体路径
 

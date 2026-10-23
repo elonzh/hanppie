@@ -53,7 +53,9 @@ class ObjectTrackingSessionTest {
                         reply(0xc0, f.id, byteArrayOf(0))
                         val status = when (f.id) { 0xa8 -> 2; 0xa7 -> if (f.payload[2] == 1.toByte()) 3 else 1; else -> 1 }
                         val rect = listOf(.5f, .5f, .2f, .3f).flatMap { value -> List(4) { (value.toBits() ushr (8 * it)).toByte() } }.toByteArray()
-                        reply(0, 0xa4, byteArrayOf(6, status.toByte(), 0, 0, 0, 0, 0, 0, 1) + rect + ByteArray(4))
+                        val info = if (status == 2) 2 else if (status == 3) 3 else 0
+                        reply(0, 0xa4, byteArrayOf(6, status.toByte(), 0, 0, 0, 0, 0, 0, 1) + rect + byteArrayOf(info.toByte(), 0, 0, 0))
+                        if (status == 1) reply(0, 0xa4, byteArrayOf(1, 0, 0, 0, 0, 0, 0, 0, 1) + rect + byteArrayOf(1, 0, 0, 0))
                     }
                 } catch (_: SocketTimeoutException) { } catch (_: SocketException) { break }
             }
@@ -66,8 +68,12 @@ class ObjectTrackingSessionTest {
                 }
                 suspend fun follow() {
                     session.startTracking(); waitFor(TrackingPhase.SEARCHING)
+                    withTimeout(2_000) { while (session.tracking.value.candidates.isEmpty()) delay(5) }
+                    assertEquals(1, session.tracking.value.candidates.single().info)
                     session.selectTrackingTarget(.5f, .5f); waitFor(TrackingPhase.TARGET_READY)
+                    assertEquals(2, session.tracking.value.rectangles.single().info)
                     session.confirmTracking(); waitFor(TrackingPhase.FOLLOWING)
+                    assertEquals(3, session.tracking.value.rectangles.single().info)
                 }
                 try {
                     follow(); delay(50)

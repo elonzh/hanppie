@@ -7,8 +7,11 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -46,18 +49,18 @@ class ObjectTrackingUiTest {
         Localization.initialize("zh", null)
         val model = testConsoleModel()
         val tracking = MutableStateFlow(TrackingState())
-        val rect = TrackingRect(.5f, .5f, .2f, .4f)
+        val rect = TrackingRect(.5f, .5f, .2f, .4f, 2)
         var selected: Pair<Float, Float>? = null
         var stopCount = 0
         var refreshVideo = true
         val controller = object : ConsoleController by model {
             override val tracking = tracking
-            override fun startObjectTracking() { tracking.value = TrackingState(TrackingPhase.SEARCHING) }
+            override fun startObjectTracking() { tracking.value = TrackingState(TrackingPhase.SEARCHING, candidates = listOf(rect.copy(info = 1))) }
             override fun selectTrackingTarget(x: Float, y: Float) {
                 selected = x to y
                 tracking.value = TrackingState(TrackingPhase.TARGET_READY, listOf(rect))
             }
-            override fun confirmObjectTracking() { tracking.value = TrackingState(TrackingPhase.FOLLOWING, listOf(rect)) }
+            override fun confirmObjectTracking() { tracking.value = TrackingState(TrackingPhase.FOLLOWING, listOf(rect.copy(info = 3))) }
             override fun stopObjectTracking() { stopCount++; tracking.value = TrackingState() }
             override fun drive(x: Double, y: Double, z: Double, pitch: Double, yaw: Double) = Unit
         }
@@ -86,10 +89,76 @@ class ObjectTrackingUiTest {
             rule.onNodeWithTag("tracking-stop").performClick()
             rule.onNodeWithTag("tracking-start").assertIsDisplayed()
             val stopsBeforeVideoExpiry = stopCount
-            rule.runOnIdle { tracking.value = TrackingState(TrackingPhase.FOLLOWING, listOf(rect)); refreshVideo = false }
+            rule.runOnIdle { tracking.value = TrackingState(TrackingPhase.FOLLOWING, listOf(rect.copy(info = 3))); refreshVideo = false }
             rule.waitUntil(3_000) { stopCount > stopsBeforeVideoExpiry }
             rule.onNodeWithTag("tracking-confirm").assertDoesNotExist()
         } finally { model.close() }
+    }
+
+    @Test fun targetInfoActionsUseCurrentFramesAndIgnoreNonActionableSpace() {
+        Localization.initialize("zh", null)
+        val rect = TrackingRect(.5f, .5f, .2f, .4f, 1)
+        val tracking = MutableStateFlow(TrackingState(TrackingPhase.SEARCHING, candidates = listOf(rect, rect.copy(x = .15f, info = 0))))
+        var selected: Pair<Float, Float>? = null
+        var confirmed = 0
+        var stopped = 0
+        rule.setContent { TestWorkbenchTheme {
+            val state by tracking.collectAsState()
+            ObjectTrackingTargets(state, 1280, 720, true,
+                { x, y -> selected = x to y; tracking.value = TrackingState(TrackingPhase.TARGET_READY, listOf(rect.copy(info = 2))) },
+                { confirmed++; tracking.value = TrackingState(TrackingPhase.FOLLOWING, listOf(rect.copy(info = 3))) },
+                { stopped++ })
+        } }
+        rule.onNodeWithTag("tracking-targets").performTouchInput { click(Offset(width * .05f, height * .05f)) }
+        assertNull(selected)
+        val candidateActions = rule.onNodeWithTag("tracking-targets").fetchSemanticsNode().config[SemanticsActions.CustomActions]
+        assertEquals(1, candidateActions.size)
+        assertEquals("选择候选目标 1", candidateActions.single().label)
+        rule.onNodeWithTag("tracking-targets").performTouchInput { click(center) }
+        assertEquals(.5f to .5f, selected)
+        rule.onNodeWithTag("tracking-targets").performTouchInput { click(center) }
+        assertEquals(1, confirmed)
+        rule.onNodeWithTag("tracking-targets").performTouchInput {
+            val viewport = TrackingViewport.fit(width.toFloat(), height.toFloat(), 1280, 720)
+            click(viewport.bounds(rect.copy(info = 3)).center)
+        }
+        assertEquals(1, stopped)
+        rule.runOnIdle { tracking.value = TrackingState(TrackingPhase.SEARCHING, candidates = listOf(rect.copy(info = 0x80000000.toInt()))) }
+        assertTrue(rule.onNodeWithTag("tracking-targets").fetchSemanticsNode().config[SemanticsActions.CustomActions].isEmpty())
+    }
+
+    @Test fun deviceFailuresKeepTheirCodesAndSpecificRecoveryControls() {
+        Localization.initialize("zh", null)
+        val tracking = MutableStateFlow(TrackingState(TrackingPhase.ERROR, problem = TrackingProblem.DEVICE_ERROR,
+            report = TrackingPush(6, 3, 4660, emptyList())))
+        var retries = 0
+        var stops = 0
+        rule.setContent { TestWorkbenchTheme {
+            val state by tracking.collectAsState()
+            ObjectTrackingControls(state, true, Modifier, { retries++ }, {}, { stops++ })
+        } }
+        rule.onNodeWithText("视觉报告异常，检查目标后重试").assertIsDisplayed()
+        rule.onNodeWithText("视觉异常码：4660（类型 6）").assertIsDisplayed()
+        rule.onNodeWithTag("tracking-start").performClick(); assertEquals(1, retries)
+        rule.runOnIdle { tracking.value = TrackingState(TrackingPhase.ERROR, problem = TrackingProblem.UNSUPPORTED_REPORT,
+            report = TrackingPush(6, 255, 0, listOf(TrackingRect(.5f, .5f, .2f, .4f, -1)))) }
+        rule.onNodeWithText("状态 255 · Info -1").assertIsDisplayed()
+        rule.runOnIdle { tracking.value = TrackingState(TrackingPhase.ERROR, problem = TrackingProblem.STOP_UNCONFIRMED,
+            responseCode = 224, rejectedCommand = 0xa3) }
+        rule.onNodeWithText("请求 0a:a3 · 应答码 224").assertIsDisplayed()
+        rule.onNodeWithTag("tracking-start").assertDoesNotExist()
+        rule.onNodeWithTag("tracking-stop").performClick(); assertEquals(1, stops)
+    }
+
+    @Test fun runningTargetUsesAPixelSquareAndAnUpwardQuarterHeightOffset() {
+        val viewport = TrackingViewport.fit(1000f, 1000f, 1280, 720)
+        val rect = TrackingRect(.5f, .5f, .2f, .4f, 3)
+        val marker = viewport.bounds(rect)
+        assertEquals(200f, marker.width)
+        assertEquals(marker.width, marker.height)
+        assertEquals(500f - .1f * viewport.height, marker.center.y)
+        val clipped = viewport.bounds(rect.copy(x = 0f, y = 0f))
+        assertTrue(clipped.left >= viewport.left && clipped.top >= viewport.top)
     }
 
 }
@@ -105,7 +174,7 @@ class ObjectTrackingLayoutTest {
         runDesktopComposeUiTest(width = width, height = height) {
             Localization.initialize(language, null)
             val model = testConsoleModel()
-            val tracking = MutableStateFlow(TrackingState(TrackingPhase.TARGET_READY, listOf(TrackingRect(.5f, .52f, .2f, .4f))))
+            val tracking = MutableStateFlow(TrackingState(TrackingPhase.TARGET_READY, listOf(TrackingRect(.5f, .52f, .2f, .4f, 2))))
             val controller = object : ConsoleController by model {
                 override val tracking = tracking
                 override fun stopObjectTracking() = Unit
@@ -124,8 +193,21 @@ class ObjectTrackingLayoutTest {
                         }
                     }
                 } }
-                onNodeWithTag("tracking-confirm").assertIsDisplayed()
-                onNodeWithTag("tracking-stop").assertIsDisplayed()
+                val ready = TrackingRect(.5f, .52f, .2f, .4f, 2)
+                val cases = listOf(
+                    "candidate" to TrackingState(TrackingPhase.SEARCHING, candidates = listOf(ready.copy(x = .25f, info = 1), ready.copy(x = .75f, info = 1))),
+                    "ready" to TrackingState(TrackingPhase.TARGET_READY, listOf(ready), listOf(ready.copy(info = 1), ready.copy(x = .8f, info = 1))),
+                    "following" to TrackingState(TrackingPhase.FOLLOWING, listOf(ready.copy(info = 3))),
+                    "device-error" to TrackingState(TrackingPhase.ERROR, problem = TrackingProblem.DEVICE_ERROR, report = TrackingPush(6, 3, 4660, emptyList())),
+                    "unknown" to TrackingState(TrackingPhase.ERROR, problem = TrackingProblem.UNSUPPORTED_REPORT, report = TrackingPush(6, 255, 0, listOf(ready.copy(info = -1)))),
+                    "rejected" to TrackingState(TrackingPhase.ERROR, problem = TrackingProblem.REJECTED, responseCode = 224, rejectedCommand = 0xa7),
+                    "stop-unconfirmed" to TrackingState(TrackingPhase.ERROR, problem = TrackingProblem.STOP_UNCONFIRMED, responseCode = 224, rejectedCommand = 0xa3))
+                for ((name, state) in cases) {
+                runOnIdle { tracking.value = state }
+                waitForIdle()
+                if (state.phase == TrackingPhase.TARGET_READY) onNodeWithTag("tracking-confirm").assertIsDisplayed()
+                if (state.blocksManualControl) onNodeWithTag("tracking-stop").assertIsDisplayed()
+                else onNodeWithTag("tracking-start").assertIsDisplayed()
                 val controls = onNodeWithTag("tracking-controls").fetchSemanticsNode().boundsInRoot
                 val heading = onNodeWithTag("remote-telemetry").fetchSemanticsNode().boundsInRoot
                 assertTrue(controls.top >= heading.bottom)
@@ -135,8 +217,9 @@ class ObjectTrackingLayoutTest {
                 val pixels = IntArray(image.width * image.height); image.readPixels(pixels)
                 val buffered = BufferedImage(image.width, image.height, BufferedImage.TYPE_INT_ARGB)
                 buffered.setRGB(0, 0, image.width, image.height, pixels, 0, image.width)
-                val file = File("build/reports/ui/tracking-$width-$height-$language.png"); file.parentFile.mkdirs()
+                val file = File("build/reports/ui/tracking-v01-$width-$height-$language-$name.png"); file.parentFile.mkdirs()
                 ImageIO.write(buffered, "png", file)
+                }
             } finally { model.close(); Localization.initialize("zh", null) }
         }
 }
