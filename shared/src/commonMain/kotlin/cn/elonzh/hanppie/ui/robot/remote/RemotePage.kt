@@ -61,6 +61,7 @@ import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.contentDescription
@@ -102,6 +103,9 @@ import cn.elonzh.hanppie.ui.settings.isHeld
 import cn.elonzh.hanppie.ui.settings.supports
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import cn.elonzh.hanppie.resources.arm_control_label
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -135,7 +139,10 @@ internal fun RemotePage(
     val tracking by model.tracking.collectAsState()
     val health by model.robotHealth.state.collectAsState()
     val zoom by model.cameraZoom.state.collectAsState()
-    val manualActionsEnabled = !tracking.blocksManualControl
+    val arm by model.robotArm.state.collectAsState()
+    var armMode by remember(arm.connection) { mutableStateOf(false) }
+    val hasArmControls = arm.task.armOnline || arm.task.clawOnline
+    val manualActionsEnabled = !tracking.blocksManualControl && !armMode
     val videoFrame = model.videoFrames.image(connected.connectedAddress)
     var videoFresh by remember { mutableStateOf(false) }
     val foreground by model.foregroundState.collectAsState()
@@ -151,8 +158,11 @@ internal fun RemotePage(
     var right by remember { mutableStateOf(Offset.Zero) }
     var pageFocused by remember { mutableStateOf(false) }
     var keys by remember { mutableStateOf(setOf<Key>()) }
+    var physicalKeys by remember { mutableStateOf(setOf<Key>()) }
+    var armSwitchKeys by remember { mutableStateOf(setOf<Key>()) }
     var firePointerHeld by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
+    val currentArmMode by rememberUpdatedState(armMode)
     val currentLeft by rememberUpdatedState(left)
     val currentRight by rememberUpdatedState(right)
     val currentKeys by rememberUpdatedState(keys)
@@ -163,11 +173,15 @@ internal fun RemotePage(
         if (connected.connected) model.setRemoteLed(control.remoteLeds.color(ledState))
     }
     DisposableEffect(model) { onDispose {
+        model.robotArm.stopControl()
         model.stopFiring()
         (onPushToTalkStop ?: model::endPushToTalk)()
         model.setRemoteLed(null)
         if (manageSession) { model.leaveRemote(); model.stopMedia() }
     } }
+    LaunchedEffect(hasArmControls) {
+        if (!hasArmControls && armMode) { armMode = false; model.clearRemoteInputs(); keys = emptySet(); left = Offset.Zero; right = Offset.Zero }
+    }
     LaunchedEffect(enabled, connected.connectedAddress) {
         while (enabled) {
             videoFresh = model.videoFrames.isFresh(connected.connectedAddress)
@@ -186,10 +200,11 @@ internal fun RemotePage(
     }
     LaunchedEffect(enabled) {
         if (enabled) focus.requestFocus()
-        else { keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; model.stopFiring() }
+        else { if (armMode) armSwitchKeys = armSwitchKeys + physicalKeys; keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; model.robotArm.stopControl(); model.stopFiring() }
     }
     LaunchedEffect(enabled) {
         while (enabled) {
+            if (currentArmMode) { model.drive(0.0, 0.0, 0.0, 0.0, 0.0); delay(50); continue }
             val shortcuts = currentControl.shortcuts
             val shiftHeld = Key.ShiftLeft in currentKeys || Key.ShiftRight in currentKeys
             fun axis(positive: ControlAction, negative: ControlAction) =
@@ -226,12 +241,28 @@ internal fun RemotePage(
     }.focusRequester(focus).onFocusChanged {
         pageFocused = it.hasFocus
         if (!it.hasFocus) {
+            if (armMode) armSwitchKeys = armSwitchKeys + physicalKeys
             keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+            model.robotArm.stopControl()
             model.stopFiring()
             model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
         }
     }.onPreviewKeyEvent {
+        val awaitingRelease = it.key in armSwitchKeys
+        if (it.type == KeyEventType.KeyUp) { physicalKeys = physicalKeys - it.key; armSwitchKeys = armSwitchKeys - it.key }
+        else if (it.type == KeyEventType.KeyDown) physicalKeys = physicalKeys + it.key
+        if (awaitingRelease) return@onPreviewKeyEvent true
         if (!inputEnabled || !foreground) return@onPreviewKeyEvent false
+        if (armMode) {
+            if (it.key == Key.Escape) {
+                if (it.type == KeyEventType.KeyDown) {
+                    armSwitchKeys = armSwitchKeys + physicalKeys
+                    model.clearRemoteInputs(); armMode = false; keys = emptySet(); focus.requestFocus()
+                }
+                return@onPreviewKeyEvent true
+            }
+            return@onPreviewKeyEvent false
+        }
         val supported = control.shortcuts.supports(it.key)
         if (supported && enabled && it.type == KeyEventType.KeyDown) {
             keyboardHints = true
@@ -283,20 +314,31 @@ internal fun RemotePage(
         if (videoContent == null) RobotVideo(model, mediaControls, Modifier.fillMaxSize()) else videoContent()
         if (tracking.active && videoFrame != null) ObjectTrackingTargets(tracking, videoFrame.width, videoFrame.height,
             enabled, model::selectTrackingTarget)
-        if (!tracking.blocksManualControl) RemoteCrosshair(model, Modifier.align(Alignment.Center))
+        if (!tracking.blocksManualControl && !armMode) RemoteCrosshair(model, Modifier.align(Alignment.Center))
         Row(Modifier.align(Alignment.TopStart).padding(HanppieDesignTokens.RemoteEdgePadding),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             onBack?.let { back -> HudIconButton(tr(Res.string.back_to_console), WorkbenchGlyph.BACK, enabled = navigationEnabled && foreground, action = back) }
             if (connected.canStop) HudIconButton(tr(Res.string.stop_script), WorkbenchGlyph.STOP, enabled = inputEnabled && foreground, action = model::stop)
             if (connected.connected && onHealth != null && navigationEnabled && foreground)
                 cn.elonzh.hanppie.ui.robot.device.RobotHealthAlertButton(model, onHealth)
+            if (hasArmControls) Button({
+                keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; keyboardHints = false
+                armSwitchKeys = armSwitchKeys + physicalKeys
+                model.clearRemoteInputs(); armMode = !armMode; focus.requestFocus()
+            }, Modifier.heightIn(min = 48.dp).widthIn(max = 156.dp).testTag("remote-arm-toggle").semantics { selected = armMode },
+                enabled = enabled && !tracking.blocksManualControl && !connected.busy,
+                colors = if (armMode) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors(
+                    color = HanppieDesignTokens.RemoteHudSurface, contentColor = HanppieDesignTokens.RemoteHudContent)) {
+                Text(tr(Res.string.arm_control_label), fontSize = 14.sp)
+            }
         }
         val leftHudWidth = (if (onBack != null) 48 else 0) + (if (connected.canStop) 56 else 0) +
             (if (connected.connected && onHealth != null && navigationEnabled && foreground && health.issues.any { it.severity >= 2 }) 80 else 0)
+        val armHudWidth = if (hasArmControls) 164 else 0
         val mediaHudWidth = 216
-        val hudOffset = if (compactHud) ((leftHudWidth - mediaHudWidth) / 2).dp else 0.dp
+        val hudOffset = if (compactHud) ((leftHudWidth + armHudWidth - mediaHudWidth) / 2).dp else 0.dp
         Card(Modifier.align(Alignment.TopCenter).offset(x = hudOffset)
-            .widthIn(max = (maxWidth - (leftHudWidth + mediaHudWidth + 48).dp).coerceAtLeast(80.dp))
+            .widthIn(max = (maxWidth - (leftHudWidth + armHudWidth + mediaHudWidth + 48).dp).coerceAtLeast(80.dp))
             .padding(top = HanppieDesignTokens.RemoteEdgePadding)
             .testTag("remote-telemetry"),
             colors = CardDefaults.defaultColors(color = HanppieDesignTokens.RemoteHudSurface.copy(alpha = HanppieDesignTokens.RemoteHudAlpha)),
@@ -330,10 +372,10 @@ internal fun RemotePage(
             (maxHeight - 180.dp).coerceAtLeast(80.dp),
             Modifier.align(Alignment.TopStart).padding(top = 76.dp, start = HanppieDesignTokens.RemoteEdgePadding), onAlbum = onAlbum) {
             keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
-            model.stopFiring(); model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
+            model.robotArm.stopControl(); model.stopFiring(); model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
             (onPushToTalkStop ?: model::endPushToTalk)()
         }
-        ObjectTrackingControls(tracking, enabled && videoFrame != null && videoFresh && !zoom.busy && (zoom.hundredths == null || zoom.hundredths == 100),
+        if (!armMode) ObjectTrackingControls(tracking, enabled && videoFrame != null && videoFresh && !zoom.busy && (zoom.hundredths == null || zoom.hundredths == 100),
             Modifier.align(Alignment.TopCenter).padding(top = 76.dp),
             onStart = {
                 keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
@@ -342,7 +384,10 @@ internal fun RemotePage(
             onStop = { model.stopObjectTracking(); focus.requestFocus() },
             unavailableReason = if ((zoom.hundredths ?: 100) > 100) Res.string.camera_zoom_tracking_unavailable else null)
         val touchInset = (maxWidth * .06f).coerceIn(32.dp, 80.dp)
-        if (!keyboardHints) {
+        if (armMode) cn.elonzh.hanppie.ui.robot.arm.RobotArmControls(model.robotArm,
+            enabled && !connected.busy, videoFresh,
+            Modifier.align(Alignment.BottomCenter).padding(start = HanppieDesignTokens.RemoteEdgePadding, end = HanppieDesignTokens.RemoteEdgePadding, bottom = 20.dp))
+        if (!keyboardHints && !armMode) {
             Column(Modifier.align(Alignment.BottomStart).padding(start = touchInset, bottom = 32.dp).testTag("remote-touch-left"),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.testTag("remote-gear-bar").drawBehind {
@@ -405,7 +450,7 @@ internal fun RemotePage(
         if (talking || talkBusy) Text(if (talking) tr(if (microphoneReady) Res.string.talking else Res.string.microphone_preparing) else tr(Res.string.sending_talk),
             Modifier.align(Alignment.BottomCenter).padding(bottom = 54.dp), color = HanppieDesignTokens.RemoteHudContent,
             fontSize = 12.sp)
-        if (keyboardHints) {
+        if (keyboardHints && !armMode) {
             Text(keyboardHint(control.shortcuts), Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp)
                 .widthIn(max = 380.dp).background(HanppieDesignTokens.RemoteHudSurface.copy(alpha = .72f),
                     androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp)

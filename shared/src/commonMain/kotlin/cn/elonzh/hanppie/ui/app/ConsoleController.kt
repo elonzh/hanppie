@@ -52,6 +52,7 @@ internal interface ConsoleController : AutoCloseable {
     val robotPower: cn.elonzh.hanppie.ui.robot.device.RobotPowerController
     val robotInformation: cn.elonzh.hanppie.ui.robot.device.RobotInformationController
     val robotHealth: cn.elonzh.hanppie.ui.robot.device.RobotHealthController
+    val robotArm: cn.elonzh.hanppie.ui.robot.arm.RobotArmController
     val robotAddressing: cn.elonzh.hanppie.ui.robot.maintenance.RobotAddressingController
     fun reconnectAddressing()
     val robotFirmware: cn.elonzh.hanppie.ui.robot.maintenance.RobotFirmwareController
@@ -91,6 +92,7 @@ internal interface ConsoleController : AutoCloseable {
     fun stopFiring()
     fun enableRemote()
     fun recenterGimbal()
+    fun clearRemoteInputs()
     fun haltRemote()
     fun leaveRemote()
     fun drive(x: Double, y: Double, z: Double, pitch: Double, yaw: Double)

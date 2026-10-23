@@ -62,6 +62,7 @@ interface RobotSession : AutoCloseable {
     val addressing: cn.elonzh.hanppie.robot.maintenance.RobotAddressingService
     val calibration: cn.elonzh.hanppie.robot.maintenance.RobotCalibrationService
     val firmware: cn.elonzh.hanppie.robot.maintenance.firmware.RobotFirmwareService
+    val arm: cn.elonzh.hanppie.robot.extensions.arm.RobotArmService
     fun startTracking()
     fun selectTrackingTarget(x: Float, y: Float)
     fun confirmTracking()

@@ -46,7 +46,8 @@ interface RobotFtpClient : AutoCloseable {
     fun deleteFile(path: String): Boolean
 }
 
-internal expect class RobotLock() { fun <T> withLock(action: () -> T): T }
+/** Reentrant synchronization for connection services and shared input/lifecycle controllers. Never suspend inside it. */
+expect class RobotLock() { fun <T> withLock(action: () -> T): T }
 private val monotonicOrigin = kotlin.time.TimeSource.Monotonic.markNow()
 internal fun robotNanoTime(): Long = monotonicOrigin.elapsedNow().inWholeNanoseconds
 internal expect fun robotSleep(millis: Long)

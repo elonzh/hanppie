@@ -60,6 +60,7 @@ private class PlatformRobotSession(
     override val addressing get() = app.addressing
     override val calibration get() = app.calibration
     override val firmware get() = app.firmware
+    override val arm get() = app.arm
     override val audio get() = app.audio
     override val wifi get() = app.wifi
     override val sdr get() = app.sdr

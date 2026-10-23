@@ -1,6 +1,10 @@
 package cn.elonzh.hanppie.robot.maintenance
 
 import cn.elonzh.hanppie.robot.protocol.*
+import cn.elonzh.hanppie.robot.extensions.arm.ArmServoBinding
+import cn.elonzh.hanppie.robot.extensions.arm.decodeArmBinding
+import cn.elonzh.hanppie.robot.product.RobotComponent
+import cn.elonzh.hanppie.robot.product.moduleIdentificationCommand
 import cn.elonzh.hanppie.robot.session.RequestProblem
 import cn.elonzh.hanppie.robot.session.RobotRequestException
 import kotlinx.coroutines.currentCoroutineContext
@@ -16,7 +20,6 @@ internal data class WheelEncodingReport(val state: Int, val percentRaw: Int) {
     val percent: Int? get() = percentRaw.takeIf { it in 0..100 }
 }
 internal data class ArmorAddressingSignal(val sequence: Int, val raw: Int)
-internal data class ArmServoIds(val main: Int, val secondary: Int)
 internal data class AddressingCommand(val node: Int, val set: Int, val id: Int, val payload: ByteArray)
 
 /** One encoding shared by acknowledged termination and best-effort connection cleanup. */
@@ -34,9 +37,9 @@ internal fun addressingEndCommands(kind: ModuleAddressingKind): List<AddressingC
 
 internal fun identificationLightCommand(kind: ModuleAddressingKind, id: Int, blinking: Boolean): AddressingCommand {
     require(kind in setOf(ModuleAddressingKind.SERVO, ModuleAddressingKind.TOF) && id in 1..4)
-    val host = if (kind == ModuleAddressingKind.SERVO) 0x19 else 0x12
-    return AddressingCommand(host or (id shl 5), 0, 0x60,
-        byteArrayOf(0xff.toByte(), if (blinking) 2 else 1, 0, 0xff.toByte(), 0))
+    val component = checkNotNull(RobotComponent.fromDeviceId(if (kind == ModuleAddressingKind.SERVO) 0x0317 + id else 0x1200 + id))
+    val command = moduleIdentificationCommand(component, blinking)
+    return AddressingCommand(command.node, command.set, command.id, command.payload)
 }
 
 /** Native constructors and decoders only. The task owner must manage admission, leases and recovery. */
@@ -74,11 +77,7 @@ internal class ModuleAddressingProtocol(private val request: suspend (Int, Int, 
         command(if (kind == ModuleAddressingKind.SERVO) 0xc3 else 9, 0x3f, 0x66, byteArrayOf(step.code.toByte(), id.toByte()))
     }
     suspend fun skipArmor() { command(0x18, 0x3f, 0x62, byteArrayOf(0xfe.toByte())) }
-    suspend fun armServoIds(): ArmServoIds {
-        val p = command(0xc3, 0x33, 0x68)
-        if (p.size < 3) throw RobotRequestException(RequestProblem.INVALID_RESPONSE)
-        return ArmServoIds(p.u8(1), p.u8(2))
-    }
+    suspend fun armServoIds(): ArmServoBinding = decodeArmBinding(command(0xc3, 0x33, 0x68))
     suspend fun enterWheelTestMode() { command(3, 0x3f, 0x19, byteArrayOf(1)) }
     suspend fun exitWheelTestMode() { command(3, 0x3f, 0x19, byteArrayOf(0)) }
     suspend fun stopWheelTest() { command(3, 0x3f, 0x20, wheelAddressingTestPayload(null)) }

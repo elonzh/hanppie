@@ -15,7 +15,7 @@ import platform.Security.SecRandomCopyBytes
 import platform.Security.kSecRandomDefault
 import platform.posix.usleep
 
-internal actual class RobotLock actual constructor() {
+actual class RobotLock actual constructor() {
     private val lock = NSRecursiveLock()
     actual fun <T> withLock(action: () -> T): T {
         lock.lock()

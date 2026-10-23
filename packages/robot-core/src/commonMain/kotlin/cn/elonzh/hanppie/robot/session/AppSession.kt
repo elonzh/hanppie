@@ -4,6 +4,7 @@ import cn.elonzh.hanppie.robot.network.WifiCommands
 import cn.elonzh.hanppie.robot.network.RobotWifiService
 import cn.elonzh.hanppie.robot.network.RobotApCredentials
 import cn.elonzh.hanppie.robot.network.WifiConfirmedField
+import cn.elonzh.hanppie.robot.extensions.arm.*
 
 import cn.elonzh.hanppie.robot.lab.LabChannel
 import cn.elonzh.hanppie.robot.media.SpeakerAudio
@@ -65,6 +66,29 @@ class AppSession(private val target: RobotTarget,
     val audio: cn.elonzh.hanppie.robot.media.RobotAudioService get() = audioCommands
     private val wifiCommands = WifiCommands(request = ::request)
     private val healthStore = cn.elonzh.hanppie.robot.telemetry.RobotHealthStore()
+    private val armCommands = ArmCommands(txLock, { healthStore.state.value }, ::requestChecked,
+        { node, set, id, payload -> send(node, if (set == 0x33 && id == 0x10) Protocol.ATTR_NO_ACK else Protocol.ATTR_NEED_ACK, set, id, payload) })
+    val arm: RobotArmService = object : RobotArmService by armCommands {
+        override suspend fun setObserving(enabled: Boolean) {
+            if (enabled) armAccess { armCommands.setObserving(true) }
+            else if (firmware.state.value.loaderMayBeActive) { armCommands.retireIdentification(); armCommands.retireObservation() }
+            else armCommands.setObserving(false)
+        }
+        override suspend fun readBinding() = armAccess { armCommands.readBinding() }
+        override suspend fun setBinding(binding: ArmServoBinding, expected: ArmServoBinding) =
+            maintenanceChange { armCommands.setBinding(binding, expected) }
+        override suspend fun setLoadMode(mode: ArmLoadMode, expectedBinding: ArmServoBinding, expectedModeRaw: Int?) =
+            maintenanceChange { armCommands.setLoadMode(mode, expectedBinding, expectedModeRaw) }
+        override suspend fun identifyServo(id: Int) = maintenanceChange { armCommands.identifyServo(id) }
+        override fun stopIdentification() = txLock.withLock {
+            if (firmware.state.value.loaderMayBeActive) armCommands.retireIdentification() else armCommands.stopIdentification()
+        }
+        override fun beginControl(): ArmControlLease = txLock.withLock { checkArmControl(); armCommands.beginControl() }
+        override fun move(lease: ArmControlLease, x: Double, y: Double, claw: Double) = txLock.withLock {
+            try { checkArmControl(); armCommands.move(lease, x, y, claw) }
+            catch (error: Exception) { armCommands.stopControl(); throw error }
+        }
+    }
     private val addressingCommands = cn.elonzh.hanppie.robot.maintenance.AddressingCommands(txLock, { healthStore.state.value }, ::request,
         { node, set, id, payload -> send(node, Protocol.ATTR_NEED_ACK, set, id, payload) })
     val addressing: cn.elonzh.hanppie.robot.maintenance.RobotAddressingService = object : cn.elonzh.hanppie.robot.maintenance.RobotAddressingService by addressingCommands {
@@ -167,6 +191,22 @@ class AppSession(private val target: RobotTarget,
     @Volatile var product: RobotProduct = RobotProduct()
         private set
     private val modeMutex = Mutex()
+    private fun checkArmControl() {
+        check(remote && connected && !labRunning && !powerTransition && !tracking.value.blocksManualControl &&
+            !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl &&
+            robotNanoTime() - lastReceivedNanos < 500_000_000) { "请结束其他任务并检查连接后启用遥控" }
+    }
+    private suspend fun armAccess(action: suspend () -> Unit) {
+        check(modeMutex.tryLock()) { "请等待控制模式切换结束" }
+        try {
+            txLock.withLock {
+                check(connected && !labRunning && !powerTransition && !addressing.state.value.blocksControl &&
+                    !calibration.state.value.blocksControl && !firmware.state.value.blocksControl &&
+                    robotNanoTime() - lastReceivedNanos < 500_000_000) { "请结束其他任务并检查连接后重试" }
+            }
+            action()
+        } finally { modeMutex.unlock() }
+    }
     private suspend fun withIdleControl(allowFirmware: Boolean = false, action: suspend () -> Unit) {
         check(modeMutex.tryLock()) { "请等待控制模式切换结束" }
         try {
@@ -215,6 +255,7 @@ class AppSession(private val target: RobotTarget,
     fun startTracking() = txLock.withLock {
         check(remote && active.load() && !labRunning && robotNanoTime() - lastReceivedNanos < 500_000_000)
         check(!cameraViewChanging && !cameraZoomMayBeActive) { "请先将相机恢复到 1 倍变焦" }
+        armCommands.stopControl()
         inputDeadline = robotNanoTime() + 250_000_000
         objectTracking.start()
     }
@@ -279,6 +320,8 @@ class AppSession(private val target: RobotTarget,
         }
     }
     private fun clearMotionInput() {
+        armCommands.stopControl()
+        if (firmware.state.value.loaderMayBeActive) armCommands.retireIdentification() else armCommands.stopIdentification()
         inputDeadline = 0; triggerDeadline = 0
         controlPayload = RemoteControl.velocity(0.0,0.0,0.0)
         gimbalPayload = RemoteControl.gimbalVelocity(0.0, 0.0)
@@ -546,10 +589,14 @@ class AppSession(private val target: RobotTarget,
         seq
     }
 
-    private suspend fun request(receiver: Int, set: Int, id: Int, payload: ByteArray): ByteArray {
+    private suspend fun request(receiver: Int, set: Int, id: Int, payload: ByteArray): ByteArray =
+        requestChecked(receiver, set, id, payload) {}
+
+    private suspend fun requestChecked(receiver: Int, set: Int, id: Int, payload: ByteArray, beforeSend: () -> Unit): ByteArray {
         val pending = PendingRequest(receiver, set, id)
         val seq = txLock.withLock {
             if (!connected) throw RobotRequestException(RequestProblem.DISCONNECTED)
+            beforeSend()
             val next = send(receiver, Protocol.ATTR_NEED_ACK, set, id, payload)
             check(pendingRequests.put(next, pending) == null)
             next
@@ -578,6 +625,7 @@ class AppSession(private val target: RobotTarget,
     private fun failRequests() {
         firmwareCommands.close()
         txLock.withLock {
+        armCommands.close(sendCleanup = !firmware.state.value.loaderMayBeActive)
         calibrationCommands.close()
         addressingCommands.close()
         audioCommands.close()
@@ -602,6 +650,9 @@ class AppSession(private val target: RobotTarget,
         addressingCommands.tick(robotNanoTime() - lastReceivedNanos < 500_000_000)
         calibrationCommands.tick()
         firmwareCommands.tick()
+        armCommands.tick(remote && !labRunning && !powerTransition && !tracking.value.blocksManualControl &&
+            !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl,
+            robotNanoTime() - lastReceivedNanos < 500_000_000)
         val seq = sequence
         sequence = (sequence + 1) and 65535
         val fresh = remote && robotNanoTime() < inputDeadline
@@ -636,8 +687,10 @@ class AppSession(private val target: RobotTarget,
 
     override fun labMode(running: Boolean) {
         txLock.withLock {
-            check(!powerTransition && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl) { "请先结束电源、编址、校准或固件任务" }
+            check(!powerTransition && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl && !arm.state.value.busy) { "请先结束电源、编址、校准、固件或扩展任务" }
             mode = Protocol.MODE_LAB; labRunning = running
+            armCommands.stopControl()
+            armCommands.stopIdentification()
         }
     }
     fun normalMode() { mode = Protocol.MODE_NORMAL; labRunning = false }
@@ -666,6 +719,7 @@ class AppSession(private val target: RobotTarget,
                                 audioCommands.receive(frame)
                                 wifiCommands.receive(frame)
                                 healthStore.receive(frame)
+                                armCommands.receive(frame)
                                 addressingCommands.receive(frame)
                                 calibrationCommands.receive(frame)
                                 val firmwareWasBlocking = firmware.state.value.blocksControl
@@ -725,6 +779,7 @@ class AppSession(private val target: RobotTarget,
     override fun close() {
         if (active.load()) runCatching { safetyStop() }
         firmwareCommands.close()
+        armCommands.close(sendCleanup = !firmware.state.value.loaderMayBeActive)
         txLock.withLock { calibrationCommands.close(); addressingCommands.close() }
         if (active.load() && remote) runCatching { send(Protocol.HOST_CHASSIS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_WORK_MODE_SET, byteArrayOf(0)) }
         active.store(false)

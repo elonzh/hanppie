@@ -1,6 +1,7 @@
 package cn.elonzh.hanppie.robot.maintenance
 
 import cn.elonzh.hanppie.robot.protocol.*
+import cn.elonzh.hanppie.robot.extensions.arm.ArmServoBinding
 import cn.elonzh.hanppie.robot.session.*
 import kotlinx.coroutines.*
 import kotlin.test.*
@@ -33,8 +34,8 @@ class ModuleAddressingProtocolTest {
         val protocol = ModuleAddressingProtocol { node, set, id, p ->
             assertEquals(0xc3, node); assertEquals(0x33, set); assertEquals(0x68, id); assertTrue(p.isEmpty()); response
         }
-        assertEquals(ArmServoIds(1, 2), protocol.armServoIds())
-        response = "00ff00".hexBytes(); assertEquals(ArmServoIds(255, 0), protocol.armServoIds())
+        assertEquals(ArmServoBinding(1, 2), protocol.armServoIds())
+        response = "00ff00".hexBytes(); assertEquals(ArmServoBinding(255, 0), protocol.armServoIds())
         response = "0001".hexBytes()
         assertEquals(RequestProblem.INVALID_RESPONSE, assertFailsWith<RobotRequestException> { protocol.armServoIds() }.problem)
     }

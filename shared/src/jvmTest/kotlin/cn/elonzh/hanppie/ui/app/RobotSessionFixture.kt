@@ -2,6 +2,7 @@ package cn.elonzh.hanppie.ui.app
 
 import cn.elonzh.hanppie.robot.telemetry.RobotSystemStatus
 import cn.elonzh.hanppie.robot.maintenance.*
+import cn.elonzh.hanppie.robot.extensions.arm.*
 import cn.elonzh.hanppie.robot.files.*
 import cn.elonzh.hanppie.robot.lab.*
 import cn.elonzh.hanppie.robot.product.*
@@ -12,6 +13,18 @@ import kotlinx.io.Source
 import java.util.concurrent.atomic.AtomicInteger
 
 internal class RobotSessionFixture : RobotSession {
+    override var arm: RobotArmService = object : RobotArmService {
+        override val state = kotlinx.coroutines.flow.MutableStateFlow(RobotArmState())
+        override suspend fun setObserving(enabled: Boolean) {}
+        override suspend fun readBinding(): Unit = error("unused")
+        override suspend fun setBinding(binding: ArmServoBinding, expected: ArmServoBinding): Unit = error("unused")
+        override suspend fun setLoadMode(mode: ArmLoadMode, expectedBinding: ArmServoBinding, expectedModeRaw: Int?): Unit = error("unused")
+        override suspend fun identifyServo(id: Int): Unit = error("unused")
+        override fun stopIdentification() {}
+        override fun beginControl(): ArmControlLease = error("unused")
+        override fun move(lease: ArmControlLease, x: Double, y: Double, claw: Double): Unit = error("unused")
+        override fun stopControl() {}
+    }
     override var calibration: RobotCalibrationService = object : RobotCalibrationService {
         override val state = kotlinx.coroutines.flow.MutableStateFlow(RobotCalibrationState())
         override suspend fun begin(kind: CalibrationKind): Unit = error("unused")

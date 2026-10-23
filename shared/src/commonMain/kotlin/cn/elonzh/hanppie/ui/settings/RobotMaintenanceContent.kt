@@ -17,7 +17,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 internal fun RobotMaintenanceContent(model: ConsoleController, onAlbum: (() -> Unit)? = null, onWifi: (() -> Unit)? = null,
-    onAddressing: (() -> Unit)? = null, onCalibration: (() -> Unit)? = null, onFirmware: (() -> Unit)? = null) {
+    onAddressing: (() -> Unit)? = null, onCalibration: (() -> Unit)? = null, onFirmware: (() -> Unit)? = null, onArm: (() -> Unit)? = null) {
     val console by model.state.collectAsState()
     val state by model.robotCamera.state.collectAsState()
     val album by model.robotAlbum.state.collectAsState()
@@ -64,6 +64,9 @@ internal fun RobotMaintenanceContent(model: ConsoleController, onAlbum: (() -> U
         Button(onFirmware, Modifier.heightIn(min = 48.dp).testTag("settings-firmware-open")) {
             Text(tr(if (firmware.blocksControl) Res.string.firmware_continue else Res.string.firmware_title))
         }
+    }
+    if (onArm != null) Button(onArm, Modifier.heightIn(min = 48.dp).testTag("settings-arm-open")) {
+        Text(tr(Res.string.arm_title))
     }
     Text(tr(Res.string.camera_storage), fontSize = 15.sp)
     Card(Modifier.fillMaxWidth().testTag("camera-storage"),

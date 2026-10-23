@@ -5,7 +5,7 @@ import java.security.SecureRandom
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-internal actual class RobotLock actual constructor() {
+actual class RobotLock actual constructor() {
     private val lock = Any()
     actual fun <T> withLock(action: () -> T): T = synchronized(lock, action)
 }
