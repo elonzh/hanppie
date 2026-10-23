@@ -150,6 +150,18 @@ class AppSession(private val target: RobotTarget,
     private val informationCommands = cn.elonzh.hanppie.robot.product.InformationCommands(::request)
     val information: cn.elonzh.hanppie.robot.product.RobotInformationService get() = informationCommands
     private val powerCommands = cn.elonzh.hanppie.robot.product.PowerCommands(::request)
+    private val motionCommands = cn.elonzh.hanppie.robot.remote.MotionCommands(::requestChecked)
+    val motion: cn.elonzh.hanppie.robot.remote.RobotMotionService = object : cn.elonzh.hanppie.robot.remote.RobotMotionService {
+        override suspend fun read() = withIdleControl { motionCommands.read() }
+        override suspend fun setSpeedLevel(level: Int, onDispatch: () -> Unit) = withIdleControl {
+            txLock.withLock { check(robotNanoTime() - lastReceivedNanos < 500_000_000) { "数据已过期，请检查连接后重试" } }
+            motionCommands.setSpeedLevel(level, onDispatch)
+        }
+        override suspend fun setParameter(parameter: cn.elonzh.hanppie.robot.remote.ChassisParameter, value: Float, onDispatch: () -> Unit) = withIdleControl {
+            txLock.withLock { check(robotNanoTime() - lastReceivedNanos < 500_000_000) { "数据已过期，请检查连接后重试" } }
+            motionCommands.setParameter(parameter, value, onDispatch)
+        }
+    }
     val power: cn.elonzh.hanppie.robot.product.RobotPowerService = object : cn.elonzh.hanppie.robot.product.RobotPowerService by powerCommands {
         override suspend fun setPolicy(policy: cn.elonzh.hanppie.robot.product.LowPowerPolicy, onDispatch: () -> Unit) = powerChange { powerCommands.setPolicy(policy, onDispatch) }
         override suspend fun perform(action: cn.elonzh.hanppie.robot.product.RobotPowerAction, onDispatch: () -> Unit) = powerChange {
@@ -240,11 +252,11 @@ class AppSession(private val target: RobotTarget,
             action()
         } finally { modeMutex.unlock() }
     }
-    private suspend fun withIdleControl(allowFirmware: Boolean = false, action: suspend () -> Unit) {
+    private suspend fun <T> withIdleControl(allowFirmware: Boolean = false, action: suspend () -> T): T {
         check(modeMutex.tryLock()) { "请等待控制模式切换结束" }
         try {
             txLock.withLock { check(connected && !powerTransition && !remote && !labRunning && !tracking.value.blocksManualControl && !vision.value.ownsPipeline && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && (allowFirmware || !firmware.state.value.blocksControl)) { "请先退出遥控、脚本、编址、校准或固件任务" } }
-            action()
+            return action()
         } finally { modeMutex.unlock() }
     }
     private suspend fun powerChange(allowFirmware: Boolean = false, action: suspend () -> Unit) = withIdleControl(allowFirmware) {
@@ -709,6 +721,7 @@ class AppSession(private val target: RobotTarget,
         healthStore.close()
         informationCommands.close()
         powerCommands.close()
+        motionCommands.close()
         sdrCommands.close()
         cameraCommands.close()
         albumCommands.close()

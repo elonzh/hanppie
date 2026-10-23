@@ -37,6 +37,7 @@ The official RoboMaster app is not required. Manual IPv4/AppID entry is availabl
 | Task | How |
 | --- | --- |
 | Drive | Enter the cockpit after connecting. Use the twin sticks, or WASD to move, Q/E to turn and arrow keys for the gimbal. Esc returns to the workbench. See Settings → Shortcuts for all controls |
+| Control settings | In Settings → Controls, tune keyboard/screen-stick response and app speed limits separately. Connect to read robot motion parameters, explicitly write changes and check readback. Hardware behavior is [pending validation](docs/official-app-capability-implementation.md#i01-输入响应与运动参数实施进度及设备待验) |
 | Object tracking | In the cockpit, choose Object tracking, tap a target, then select Start following after it locks. Stop tracking or use a direction control to take over. See the [hardware validation boundary](./docs/architecture.md#134-遥控操纵镜头坐标系与安全联动) (Chinese) |
 | Camera zoom | In the cockpit, select the zoom control to switch between 1× and 4×. The camera confirms its ratio; return to 1× before starting tracking. See the [pending hardware checks](./docs/official-app-capability-implementation.md#a02-验证入口与设备待验) (Chinese) |
 | Camera settings | In Settings → Media → Onboard camera, set anti-flicker, read the camera clock, or sync this device’s local time. An unsynchronized status triggers one automatic sync attempt per connection. See [pending hardware checks](./docs/official-app-capability-implementation.md#a03-验证入口与设备待验) (Chinese) |

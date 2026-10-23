@@ -53,6 +53,7 @@ internal data class ControlSettings(
     val joystickDeadZone: Double = .12,
     val shortcuts: ControlShortcuts = ControlShortcuts(),
     val remoteLeds: RemoteLedSettings = RemoteLedSettings(),
+    val inputSensitivities: InputSensitivities = InputSensitivities(),
 ) {
     init {
         require(gimbalSpeed in 15..120)

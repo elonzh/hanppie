@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -168,7 +169,7 @@ internal fun RemotePage(
     var pageFocused by remember { mutableStateOf(false) }
     var keys by remember { mutableStateOf(setOf<Key>()) }
     var physicalKeys by remember { mutableStateOf(setOf<Key>()) }
-    var armSwitchKeys by remember { mutableStateOf(setOf<Key>()) }
+    var suppressedKeys by remember { mutableStateOf(setOf<Key>()) }
     var firePointerHeld by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     val currentArmMode by rememberUpdatedState(armMode)
@@ -188,6 +189,14 @@ internal fun RemotePage(
         model.setRemoteLed(null)
         if (manageSession) { model.leaveRemote(); model.stopMedia() }
     } }
+    var appliedSensitivities by remember { mutableStateOf(control.inputSensitivities) }
+    LaunchedEffect(control.inputSensitivities) {
+        if (appliedSensitivities == control.inputSensitivities) return@LaunchedEffect
+        appliedSensitivities = control.inputSensitivities
+        suppressedKeys = suppressedKeys + physicalKeys
+        keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+        model.clearRemoteInputs()
+    }
     LaunchedEffect(hasArmControls) {
         if (!hasArmControls && armMode) { armMode = false; model.clearRemoteInputs(); keys = emptySet(); left = Offset.Zero; right = Offset.Zero }
     }
@@ -225,7 +234,7 @@ internal fun RemotePage(
     }
     LaunchedEffect(enabled) {
         if (enabled) focus.requestFocus()
-        else { if (armMode) armSwitchKeys = armSwitchKeys + physicalKeys; keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; model.robotArm.stopControl(); model.stopFiring() }
+        else { if (armMode) suppressedKeys = suppressedKeys + physicalKeys; keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; model.robotArm.stopControl(); model.stopFiring() }
     }
     LaunchedEffect(enabled) {
         while (enabled) {
@@ -235,15 +244,16 @@ internal fun RemotePage(
             fun axis(positive: ControlAction, negative: ControlAction) =
                 (if (shortcuts.isHeld(positive, currentKeys, shiftHeld)) 1 else 0) -
                     (if (shortcuts.isHeld(negative, currentKeys, shiftHeld)) 1 else 0)
+            val sensitivity = currentControl.inputSensitivities
             val translation = DriveSpeed.translation(
-                (-currentLeft.y + axis(ControlAction.Forward, ControlAction.Backward)).coerceIn(-1f,1f).toDouble(),
-                (currentLeft.x + axis(ControlAction.StrafeRight, ControlAction.StrafeLeft)).coerceIn(-1f,1f).toDouble(),
+                sensitivity.combine(cn.elonzh.hanppie.ui.settings.InputAxis.FORWARD, -currentLeft.y.toDouble(), axis(ControlAction.Forward, ControlAction.Backward).toDouble()),
+                sensitivity.combine(cn.elonzh.hanppie.ui.settings.InputAxis.LATERAL, currentLeft.x.toDouble(), axis(ControlAction.StrafeRight, ControlAction.StrafeLeft).toDouble()),
                 currentGear, currentControl)
             val rotation = axis(ControlAction.RotateClockwise, ControlAction.RotateCounterclockwise) *
                 DriveSpeed.rotation(currentGear, currentControl)
             model.drive(translation.first, translation.second, rotation,
-                (-currentRight.y + axis(ControlAction.GimbalUp, ControlAction.GimbalDown)).coerceIn(-1f,1f).toDouble() * currentControl.gimbalSpeed,
-                (currentRight.x + axis(ControlAction.GimbalRight, ControlAction.GimbalLeft)).coerceIn(-1f,1f).toDouble() * currentControl.gimbalSpeed)
+                sensitivity.combine(cn.elonzh.hanppie.ui.settings.InputAxis.PITCH, -currentRight.y.toDouble(), axis(ControlAction.GimbalUp, ControlAction.GimbalDown).toDouble()) * currentControl.gimbalSpeed,
+                sensitivity.combine(cn.elonzh.hanppie.ui.settings.InputAxis.YAW, currentRight.x.toDouble(), axis(ControlAction.GimbalRight, ControlAction.GimbalLeft).toDouble()) * currentControl.gimbalSpeed)
             delay(50)
         }
     }
@@ -266,22 +276,22 @@ internal fun RemotePage(
     }.focusRequester(focus).onFocusChanged {
         pageFocused = it.hasFocus
         if (!it.hasFocus) {
-            if (armMode) armSwitchKeys = armSwitchKeys + physicalKeys
+            if (armMode) suppressedKeys = suppressedKeys + physicalKeys
             keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
             model.robotArm.stopControl()
             model.stopFiring()
             model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
         }
     }.onPreviewKeyEvent {
-        val awaitingRelease = it.key in armSwitchKeys
-        if (it.type == KeyEventType.KeyUp) { physicalKeys = physicalKeys - it.key; armSwitchKeys = armSwitchKeys - it.key }
+        val awaitingRelease = it.key in suppressedKeys
+        if (it.type == KeyEventType.KeyUp) { physicalKeys = physicalKeys - it.key; suppressedKeys = suppressedKeys - it.key }
         else if (it.type == KeyEventType.KeyDown) physicalKeys = physicalKeys + it.key
         if (awaitingRelease) return@onPreviewKeyEvent true
         if (!inputEnabled || !foreground) return@onPreviewKeyEvent false
         if (armMode) {
             if (it.key == Key.Escape) {
                 if (it.type == KeyEventType.KeyDown) {
-                    armSwitchKeys = armSwitchKeys + physicalKeys
+                    suppressedKeys = suppressedKeys + physicalKeys
                     model.clearRemoteInputs(); armMode = false; keys = emptySet(); focus.requestFocus()
                 }
                 return@onPreviewKeyEvent true
@@ -352,7 +362,7 @@ internal fun RemotePage(
                 cn.elonzh.hanppie.ui.robot.device.RobotHealthAlertButton(model, onHealth)
             if (hasArmControls) Button({
                 keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; keyboardHints = false
-                armSwitchKeys = armSwitchKeys + physicalKeys
+                suppressedKeys = suppressedKeys + physicalKeys
                 model.clearRemoteInputs(); armMode = !armMode; focus.requestFocus()
             }, Modifier.heightIn(min = 48.dp).widthIn(max = 156.dp).testTag("remote-arm-toggle").semantics { selected = armMode },
                 enabled = enabled && !tracking.blocksManualControl && !vision.ownsPipeline && !connected.busy,
@@ -443,9 +453,11 @@ internal fun RemotePage(
                     }
                 }
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Stick(tr(Res.string.chassis),
-                        foreground && enabled, { keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
-                        tr(Res.string.chassis)) { left = it }
+                    key(control.inputSensitivities) {
+                        Stick(tr(Res.string.chassis),
+                            foreground && enabled, { keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
+                            tr(Res.string.chassis)) { left = it }
+                    }
 
                 }
             }
@@ -467,9 +479,11 @@ internal fun RemotePage(
                         })
 
                 }
-                Stick("${tr(Res.string.gimbal)} · ${control.gimbalSpeed}°/s", foreground && enabled,
-                    { keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
-                    tr(Res.string.gimbal)) { right = it }
+                key(control.inputSensitivities) {
+                    Stick("${tr(Res.string.gimbal)} · ${control.gimbalSpeed}°/s", foreground && enabled,
+                        { keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
+                        tr(Res.string.gimbal)) { right = it }
+                }
             }
             Box(Modifier.align(Alignment.BottomEnd).padding(end = touchInset + 76.dp, bottom = 180.dp).testTag("remote-ammo").then(reserveVisionSpace("ammo"))) {
                 HudIconButton(tr(Res.string.switch_ammo),

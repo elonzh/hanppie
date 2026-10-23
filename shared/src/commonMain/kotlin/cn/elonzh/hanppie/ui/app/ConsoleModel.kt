@@ -95,6 +95,8 @@ import cn.elonzh.hanppie.resources.upload_failed
 import cn.elonzh.hanppie.resources.uploading
 import cn.elonzh.hanppie.resources.waiting_for_robot_to_scan_qr
 import cn.elonzh.hanppie.resources.waiting_for_script_start
+import cn.elonzh.hanppie.resources.motion_task_active
+import cn.elonzh.hanppie.resources.motion_target_changed
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.robot.lab.ui.LabUiState
 import cn.elonzh.hanppie.robot.lab.ui.LabUiValue
@@ -232,6 +234,10 @@ internal class ConsoleModel(
         ::changeArm, ::canObserveArm, { source -> canObserveArm(source) && remoteEnabled.value && !state.value.busy &&
             !tracking.value.blocksManualControl && !vision.value.ownsPipeline && videoFrames.isFresh(state.value.connectedAddress) })
     override val robotExtensions = cn.elonzh.hanppie.ui.robot.extensions.RobotExtensionController(scope, ::changeExtensions, ::canObserveExtensions)
+    override val robotMotion = cn.elonzh.hanppie.ui.robot.remote.RobotMotionController(scope) { source, action ->
+        check(robotWifi.state.value.recovery == null && robotSdr.state.value.recovery == null) { tr(Res.string.motion_task_active) }
+        changeDevice({ it.motion === source }, Res.string.motion_task_active, Res.string.motion_target_changed, action)
+    }
     override val robotFirmware: RobotFirmwareController = RobotFirmwareController(scope, ::changeFirmware,
         { source -> if (session.load()?.firmware === source) {
             haltRemote()
@@ -676,6 +682,7 @@ internal class ConsoleModel(
     override fun setForeground(foreground: Boolean) {
         acceptingWork.store(foreground)
         foregroundState.value = foreground
+        if (!foreground) robotMotion.cancelRead()
         if (!foreground) labUiVisibleRun?.let { session.load()?.labUi?.setVisible(it, false) }
         if (!foreground) { robotCalibration.stopAutomaticContinuation(); robotAddressing.holdWheel(null); haltRemote(); voiceInput.cancel() }
         robotArm.refreshVisibility(); robotExtensions.refreshVisibility()
@@ -733,7 +740,7 @@ internal class ConsoleModel(
                 connectionRevision.addAndFetch(1)
                 session.exchange(null)?.close()
                 lab.store(null)
-                robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.detach(); robotArm.detach(); robotExtensions.detach(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(); robotSdr.detach()
+                robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.detach(); robotArm.detach(); robotExtensions.detach(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotMotion.clear(); robotWifi.detach(); robotSdr.detach()
                 state.update { it.copy(connected = false, connectedAddress = null, connecting = false,
                     statusMessage = uiText(Res.string.connection_failed)) }
                 throw error
@@ -864,6 +871,7 @@ internal class ConsoleModel(
             robotArm.attach(candidate.arm, target)
             robotExtensions.attach(candidate.extensions)
             robotPower.attach(candidate.power, candidate.information.systemStatus)
+            robotMotion.attach(candidate.motion)
             robotFirmware.attach(candidate.firmware, target)
             robotCalibration.attach(candidate.calibration, target)
             robotAddressing.attach(candidate.addressing, target)
@@ -893,7 +901,7 @@ internal class ConsoleModel(
             candidate.close()
             session.compareAndSet(candidate, null)
             if (revision == connectionRevision.load()) {
-                robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.detach(); robotArm.detach(); robotExtensions.detach(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(); robotSdr.detach()
+                robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.detach(); robotArm.detach(); robotExtensions.detach(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotMotion.clear(); robotWifi.detach(); robotSdr.detach()
                 state.update { it.lost(tr(Res.string.connection_failed)).copy(connecting = false, statusMessage = uiText(Res.string.connection_failed)) }
             }
             throw error
@@ -916,7 +924,7 @@ internal class ConsoleModel(
     }
 
     private fun newSession(target: RobotTarget): RobotSession {
-        robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.detach(); robotArm.detach(); robotExtensions.detach(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(); robotSdr.detach()
+        robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.detach(); robotArm.detach(); robotExtensions.detach(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotMotion.clear(); robotWifi.detach(); robotSdr.detach()
         val candidate = robotRuntime.open(target, ::receive, ::log, ::connectionLost)
         candidate.onVideo = { videoConsumer.load()?.invoke(it) }
         candidate.onAudio = { audioConsumer.load()?.invoke(it) }
@@ -960,7 +968,7 @@ internal class ConsoleModel(
             if (session.load() !== candidate) return@launch
             session.store(null)
             lab.store(null)
-            robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.detach(); robotArm.detach(); robotExtensions.detach(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(); robotSdr.detach()
+            robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.detach(); robotArm.detach(); robotExtensions.detach(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotMotion.clear(); robotWifi.detach(); robotSdr.detach()
             candidate.close()
             log(reason)
             state.update { it.lost(reason).copy(busy = false, connecting = false) }
@@ -974,7 +982,7 @@ internal class ConsoleModel(
         clearLabUiBinding()
         haltRemote()
         session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState()
-        robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.detach(); robotArm.detach(); robotExtensions.detach(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(preserveNetworkRecovery); robotSdr.detach(preserveNetworkRecovery)
+        robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.detach(); robotArm.detach(); robotExtensions.detach(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotMotion.clear(); robotWifi.detach(preserveNetworkRecovery); robotSdr.detach(preserveNetworkRecovery)
         state.update {
             val uncertain = it.scriptRunPhase.mayBeExecuting
             it.copy(connected = false, connectedAddress = null, connecting = false,
@@ -1328,7 +1336,7 @@ internal class ConsoleModel(
         chat.cancelAndJoin()
         scope.coroutineContext[Job]?.children?.toList()?.forEach { it.cancelAndJoin() }
         session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState()
-        robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.detach(); robotArm.detach(); robotExtensions.detach(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotWifi.detach(); robotSdr.detach()
+        robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.detach(); robotArm.detach(); robotExtensions.detach(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotMotion.clear(); robotWifi.detach(); robotSdr.detach()
         state.update {
             val uncertain = it.scriptRunPhase.mayBeExecuting
             it.copy(connected = false, connectedAddress = null, connecting = false, busy = false,
@@ -1338,5 +1346,5 @@ internal class ConsoleModel(
                 scriptMessage = if (uncertain) uiText(Res.string.connection_closed_robot_state_unknown) else it.scriptMessage)
         }
     }
-    override fun close() { connectionRevision.addAndFetch(1); clearLabUiBinding(); robotFiles.close(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.clear(); robotArm.clear(); robotExtensions.clear(); robotCalibration.clear(); robotAddressing.clear(); robotPower.clear(); robotWifi.close(); robotSdr.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
+    override fun close() { connectionRevision.addAndFetch(1); clearLabUiBinding(); robotFiles.close(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.clear(); robotArm.clear(); robotExtensions.clear(); robotCalibration.clear(); robotAddressing.clear(); robotPower.clear(); robotMotion.clear(); robotWifi.close(); robotSdr.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
 }

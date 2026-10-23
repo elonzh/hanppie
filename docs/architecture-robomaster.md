@@ -552,6 +552,26 @@ SDK `EscSubject` 的 `<hhhhhhhhIIIIBBBB`：四项有符号 RPM、四项编码器
 
 可复现的输入指纹、反汇编地址和本次验证记录见 [macOS App 静态分析记录](s1-app-static-analysis-2026-09-08.md)。本地提取对象索引位于 `.hanppie/app-analysis/2026-09-08/report.md`；原始分析材料仍保留在该目录，首页使用的转换模型及来源说明见 [展示素材](../assets/robot-scene/README.md)。
 
+#### 输入灵敏度与机器人运动参数
+
+固定 macOS 1.1.5/build 239 的 `ViewSettingControl` 将终端输入响应与机器人运动参数分开处理。灵敏度标准预设向四轴写 50；自定义保存的初值为前后/横移 35、云台水平 50、俯仰 40，切回标准不删除自定义值。`LeftJoystick` 的触摸分支把指针增量乘灵敏度 ×0.01 后累加位置，`RightJoystick.Delta` 按输入类型应用云台灵敏度；它们不是直接以灵敏度百分比配置机器人速度。输入类型枚举为 Touch/Joystick/KeyboardMouse/GamePad，是否公开还取决于平台条件。官方手柄另有灵敏度下发，不能由终端偏好抵扣 I02。**代码**
+
+原生 `LoadConfigs`（`0x7922f0`）注册下列七项，值类型均为 float（注册类型 4）。`DJIRMMCConfig::SimpleHashString` 按字节计算 `((hash << 8) | byte) mod 0xfffffffb`，哈希以 little-endian 发送；桥接 key 名称不作为线上参数名发送。**原生构造 / 独立复算**
+
+| 参数 | 原生参数名 | 哈希 |
+| --- | --- | --- |
+| 前进速度 | `vel_config_forward_max_0` | `fe360681` |
+| 后退速度 | `vel_config_backward_max_0` | `ed0c98d9` |
+| 横移速度 | `vel_config_trans_max_0` | `5ea0e66f` |
+| 前后加速响应 | `acc_config_fb_std_para_0` | `1053171b` |
+| 横移加速响应 | `acc_config_lr_std_para_0` | `a0531a0e` |
+| 前后制动响应 | `acc_config_fb_brk_para_0` | `33516de9` |
+| 横移制动响应 | `acc_config_lr_brk_para_0` | `c35170dc` |
+
+`GetConfigParamValueFloatRange`（`0x787940`）构造 `03:f7`，请求为四字节哈希；`GetConfigParamValue`（`0x7866c0`）构造 `03:f8` 同样请求；`SetConfigParamValue`（`0x787000`）构造 `03:f9`，上述 float 参数的载荷为哈希 + float32LE，共 8 字节，沿主控节点 `0x03` 请求。范围回调 `0x78fc70` 从响应 7/11/15 读取三个 float；JSON 字段构造 `0x5c59d0` 进一步对应 minimum/maximum/default，不能将默认值与当前值混同。范围响应的前三组字段保留为类型、值长度和属性原值；当前数值回调从响应偏移 5 取 float，前四字节是参数哈希，响应首字节为结果码。**原生构造 / 解码**
+
+`GetChassisSpeedLevel`（`0x6a4410`）使用 `3f:4f` 空请求，回调 `0x6c0d70` 取响应偏移 1 的字节；`SetChassisSpeedLevel`（`0x6a4aa0`）使用 `3f:3f` 单字节写入。托管 UI 将低/中/高/自定义映射为 1/2/3/4；选择自定义后，原客户端另外按七次参数写入恢复本地值。Hanppie 沿既有 System `0x09` 请求路由单独读取/设置档位，不自动恢复一套本地设备参数。允许范围、档位切换后的实际参数、数值单位、持久性与地区/固件差异尚无新增实机证据。来源指纹、原生片段和字段对应保存在忽略目录 `I01-native-contracts.json` 与 `I01-native-*.txt`；不提交厂商二进制。**原生 / 当前实现边界**
+
 #### 模块健康与电池报告
 
 固定 macOS 1.1.5/build 239 的 `RobomasterSystemAbstraction::OnDeviceStatusPush`（`0x694f10`）同时生成 WorkingDevices 和 Exceptions，而不是两个独立报文。现有 `3f:12` 布局仍为数量 + 各组 `(uint16LE deviceId, uint8 count, count 个 uint16LE 状态字)`；原生在 `0x695159` 左移 deviceId 16 位，`0x6951a1/0x6951a6` 逐项读取状态字并按位合并，发布完整 32 位异常码。此前组件清单仅跳过的附加字节因此可命名为异常字；解析继续复用 `RobotProductProtocol`，保留原始值和未知模块。**原生/当前代码**

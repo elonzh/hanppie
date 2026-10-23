@@ -87,6 +87,11 @@ internal class RobotSessionFixture : RobotSession {
         override suspend fun setPolicy(policy: LowPowerPolicy, onDispatch: () -> Unit) = error("unused")
         override suspend fun perform(action: RobotPowerAction, onDispatch: () -> Unit) = error("unused")
     }
+    override var motion: cn.elonzh.hanppie.robot.remote.RobotMotionService = object : cn.elonzh.hanppie.robot.remote.RobotMotionService {
+        override suspend fun read(): cn.elonzh.hanppie.robot.remote.RobotMotionConfiguration = error("unused")
+        override suspend fun setSpeedLevel(level: Int, onDispatch: () -> Unit): cn.elonzh.hanppie.robot.remote.RobotMotionConfiguration = error("unused")
+        override suspend fun setParameter(parameter: cn.elonzh.hanppie.robot.remote.ChassisParameter, value: Float, onDispatch: () -> Unit): cn.elonzh.hanppie.robot.remote.ChassisParameterReading = error("unused")
+    }
     @Volatile var closed = false
     override val album = object : cn.elonzh.hanppie.robot.media.album.RobotAlbumService {
         override val busy = kotlinx.coroutines.flow.MutableStateFlow(false)

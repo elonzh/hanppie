@@ -306,37 +306,6 @@ internal fun MediaSettingsContent(model: ConsoleController) {
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
-internal fun ControlSettingsContent(model: ConsoleController) {
-    val control by model.controlSettings.collectAsState()
-    SettingsDropdown(tr(Res.string.gimbal_sensitivity), "gimbal-sensitivity", control.gimbalSpeed.toString(),
-        listOf(15, 30, 45, 60, 90, 120).map { it.toString() to tr(Res.string.degrees_per_second_value, it) }) { value ->
-        model.settingsMessage.value = null
-        model.controlSettings.value = control.copy(gimbalSpeed = value.toInt())
-    }
-    Text(tr(Res.string.motion_parameters), fontSize = 15.sp)
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        control.translationSpeeds.indices.forEach { index ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                Text("${index + 1}", Modifier.width(24.dp), style = MiuixTheme.textStyles.footnote1)
-                CompactNumberField(control.translationSpeeds[index], tr(Res.string.meters_per_second), Modifier.weight(1f)) { value ->
-                    val next = control.translationSpeeds.toMutableList().also { it[index] = value }
-                    runCatching { control.copy(translationSpeeds = next) }.onSuccess { model.controlSettings.value = it }
-                }
-                CompactNumberField(control.rotationSpeeds[index], tr(Res.string.degrees_per_second), Modifier.weight(1f)) { value ->
-                    val next = control.rotationSpeeds.toMutableList().also { it[index] = value }
-                    runCatching { control.copy(rotationSpeeds = next) }.onSuccess { model.controlSettings.value = it }
-                }
-            }
-        }
-        CompactNumberField(control.joystickDeadZone, tr(Res.string.joystick_dead_zone), Modifier.fillMaxWidth()) { value ->
-            runCatching { control.copy(joystickDeadZone = value) }.onSuccess { model.controlSettings.value = it }
-        }
-    }
-}
-
-@Composable
-@OptIn(ExperimentalLayoutApi::class)
 internal fun LightsSettingsContent(model: ConsoleController) {
     val control by model.controlSettings.collectAsState()
     Text(tr(Res.string.remote_led_colors_summary), fontSize = 12.sp,
@@ -444,7 +413,7 @@ internal fun RemoteLedColorPicker(label: String, tag: String, value: RobotLedCol
 private fun rgbColor(hex: String): Color = Color(0xff000000L or hex.removePrefix("#").toLong(16))
 
 @Composable
-private fun CompactNumberField(value: Double, label: String, modifier: Modifier, onValid: (Double) -> Unit) {
+internal fun CompactNumberField(value: Double, label: String, modifier: Modifier, onValid: (Double) -> Unit) {
     var draft by remember(value) { mutableStateOf(value.toString().removeSuffix(".0")) }
     TextField(draft, { text ->
         draft = text

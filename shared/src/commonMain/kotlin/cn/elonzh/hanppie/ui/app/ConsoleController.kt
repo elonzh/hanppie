@@ -56,6 +56,7 @@ internal interface ConsoleController : AutoCloseable {
     val robotWifi: RobotWifiController
     val robotSdr: cn.elonzh.hanppie.ui.robot.network.RobotSdrController
     val robotPower: cn.elonzh.hanppie.ui.robot.device.RobotPowerController
+    val robotMotion: cn.elonzh.hanppie.ui.robot.remote.RobotMotionController
     val robotInformation: cn.elonzh.hanppie.ui.robot.device.RobotInformationController
     val robotHealth: cn.elonzh.hanppie.ui.robot.device.RobotHealthController
     val robotArm: cn.elonzh.hanppie.ui.robot.arm.RobotArmController
