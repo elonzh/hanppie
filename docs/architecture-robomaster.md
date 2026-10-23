@@ -566,7 +566,7 @@ SDK `EscSubject` 的 `<hhhhhhhhIIIIBBBB`：四项有符号 RPM、四项编码器
 
 #### 输入灵敏度与机器人运动参数
 
-固定 macOS 1.1.5/build 239 的 `ViewSettingControl` 将终端输入响应与机器人运动参数分开处理。灵敏度标准预设向四轴写 50；自定义保存的初值为前后/横移 35、云台水平 50、俯仰 40，切回标准不删除自定义值。`LeftJoystick` 的触摸分支把指针增量乘灵敏度 ×0.01 后累加位置，`RightJoystick.Delta` 按输入类型应用云台灵敏度；它们不是直接以灵敏度百分比配置机器人速度。输入类型枚举为 Touch/Joystick/KeyboardMouse/GamePad，是否公开还取决于平台条件。官方手柄另有灵敏度下发，不能由终端偏好抵扣 I02。**代码**
+固定 macOS 1.1.5/build 239 的 `ViewSettingControl` 将终端输入响应与机器人运动参数分开处理。灵敏度标准预设向四轴写 50；自定义保存的初值为前后/横移 35、云台水平 50、俯仰 40，切回标准不删除自定义值。`LeftJoystick` 的触摸分支把指针增量乘灵敏度 ×0.01 后累加位置，`RightJoystick.Delta` 按输入类型应用云台灵敏度；它们不是直接以灵敏度百分比配置机器人速度。输入类型枚举为 Touch/Joystick/KeyboardMouse/GamePad，是否公开还取决于平台条件。官方手柄另有原生进程内的输入参数，不能由当前屏幕/键盘偏好抵扣 I02，也不能把参数写入桥接解释为独立无线设置指令。**代码**
 
 原生 `LoadConfigs`（`0x7922f0`）注册下列七项，值类型均为 float（注册类型 4）。`DJIRMMCConfig::SimpleHashString` 按字节计算 `((hash << 8) | byte) mod 0xfffffffb`，哈希以 little-endian 发送；桥接 key 名称不作为线上参数名发送。**原生构造 / 独立复算**
 
@@ -583,6 +583,34 @@ SDK `EscSubject` 的 `<hhhhhhhhIIIIBBBB`：四项有符号 RPM、四项编码器
 `GetConfigParamValueFloatRange`（`0x787940`）构造 `03:f7`，请求为四字节哈希；`GetConfigParamValue`（`0x7866c0`）构造 `03:f8` 同样请求；`SetConfigParamValue`（`0x787000`）构造 `03:f9`，上述 float 参数的载荷为哈希 + float32LE，共 8 字节，沿主控节点 `0x03` 请求。范围回调 `0x78fc70` 从响应 7/11/15 读取三个 float；JSON 字段构造 `0x5c59d0` 进一步对应 minimum/maximum/default，不能将默认值与当前值混同。范围响应的前三组字段保留为类型、值长度和属性原值；当前数值回调从响应偏移 5 取 float，前四字节是参数哈希，响应首字节为结果码。**原生构造 / 解码**
 
 `GetChassisSpeedLevel`（`0x6a4410`）使用 `3f:4f` 空请求，回调 `0x6c0d70` 取响应偏移 1 的字节；`SetChassisSpeedLevel`（`0x6a4aa0`）使用 `3f:3f` 单字节写入。托管 UI 将低/中/高/自定义映射为 1/2/3/4；选择自定义后，原客户端另外按七次参数写入恢复本地值。Hanppie 沿既有 System `0x09` 请求路由单独读取/设置档位，不自动恢复一套本地设备参数。允许范围、档位切换后的实际参数、数值单位、持久性与地区/固件差异尚无新增实机证据。来源指纹、原生片段和字段对应保存在忽略目录 `I01-native-contracts.json` 与 `I01-native-*.txt`；不提交厂商二进制。**原生 / 当前实现边界**
+
+#### 官方 GamePad 的独立链路与输入
+
+[官方手册](https://dl.djicdn.com/downloads/robomaster-s1/20220429UM/RoboMaster_S1_User_Manual_v1.8_EN.pdf)第 27、37–39 页把 GamePad 定义为连接移动终端的配件，可以再挂鼠标和键盘；接入后手柄拥有底盘输入，触屏仍可执行其他操作。这与电脑直接使用键鼠是不同的连接路径。手册还描述手柄固件更新，不能拿普通机器人升级流程抵扣。**官方用户流程**
+
+2026-10-24 从[官方 App 下载页](https://www.dji.com/downloads/djiapp/robomaster)内嵌数据确认：Android 列为 v1.2.0，iOS 为 v1.1.6，桌面软件条目为 v1.1.5。官方下载端点提供 `RoboMaster_V1.2.0_382_Signed.apk`；本机按 HTTP Range 读取 ZIP 目录并提取原始条目，Manifest 为 `com.dji.robomaster`、1.2.0/build 382。提取时核对 ZIP 条目 CRC，未下载或验证整个 APK 签名，不能把文件名中的 Signed 当作独立签名验证结果。**官方下载元数据 / 静态提取**
+
+该 Android 包声明 `android.hardware.usb.accessory`、`USB_ACCESSORY_ATTACHED`，`res/xml/accessory_filter.xml` 的筛选值是 manufacturer `DJI`、model `GD0MA`。arm64 `libunitybridge.so` 的 `AoaDatalinkMgr`、`OnUsbConnected` 与读写线程进一步确认 Android Open Accessory 链路：Java 侧交付文件描述符，原生线程直接 `read`/`write` 字节。这里的设备标识只属于平台连接发现，不应成为通用机器人型号限制；它也不证明普通 HID 手柄或机器人 UDP 会话能接收相同输入。iOS 的附件协议标识、会话打开方式及真实跨平台兼容性尚未恢复。**Android 原生 / 未验证边界**
+
+固定 macOS 原生 `DJIRobomasterRealControlProcessor::Initialize`（`0x15e80`）观察单独的 `get_game_pad_link_id`，注册键为 `0x403f0090`；这是原生观察者键，不能将高字节 `0x40` 当作线上 ACK 属性。`OnGamePadDataPush`（macOS `0x16090`、Android `0x4cf76c`）消费 19 字节输入体，已建立的字段如下。没有抓到真实手柄报文，线上完整封装、属性、实际周期与未列字段仍待核对。**原生构造 / 解码**
+
+| 输入体位置 | 已建立的用途 |
+| --- | --- |
+| byte 1 bit 4 / bit 3 | 挂载鼠标 / 键盘；bit 7 / bit 6 控制两组输入分支 |
+| uint16LE @2 / @4 | 底盘两轴，原生中心值 1024 |
+| int16LE @6 / @8 | 鼠标/云台两轴；原生按中心 1024 的输入处理，不能直接称为屏幕像素增量 |
+| uint16LE @12 | bit 7/6 为鼠标左/右；bit 13/14/15/12 为 C1/C2/Fire/Fn |
+| uint8 @18 | 电量读数 |
+
+byte 1 的低三位进入校准/居中/电量告警相关分支，但两份原生实现的通知分发不能仅按 key 名称认定为三个准确独立状态；其余字节也未完整解释，不补造键盘位图。`SystemGamePadStatus` 的部分告警消费者为空；`ViewGamePad` 的停用/激活操作属于内部工具，不能全部变成普通设置。
+
+24 个 GamePad key 中，八个轴增益/斜率/死区及 `ControlEnabled` 由原生事件更新进程内状态，没有为它们建立独立设备设置 opcode。构造默认值依次是 X/Y 增益 1/1，yaw 增益/斜率/死区 1/1/0，pitch 1/1/0；`GetExpValue`（macOS `0x17e40`）先令 `u=(raw-1024)/660`，计算 `sign(u) × min(pow(max(0,(1+deadZone)×abs(u)-deadZone),slope),1) × gain`，再映回中心 1024。该 deadZone 参数不能直接当作摇杆死区百分比。
+
+`OnTimerTicked`（macOS `0x17880`、Android `0x4d0fbc`）将输入合并进原生 `01:04` 高频控制帧，受控制使能、连接和超时状态约束；直接并发转发与 Hanppie 既有速度控制会产生执行器所有权问题。C2 在对战中触发随机技能，Fn 涉及自定义技能；普通 FPV 中的若干同名回调为空，不能为 C1/C2/Fn 猜测通用动作。**原生 / 客户端消费者**
+
+`RobomasterGamePadAbstraction::GetFirmwareVersion`（`0x74c6f0`）向独立手柄链路的节点 `06` 发 `00:01` 空请求。`GetActivationSettings`（`0x74c970`）向同一节点发 `00:32`、单字节 `11`；这与机器人只读激活请求的载荷不同。账号激活写入仍不在 Hanppie 范围，不能套用内部工具或第三方绕过流程。手柄 V1 流式升级仍是未接入的独立分支。**原生构造 / 范围**
+
+证据位于忽略目录 `.hanppie/validation/2026-10-22-official-gap/I02-native-*.txt`、`I02-android-*.txt`，Android 原始条目在 `.hanppie/app-analysis/2026-10-24-android-1.2.0/`；文件指纹统一记录在 `2026-10-24-27a7293-audit.json`。本次仅静态调查，没有构建或运行 Hanppie Android，也未连接真实手柄；当前接入状态见[实施台账](./official-app-capability-implementation.md)。
 
 #### 模块健康与电池报告
 
