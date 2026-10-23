@@ -487,6 +487,36 @@ chassis_ctrl.move_with_speed(x, y, z)
 
 S1 Lab 程序受固件内固定的 Python `3.6.6`、标准库和 DJI 注入模块约束。root ADB 直接启动解释器时，默认 `site` 初始化会因 Android 的 root UID 没有 passwd 记录而报 `getpwuid(): uid not found: 0`；使用 `-S` 可完成 `sys`、`socket`、`json`、`select`、`threading` 和 `_thread` 探针。Lab 程序由 `dji_scratch` 提供自己的运行环境，不能用 root shell 直接执行的结果代替 Lab 执行结果。这个约束只属于机内 Lab 实现，不属于 DUSS 协议本身；主机端或其他语言客户端的版本边界见 [Hanppie 技术架构 1.5 节](./architecture.md#15-sdk-打包与-python-边界)。
 
+#### 脚本自定义界面
+
+固定 macOS RoboMaster `1.1.5/build 239` 的 `Module.LAB/LABCustomUIManger`、`LABCustomUIDataBase`、`DJIWidget*` 与原生 `RobomasterSystemAbstraction` 共同给出自定义界面契约。以下属于静态恢复，尚无本轮设备报文或真实脚本验收；Hanppie 的开发/交付状态见[实施台账 P03](./official-app-capability-implementation.md#实施清单)。
+
+| 方向 | 原生线格式与依据 |
+| --- | --- |
+| 脚本到终端属性 | `c9 → 02 / 3f:ba`，头部为 `widgetType:u8, index:u8, function:u8, count:u8`，随后为参数 TLV；恢复的 `custom_ui/widget_module.py` 也按此顺序构造 |
+| 属性确认 | `OnCustomUIAttributePush` 地址 `0x697cd0` 在分派前确认；`0x697d10` 写单字节零，`0x697d89` 沿用请求序号，`0x697dad` 指定长度 1。收到确认不证明控件渲染成功 |
+| 终端到脚本事件 | `02 → c9 / 3f:bb`，头部为 `widgetType:u8, index:u8, event:u8, count:u8`，参数同样是 TLV；`ActionCustomUIFunctionEvent` 地址 `0x6ac460`，`0x6ac7f9` 写 `3f:bb`，`0x6ac80a` 指定 host 9/index 6 |
+| 参数 TLV | `type:u8, length:u8, value:length bytes`；类型 0 为单字节布尔、1 为 int32 LE、2 为 float32 LE、3 为字符串。原生字符串按字节长度传输，单项长度字段上限 255，不能按字符数计算多字节输入预算 |
+
+`DJIWidgetType` 及工厂实际支持 Stage 0、Button 1、Toggle 2、Slider 3、DropDown 4、Text 5、InputField 6。枚举还声明 JoyStick 7，但工厂没有对应分支，不能仅凭名称承诺脚本摇杆控件可用。
+
+通用函数 0..8 依次为创建、销毁、显隐、名称、位置、尺寸、旋转、枢轴和顺序。位置/枢轴/旋转按浮点解析，尺寸按整数解析，颜色为四个 0..255 整数；文本对齐枚举为 0..8。Stage 负责添加/移除子控件。几何沿 Unity `RectTransform` 的中心坐标、Y 向上和 pivot；预制体尺寸不等于已经确认的运行时画布映射，真实缩放和不同终端坐标仍待验。
+
+| 控件 | 特有属性函数 | 用户事件 |
+| --- | --- | --- |
+| Button | 128..132：文字、文字色、对齐、字号、背景色 | 0 点击、1 按下、2 松开，均无参数 |
+| Toggle | 128..132 同 Button，133 勾选色、134 勾选状态 | 0，布尔值 |
+| Slider | 128 整数上下限，129 背景色、130 填充色、131 滑块色 | 0，整数值；`OnValueChanged` 以 0.2 秒限频，`OnPointerUp` 另发末值 |
+| DropDown | 128 选项，129..134 文字/背景/箭头/条目文字/条目背景/条目勾选色 | 0，所选索引整数；选项是多个字符串参数，不是逗号串或 JSON |
+| Text | 128..131 文字样式，132 边框色、133 背景色、134/135 边框/背景显隐、136 追加文字 | 无输入事件 |
+| InputField | 128..131 文字样式，132..135 提示文字/颜色/对齐/字号，136 背景色 | 0，编辑后的字符串 |
+
+官方按控件类型/索引缓存先到的属性，创建后应用；控件在加入 Stage 后显示，停止和断连销毁全部控件。`RealController.SendCustomUIFunctionEventInfo` 的 action 回调没有处理结果，不能据此认定脚本回调已完成或物理动作已执行。属性与事件头部没有项目 GUID 或执行代次，不能仅靠主机运行标识证明已排除跨运行的晚到属性。
+
+恢复的机内辅助库不等同已验证的可用创作环境：`widget_base.py` 的 `set_active` 构造后遗漏参数，`set_pivot/set_order` 引用未定义变量，`widget.py` 的 Stage.remove 使用 add 选择子；`global_event_client` 的机载运行注入/初始化仍需缺失的 `script_manage` 或设备证据。保持恢复内容不变，不以主机猜测值、另建同地址 EventClient 或未验证示例掩盖这些边界。
+
+原始来源与指纹保存在忽略目录 `.hanppie/app-analysis/2026-09-08/`，定向反汇编为 `.hanppie/validation/2026-10-22-official-gap/P03-native-Attributes.txt`、`P03-native-Events.txt`；本轮差距、构建结果和源码摘要见[日期化复核](./official-app-gap-review-2026-10-23-cd4287c.md)。
+
 #### 5.3.5 macOS 客户端静态分析边界
 
 RoboMaster macOS `1.1.5`（build `239`）安装包采用 Unity `2019.2.3f1` / Mono，业务程序集包括 `Assembly-CSharp.dll`、`RobotService.dll` 和 `Native.dll`。Unity 资源包含机器人零件网格、纹理、材质和 Transform 层级；这些是应用显示资源，不是经标定的 CAD、URDF、碰撞或惯性模型。**代码**
@@ -907,6 +937,12 @@ Hanppie 当前将上述包接入 App 会话请求与接收通道，过滤相机�
 静态 C# `RecordAudio/RecordAudioComponent` 录音并生成 Opus 文件，`RecordAudioPanel.TransformSoundFile` 通过 PushFile 上传，`PlaySoundFile` 再调用 PlaySound；已恢复的该路径不足以证明另一条连续终端麦克风上行或全双工通话契约。既有 Hanppie 短片对讲不能因此写成连续通话；也不能把这类未证实模式当作已确认缺陷直接替换当前路径。**代码 / 证据边界**
 
 局部证据保留在 `.hanppie/validation/2026-10-22-official-gap/native-System-SoundStreamEnabled.txt`、`native-System-SoundStreamReply.txt`、`native-Camera-AntiLarsen.txt`、`native-System-PlaySoundStatus.txt`、`native-System-PlaySoundObserver.txt` 与 `native-System-PlaySoundRequest.txt`。本轮没有设备，声音流开关真实含义/应答、防啸叫的声学效果、播放推送属性/频率/来源/任务关联、延迟和并发结果均待验证；清单见[实施台账 A08](./official-app-capability-implementation.md#a08-验证入口与设备待验)。
+
+#### 头灯亮度
+
+固定 App 的 `Module.Setting.View/ViewSettingDisplay.cs:40/213/323` 从左头灯读值、回填滑条并调用 `SendRobotHeadLightBrightness`；`Base.CONTROL/RealController.cs:2012` 将同一亮度写入左右头灯两个 key。右侧 key 没有非 `Base.CONTROL` 具名引用，不代表没有生产写入链。该项不在 `SettingManager` 的 75 个默认字段内，也不等于装甲灯颜色或终端屏幕亮度。
+
+原生左侧 setter/getter 入口为 `0x6a03c0/0x6a08f0`，右侧为 `0x6a0c10/0x6a0d80`；最终共享配置构造在 `0x6a0685/0x6a0696` 写 `c3 / 3f:3c`，查询在 `0x6a0a58/0x6a0a69` 写 `c3 / 3f:3d`。写入构造复制 13 字节的多路配置，不能将单个亮度值直接视作完整载荷；字段/范围、同通道缓存、设备与硬件适用性仍需进一步恢复和设备验证。定向反汇编保留于忽略目录 `audit-cd4287c-native-Headlights.txt`。Hanppie 尚未接入该设置，交付归属见[实施台账 D01](./official-app-capability-implementation.md#实施清单)。
 
 ### 5.5 红外发射与命中链路
 
