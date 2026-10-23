@@ -53,6 +53,7 @@ internal interface ConsoleController : AutoCloseable {
     val robotInformation: cn.elonzh.hanppie.ui.robot.device.RobotInformationController
     val robotHealth: cn.elonzh.hanppie.ui.robot.device.RobotHealthController
     val robotArm: cn.elonzh.hanppie.ui.robot.arm.RobotArmController
+    val robotExtensions: cn.elonzh.hanppie.ui.robot.extensions.RobotExtensionController
     val robotAddressing: cn.elonzh.hanppie.ui.robot.maintenance.RobotAddressingController
     fun reconnectAddressing()
     val robotFirmware: cn.elonzh.hanppie.ui.robot.maintenance.RobotFirmwareController

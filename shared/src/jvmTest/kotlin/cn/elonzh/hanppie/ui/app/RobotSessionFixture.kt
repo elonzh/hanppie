@@ -3,6 +3,7 @@ package cn.elonzh.hanppie.ui.app
 import cn.elonzh.hanppie.robot.telemetry.RobotSystemStatus
 import cn.elonzh.hanppie.robot.maintenance.*
 import cn.elonzh.hanppie.robot.extensions.arm.*
+import cn.elonzh.hanppie.robot.extensions.*
 import cn.elonzh.hanppie.robot.files.*
 import cn.elonzh.hanppie.robot.lab.*
 import cn.elonzh.hanppie.robot.product.*
@@ -13,6 +14,12 @@ import kotlinx.io.Source
 import java.util.concurrent.atomic.AtomicInteger
 
 internal class RobotSessionFixture : RobotSession {
+    override var extensions: RobotExtensionService = object : RobotExtensionService {
+        override val state = kotlinx.coroutines.flow.MutableStateFlow(RobotExtensionState())
+        override suspend fun setObserving(kind: ExtensionKind?) {}
+        override suspend fun identify(component: RobotComponent): Unit = error("unused")
+        override fun stopIdentification() {}
+    }
     override var arm: RobotArmService = object : RobotArmService {
         override val state = kotlinx.coroutines.flow.MutableStateFlow(RobotArmState())
         override suspend fun setObserving(enabled: Boolean) {}

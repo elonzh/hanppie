@@ -10,6 +10,7 @@ internal fun moduleIdentificationCommand(component: RobotComponent, blinking: Bo
     val (host, index) = when (component.deviceId) {
         in 0x0318..0x031b -> 0x19 to (component.deviceId - 0x0317)
         in 0x1201..0x1204 -> 0x12 to (component.deviceId - 0x1200)
+        in 0x1601..0x1606 -> 0x16 to (component.deviceId - 0x1600)
         else -> error("该模块没有已建立的识别灯指令")
     }
     return ModuleIdentificationCommand(host or (index shl 5),

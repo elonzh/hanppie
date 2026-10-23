@@ -30,19 +30,10 @@ data class ClawWarnings(val raw: Int, val sender: Int) {
 }
 
 /** Host-chosen message IDs do not overlap this App session's existing 1/10/13/14 topics. */
-internal enum class ArmTopic(val messageId: Int, val uid: Long, val frequency: Int, val bytes: Int) {
-    ARM(15, 0x0002000926abd64dL, 10, 9), CLAW(16, 0x00020009124d156aL, 5, 1);
-    fun remove() = byteArrayOf(0, 2, messageId.toByte())
-    fun add() = ByteArray(15).apply {
-        this[0] = 2; this[1] = messageId.toByte(); this[4] = 1
-        repeat(8) { this[5 + it] = (uid ushr (8 * it)).toByte() }
-        put16(13, frequency)
-    }
-    fun data(frame: DussFrame): ByteArray? = frame.payload.takeIf {
-        frame.valid && frame.sender == Protocol.HOST_HDVT_UAV && frame.receiver == Protocol.HOST_MOBILE &&
-            frame.attr == Protocol.ATTR_NO_ACK && frame.set == Protocol.CMDSET_VIRTUAL_BUS &&
-            frame.id == Protocol.CMD_VBUS_DATA_ANALYSIS && it.size == bytes + 2 && it.u8(0) == 0 && it.u8(1) == messageId
-    }?.copyOfRange(2, bytes + 2)
+internal object ArmTopic {
+    val ARM = PeriodicTopic(15, 0x0002000926abd64dL, 10, 9)
+    val CLAW = PeriodicTopic(16, 0x00020009124d156aL, 5, 1)
+    val entries = listOf(ARM, CLAW)
 }
 
 internal fun decodeArmBinding(payload: ByteArray): ArmServoBinding {

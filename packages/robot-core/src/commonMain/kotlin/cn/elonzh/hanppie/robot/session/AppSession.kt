@@ -66,15 +66,28 @@ class AppSession(private val target: RobotTarget,
     val audio: cn.elonzh.hanppie.robot.media.RobotAudioService get() = audioCommands
     private val wifiCommands = WifiCommands(request = ::request)
     private val healthStore = cn.elonzh.hanppie.robot.telemetry.RobotHealthStore()
+    private val extensionCommands = cn.elonzh.hanppie.robot.extensions.ExtensionCommands(txLock, { healthStore.state.value }, ::requestChecked,
+        { node, set, id, payload -> send(node, Protocol.ATTR_NEED_ACK, set, id, payload) })
+    val extensions: cn.elonzh.hanppie.robot.extensions.RobotExtensionService = object : cn.elonzh.hanppie.robot.extensions.RobotExtensionService by extensionCommands {
+        override suspend fun setObserving(kind: cn.elonzh.hanppie.robot.extensions.ExtensionKind?) {
+            if (kind != null) extensionAccess { extensionCommands.setObserving(kind) }
+            else if (firmware.state.value.loaderMayBeActive) extensionCommands.retire(sendCleanup = false)
+            else extensionCommands.setObserving(null)
+        }
+        override suspend fun identify(component: cn.elonzh.hanppie.robot.product.RobotComponent) = maintenanceChange { extensionCommands.identify(component) }
+        override fun stopIdentification() = txLock.withLock {
+            if (firmware.state.value.loaderMayBeActive) extensionCommands.retireIdentification() else extensionCommands.stopIdentification()
+        }
+    }
     private val armCommands = ArmCommands(txLock, { healthStore.state.value }, ::requestChecked,
         { node, set, id, payload -> send(node, if (set == 0x33 && id == 0x10) Protocol.ATTR_NO_ACK else Protocol.ATTR_NEED_ACK, set, id, payload) })
     val arm: RobotArmService = object : RobotArmService by armCommands {
         override suspend fun setObserving(enabled: Boolean) {
-            if (enabled) armAccess { armCommands.setObserving(true) }
+            if (enabled) extensionAccess { armCommands.setObserving(true) }
             else if (firmware.state.value.loaderMayBeActive) { armCommands.retireIdentification(); armCommands.retireObservation() }
             else armCommands.setObserving(false)
         }
-        override suspend fun readBinding() = armAccess { armCommands.readBinding() }
+        override suspend fun readBinding() = extensionAccess { armCommands.readBinding() }
         override suspend fun setBinding(binding: ArmServoBinding, expected: ArmServoBinding) =
             maintenanceChange { armCommands.setBinding(binding, expected) }
         override suspend fun setLoadMode(mode: ArmLoadMode, expectedBinding: ArmServoBinding, expectedModeRaw: Int?) =
@@ -196,7 +209,7 @@ class AppSession(private val target: RobotTarget,
             !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl &&
             robotNanoTime() - lastReceivedNanos < 500_000_000) { "请结束其他任务并检查连接后启用遥控" }
     }
-    private suspend fun armAccess(action: suspend () -> Unit) {
+    private suspend fun extensionAccess(action: suspend () -> Unit) {
         check(modeMutex.tryLock()) { "请等待控制模式切换结束" }
         try {
             txLock.withLock {
@@ -322,6 +335,7 @@ class AppSession(private val target: RobotTarget,
     private fun clearMotionInput() {
         armCommands.stopControl()
         if (firmware.state.value.loaderMayBeActive) armCommands.retireIdentification() else armCommands.stopIdentification()
+        if (firmware.state.value.loaderMayBeActive) extensionCommands.retireIdentification() else extensionCommands.stopIdentification()
         inputDeadline = 0; triggerDeadline = 0
         controlPayload = RemoteControl.velocity(0.0,0.0,0.0)
         gimbalPayload = RemoteControl.gimbalVelocity(0.0, 0.0)
@@ -626,6 +640,7 @@ class AppSession(private val target: RobotTarget,
         firmwareCommands.close()
         txLock.withLock {
         armCommands.close(sendCleanup = !firmware.state.value.loaderMayBeActive)
+        extensionCommands.close(sendCleanup = !firmware.state.value.loaderMayBeActive)
         calibrationCommands.close()
         addressingCommands.close()
         audioCommands.close()
@@ -650,6 +665,7 @@ class AppSession(private val target: RobotTarget,
         addressingCommands.tick(robotNanoTime() - lastReceivedNanos < 500_000_000)
         calibrationCommands.tick()
         firmwareCommands.tick()
+        extensionCommands.tick()
         armCommands.tick(remote && !labRunning && !powerTransition && !tracking.value.blocksManualControl &&
             !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl,
             robotNanoTime() - lastReceivedNanos < 500_000_000)
@@ -687,10 +703,11 @@ class AppSession(private val target: RobotTarget,
 
     override fun labMode(running: Boolean) {
         txLock.withLock {
-            check(!powerTransition && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl && !arm.state.value.busy) { "请先结束电源、编址、校准、固件或扩展任务" }
+            check(!powerTransition && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl && !arm.state.value.busy && !extensions.state.value.busy) { "请先结束电源、编址、校准、固件或扩展任务" }
             mode = Protocol.MODE_LAB; labRunning = running
             armCommands.stopControl()
             armCommands.stopIdentification()
+            extensionCommands.retire()
         }
     }
     fun normalMode() { mode = Protocol.MODE_NORMAL; labRunning = false }
@@ -720,10 +737,13 @@ class AppSession(private val target: RobotTarget,
                                 wifiCommands.receive(frame)
                                 healthStore.receive(frame)
                                 armCommands.receive(frame)
+                                extensionCommands.receive(frame)
                                 addressingCommands.receive(frame)
                                 calibrationCommands.receive(frame)
                                 val firmwareWasBlocking = firmware.state.value.blocksControl
                                 firmwareCommands.receive(frame)
+                                if (!firmwareWasBlocking && firmware.state.value.blocksControl)
+                                    extensionCommands.retire(sendCleanup = !firmware.state.value.loaderMayBeActive)
                                 if (!firmwareWasBlocking && firmware.state.value.blocksControl && remote) {
                                     clearMotionInput()
                                     runCatching { sendNeutral(forceActuatorStop = true) }
@@ -780,6 +800,7 @@ class AppSession(private val target: RobotTarget,
         if (active.load()) runCatching { safetyStop() }
         firmwareCommands.close()
         armCommands.close(sendCleanup = !firmware.state.value.loaderMayBeActive)
+        extensionCommands.close(sendCleanup = !firmware.state.value.loaderMayBeActive)
         txLock.withLock { calibrationCommands.close(); addressingCommands.close() }
         if (active.load() && remote) runCatching { send(Protocol.HOST_CHASSIS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_WORK_MODE_SET, byteArrayOf(0)) }
         active.store(false)

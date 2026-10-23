@@ -70,7 +70,8 @@ internal fun RobotInformationContent(model: ConsoleController) {
 }
 
 @Composable
-private fun <T> InformationRow(label: String, value: InformationValue<T>, tag: String, query: () -> Unit, render: @Composable (T) -> String) {
+internal fun <T> InformationRow(label: String, value: InformationValue<T>, tag: String, query: () -> Unit,
+    enabled: Boolean = true, render: @Composable (T) -> String) {
     Row(Modifier.fillMaxWidth().testTag("robot-info-$tag"), horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -83,7 +84,7 @@ private fun <T> InformationRow(label: String, value: InformationValue<T>, tag: S
         }, Modifier.testTag("robot-info-value-$tag"), fontSize = 14.sp,
             color = if (value is InformationValue.Failed) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.onSurface)
         }
-        Button(query, Modifier.heightIn(min = 48.dp).testTag("robot-info-query-$tag"), enabled = value != InformationValue.Loading) {
+        Button(query, Modifier.heightIn(min = 48.dp).testTag("robot-info-query-$tag"), enabled = enabled && value != InformationValue.Loading) {
             Text(tr(if (value is InformationValue.Failed) Res.string.album_retry else Res.string.robot_info_query))
         }
     }

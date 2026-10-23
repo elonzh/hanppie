@@ -50,8 +50,8 @@
 | M01 | 电机/装甲/舵机/ToF/适配板编址：发现、进度、取消与恢复 | 离线完成 | `ddbc91d`；43 项 M01 用例及 9 项回归通过，桌面入口与四组横屏验收完成；下方 M01 记录 | 接线顺序、编址结果、单轮停止、灯图与持久性、失联恢复 |
 | M02 | 云台/底盘/机械臂校准任务：前置条件、进度、取消与恢复 | 离线完成 | `e135b38`；39 项 M02 用例与 13 项回归通过，桌面 classes、真实维护入口及四组横屏验收完成；下方 M02 记录 | 物理校准、失败/断连后状态；云台无已证实的独立取消命令 |
 | M03 | 本地固件查询、文件验证、分发、升级与恢复 | 离线完成 | `ee8df9b`；64 项 M03 用例与 21 项回归通过，桌面 classes、真实维护入口及四组横屏共 50 张渲染验收完成；下方 M03 记录 | 型号/版本兼容、真实 FTP/刷写、断电与恢复；全部未执行 |
-| E01 | 机械臂/爪安装管理、直接操控与状态 HUD | 离线完成 | 本提交 `feat(extensions): 补齐机械臂与机械爪安装和操控`；49 项 E01 用例与 30 项回归通过，真实维护/FPV 入口及四组横屏共 31 张渲染验收完成；下方 E01 记录 | 扩展识别、绑定/带载、运动/限位与停止；全部未执行 |
-| E02 | 舵机、ToF、适配板在线列表、标识与数据订阅 | 待实施 | — | 各类扩展的实际数据与离线变化 |
+| E01 | 机械臂/爪安装管理、直接操控与状态 HUD | 离线完成 | `90daea2`；49 项 E01 用例与 30 项回归通过，真实维护/FPV 入口及四组横屏共 31 张渲染验收完成；下方 E01 记录 | 扩展识别、绑定/带载、运动/限位与停止；全部未执行 |
+| E02 | 舵机、ToF、适配板在线列表、标识与数据订阅 | 离线完成 | 本提交 `feat(extensions): 补齐常规扩展部件状态与识别`；33 项 E02 用例与 72 项回归通过，真实维护入口及四组横屏共 38 张渲染验收完成；下方 E02 记录 | 各类扩展身份、实际数据/量纲、标识灯和离线变化；全部未执行 |
 | V01 | 跟随原生 Info、候选框处理、状态/错误解释 | 待实施 | — | 原生推送字段及框语义 |
 | V02 | 机器人/标签辅助瞄准、激光点与识别结果叠加 | 待实施 | — | 资源优先级、目标与瞄准结果 |
 | V03 | 人体/姿态/巡线/颜色等检测配置、结果与资源管理 | 待实施 | — | 硬件/资源支持和结果准确性 |
@@ -118,7 +118,9 @@
 | 2026-10-23 | N02 信道与干扰 | 新增 4 项协议、1 项 App 会话 UDP 回环、3 项共享状态和 1 项界面交互；扩展根连接、会话互斥及四种横屏布局。共 28 项定向测试通过，桌面 classes 通过；补充多组信道报告/畸形后组向量后 4 项协议定向复核通过 | `ddf0e97` |
 | 2026-10-23 | N03 SDR 配置 | 新增 4 项协议、1 项 App 会话 UDP 回环、2 项共享控制器、1 项根连接、1 项实际维护页交互和 4 项横屏布局；连同 Wi-Fi 回归共 41 项通过，桌面 classes 通过。补充界面恢复流程后 5 项 UI/布局复核通过，最终连接/状态/交互 4 项复核通过 | `77b595b` |
 | 2026-10-23 | H01 模块健康与电池 | 新增 3 项解析/快照、1 项 App 会话 UDP 回环、1 项状态归属、2 项消息目录、3 项界面和 4 项横屏布局；连同遥测、产品、连接、维护、发射和遥控生命周期回归共 52 项通过，桌面 classes 通过。补充空报告和关闭后计时边界后 12 项定向复核通过 | `feat(health): 补齐模块异常与电池状态` |
-| 2026-10-23 | E01 机械臂与机械爪 | 49 项 E01 用例、30 项回归全部通过，desktop classes 与 core/shared iOS Simulator 编译通过；真实维护入口、FPV 输入切换与四组横屏共 31 张渲染；独立恢复问题修复复核 ship，实机未执行 | 本提交 `feat(extensions): 补齐机械臂与机械爪安装和操控` |
+| 2026-10-23 | E01 机械臂与机械爪 | 49 项 E01 用例、30 项回归全部通过，desktop classes 与 core/shared iOS Simulator 编译通过；真实维护入口、FPV 输入切换与四组横屏共 31 张渲染；独立恢复问题修复复核 ship，实机未执行 | `90daea2` |
+
+| 2026-10-23 | E02 常规扩展部件 | 33 项 E02 用例、72 项回归全部通过，desktop classes 与 core/shared iOS Simulator 编译通过；真实维护/编址导航及四组横屏共 38 张合成渲染，独立审查 ship；实机未执行 | 本提交 `feat(extensions): 补齐常规扩展部件状态与识别` |
 
 ### A01 验证入口与设备待验
 
@@ -592,5 +594,38 @@ FPV 的“臂 / 爪”入口显式切换输入面板，保留视频和媒体/遥
 5. 与编址、校准、固件、自主程序、对象跟随及原有遥控的设备侧互斥和恢复；所有写入不自动重放，运动不自动恢复。
 
 未运行 Android、iOS 界面或实机验收；iOS 仅编译。当前提交只完成 E01 的离线范围，其余任务继续按清单实施。
+
+### E02 实施进度与设备待验
+
+离线完成，随本次范围提交；全部物理验收仍未执行。实际入口为设置 → 机器人维护 → 扩展部件，覆盖三类在线编号选择、读数/原值、失效与过期状态、识别灯、版本查询和既有部件编址导航。职责、生命周期与当前行为维护在[应用实现](./architecture.md#134-遥控操纵镜头坐标系与安全联动)，固定官方版本的原生订阅、解码与灯指令维护在[上游扩展数据契约](./architecture-robomaster.md#舵机tof-与传感器适配板常规模块数据)。
+
+初期调查中“舵机速度管理缺口”的结论在本轮细化：setter 有原生构造，但完整托管客户端没有调用者，尚无已确认的官方用户流程，不能只按 key 增设运动入口。此判断不删除三类扩展在线、标识、读数和订阅的既定范围。H02 版本、M01 编址及 M01/E01 标识灯编码得到复用；没有新增依赖或平台业务实现，C01–C14 保持冻结。
+
+当前 105 个不同用例通过，其中 E02 新增 33、回归 72：
+
+- 核心 60 项：协议 6、连接服务 10、真实 UDP 合成回环 2，共新增 18；机械臂、编址协议与 App/编址/校准/固件/电源会话回归 42。覆盖来源/长度/字节序、无效与原值、仅接纳后续样本、切换族、热插拔、过期、拒绝/重试、ADD 在途退出与二次清理、发包前条件变化、识别灯丢应答/期限/离线、关闭与 loader 清理抑制，以及程序和维护准入。
+- 共享 45 项：控制器 6、根连接 2、实际界面 3、四组布局 4，共新增 15；机械臂、设备信息与编址/校准/固件连接回归 30。覆盖显式选择、失败后重试、后台只恢复只读观察、不重放亮灯、旧连接晚到结果隔离、在途切换、程序/维护互斥、H02 查询和真实设置/编址返回路径。
+- 首轮核心范围 59 项，新增接管用例及最终在线读数判断后服务 10 项定向复核；共享首轮 45 项，统一中文“传感器转接板”后再复核 7 项 UI/布局。重复执行不累计。桌面 classes、core/shared iOS Simulator 编译通过。
+
+```bash
+./gradlew :packages:robot-core:desktopTest --tests '*Extension*Test' --tests '*Arm*Test' --tests '*ModuleAddressingProtocolTest' --tests '*RobotAddressingSessionTest' --tests '*RobotCalibrationSessionTest' --tests '*RobotFirmwareSessionTest' --tests '*RobotPowerSessionTest' --tests '*AppSessionIntegrationTest.loopbackHandshakeSetupTelemetryAndClose*' :shared:compileTestKotlinJvm :desktopApp:classes :packages:robot-core:compileKotlinIosSimulatorArm64 --console=plain
+./gradlew :packages:robot-core:desktopTest --tests '*ExtensionCommandsTest' :packages:robot-core:compileKotlinIosSimulatorArm64 :desktopApp:classes --console=plain
+./gradlew :shared:jvmTest --tests '*RobotExtension*Test' --tests '*RobotArmControllerTest' --tests '*RobotArmConnectionTest' --tests '*RobotArmUiTest' --tests '*RobotInformationControllerTest' --tests '*RobotInformationConnectionTest' --tests '*RobotInformationUiTest' --tests '*RobotAddressingConnectionTest' --tests '*RobotCalibrationConnectionTest' --tests '*RobotFirmwareConnectionTest' :desktopApp:classes :shared:compileKotlinIosSimulatorArm64 --console=plain
+./gradlew :shared:jvmTest --tests '*RobotExtensionUiTest' --tests '*RobotExtensionLayoutTest' :desktopApp:classes :shared:compileKotlinIosSimulatorArm64 --console=plain
+```
+
+本机使用 JDK 25 启动现有 wrapper，未改项目工具链。结果与计数来源保留在忽略目录 `.hanppie/validation/2026-10-22-official-gap/E02-results.json`；核心日志为 `E02-core-session.log`、`E02-core-retirement.log`、`E02-current-presence.log`，共享范围及确认日志为 `E02-ui-first.log`、`E02-ui-confirmation.log`。首轮共享 XML 在 `E02-ui-first-xml/` 归档，避免后续测试过滤覆盖报告后丢失计数依据。原生来源摘要和片段为 `E02-native-contracts.json` 与 `E02-native-*`，不提交厂商材料或生成日志。
+
+桌面合成状态验收覆盖 844×390、1024×600、1280×720 中文，以及 844×390 英文 1.4 倍字体/深色，共 36 张状态渲染，另有 2 张真实设置/Console 路由渲染。包含断开、空列表、选择、三族数据、无效舵机、过期记录、失败重试和亮灯；紧凑窗口滚动时固定标题保留所选对象。最终 38 张清单及摘要在 `.impeccable/review/e02/captures.json`，独立审查与文档核对分别见上述验证目录的 `E02-finish-review.md`、`E02-documentation-review.md`；审查结论为 `ship`，仅覆盖已审的合成桌面界面与行为。
+
+全部设备待验为“未执行”：
+
+1. 1–4 号舵机、1–4 号 ToF、1–6 号适配板的在线身份与槽位，以及完整报告缺席、热插拔和重新连接后的变化。
+2. 三族 DDS 的接受、属性/来源、频率、长度、无效与极值、切换/退订、ADD 在途退出、晚到报告及清理效果。
+3. 舵机有效位、速度单位与角度方向/零点；ToF 实际距离、原始头含义和测量边界；两路 IO/ADC 电气语义、量纲与极值。
+4. 标识灯实际对象、绿色闪烁 3 秒后常亮、显式结束，以及拒绝/丢应答、离页、后台、离线和失联后的灯状态。
+5. H02 版本节点与实际固件结果、进入/返回 M01 编址时的订阅/标识清理，与机械臂、程序及固件任务的设备侧并发和恢复。
+
+本地 UDP 使用真实套接字与 App 关联，应答/读数均为合成数据；桌面渲染使用合成服务。未执行 Android、iOS 界面或实机验收，iOS 仅编译。这些证据不能证明设备接受指令、数据准确或物理效果。
 
 当前没有任何新增能力获得实机验收。离线完成不清除表中的实机待验项，也不代表该目标的其他条目已经完成。
