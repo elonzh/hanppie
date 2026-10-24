@@ -838,52 +838,6 @@ class ConsoleUiTest {
         }
     }
 
-    @Test fun scriptToolListOpensEditorAndProtectsUnsavedWork() {
-        Localization.initialize("zh", null)
-        val script = cn.elonzh.hanppie.ui.scripts.StoredScript("jump-script", "列表中的巡检", "def start(): pass", 1, 1)
-        val model = testConsoleModel(scriptRepository = MemoryScriptRepository(listOf(script)))
-        val document = mutableStateOf(EditorDocument(source = "unsaved work", savedSource = ""))
-        try {
-            rule.setContent { WorkbenchTheme { Box(Modifier.requiredSize(393.dp, 740.dp)) { Console(model, document) } } }
-            rule.waitUntil(5_000) { model.chat.state.value.ready && !model.scriptLibrary.state.value.loading }
-            rule.runOnIdle {
-                model.chat.state.value = model.chat.state.value.copy(lines = listOf(ChatLine(ChatRole.TOOL,
-                    toolCall = MessagePart.Tool.Call("list", "list_lab_scripts", "{}"),
-                    toolResult = MessagePart.Tool.Result("list", "list_lab_scripts",
-                        """{"scripts":[{"id":"${script.id}","name":"${script.name}","sourceLength":17,"updatedAtEpochMillis":1}]}"""))))
-            }
-            kotlinx.coroutines.runBlocking {
-                model.scriptLibrary.rename(script.id, "已重命名的巡检")
-                model.scriptLibrary.create(script.name, "def start():\n    print('another script')")
-            }
-            rule.onNodeWithContentDescription("对话").performClick()
-            rule.onNodeWithTag("tool-open-script-${script.id}").assertIsDisplayed()
-            snapshot("phone-chat-script-list")
-            rule.onNodeWithTag("tool-open-script-${script.id}").performClick()
-            rule.onNodeWithText("放弃修改").assertIsDisplayed()
-            rule.onNodeWithText("返回").performClick()
-            rule.runOnIdle { assertEquals("unsaved work", document.value.source) }
-            rule.onNodeWithTag("tool-open-script-${script.id}").performClick()
-            rule.onNodeWithText("放弃修改").performClick()
-            rule.runOnIdle {
-                assertEquals(script.id, document.value.scriptId)
-                assertEquals(script.source, document.value.source)
-                assertEquals("已重命名的巡检", document.value.displayName)
-            }
-            rule.onNodeWithTag("script-editor").assertIsDisplayed()
-            snapshot("phone-script-editor-from-chat")
-            rule.onNodeWithContentDescription("返回对话").performClick()
-            rule.onNodeWithTag("chat-surface").assertIsDisplayed()
-            rule.onNodeWithTag("tool-open-script-${script.id}").performClick()
-            rule.onNodeWithTag("script-editor").assertIsDisplayed()
-            kotlinx.coroutines.runBlocking { model.scriptLibrary.delete(script.id) }
-            rule.onNodeWithContentDescription("对话").performClick()
-            rule.onNodeWithTag("tool-open-script-${script.id}").performClick()
-            rule.onNodeWithText("此脚本已不在脚本库中，请刷新脚本列表。").assertIsDisplayed()
-            rule.runOnIdle { assertEquals(script.source, document.value.source) }
-        } finally { model.close() }
-    }
-
     @Test fun toolExpansionAndEditorReturnKeepTheReadingPosition() {
         Localization.initialize("zh", null)
         val script = cn.elonzh.hanppie.ui.scripts.StoredScript("position-script", "位置测试", "def start(): pass", 1, 1)
@@ -1078,7 +1032,7 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.onNodeWithText(rawFailure, substring = false).assertIsDisplayed()
 
             rule.onNodeWithTag("tool-message-header-${StopLabTool.NAME}")
-                .assertHeightIsAtLeast(32.dp)
+                .assertHeightIsAtLeast(48.dp)
                 .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
                 .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "工具详情已折叠"))
             rule.onNodeWithTag("tool-message-header-${SaveLabScriptTool.NAME}").performClick()

@@ -94,7 +94,7 @@ internal fun ToolMessage(line: ChatLine, onOpenScript: (String) -> Unit) {
         }
         Row(
             headerModifier.fillMaxWidth().testTag("tool-message-header-$tool")
-                .heightIn(min = 32.dp)
+                .heightIn(min = 48.dp)
                 .padding(horizontal = 12.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(9.dp),
@@ -417,7 +417,7 @@ private fun ScriptToolRow(id: String?, name: String, length: String?, onOpenScri
     val action = if (id != null) Modifier.clickable(role = Role.Button) { onOpenScript(id) }
         .testTag("tool-open-script-$id") else Modifier
     Row(Modifier.fillMaxWidth().then(action)
-        .heightIn(min = 32.dp).padding(8.dp),
+        .heightIn(min = 48.dp).padding(8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         WorkbenchIcon(WorkbenchGlyph.FILE_TEXT, MiuixTheme.colorScheme.primary, Modifier.size(20.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {

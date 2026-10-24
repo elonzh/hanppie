@@ -211,14 +211,14 @@ internal fun Console(
         model.haltRemote()
         navigate(4); showRobotMaintenance = true
     }
-    var chatScriptError by remember { mutableStateOf<String?>(null) }
+    var chatScriptUnavailable by remember { mutableStateOf(false) }
     var pendingChatScript by remember { mutableStateOf<String?>(null) }
     fun openChatScript(scriptId: String) {
         val script = model.scriptLibrary.state.value.scripts.firstOrNull { it.id == scriptId }
         if (script == null) {
-            chatScriptError = tr(Res.string.chat_script_unavailable)
+            chatScriptUnavailable = true
         } else {
-            chatScriptError = null
+            chatScriptUnavailable = false
             document.value = EditorDocument.from(script)
             focus.clearFocus()
             keyboard?.hide()
@@ -228,11 +228,11 @@ internal fun Console(
     WorkbenchDialog(show = pendingChatScript != null, onDismissRequest = { pendingChatScript = null },
         title = tr(Res.string.replace_unsaved_script), summary = tr(Res.string.your_changes_have_not_been_saved)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button({ pendingChatScript = null }, Modifier.weight(1f)) { Text(tr(Res.string.back)) }
+            Button({ pendingChatScript = null }, Modifier.weight(1f).heightIn(min = 48.dp)) { Text(tr(Res.string.back)) }
             Button({
                 pendingChatScript?.let(::openChatScript)
                 pendingChatScript = null
-            }, Modifier.weight(1f)) { Text(tr(Res.string.discard_changes)) }
+            }, Modifier.weight(1f).heightIn(min = 48.dp)) { Text(tr(Res.string.discard_changes)) }
         }
     }
     var connectionDetails by remember { mutableStateOf(false) }
@@ -390,8 +390,9 @@ internal fun Console(
                                             }
                                         }
                                     }
-                                    if (route == ChatRoute) chatScriptError?.let {
-                                        Text(it, Modifier.padding(vertical = 8.dp), color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
+                                    if (route == ChatRoute && chatScriptUnavailable) {
+                                        Text(tr(Res.string.chat_script_unavailable), Modifier.padding(vertical = 8.dp),
+                                            color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
                                     }
                                     when (route) {
                                         ChatRoute -> ChatPage(model, Modifier.weight(1f), onVoiceInput,
