@@ -1,0 +1,8 @@
+<resources>
+    <string name="script_audio_slots_full">All %1$s audio slots are in use. Delete a clip before importing another.</string>
+    <string name="script_audio_file_too_large">Audio file exceeds the %1$s MB limit. Choose a smaller file.</string>
+    <string name="script_audio_budget_limit">Audio exceeds the %1$s MB program upload limit. Choose a shorter clip.</string>
+    <string name="script_audio_missing">This audio clip no longer exists. Reopen the audio list.</string>
+    <string name="script_audio_load_failed_value">Could not load audio: %1$s</string>
+    <string name="script_audio_operation_failed_value">Could not update audio: %1$s</string>
+</resources>

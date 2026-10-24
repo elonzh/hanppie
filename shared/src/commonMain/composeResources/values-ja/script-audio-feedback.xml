@@ -1,0 +1,8 @@
+<resources>
+    <string name="script_audio_slots_full">%1$s 個の音声枠がすべて使用中です。音声を削除してから読み込んでください。</string>
+    <string name="script_audio_file_too_large">音声ファイルが上限の %1$s MB を超えています。小さいファイルを選んでください。</string>
+    <string name="script_audio_budget_limit">音声がプログラム転送の上限 %1$s MB を超えています。短い音声を選んでください。</string>
+    <string name="script_audio_missing">この音声は既に削除されています。音声一覧を開き直してください。</string>
+    <string name="script_audio_load_failed_value">音声を読み込めませんでした：%1$s</string>
+    <string name="script_audio_operation_failed_value">音声を更新できませんでした：%1$s</string>
+</resources>

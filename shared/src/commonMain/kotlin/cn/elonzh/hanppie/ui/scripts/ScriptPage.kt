@@ -95,6 +95,7 @@ import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.robot.device.ConnectionStatusChip
 import cn.elonzh.hanppie.ui.scripts.editor.CodeHistory
 import cn.elonzh.hanppie.ui.scripts.editor.ScriptCodeEditor
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -203,8 +204,11 @@ internal fun ScriptPage(
             try {
                 action()
                 onFileError(null)
-            } catch (error: Exception) {
-                report(error)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                // The audio library owns localized feedback; do not copy it into a stale file error.
+                onFileError(null)
             }
         }
     }
@@ -515,7 +519,10 @@ internal fun ScriptPage(
                             },
                             onMore = { moreOpen = true },
                             onMonitor = if (monitorInline) null else ({ monitorOpen = true }),
-                            onAudio = { audioOpen = true },
+                            onAudio = {
+                                audioOpen = true
+                                scope.launch { model.scriptAudio.open(if (editorOpen) document.value.scriptId else null, document.value.initialAudio) }
+                            },
                             shortWindow = shortWindow,
                             onBack = navigateBack.takeIf { shortWindow },
                             backLabel = tr(if (onBackToOrigin != null) Res.string.back_to_chat else Res.string.back_to_script_library),

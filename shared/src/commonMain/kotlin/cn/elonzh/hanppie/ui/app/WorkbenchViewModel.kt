@@ -131,7 +131,9 @@ internal class WorkbenchViewModel(
     fun importScriptAudio() = launchFileAction("import audio") {
         val file = FileKit.openFilePicker(AUDIO_EXTENSIONS) ?: return@launchFileAction
         val bytes = withContext(Dispatchers.IO) { file.source().buffered().use { it.readByteArray() } }
-        model.scriptAudio.import(file.name, bytes)
+        try { model.scriptAudio.import(file.name, bytes) }
+        catch (error: CancellationException) { throw error }
+        catch (_: Exception) { /* The library presents its own localized operation feedback. */ }
     }
 
     fun exportScript() = documentOperation("export script") {

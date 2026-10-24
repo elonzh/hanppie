@@ -1,5 +1,8 @@
 package cn.elonzh.hanppie.ui.scripts
 
+import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.ui.i18n.Localization
+import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.robot.lab.LabProgram
 import cn.elonzh.hanppie.ui.app.MemoryScriptRepository
@@ -68,8 +71,8 @@ class ScriptAudioLibraryTest {
         library.open(script.id)
         repeat(LabAudioClip.MAX_CLIPS) { index -> library.import("clip$index.mp3", byteArrayOf(1)) }
         assertEquals((0 until LabAudioClip.MAX_CLIPS).toList(), library.state.value.clips.map { it.id })
-        val failure = assertFailsWith<IllegalStateException> { library.import("extra.mp3", byteArrayOf(1)) }
-        assertContains(failure.message.orEmpty(), "最多 ${LabAudioClip.MAX_CLIPS} 个")
+        assertFailsWith<IllegalStateException> { library.import("extra.mp3", byteArrayOf(1)) }
+        assertEquals(Res.string.script_audio_slots_full, library.state.value.error?.resource)
     }
 
     @Test fun audioThatCannotFitTheDspBudgetIsRejected() = runBlocking {
@@ -77,8 +80,8 @@ class ScriptAudioLibraryTest {
         val oversized = StubImporter(bytesPerClip = LabProgram.MAX_DSP_BYTES)
         val library = ScriptAudioLibrary(repository, oversized)
         library.open(script.id)
-        val failure = assertFailsWith<IllegalArgumentException> { library.import("long.mp3", byteArrayOf(1)) }
-        assertContains(failure.message.orEmpty(), "上传上限")
+        assertFailsWith<IllegalStateException> { library.import("long.mp3", byteArrayOf(1)) }
+        assertEquals(Res.string.script_audio_budget_limit, library.state.value.error?.resource)
         assertTrue(repository.audio(script.id).isEmpty())
         assertTrue(library.state.value.clips.isEmpty())
     }
@@ -106,7 +109,7 @@ class ScriptAudioLibraryTest {
         val library = ScriptAudioLibrary(repository, StubImporter(failure = "无法解码该音频文件"))
         library.open(script.id)
         assertFailsWith<IllegalStateException> { library.import("broken.bin", byteArrayOf(1)) }
-        assertContains(library.state.value.error.orEmpty(), "无法解码")
+        assertContains(library.state.value.error?.resolve().orEmpty(), "无法解码")
         assertTrue(library.state.value.clips.isEmpty())
     }
 
@@ -165,6 +168,65 @@ class ScriptAudioLibraryTest {
         assertEquals(listOf(0, 1, 2), library.state.value.clips.map { it.id })
         assertEquals(listOf("third", "first", "second"), repository.audio(script.id).map { it.name })
         assertEquals(listOf(0, 1, 2), repository.audio(script.id).map { it.id })
+    }
+
+    @Test fun validationFeedbackKeepsItsIdentityAcrossAllLanguageChanges() = runBlocking {
+        val (repository, script) = repository()
+        val importer = StubImporter()
+        val library = ScriptAudioLibrary(repository, importer)
+        library.open(script.id)
+        assertFailsWith<IllegalStateException> { library.import("too-large.wav", ByteArray(50 * 1024 * 1024 + 1)) }
+        val feedback = checkNotNull(library.state.value.error)
+        assertEquals(Res.string.script_audio_file_too_large, feedback.resource)
+        assertEquals(listOf(50), feedback.arguments)
+        assertEquals(0, importer.imports, "Reject the host size before decoding")
+        try {
+            for (language in listOf("zh", "zh-Hant", "en", "ja", "de", "es", "fr", "ko", "ru")) {
+                Localization.initialize(language, language)
+                assertEquals(tr(Res.string.script_audio_file_too_large, 50), feedback.resolve())
+                assertEquals(feedback, library.state.value.error, "Changing language does not mutate the operation state")
+            }
+        } finally { Localization.initialize("zh", null) }
+        assertTrue(repository.audio(script.id).isEmpty())
+    }
+
+    @Test fun rawStorageFailureGetsALiveLocalizedContextAndRetainsItsDetails() = runBlocking {
+        val (repository, script) = repository()
+        var failing = true
+        val broken = object : ScriptRepository by repository {
+            override suspend fun audio(scriptId: String): List<LabAudioClip> =
+                if (failing) error("synthetic disk I/O: EACCES") else repository.audio(scriptId)
+        }
+        val library = ScriptAudioLibrary(broken, StubImporter())
+        library.open(script.id)
+        val feedback = checkNotNull(library.state.value.error)
+        assertEquals(Res.string.script_audio_load_failed_value, feedback.resource)
+        assertEquals(listOf("synthetic disk I/O: EACCES"), feedback.arguments)
+        try {
+            Localization.initialize("en", "en")
+            assertContains(feedback.resolve(), "Could not load audio")
+            Localization.select("fr")
+            assertContains(feedback.resolve(), "Impossible de charger")
+            assertContains(feedback.resolve(), "synthetic disk I/O: EACCES")
+        } finally { Localization.initialize("zh", null) }
+        assertTrue(library.state.value.clips.isEmpty())
+        assertTrue(!library.state.value.loading)
+        failing = false
+        library.open(script.id)
+        assertEquals(null, library.state.value.error, "Reopening retries a failed binding")
+    }
+
+    @Test fun missingClipFeedbackDoesNotChangeTheSavedResourcesAndSuccessClearsIt() = runBlocking {
+        val (repository, script) = repository()
+        val library = ScriptAudioLibrary(repository, StubImporter())
+        library.open(script.id)
+        val clip = library.import("kept.wav", byteArrayOf(1))
+        assertFailsWith<IllegalStateException> { library.rename(9, "missing") }
+        assertEquals(Res.string.script_audio_missing, library.state.value.error?.resource)
+        assertEquals(listOf(clip), repository.audio(script.id))
+        library.rename(clip.id, "updated")
+        assertEquals(null, library.state.value.error)
+        assertEquals("updated", repository.audio(script.id).single().name)
     }
 
     private class StubPlayer : cn.elonzh.hanppie.ui.robot.audio.LabAudioPlayer {

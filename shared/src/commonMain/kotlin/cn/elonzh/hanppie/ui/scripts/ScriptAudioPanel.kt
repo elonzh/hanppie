@@ -160,7 +160,7 @@ internal fun ScriptAudioPanel(
                 )
             }
         }
-        audio.error?.let { Text(it, Modifier.padding(horizontal = 8.dp), color = MiuixTheme.colorScheme.error, fontSize = 12.sp) }
+        audio.error?.let { Text(it.resolve(), Modifier.padding(horizontal = 8.dp).testTag("script-audio-error"), color = MiuixTheme.colorScheme.error, fontSize = 12.sp) }
     }
 }
 

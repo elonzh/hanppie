@@ -1,0 +1,8 @@
+<resources>
+    <string name="script_audio_slots_full">Los %1$s espacios de audio están ocupados. Elimina un clip antes de importar otro.</string>
+    <string name="script_audio_file_too_large">El archivo de audio supera el límite de %1$s MB. Elige un archivo más pequeño.</string>
+    <string name="script_audio_budget_limit">El audio supera el límite de carga del programa de %1$s MB. Elige un clip más corto.</string>
+    <string name="script_audio_missing">Este clip de audio ya no existe. Vuelve a abrir la lista de audio.</string>
+    <string name="script_audio_load_failed_value">No se pudo cargar el audio: %1$s</string>
+    <string name="script_audio_operation_failed_value">No se pudo actualizar el audio: %1$s</string>
+</resources>

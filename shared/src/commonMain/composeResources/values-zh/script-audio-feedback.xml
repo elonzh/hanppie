@@ -1,0 +1,8 @@
+<resources>
+    <string name="script_audio_slots_full">%1$s 个音频资源位已用满，请先删除一个音频再导入。</string>
+    <string name="script_audio_file_too_large">音频文件超过 %1$s MB 上限，请选择更小的文件。</string>
+    <string name="script_audio_budget_limit">音频超过程序上传的 %1$s MB 上限，请选择更短的音频。</string>
+    <string name="script_audio_missing">此音频已不存在，请重新打开音频列表。</string>
+    <string name="script_audio_load_failed_value">无法加载音频：%1$s</string>
+    <string name="script_audio_operation_failed_value">无法更新音频：%1$s</string>
+</resources>

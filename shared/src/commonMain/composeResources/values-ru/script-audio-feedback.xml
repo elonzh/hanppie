@@ -1,0 +1,8 @@
+<resources>
+    <string name="script_audio_slots_full">Все %1$s слотов аудио заняты. Удалите запись перед импортом новой.</string>
+    <string name="script_audio_file_too_large">Аудиофайл превышает лимит %1$s МБ. Выберите файл меньшего размера.</string>
+    <string name="script_audio_budget_limit">Аудио превышает лимит загрузки программы %1$s МБ. Выберите более короткую запись.</string>
+    <string name="script_audio_missing">Этой аудиозаписи больше нет. Откройте список аудио заново.</string>
+    <string name="script_audio_load_failed_value">Не удалось загрузить аудио: %1$s</string>
+    <string name="script_audio_operation_failed_value">Не удалось обновить аудио: %1$s</string>
+</resources>

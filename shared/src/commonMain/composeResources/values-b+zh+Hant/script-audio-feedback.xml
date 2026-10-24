@@ -1,0 +1,8 @@
+<resources>
+    <string name="script_audio_slots_full">%1$s 個音訊資源位置已用滿，請先刪除一個音訊再匯入。</string>
+    <string name="script_audio_file_too_large">音訊檔案超過 %1$s MB 上限，請選擇較小的檔案。</string>
+    <string name="script_audio_budget_limit">音訊超過程式上傳的 %1$s MB 上限，請選擇較短的音訊。</string>
+    <string name="script_audio_missing">此音訊已不存在，請重新開啟音訊清單。</string>
+    <string name="script_audio_load_failed_value">無法載入音訊：%1$s</string>
+    <string name="script_audio_operation_failed_value">無法更新音訊：%1$s</string>
+</resources>

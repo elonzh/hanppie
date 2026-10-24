@@ -1,0 +1,8 @@
+<resources>
+    <string name="script_audio_slots_full">Les %1$s emplacements audio sont occupés. Supprimer un extrait avant d’en importer un autre.</string>
+    <string name="script_audio_file_too_large">Le fichier audio dépasse la limite de %1$s Mo. Choisir un fichier plus petit.</string>
+    <string name="script_audio_budget_limit">L’audio dépasse la limite de transfert du programme de %1$s Mo. Choisir un extrait plus court.</string>
+    <string name="script_audio_missing">Cet extrait audio n’existe plus. Rouvrir la liste audio.</string>
+    <string name="script_audio_load_failed_value">Impossible de charger l’audio : %1$s</string>
+    <string name="script_audio_operation_failed_value">Impossible de mettre à jour l’audio : %1$s</string>
+</resources>

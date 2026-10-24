@@ -1,5 +1,8 @@
 package cn.elonzh.hanppie.ui.scripts
 
+import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.ui.i18n.UiText
+import cn.elonzh.hanppie.ui.i18n.uiText
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.robot.lab.LabProgram
 import cn.elonzh.hanppie.ui.robot.audio.AudioPlaybackState
@@ -15,6 +18,10 @@ import kotlinx.coroutines.sync.withLock
 
 private val audioLogger = KotlinLogging.logger {}
 
+/** App validation keeps resource identity; codec/storage details remain unchanged. */
+private class ScriptAudioFailure(val feedback: UiText) : IllegalStateException(feedback.resolve())
+private fun rejectAudio(feedback: UiText): Nothing = throw ScriptAudioFailure(feedback)
+
 /** Refuses oversized host files before decoding to prevent host memory exhaustion. */
 private const val MAX_AUDIO_FILE_BYTES = 50 * 1024 * 1024
 
@@ -23,7 +30,7 @@ internal data class ScriptAudioState(
     val clips: List<LabAudioClip> = emptyList(),
     val loading: Boolean = false,
     val busy: Boolean = false,
-    val error: String? = null,
+    val error: UiText? = null,
 )
 
 /** Chooses the first free resource id; the machine only exposes ids 0..9. */
@@ -67,7 +74,7 @@ internal class ScriptAudioLibrary(
     suspend fun open(scriptId: String?, initialClips: List<LabAudioClip> = emptyList()) = mutex.withLock {
         player.stop()
         val sanitized = initialClips.distinctBy { it.id }.sortedBy { it.id }
-        if (state.value.scriptId == scriptId && (scriptId != null || state.value.clips == sanitized)) return@withLock
+        if (state.value.scriptId == scriptId && state.value.error == null && (scriptId != null || state.value.clips == sanitized)) return@withLock
         state.value = ScriptAudioState(scriptId = scriptId, clips = if (scriptId == null) sanitized else emptyList(), loading = scriptId != null)
         if (scriptId == null) return@withLock
         try {
@@ -76,7 +83,7 @@ internal class ScriptAudioLibrary(
             throw error
         } catch (error: Exception) {
             audioLogger.error(error) { "Could not load script audio" }
-            state.value = state.value.copy(loading = false, error = error.message ?: error::class.simpleName.orEmpty())
+            state.value = state.value.copy(loading = false, error = uiText(Res.string.script_audio_load_failed_value, error.message ?: error::class.simpleName.orEmpty()))
         }
     }
 
@@ -88,22 +95,21 @@ internal class ScriptAudioLibrary(
     }
 
     suspend fun import(name: String, bytes: ByteArray): LabAudioClip = busy {
-        val scriptId = checkNotNull(state.value.scriptId) { "请先保存脚本，再添加自定义音频" }
+        val scriptId = state.value.scriptId ?: rejectAudio(uiText(Res.string.script_audio_needs_script))
         val current = state.value.clips
-        val id = checkNotNull(freeAudioId(current)) { "自定义音频最多 ${LabAudioClip.MAX_CLIPS} 个" }
-        require(bytes.size <= MAX_AUDIO_FILE_BYTES) { "音频文件过大（上限 ${MAX_AUDIO_FILE_BYTES / (1024 * 1024)} MB）" }
+        val id = freeAudioId(current) ?: rejectAudio(uiText(Res.string.script_audio_slots_full, LabAudioClip.MAX_CLIPS))
+        if (bytes.size > MAX_AUDIO_FILE_BYTES) rejectAudio(uiText(Res.string.script_audio_file_too_large, MAX_AUDIO_FILE_BYTES / (1024 * 1024)))
         val decoded = importer.decode(name, bytes)
         val clip = LabAudioClip(id, labAudioName(name), decoded.durationMillis, decoded.packets)
-        require(LabAudioClip.totalEncodedBytes(current + clip) <= LabProgram.MAX_DSP_BYTES) {
-            "音频体积超过 Lab 程序上传上限（${LabProgram.MAX_DSP_BYTES / (1024 * 1024)} MB），请选择更短的音频"
-        }
+        if (LabAudioClip.totalEncodedBytes(current + clip) > LabProgram.MAX_DSP_BYTES)
+            rejectAudio(uiText(Res.string.script_audio_budget_limit, LabProgram.MAX_DSP_BYTES / (1024 * 1024)))
         repository.insertAudio(scriptId, clip)
         publish(clip)
         clip
     }
 
     suspend fun rename(nativeId: Int, name: String): LabAudioClip = busy {
-        val scriptId = checkNotNull(state.value.scriptId) { "请先保存脚本，再修改自定义音频" }
+        val scriptId = state.value.scriptId ?: rejectAudio(uiText(Res.string.script_audio_needs_script))
         val renamed = LabAudioClip(current(nativeId).id, labAudioName(name), current(nativeId).durationMillis, current(nativeId).packets)
         repository.updateAudio(scriptId, renamed)
         publish(renamed)
@@ -111,17 +117,17 @@ internal class ScriptAudioLibrary(
     }
 
     suspend fun delete(nativeId: Int) = busy {
-        val scriptId = checkNotNull(state.value.scriptId) { "请先保存脚本，再删除自定义音频" }
+        val scriptId = state.value.scriptId ?: rejectAudio(uiText(Res.string.script_audio_needs_script))
         current(nativeId)
         if (playbackState.value.playingClipId == nativeId) {
             player.stop()
         }
-        check(repository.deleteAudio(scriptId, nativeId)) { "自定义音频已不存在" }
+        if (!repository.deleteAudio(scriptId, nativeId)) rejectAudio(uiText(Res.string.script_audio_missing))
         state.value = state.value.copy(clips = state.value.clips.filterNot { it.id == nativeId })
     }
 
     suspend fun reorder(newOrder: List<LabAudioClip>) = busy {
-        val scriptId = checkNotNull(state.value.scriptId) { "请先保存脚本，再调整音频顺序" }
+        val scriptId = state.value.scriptId ?: rejectAudio(uiText(Res.string.script_audio_needs_script))
         player.stop()
         val reordered = newOrder.mapIndexed { index, clip ->
             LabAudioClip(index, clip.name, clip.durationMillis, clip.packets)
@@ -131,7 +137,7 @@ internal class ScriptAudioLibrary(
     }
 
     suspend fun move(fromIndex: Int, toIndex: Int) = busy {
-        val scriptId = checkNotNull(state.value.scriptId) { "请先保存脚本，再调整音频顺序" }
+        val scriptId = state.value.scriptId ?: rejectAudio(uiText(Res.string.script_audio_needs_script))
         val current = state.value.clips.toMutableList()
         if (fromIndex !in current.indices || toIndex !in current.indices || fromIndex == toIndex) return@busy
         player.stop()
@@ -145,7 +151,7 @@ internal class ScriptAudioLibrary(
     }
 
     private fun current(nativeId: Int): LabAudioClip =
-        state.value.clips.firstOrNull { it.id == nativeId } ?: error("自定义音频已不存在")
+        state.value.clips.firstOrNull { it.id == nativeId } ?: rejectAudio(uiText(Res.string.script_audio_missing))
 
     private fun publish(clip: LabAudioClip) {
         val clips = (state.value.clips.filterNot { it.id == clip.id } + clip).sortedBy { it.id }
@@ -160,7 +166,8 @@ internal class ScriptAudioLibrary(
             throw error
         } catch (error: Exception) {
             audioLogger.error(error) { "Script audio operation failed" }
-            state.value = state.value.copy(error = error.message ?: error::class.simpleName.orEmpty())
+            state.value = state.value.copy(error = if (error is ScriptAudioFailure) error.feedback
+                else uiText(Res.string.script_audio_operation_failed_value, error.message ?: error::class.simpleName.orEmpty()))
             throw error
         } finally {
             state.value = state.value.copy(busy = false)
