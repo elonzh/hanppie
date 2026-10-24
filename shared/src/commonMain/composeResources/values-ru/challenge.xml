@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="challenge_entry">Испытание</string>
+    <string name="challenge_sounds">Звуки обратной связи</string>
+    <string name="challenge_aimed">Прицел на маркере %1$s</string>
+    <string name="challenge_hit_unscored">Маркер %1$s · Без очков в этом раунде</string>
+    <string name="challenge_hit_points">Мишень %1$s · +100 очков</string>
+    <string name="challenge_hit_completed">Мишень %1$s завершена</string>
+    <string name="challenge_title">Одиночное испытание</string>
+    <string name="challenge_practice">Стрельба по мишеням</string>
+    <string name="challenge_race">Гонка по мишеням</string>
+    <string name="challenge_practice_guide">Разместите маркеры 1–5 в поле зрения. Поражайте заданные цели инфракрасным огнём до истечения времени. Каждое попадание даёт 100 очков; в этапе три группы.</string>
+    <string name="challenge_race_guide">Выберите число пронумерованных маркеров и завершите их в любом порядке. Время и каждая контрольная точка записываются.</string>
+    <string name="challenge_gel_guide">Используйте стоящие мишени, которые могут упасть. Счёт зависит от исчезновения ближайшей мишени после отчёта выстрела.</string>
+    <string name="challenge_marker_count">Пронумерованные мишени</string>
+    <string name="challenge_start">Начать испытание</string>
+    <string name="challenge_not_ready">Включите движение и проверьте живое видео перед началом.</string>
+    <string name="challenge_preparing">Подготовка прицела, правил и распознавания…</string>
+    <string name="challenge_countdown">Старт через %1$s</string>
+    <string name="challenge_wave_clear">Группа завершена</string>
+    <string name="challenge_level_change">Подготовка этапа %1$s</string>
+    <string name="challenge_stopping">Восстановление управления…</string>
+    <string name="challenge_practice_live">Этап %1$s · %2$s/3 · %3$s очков · %4$s</string>
+    <string name="challenge_race_live">Время %1$s</string>
+    <string name="challenge_targets_left">Осталось мишеней: %1$s</string>
+    <string name="challenge_stop">Завершить</string>
+    <string name="challenge_finished">Результат испытания</string>
+    <string name="challenge_completed">Все мишени завершены</string>
+    <string name="challenge_time_expired">Время вышло</string>
+    <string name="challenge_input_lost">Ввод управления прерван. Начните снова, когда будете готовы.</string>
+    <string name="challenge_vision_failed">Распознавание прервано. Проверьте живое видео перед повтором.</string>
+    <string name="challenge_cancelled">Испытание завершено</string>
+    <string name="challenge_cleanup_unknown">Очистка не подтверждена. Повторите остановку перед новым раундом.</string>
+    <string name="challenge_calibration_failed">Не удалось прочитать прицел робота. Проверьте связь и повторите.</string>
+    <string name="challenge_rules_rejected">Робот отклонил правила испытания.</string>
+    <string name="challenge_rules_timed_out">Правила испытания не подтверждены. Проверьте связь перед повтором.</string>
+    <string name="challenge_score">Очков: %1$s</string>
+    <string name="challenge_checkpoint">Мишень %1$s · %2$s</string>
+    <string name="challenge_name">Имя игрока</string>
+    <string name="challenge_save_score">Добавить в этот сеанс</string>
+    <string name="challenge_local_scores">Этот сеанс · пять лучших</string>
+    <string name="challenge_replay">Попробовать снова</string>
+    <string name="challenge_back_to_driving">Вернуться к управлению</string>
+</resources>

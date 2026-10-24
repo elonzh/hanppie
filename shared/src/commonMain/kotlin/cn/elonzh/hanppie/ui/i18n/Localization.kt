@@ -15,7 +15,8 @@ internal enum class AppLanguage(val preference: String, val languageTag: String,
     GERMAN("de", "de-DE", "Deutsch"),
     SPANISH("es", "es-ES", "Español"),
     FRENCH("fr", "fr-FR", "Français"),
-    KOREAN("ko", "ko-KR", "한국어");
+    KOREAN("ko", "ko-KR", "한국어"),
+    RUSSIAN("ru", "ru-RU", "Русский");
 
     companion object {
         fun isPreference(value: String) = value == "system" || entries.any { it.preference == value }

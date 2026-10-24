@@ -30,6 +30,7 @@ class UsageGuideUiTest {
     @Test fun largeSpanishLandscape() = scenario(844, 390, "es", 1.4f, true)
     @Test fun largeFrenchLandscape() = scenario(844, 390, "fr", 1.4f, true)
     @Test fun largeKoreanLandscape() = scenario(844, 390, "ko", 1.4f, true)
+    @Test fun largeRussianLandscape() = scenario(844, 390, "ru", 1.4f, true)
 
     @Test fun destinationActionsUseExistingRoutesWithoutStartingControl() = runDesktopComposeUiTest(width = 1024, height = 768) {
         Localization.initialize("zh", "zh")
