@@ -601,6 +601,7 @@
     <string name="about_project_info">Project &amp; Community</string>
     <string name="about_repository">GitHub Repository</string>
     <string name="about_license">Open Source License</string>
+    <string name="about_release_license">%1$s · Released under %2$s</string>
     <string name="about_developer">Author</string>
     <string name="about_copy_system_info">Copy Build &amp; System Info</string>
     <string name="about_info_copied">Copied to clipboard</string>

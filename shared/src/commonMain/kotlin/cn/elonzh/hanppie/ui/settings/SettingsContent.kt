@@ -439,7 +439,8 @@ private fun ShortcutRow(label: String, binding: String, capturing: Boolean, modi
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Text(label, Modifier.weight(1f), fontSize = 13.sp)
-            Button(onClick, insideMargin = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
+            Button(onClick, modifier = Modifier.heightIn(min = 48.dp),
+                insideMargin = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
                 colors = if (capturing) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors()) {
                 Text(if (capturing) tr(Res.string.press_a_key) else binding, fontSize = 12.sp)
             }

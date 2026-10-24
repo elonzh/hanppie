@@ -153,7 +153,7 @@ internal fun AboutSettingsContent(
                                 copied = false
                             }
                         },
-                        modifier = Modifier.heightIn(min = 40.dp).testTag("copy-diagnostic-info"),
+                        modifier = Modifier.heightIn(min = 48.dp).testTag("copy-diagnostic-info"),
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -241,7 +241,7 @@ internal fun AboutSettingsContent(
 
         // 4. Footer
         Text(
-            text = "${buildInfo.copyright} · Released under ${buildInfo.license}",
+            text = tr(Res.string.about_release_license, buildInfo.copyright, buildInfo.license),
             fontSize = 11.sp,
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             textAlign = TextAlign.Center,

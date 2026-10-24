@@ -601,6 +601,7 @@
     <string name="about_project_info">项目与社区</string>
     <string name="about_repository">GitHub 仓库</string>
     <string name="about_license">开源协议</string>
+    <string name="about_release_license">%1$s · 遵循 %2$s 开源协议发布</string>
     <string name="about_developer">开发者</string>
     <string name="about_copy_system_info">复制构建与系统信息</string>
     <string name="about_info_copied">已复制到剪贴板</string>

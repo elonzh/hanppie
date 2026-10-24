@@ -2,15 +2,21 @@ package cn.elonzh.hanppie.ui.settings
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
@@ -30,6 +36,7 @@ import cn.elonzh.hanppie.ui.app.MemorySettingsStore
 import cn.elonzh.hanppie.ui.app.testConsoleModel
 import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme as WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
 import kotlinx.coroutines.runBlocking
 import java.awt.image.BufferedImage
 import java.io.File
@@ -41,7 +48,7 @@ import kotlin.test.assertEquals
 class SettingsNavigationUiTest {
     @Test
     fun dataDirectoryShowsActualPathAndAllowsRetryAfterFailure() =
-        runDesktopComposeUiTest(width = 393, height = 740) {
+        runDesktopComposeUiTest(width = 700, height = 390) {
             Localization.initialize("zh", null)
             var attempts = 0
             val directory =
@@ -68,13 +75,13 @@ class SettingsNavigationUiTest {
         }
 
     @Test
-    fun dataDirectoryIsAbsentWithoutPlatformAccess() = runDesktopComposeUiTest {
+    fun dataDirectoryIsAbsentWithoutPlatformAccess() = runDesktopComposeUiTest(width = 844, height = 390) {
         setContent { WorkbenchTheme { DataDirectorySetting() } }
         onNodeWithTag("data-directory-path").assertDoesNotExist()
         onNodeWithTag("open-data-directory").assertDoesNotExist()
     }
 
-    @Test fun phoneUsesCategoryPagesAndPreservesDraftUntilSave() = runDesktopComposeUiTest(width = 393, height = 740) {
+    @Test fun compactLandscapeUsesCategoryPagesAndPreservesDraftUntilSave() = runDesktopComposeUiTest(width = 700, height = 390) {
         Localization.initialize("zh", null)
         val store = MemorySettingsStore()
         val model = testConsoleModel(settingsStore = store)
@@ -83,19 +90,19 @@ class SettingsNavigationUiTest {
             setContent { WorkbenchTheme { SettingsPage(model, Modifier.fillMaxSize().padding(horizontal = 20.dp)) } }
             onNodeWithTag("settings-category-model").assertIsDisplayed()
             onNodeWithText("API Key").assertDoesNotExist()
-            snapshot("settings-phone-categories", onRoot())
-            onNodeWithTag("settings-category-model").performClick()
+            snapshot("settings-compact-categories", onRoot())
+            onNodeWithTag("settings-category-model").performScrollTo().performClick()
             onNodeWithTag("settings-category-control").assertDoesNotExist()
             onNodeWithTag("model-provider-selector").performClick()
             onNodeWithTag("model-provider-DEEPSEEK").performClick()
             onNodeWithTag("settings-save").assertIsDisplayed()
-            snapshot("settings-phone-model", onRoot())
+            snapshot("settings-compact-model", onRoot())
             onNodeWithTag("settings-back").performClick()
-            onNodeWithTag("settings-category-general").performClick()
+            onNodeWithTag("settings-category-general").performScrollTo().performClick()
             onNodeWithText("API Key").assertDoesNotExist()
             onNodeWithTag("settings-save").assertDoesNotExist()
             onNodeWithTag("settings-back").performClick()
-            onNodeWithTag("settings-category-model").performClick()
+            onNodeWithTag("settings-category-model").performScrollTo().performClick()
             runOnIdle { assertEquals(ModelProviderPreset.DEEPSEEK, model.modelSettings.value.provider) }
             onNodeWithTag("settings-save").performClick()
             waitUntil(timeoutMillis = 3_000) { !model.settingsBusy.value }
@@ -103,24 +110,24 @@ class SettingsNavigationUiTest {
         } finally { model.close() }
     }
 
-    @Test fun wideLayoutKeepsSelectionWhenResizedAndSeparatesLights() = runDesktopComposeUiTest(width = 1080, height = 740) {
+    @Test fun wideLayoutKeepsSelectionWhenResizedAndSeparatesLights() = runDesktopComposeUiTest(width = 1080, height = 600) {
         Localization.initialize("zh", null)
         val model = testConsoleModel()
         val width = mutableStateOf(1040.dp)
         try {
-            setContent { WorkbenchTheme { Box(Modifier.width(width.value).fillMaxHeight()) { SettingsPage(model, Modifier.fillMaxSize().padding(horizontal = 20.dp)) } } }
+            setContent { WorkbenchTheme { Box(Modifier.width(width.value).height(390.dp)) { SettingsPage(model, Modifier.fillMaxSize().padding(horizontal = 20.dp)) } } }
             onNodeWithTag("settings-detail-general").assertIsDisplayed()
-            onNodeWithTag("settings-category-control").performClick()
+            onNodeWithTag("settings-category-control").performScrollTo().performClick()
             onNodeWithTag("settings-gamepad-open").assertDoesNotExist()
             onNodeWithTag("gamepad-response-defaults").assertDoesNotExist()
             onNodeWithTag("gimbal-sensitivity-selector").assertIsDisplayed()
             onNodeWithTag("remote-led-standby").assertDoesNotExist()
             snapshot("settings-desktop-control", onRoot())
-            onNodeWithTag("settings-category-lights").performClick()
+            onNodeWithTag("settings-category-lights").performScrollTo().performClick()
             onNodeWithTag("remote-led-standby").assertIsDisplayed()
             onNodeWithTag("gimbal-sensitivity-selector").assertDoesNotExist()
             snapshot("settings-desktop-lights", onRoot())
-            runOnIdle { width.value = 393.dp }
+            runOnIdle { width.value = 700.dp }
             onNodeWithTag("settings-detail-lights").assertIsDisplayed()
             onNodeWithTag("settings-category-model").assertDoesNotExist()
             onNodeWithTag("settings-back").performClick()
@@ -128,14 +135,14 @@ class SettingsNavigationUiTest {
         } finally { model.close() }
     }
 
-    @Test fun mediaSettingsCanBeSelectedAndSaved() = runDesktopComposeUiTest(width = 1080, height = 740) {
+    @Test fun mediaSettingsCanBeSelectedAndSaved() = runDesktopComposeUiTest(width = 1080, height = 600) {
         Localization.initialize("zh", null)
         val store = MemorySettingsStore()
         val model = testConsoleModel(settingsStore = store)
         try {
             waitUntil(timeoutMillis = 3_000) { !model.settingsBusy.value }
             setContent { WorkbenchTheme { Box(Modifier.fillMaxSize()) { SettingsPage(model, Modifier.fillMaxSize().padding(horizontal = 20.dp)) } } }
-            onNodeWithTag("settings-category-media").performClick()
+            onNodeWithTag("settings-category-media").performScrollTo().performClick()
             onNodeWithTag("settings-detail-media").assertIsDisplayed()
             onNodeWithTag("video-resolution-selector").assertIsDisplayed()
             onNodeWithTag("speaker-volume-card").assertIsDisplayed()
@@ -152,38 +159,56 @@ class SettingsNavigationUiTest {
         } finally { model.close() }
     }
 
-    @Test fun largeEnglishPhoneCanNavigateWithoutAccordionOrClippedActions() = runDesktopComposeUiTest(width = 320, height = 640) {
+    @Test fun largeEnglishLandscapeCanNavigateAndCaptureWithoutClippedActions() = runDesktopComposeUiTest(width = 844, height = 390) {
         Localization.initialize("en", null)
         val model = testConsoleModel()
         try {
             setContent {
-                CompositionLocalProvider(LocalDensity provides Density(1f, 1.3f)) {
+                CompositionLocalProvider(LocalDensity provides Density(1f, 1.4f)) {
                     WorkbenchTheme(AppearanceController(AppearanceSettings(NightMode.DARK))) {
                         SettingsPage(model, Modifier.fillMaxSize().padding(horizontal = 20.dp))
                     }
                 }
             }
-            snapshot("settings-small-dark-categories", onRoot())
+            snapshot("settings-landscape-dark-categories", onRoot())
             onNodeWithTag("settings-category-shortcuts").performScrollTo().performClick()
             onNodeWithTag("settings-back").assertIsDisplayed()
             onNodeWithTag("settings-save").assertIsDisplayed()
-            snapshot("settings-small-dark-shortcuts", onRoot())
+            snapshot("settings-landscape-dark-shortcuts", onRoot())
+            val before = model.controlSettings.value.shortcuts
+            onNode(hasText("W") and hasClickAction()).performScrollTo().assertHeightIsAtLeast(48.dp).performClick()
+            snapshot("settings-landscape-dark-shortcut-capture", onRoot())
+            onRoot().performKeyInput { pressKey(Key.Escape) }
+            assertEquals(before, model.controlSettings.value.shortcuts)
+            onNode(hasText("W") and hasClickAction()).performClick()
+            onRoot().performKeyInput { pressKey(Key.S) }
+            assertEquals(ControlKey.S, model.controlSettings.value.shortcuts[ControlAction.Forward].key)
+            assertEquals(ControlKey.W, model.controlSettings.value.shortcuts[ControlAction.Backward].key)
+            onNode(hasText("S") and hasClickAction()).assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+            snapshot("settings-landscape-dark-shortcut-assigned", onRoot())
         } finally { model.close(); Localization.initialize("zh", null) }
     }
 
-    @Test fun aboutPageShowsBuildInfoAndHidesSaveButton() = runDesktopComposeUiTest(width = 393, height = 740) {
+    @Test fun aboutPageShowsBuildInfoAndHidesSaveButton() = runDesktopComposeUiTest(width = 700, height = 390) {
         Localization.initialize("zh", null)
         val model = testConsoleModel()
         try {
-            setContent { WorkbenchTheme { SettingsPage(model, Modifier.fillMaxSize().padding(horizontal = 20.dp)) } }
+            setContent { WorkbenchTheme { CompositionLocalProvider(LocalDensity provides Density(1f, 1.4f)) {
+                SettingsPage(model, Modifier.fillMaxSize().padding(horizontal = 20.dp))
+            } } }
             onNodeWithTag("settings-category-about").performScrollTo().performClick()
-            onNodeWithTag("about-settings-content").assertIsDisplayed()
-            onNodeWithTag("settings-save").assertDoesNotExist()
-            onNodeWithTag("copy-diagnostic-info").assertIsDisplayed()
-            onNodeWithText("构建信息").assertIsDisplayed()
-            onNodeWithText("开源协议").assertIsDisplayed()
-            snapshot("settings-about-page", onRoot())
-        } finally { model.close() }
+            for (language in AppLanguage.entries) {
+                runOnIdle { Localization.select(language.preference) }
+                onNodeWithTag("about-settings-content").assertIsDisplayed()
+                onNodeWithTag("settings-save").assertDoesNotExist()
+                onNodeWithText(if (language == AppLanguage.ENGLISH) "Build Information" else "构建信息").performScrollTo().assertIsDisplayed()
+                onNodeWithTag("copy-diagnostic-info").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                snapshot("settings-about-${language.preference}-build", onRoot())
+                onNodeWithText(if (language == AppLanguage.ENGLISH) "Released under" else "开源协议发布", substring = true)
+                    .performScrollTo().assertIsDisplayed()
+                snapshot("settings-about-${language.preference}-footer", onRoot())
+            }
+        } finally { model.close(); Localization.initialize("zh", null) }
     }
 
     private fun snapshot(name: String, node: SemanticsNodeInteraction) {
