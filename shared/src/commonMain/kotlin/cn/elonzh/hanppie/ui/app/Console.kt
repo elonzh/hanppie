@@ -311,7 +311,7 @@ internal fun Console(
             TextField(ip, { ip = it }, modifier = Modifier.testTag("manual-ip"), label = tr(Res.string.robot_ipv4), singleLine = true)
             TextField(appId, { appId = it }, modifier = Modifier.testTag("manual-app-id"), label = tr(Res.string.appid_8_hex_characters), singleLine = true)
             if (manualAttempted) state.error?.let { error ->
-                Text(error, color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
+                Text(error.resolve(), color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 Button({ manual = false; manualAttempted = false }, Modifier.weight(1f).heightIn(min = 48.dp).testTag("manual-connect-cancel")) { Text(tr(Res.string.cancel)) }

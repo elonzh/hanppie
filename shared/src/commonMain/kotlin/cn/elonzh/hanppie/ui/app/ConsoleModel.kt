@@ -37,6 +37,8 @@ import cn.elonzh.hanppie.resources.addressing_finish_first
 import cn.elonzh.hanppie.resources.addressing_task_active
 import cn.elonzh.hanppie.resources.addressing_target_changed
 import cn.elonzh.hanppie.resources.Res
+import cn.elonzh.hanppie.resources.specify_a_robot_ipv4_address
+import cn.elonzh.hanppie.resources.appid_must_contain_8_hex_characters
 import cn.elonzh.hanppie.resources.sdr_verification_failed
 import cn.elonzh.hanppie.resources.wifi_verification_failed
 import cn.elonzh.hanppie.resources.wifi_target_changed
@@ -117,9 +119,11 @@ import cn.elonzh.hanppie.robot.session.RobotRuntime
 import cn.elonzh.hanppie.robot.session.RobotSession
 import cn.elonzh.hanppie.robot.tracking.TrackingState
 import cn.elonzh.hanppie.robot.session.RobotTarget
+import cn.elonzh.hanppie.robot.session.RobotTargetValidationException
 import cn.elonzh.hanppie.robot.telemetry.Telemetry
 import cn.elonzh.hanppie.ui.chat.ChatAgent
 import cn.elonzh.hanppie.ui.i18n.DateTimeStyle
+import cn.elonzh.hanppie.ui.i18n.UiText
 import cn.elonzh.hanppie.ui.i18n.formatLocalDateTime
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.i18n.uiText
@@ -177,6 +181,7 @@ import kotlin.concurrent.atomics.AtomicReference
 import kotlin.time.Clock
 
 private val consoleLogger = KotlinLogging.logger {}
+private class ConsoleOperationFailure(val feedback: UiText) : IllegalStateException(feedback.resolve())
 
 internal class ConsoleModel(
     override val voiceInput: SpeechInput = NoSpeechInput(),
@@ -486,8 +491,8 @@ internal class ConsoleModel(
             cameraYaw.value = session.load()?.cameraYaw
             runCatching { session.load()?.drive(x, y, z, effectivePitch, effectiveYaw, cameraRelative = true) }.onFailure {
                 haltRemote()
-                val message = tr(Res.string.remote_stopped_connection_unresponsive)
-                log(message)
+                val message = uiText(Res.string.remote_stopped_connection_unresponsive)
+                log(message.resolve())
                 state.update { current -> current.copy(error = message) }
             }
         }
@@ -541,7 +546,7 @@ internal class ConsoleModel(
             val s = session.load() ?: return
             val ok = runCatching { s.fireInfrared() }.onFailure {
                 state.update { current ->
-                    current.copy(error = it.message)
+                    current.copy(error = it.message?.let { message -> uiText(Res.string.error_value, message) })
                 }
             }.isSuccess
             if (ok) _fireEvents.tryEmit(AmmoType.INFRARED)
@@ -559,7 +564,7 @@ internal class ConsoleModel(
                 }.onFailure { error ->
                     val message = error.message ?: error::class.simpleName ?: "Unknown error"
                     log(tr(Res.string.error_value, message))
-                    state.update { it.copy(error = message) }
+                    state.update { it.copy(error = uiText(Res.string.error_value, message)) }
                 }
             }
         }
@@ -704,7 +709,7 @@ internal class ConsoleModel(
 
     private fun work(allowDuringChat: Boolean = false, connecting: Boolean = false, block: suspend () -> Unit) {
         if (chat.state.value.running && !allowDuringChat) {
-            state.update { it.copy(error = tr(Res.string.cancel_the_current_chat_before_changing_connections_or_using)) }; return
+            state.update { it.copy(error = uiText(Res.string.cancel_the_current_chat_before_changing_connections_or_using)) }; return
         }
         val snapshot = state.value
         if (!acceptingWork.load() || snapshot.busy ||
@@ -714,9 +719,17 @@ internal class ConsoleModel(
             catch (error: CancellationException) { throw error }
             catch (error: Exception) {
                 consoleLogger.error(error) { "Console operation failed connecting=$connecting" }
-                val message = error.message ?: error.toString()
-                log(tr(Res.string.error_value,message))
-                state.update { it.copy(error = message) }
+                val feedback = when (error) {
+                    is ConsoleOperationFailure -> error.feedback
+                    is RobotTargetValidationException -> uiText(when (error.field) {
+                        RobotTargetValidationException.Field.IPV4 -> Res.string.specify_a_robot_ipv4_address
+                        RobotTargetValidationException.Field.APP_ID -> Res.string.appid_must_contain_8_hex_characters
+                    })
+                    else -> uiText(Res.string.error_value, error.message ?: error.toString())
+                }
+                log(if (error is ConsoleOperationFailure || error is RobotTargetValidationException)
+                    tr(Res.string.error_value, feedback.resolve()) else feedback.resolve())
+                state.update { it.copy(error = feedback) }
             } finally { state.update { it.copy(busy = false, connecting = false) } }
         }
     }
@@ -728,7 +741,7 @@ internal class ConsoleModel(
     override fun pairRouter(ssid: String, password: String) {
         work(connecting = true) {
             awaitConnectionPreferences()
-            check(session.load() == null) { tr(Res.string.disconnect_the_current_session_first) }
+            if (session.load() != null) throw ConsoleOperationFailure(uiText(Res.string.disconnect_the_current_session_first))
             val normalizedSsid = ssid
             val currentPreferences = connectionPreferences.value.normalized()
             val normalizedAppId = currentPreferences.appId
@@ -761,10 +774,10 @@ internal class ConsoleModel(
     override fun connect(ip: String, appId: String) {
         work(connecting = true) {
             awaitConnectionPreferences()
-            check(session.load() == null) { tr(Res.string.disconnect_the_current_session_first) }
+            if (session.load() != null) throw ConsoleOperationFailure(uiText(Res.string.disconnect_the_current_session_first))
+            val target = RobotTarget(ip.trim(), appId.trim())
             val revision = connectionRevision.addAndFetch(1)
             prepareNetwork()
-            val target = RobotTarget(ip.trim(), appId.trim())
             val device = state.value.devices.firstOrNull { it.ip == target.ip }
             val remembered = connectionPreferences.value.robots.firstOrNull {
                 it.ip == target.ip && it.appId.equals(target.appId, ignoreCase = true)
@@ -781,7 +794,7 @@ internal class ConsoleModel(
 
     private suspend fun autoConnect() {
         awaitConnectionPreferences()
-        check(session.load() == null) { tr(Res.string.disconnect_the_current_session_first) }
+        if (session.load() != null) throw ConsoleOperationFailure(uiText(Res.string.disconnect_the_current_session_first))
         val revision = connectionRevision.addAndFetch(1)
         prepareNetwork()
         state.update { it.copy(statusMessage = uiText(Res.string.automatically_finding_robot), devices = emptyList()) }
@@ -830,7 +843,7 @@ internal class ConsoleModel(
             }
         }
         log(tr(Res.string.found_value_robots_connected_robots_may_not_broadcast_enter, devices.size))
-        throw lastFailure ?: IllegalStateException(tr(Res.string.no_robot_found_automatic_connection_failed))
+        throw lastFailure ?: ConsoleOperationFailure(uiText(Res.string.no_robot_found_automatic_connection_failed))
     }
 
     private suspend fun connectTarget(
@@ -1075,7 +1088,7 @@ internal class ConsoleModel(
         val origin = robotFirmware.state.value.recovery?.target ?: return
         work(connecting = true) {
             awaitConnectionPreferences()
-            check(session.load() == null) { tr(Res.string.disconnect_the_current_session_first) }
+            if (session.load() != null) throw ConsoleOperationFailure(uiText(Res.string.disconnect_the_current_session_first))
             val revision = connectionRevision.addAndFetch(1)
             prepareNetwork(); connectTarget(origin, revision, ConnectionMode.UNKNOWN)
         }
@@ -1085,7 +1098,7 @@ internal class ConsoleModel(
         val origin = robotCalibration.state.value.recovery?.target ?: return
         work(connecting = true) {
             awaitConnectionPreferences()
-            check(session.load() == null) { tr(Res.string.disconnect_the_current_session_first) }
+            if (session.load() != null) throw ConsoleOperationFailure(uiText(Res.string.disconnect_the_current_session_first))
             val revision = connectionRevision.addAndFetch(1)
             prepareNetwork(); connectTarget(origin, revision, ConnectionMode.UNKNOWN)
         }
@@ -1095,7 +1108,7 @@ internal class ConsoleModel(
         val origin = robotAddressing.state.value.recovery?.target ?: return
         work(connecting = true) {
             awaitConnectionPreferences()
-            check(session.load() == null) { tr(Res.string.disconnect_the_current_session_first) }
+            if (session.load() != null) throw ConsoleOperationFailure(uiText(Res.string.disconnect_the_current_session_first))
             val revision = connectionRevision.addAndFetch(1)
             prepareNetwork()
             connectTarget(origin, revision, ConnectionMode.UNKNOWN)

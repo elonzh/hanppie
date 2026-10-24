@@ -24,16 +24,26 @@ data class RobotTarget(
     val sessionTimeoutMillis: Long = 5_000,
 ) {
     init {
-        require(ip.split('.').let { parts -> parts.size == 4 && parts.all { it.toIntOrNull() in 0..255 } }) {
-            "请指定机器人 IPv4 地址"
+        if (!ip.split('.').let { parts -> parts.size == 4 && parts.all { it.toIntOrNull() in 0..255 } }) {
+            throw RobotTargetValidationException(RobotTargetValidationException.Field.IPV4)
         }
-        require(Regex("[0-9a-fA-F]{8}").matches(appId)) { "AppID 必须是 8 位十六进制字符" }
+        if (!Regex("[0-9a-fA-F]{8}").matches(appId)) {
+            throw RobotTargetValidationException(RobotTargetValidationException.Field.APP_ID)
+        }
         require(localPort in 0..65535 && remotePort in 1..65535)
         require(identityTimeoutMillis in 200..30_000 && sessionTimeoutMillis in 200..30_000)
     }
 
     fun forAutomaticProbe(): RobotTarget = copy(identityTimeoutMillis = 800, sessionTimeoutMillis = 1_800)
 
+}
+
+/** Structured input failures let callers localize feedback without inspecting diagnostic strings. */
+class RobotTargetValidationException(val field: Field) : IllegalArgumentException(when (field) {
+    Field.IPV4 -> "请指定机器人 IPv4 地址"
+    Field.APP_ID -> "AppID 必须是 8 位十六进制字符"
+}) {
+    enum class Field { IPV4, APP_ID }
 }
 
 /** Router-mode pairing broadcast together with the UDP endpoint that must receive the final ACK. */

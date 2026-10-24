@@ -55,6 +55,6 @@ class ConsoleStateTest {
         assertEquals(ScriptRunPhase.UNKNOWN, state.scriptRunPhase)
         assertFalse(state.canRun("pass"))
         assertFalse(state.canStop)
-        assertEquals("timeout", state.error)
+        assertEquals(listOf("timeout"), state.error?.arguments)
     }
 }

@@ -96,7 +96,7 @@ class DiagnosticNavigationUiTest {
                     onNodeWithTag("manual-connect-submit").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
                     onNodeWithTag("manual-connect-submit").performClick()
                     waitUntil(timeoutMillis = 5000) { attempts.get() > 0 && !model.state.value.busy && model.state.value.error != null }
-                    waitUntil(timeoutMillis = 5000) { onAllNodesWithText(rawFailure).fetchSemanticsNodes().isNotEmpty() }
+                    waitUntil(timeoutMillis = 5000) { onAllNodesWithText(tr(Res.string.error_value, rawFailure)).fetchSemanticsNodes().isNotEmpty() }
                     onNodeWithTag("manual-ip").performScrollTo().assertTextContains("127.0.0.1")
                     onNodeWithTag("manual-app-id").performScrollTo().assertTextContains("12345678")
                     onNodeWithTag("manual-connect-cancel").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)

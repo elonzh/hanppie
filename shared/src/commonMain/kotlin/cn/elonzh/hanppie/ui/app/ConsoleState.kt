@@ -16,7 +16,7 @@ internal data class ConsoleState(
     val connecting: Boolean = false,
     val busy: Boolean = false,
     val statusMessage: UiText = uiText(Res.string.disconnected),
-    val error: String? = null,
+    val error: UiText? = null,
     val devices: List<DiscoveredRobot> = emptyList(),
     val robotProduct: RobotProduct = RobotProduct(),
     val packets: Long = 0,
@@ -52,7 +52,7 @@ internal data class ConsoleState(
         (scriptRunPhase == ScriptRunPhase.STARTING || scriptRunPhase == ScriptRunPhase.RUNNING ||
             scriptRunPhase == ScriptRunPhase.UNKNOWN)
 
-    fun lost(reason: String): ConsoleState = copy(connected = false, connectedAddress = null, connecting = false, statusMessage = uiText(Res.string.connection_lost), error = reason,
+    fun lost(reason: String): ConsoleState = copy(connected = false, connectedAddress = null, connecting = false, statusMessage = uiText(Res.string.connection_lost), error = uiText(Res.string.error_value, reason),
         robotProduct = RobotProduct(), battery = null, signalQuality = null, values = emptyList(), gimbal = null, gimbalReceivedAtMillis = null,
         chassisAttitude = null, chassisReceivedAtMillis = null, wheels = null, wheelsReceivedAtMillis = null,
         scriptRunPhase = if (scriptRunPhase.mayBeExecuting) ScriptRunPhase.UNKNOWN else scriptRunPhase,

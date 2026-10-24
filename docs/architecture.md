@@ -227,6 +227,8 @@ flowchart LR
 
 #### 1.3.3 网络拓扑与连接生命周期
 
+手动连接先裁去 IPv4/AppID 两端空白并构造 `RobotTarget`，核心校验通过后才推进连接代次、执行平台网络准备及打开会话。核心 `RobotTargetValidationException` 提供失败字段，保留原校验条件及 `IllegalArgumentException` 继承关系；共享层据字段选择已有资源，不匹配异常文字，也不把 UI 资源依赖引入核心。`ConsoleState.error` 保存 `UiText`：字段校验、先断开连接和聊天占用提示可随语言选择重新解析；其他未结构化错误保留原始详情，以当前语言的错误上下文呈现。原始日志仍保留产生时的语言，不因切换语言重复连接或改写历史。修正后显式重试沿原连接流程，成功清除错误并关闭手动弹窗；证据见[连接校验反馈阶段](./official-app-capability-implementation.md#d02-连接校验反馈本地化与重试阶段)。
+
 客户端支持两种原厂网络拓扑，底层协议会话逻辑完全共享：
 
 ```mermaid

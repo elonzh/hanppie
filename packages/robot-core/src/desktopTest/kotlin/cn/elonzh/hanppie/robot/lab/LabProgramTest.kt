@@ -2,6 +2,7 @@ package cn.elonzh.hanppie.robot.lab
 
 import cn.elonzh.hanppie.robot.protocol.hex
 import cn.elonzh.hanppie.robot.session.RobotTarget
+import cn.elonzh.hanppie.robot.session.RobotTargetValidationException
 import java.io.ByteArrayInputStream
 import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.test.*
@@ -21,7 +22,15 @@ class LabProgramTest {
     }
     @Test fun rejectsInvalidIdentityAndTarget() {
         assertFailsWith<IllegalArgumentException> { LabProgram("pass", "bad", "bad") }
-        assertFailsWith<IllegalArgumentException> { RobotTarget("robot.example", "12345678") }
-        assertFailsWith<IllegalArgumentException> { RobotTarget("127.0.0.1", "bad") }
+        for (ip in listOf("", "robot.example", "127.0.0", "127.0.0.256", "-1.0.0.1")) {
+            assertEquals(RobotTargetValidationException.Field.IPV4,
+                assertFailsWith<RobotTargetValidationException> { RobotTarget(ip, "12345678") }.field)
+        }
+        for (appId in listOf("bad", "1234567g", "１２３４５６７８")) {
+            assertEquals(RobotTargetValidationException.Field.APP_ID,
+                assertFailsWith<RobotTargetValidationException> { RobotTarget("127.0.0.1", appId) }.field)
+        }
+        assertEquals("AbCd1234", RobotTarget("127.0.0.1", "AbCd1234").appId)
+        assertFailsWith<IllegalArgumentException> { RobotTarget("127.0.0.1", "12345678", remotePort = 0) }
     }
 }
