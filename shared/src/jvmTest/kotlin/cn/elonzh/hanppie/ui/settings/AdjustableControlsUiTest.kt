@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.test.*
@@ -49,7 +50,7 @@ class AdjustableControlsUiTest {
                 val pixels = IntArray(image.width * image.height); image.readPixels(pixels)
                 val bitmap = BufferedImage(image.width, image.height, BufferedImage.TYPE_INT_ARGB)
                 bitmap.setRGB(0, 0, image.width, image.height, pixels, 0, image.width)
-                val path = File("build/reports/ui/adjustable-$width-$height-$scale-$name.png")
+                val path = File("build/reports/ui/adjustable-keyboard-$width-$height-$scale-$name.png")
                 path.parentFile.mkdirs(); ImageIO.write(bitmap, "png", path)
             }
             fun category(id: String) {
@@ -85,9 +86,25 @@ class AdjustableControlsUiTest {
                 slider("speaker-volume-slider", tr(Res.string.speaker_volume), volume.toFloat(), 0f..100f, "$volume%")
                 adjust("speaker-volume-slider", 61f)
                 slider("speaker-volume-slider", tr(Res.string.speaker_volume), 61f, 0f..100f, "61%")
+                val volumeSlider = onNodeWithTag("speaker-volume-slider")
+                volumeSlider.requestFocus(); volumeSlider.assertIsFocused()
+                volumeSlider.performKeyInput { pressKey(Key.DirectionRight) }
+                assertEquals(62, model.mediaSettings.value.speakerVolume)
+                volumeSlider.performKeyInput { pressKey(Key.MoveHome) }
+                assertEquals(0, model.mediaSettings.value.speakerVolume)
+                volumeSlider.performKeyInput { pressKey(Key.PageUp) }
+                assertEquals(10, model.mediaSettings.value.speakerVolume)
+                volumeSlider.performKeyInput { pressKey(Key.MoveEnd); pressKey(Key.DirectionRight) }
+                assertEquals(100, model.mediaSettings.value.speakerVolume)
+                volumeSlider.performKeyInput { pressKey(Key.PageDown) }
+                assertEquals(90, model.mediaSettings.value.speakerVolume)
+                volumeSlider.performKeyInput { keyDown(Key.CtrlLeft); pressKey(Key.DirectionLeft); keyUp(Key.CtrlLeft) }
+                assertEquals(90, model.mediaSettings.value.speakerVolume)
+                adjust("speaker-volume-slider", 61f)
                 picture("media", "settings-page")
                 runOnIdle { model.settingsBusy.value = true }
                 onNodeWithTag("speaker-volume-slider").assertIsNotEnabled()
+                assertNotEquals(true, volumeSlider.fetchSemanticsNode().config.getOrNull(SemanticsProperties.Focused))
                 adjust("speaker-volume-slider", 90f, false)
                 assertEquals(61, model.mediaSettings.value.speakerVolume)
                 runOnIdle { model.settingsBusy.value = false }
@@ -107,6 +124,16 @@ class AdjustableControlsUiTest {
                     onNodeWithTag(tag).performScrollTo(); adjust(tag, 64f)
                     slider(tag, tr(label), 64f, 0f..100f, "64")
                 }
+                onNodeWithTag("input-axis-FORWARD").performScrollTo().requestFocus()
+                onNodeWithTag("input-axis-FORWARD").performKeyInput { pressKey(Key.Tab) }
+                onNodeWithTag("input-axis-LATERAL").assertIsFocused()
+                    .performKeyInput { keyDown(Key.ShiftLeft); pressKey(Key.Tab); keyUp(Key.ShiftLeft) }
+                onNodeWithTag("input-axis-FORWARD").assertIsFocused().performKeyInput { pressKey(Key.DirectionUp) }
+                assertEquals(AxisSensitivity(74, 73, 73, 73), model.controlSettings.value.inputSensitivities.screen.custom)
+                onNodeWithTag("aim-gyro-sensitivity").performScrollTo().requestFocus()
+                onNodeWithTag("aim-gyro-sensitivity").performKeyInput { pressKey(Key.DirectionDown) }
+                assertEquals(63, model.controlSettings.value.aimInput.gyroSensitivity)
+                assertEquals(64, model.controlSettings.value.aimInput.mouseSensitivity)
                 picture("control", "settings-page")
                 val kept = model.controlSettings.value
                 runOnIdle { model.settingsBusy.value = true }
@@ -127,6 +154,12 @@ class AdjustableControlsUiTest {
                     slider("led-hue", tr(Res.string.color_hue), 180f, 0f..360f, "180°")
                     slider("led-saturation", tr(Res.string.color_saturation), 100f, 0f..100f, "100%")
                     slider("led-brightness", tr(Res.string.color_brightness), 50f, 0f..100f, "50%")
+                    onNodeWithTag("led-hue").requestFocus()
+                    onNodeWithTag("led-hue").performKeyInput { pressKey(Key.Tab) }
+                    onNodeWithTag("led-saturation").assertIsFocused().performKeyInput { pressKey(Key.Tab) }
+                    onNodeWithTag("led-brightness").assertIsFocused().performKeyInput { pressKey(Key.DirectionUp) }
+                    slider("led-brightness", tr(Res.string.color_brightness), 51f, 0f..100f, "51%")
+                    adjust("led-brightness", 50f)
                     assertEquals(original, model.controlSettings.value.remoteLeds.standby)
                     onNodeWithTag("led-color-apply").performScrollTo().assertIsDisplayed()
                     picture("color-${language.preference}", "led-color-apply")

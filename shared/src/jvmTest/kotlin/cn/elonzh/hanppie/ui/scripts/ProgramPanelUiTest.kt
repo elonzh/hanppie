@@ -48,7 +48,7 @@ class ProgramPanelUiTest {
             LabWidget(key(LabWidgetType.TOGGLE), 3, LabWidgetLayout(155f, 70f, 260f, 50f),
                 stage.key, true, text = if (english) "Headlight" else "照明"),
             LabWidget(key(LabWidgetType.SLIDER), 4, LabWidgetLayout(-155f, 0f, 260f, 50f),
-                stage.key, true, maximum = 100, value = 40),
+                stage.key, true, maximum = 100, value = 40, background = LabUiColor(0, 0, 0, 255)),
             LabWidget(key(LabWidgetType.DROPDOWN), 5, LabWidgetLayout(155f, 0f, 260f, 50f),
                 stage.key, true, options = if (english) listOf("Route A", "Route B") else listOf("路线 A", "路线 B")),
             LabWidget(key(LabWidgetType.TEXT), 6, LabWidgetLayout(-155f, -70f, 260f, 50f),
@@ -121,6 +121,9 @@ class ProgramPanelUiTest {
                 onNodeWithTag("program-panel-back").assertIsDisplayed()
                 onNodeWithTag("program-input-0").assertIsDisplayed()
                 capture("controls")
+                onNodeWithTag("program-slider-0").requestFocus()
+                onNodeWithTag("program-slider-0").assertIsFocused()
+                capture("keyboard-focus")
                 // Device attributes are presentation, never user intent.
                 assertTrue(session.labUiEvents.isEmpty())
                 onNodeWithTag("program-toggle-0").performClick()
@@ -183,6 +186,36 @@ class ProgramPanelUiTest {
                 assertEquals(listOf(false, true), session.labUiEvents.map { it.final })
                 assertTrue(session.labUiEvents.all { it.value == LabUiValue.Integer(75) })
                 session.labUiEvents.clear()
+                val keyboardSlider = onNodeWithTag("program-slider-0")
+                keyboardSlider.requestFocus(); keyboardSlider.assertIsFocused()
+                keyboardSlider.performKeyInput { keyDown(Key.DirectionRight); advanceEventTime(600) }
+                waitForIdle()
+                assertEquals(LabUiValue.Integer(79), session.labUiEvents.last().value)
+                assertTrue(session.labUiEvents.none { it.final })
+                keyboardSlider.performKeyInput { keyUp(Key.DirectionRight) }
+                assertEquals(listOf(79), session.labUiEvents.filter { it.final }.map { (it.value as LabUiValue.Integer).value })
+                session.labUiEvents.clear()
+                keyboardSlider.performKeyInput { keyDown(Key.DirectionLeft); keyDown(Key.DirectionDown) }
+                keyboardSlider.performKeyInput { keyUp(Key.DirectionLeft) }
+                assertTrue(session.labUiEvents.none { it.final })
+                onNodeWithTag("program-input-0").requestFocus()
+                assertEquals(1, session.labUiEvents.count { it.final })
+                val beforeRelease = session.labUiEvents.size
+                onNodeWithTag("program-input-0").performKeyInput { keyUp(Key.DirectionDown) }
+                assertEquals(beforeRelease, session.labUiEvents.size)
+                session.labUiEvents.clear()
+                keyboardSlider.requestFocus()
+                keyboardSlider.performKeyInput { keyDown(Key.DirectionRight) }
+                val beforeBackground = session.labUiEvents.size
+                runOnIdle { model.setForeground(false) }
+                waitUntil(timeoutMillis = 5_000) { !model.foregroundState.value }
+                assertNotEquals(true, keyboardSlider.fetchSemanticsNode().config.getOrNull(SemanticsProperties.Focused))
+                runOnIdle { model.setForeground(true) }
+                assertNotEquals(true, keyboardSlider.fetchSemanticsNode().config.getOrNull(SemanticsProperties.Focused))
+                keyboardSlider.performKeyInput { advanceEventTime(600); keyUp(Key.DirectionRight) }
+                assertEquals(beforeBackground, session.labUiEvents.size)
+                assertTrue(session.labUiEvents.none { it.final })
+                session.labUiEvents.clear()
                 onNodeWithTag("program-slider-0").performTouchInput { down(centerLeft); moveTo(centerRight); up() }
                 waitUntil(timeoutMillis = 5_000) { session.labUiEvents.any { it.key.type == LabWidgetType.SLIDER && it.final } }
                 assertEquals(LabUiValue.Integer(100), session.labUiEvents.last().value)
@@ -195,6 +228,10 @@ class ProgramPanelUiTest {
                 assertEquals(listOf("Inspection level"), range[SemanticsProperties.ContentDescription])
                 assertEquals(-30f..70f, range[SemanticsProperties.ProgressBarRangeInfo].range)
                 assertEquals("-20", range[SemanticsProperties.StateDescription])
+                keyboardSlider.requestFocus()
+                keyboardSlider.performKeyInput { pressKey(Key.DirectionRight) }
+                assertEquals(LabUiValue.Integer(-19), session.labUiEvents.last().value)
+                session.labUiEvents.clear()
                 onNodeWithTag("program-slider-0").performSemanticsAction(SemanticsActions.SetProgress) { assertTrue(it(100f)) }
                 waitUntil(timeoutMillis = 5_000) { session.labUiEvents.size == 2 }
                 assertTrue(session.labUiEvents.all { it.value == LabUiValue.Integer(70) })
@@ -235,7 +272,8 @@ class ProgramPanelUiTest {
                 val adjacentConfig = onNodeWithTag("program-slider-0").fetchSemanticsNode().config
                 assertEquals((Int.MAX_VALUE - 1).toString(), adjacentConfig[SemanticsProperties.StateDescription])
                 assertEquals(0f..1f, adjacentConfig[SemanticsProperties.ProgressBarRangeInfo].range)
-                onNodeWithTag("program-slider-0").performSemanticsAction(SemanticsActions.SetProgress) { assertTrue(it(1f)) }
+                keyboardSlider.requestFocus()
+                keyboardSlider.performKeyInput { pressKey(Key.DirectionRight) }
                 waitUntil(timeoutMillis = 5_000) { session.labUiEvents.size == beforeAdjacent + 2 }
                 assertTrue(session.labUiEvents.takeLast(2).all { it.value == LabUiValue.Integer(Int.MAX_VALUE) })
                 val fixed = adjacent.copy(

@@ -84,7 +84,11 @@ class DisplaySettingsUiTest {
                 assertEquals(listOf(tr(Res.string.display_headlights)), light[SemanticsProperties.ContentDescription])
                 assertEquals(0f..100f, light[SemanticsProperties.ProgressBarRangeInfo].range)
                 onNodeWithTag("display-lights-slider").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress){it(70f)}
+                onNodeWithTag("display-lights-slider").requestFocus()
+                onNodeWithTag("display-lights-slider").assertIsFocused()
+                    .performKeyInput { pressKey(Key.DirectionLeft); pressKey(Key.DirectionRight) }
                 assertEquals(0,peer.writes)
+                capture("headlights-focus")
                 onNodeWithTag("display-lights-apply").performScrollTo().performClick()
                 waitUntil(timeoutMillis=5000){model.robotDisplay.state.value.confirmed==DisplayTarget.HEADLIGHTS && !model.state.value.busy}
                 assertEquals(HeadlightBrightness(70,70),peer.lights)

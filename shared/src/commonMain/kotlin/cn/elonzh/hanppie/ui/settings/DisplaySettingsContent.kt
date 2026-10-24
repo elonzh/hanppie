@@ -62,12 +62,12 @@ internal fun DisplaySettingsContent(model: ConsoleController, onCalibrate: () ->
                 if (ui.confirmed == DisplayTarget.HEADLIGHTS) Text(tr(Res.string.display_confirmed), Modifier.testTag("display-confirmed"), fontSize = 14.sp)
                 if (reading.left in 0..100 && reading.right in 0..100) {
                     var draft by remember(reading, ui.connection) { mutableIntStateOf(reading.left) }
-                    fun changeBrightness(value: Float) { draft = value.roundToInt() }
+                    val changeBrightness: (Float) -> Unit = { draft = it.roundToInt() }
                     Text("$draft%", fontSize = 14.sp)
-                    Slider(draft.toFloat(), ::changeBrightness, valueRange = 0f..100f, enabled = !ui.busy,
+                    Slider(draft.toFloat(), changeBrightness, valueRange = 0f..100f, enabled = !ui.busy,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("display-lights-slider")
                             .adjustableValue(tr(Res.string.display_headlights), draft.toFloat(), 0f..100f, "$draft%",
-                                !ui.busy, steps = 99, onChange = ::changeBrightness))
+                                !ui.busy, steps = 99, onChange = changeBrightness))
                     Text(tr(Res.string.display_lights_scope), fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                     Button({ model.robotDisplay.setHeadlights(draft) }, Modifier.heightIn(min = 48.dp).testTag("display-lights-apply"),
                         !ui.busy && (draft != reading.left || draft != reading.right)) { Text(tr(Res.string.display_lights_apply)) }

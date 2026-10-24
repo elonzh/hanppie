@@ -197,6 +197,7 @@ private fun LabWidgetContent(widget: LabWidget, enabled: Boolean,
             }, Modifier.fillMaxSize().testTag("program-slider-${widget.key.index}")
                 .adjustableValue(widget.text.takeIf { it.isNotBlank() } ?: tr(Res.string.program_panel_value),
                     if (fractionalRange) fraction else value.toFloat(), semanticRange, value.toString(), enabled && span > 0,
+                    keyboardStep = if (fractionalRange) 1f else maxOf(1f, (span / 100).toFloat()),
                     onChange = {
                         value = (if (fractionalRange) (widget.minimum.toDouble() + it.toDouble() * span).toInt() else it.toInt())
                             .coerceIn(widget.minimum, widget.maximum)

@@ -3,7 +3,6 @@ package cn.elonzh.hanppie.ui.settings
 import ai.koog.prompt.llm.LLModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -259,7 +258,7 @@ internal fun MediaSettingsContent(model: ConsoleController) {
     val chat by model.chat.state.collectAsState()
     val settingsBusy by model.settingsBusy.collectAsState()
     val enabled = !chat.running && !settingsBusy
-    fun changeVolume(value: Float) {
+    val changeVolume: (Float) -> Unit = { value ->
         model.settingsMessage.value = null
         model.mediaSettings.value = media.copy(speakerVolume = value.roundToInt().coerceIn(0, 100))
     }
@@ -298,12 +297,12 @@ internal fun MediaSettingsContent(model: ConsoleController) {
             }
             Slider(
                 value = media.speakerVolume.toFloat(),
-                onValueChange = ::changeVolume,
+                onValueChange = changeVolume,
                 valueRange = 0f..100f,
                 enabled = enabled,
-                modifier = Modifier.fillMaxWidth().testTag("speaker-volume-slider")
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("speaker-volume-slider")
                     .adjustableValue(tr(Res.string.speaker_volume), media.speakerVolume.toFloat(), 0f..100f,
-                        "${media.speakerVolume}%", enabled, steps = 99, onChange = ::changeVolume),
+                        "${media.speakerVolume}%", enabled, steps = 99, onChange = changeVolume),
             )
         }
     }
@@ -387,17 +386,17 @@ internal fun RemoteLedColorPicker(label: String, tag: String, value: RobotLedCol
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(Modifier.fillMaxWidth().height(48.dp).background(selected, RoundedCornerShape(12.dp)))
                 Column(Modifier.heightIn(min = 48.dp).testTag("led-hue").adjustableValue(tr(Res.string.color_hue), hue, 0f..360f,
-                    "${hue.roundToInt()}°", onChange = { hue = it }).focusable()) {
+                    "${hue.roundToInt()}°", onChange = { hue = it }).padding(4.dp)) {
                     Text(tr(Res.string.color_hue), fontSize = 13.sp)
                     HsvHueSlider(hue, { hue = it * 360f })
                 }
                 Column(Modifier.heightIn(min = 48.dp).testTag("led-saturation").adjustableValue(tr(Res.string.color_saturation), saturation * 100f, 0f..100f,
-                    "${(saturation * 100f).roundToInt()}%", onChange = { saturation = it / 100f }).focusable()) {
+                    "${(saturation * 100f).roundToInt()}%", onChange = { saturation = it / 100f }).padding(4.dp)) {
                     Text(tr(Res.string.color_saturation), fontSize = 13.sp)
                     HsvSaturationSlider(hue, saturation, { saturation = it })
                 }
                 Column(Modifier.heightIn(min = 48.dp).testTag("led-brightness").adjustableValue(tr(Res.string.color_brightness), brightness * 100f, 0f..100f,
-                    "${(brightness * 100f).roundToInt()}%", onChange = { brightness = it / 100f }).focusable()) {
+                    "${(brightness * 100f).roundToInt()}%", onChange = { brightness = it / 100f }).padding(4.dp)) {
                     Text(tr(Res.string.color_brightness), fontSize = 13.sp)
                     HsvValueSlider(hue, saturation, brightness, { brightness = it })
                 }
