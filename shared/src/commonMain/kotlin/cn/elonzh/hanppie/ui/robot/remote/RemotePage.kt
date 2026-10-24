@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -204,6 +205,11 @@ internal fun RemotePage(
     var physicalKeys by remember { mutableStateOf(setOf<Key>()) }
     var suppressedKeys by remember { mutableStateOf(setOf<Key>()) }
     var firePointerHeld by remember { mutableStateOf(false) }
+    val pressureMode = LocalPressureTouchAvailable.current() && control.pressureFire
+    val pressureAllowed = pressureMode && enabled && pageFocused && videoFresh && manualActionsEnabled &&
+        !gunCooling.ownsCooling && !connected.busy && inputLifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    val pressureInput = remember(model, pressureAllowed, control.pressureFireSensitivity) { PressureFireInput(control.pressureFireSensitivity) }
+    val currentPressureAllowed by rememberUpdatedState(pressureAllowed)
     val focus = remember { FocusRequester() }
     val currentArmMode by rememberUpdatedState(armMode)
     val currentLeft by rememberUpdatedState(left)
@@ -225,12 +231,13 @@ internal fun RemotePage(
         if (manageSession) { model.leaveRemote(); model.stopMedia() }
     } }
     DisposableEffect(aimInput) { onDispose { aimInput.close() } }
-    DisposableEffect(aimInput, inputLifecycle) {
+    DisposableEffect(pressureInput) { onDispose { pressureInput.retire() } }
+    DisposableEffect(aimInput, inputLifecycle, pressureInput, pressureMode) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event in listOf(Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP) && (aimInput.state.value.mode != AimInputMode.OFF || model.challenge.value.ownsRound)) {
+            if (event in listOf(Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP) && (pressureMode || aimInput.state.value.mode != AimInputMode.OFF || model.challenge.value.ownsRound)) {
                 aimInput.stop()
                 suppressedKeys = suppressedKeys + physicalKeys
-                keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+                keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire()
                 model.clearRemoteInputs()
             }
         }
@@ -242,7 +249,7 @@ internal fun RemotePage(
         if (appliedSensitivities == control.inputSensitivities) return@LaunchedEffect
         appliedSensitivities = control.inputSensitivities
         suppressedKeys = suppressedKeys + physicalKeys
-        keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+        keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire()
         model.clearRemoteInputs()
     }
     LaunchedEffect(control.aimInput) { aimInput.stop(); right = Offset.Zero; model.stopFiring() }
@@ -277,7 +284,7 @@ internal fun RemotePage(
     LaunchedEffect(vision.phase, vision.mode) {
         if (vision.mode == cn.elonzh.hanppie.robot.vision.VisionMode.ROBOT_AIM &&
             vision.phase != cn.elonzh.hanppie.robot.vision.VisionPhase.OFF) {
-            keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+            keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire()
             model.stopFiring()
         }
     }
@@ -285,7 +292,7 @@ internal fun RemotePage(
         if (challenge.blocksControl || challengeChoosing) {
             aimInput.stop()
             suppressedKeys = suppressedKeys + physicalKeys
-            keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; keyboardHints = false
+            keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire(); keyboardHints = false
             model.stopFiring(); model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
         }
     }
@@ -293,7 +300,7 @@ internal fun RemotePage(
         if (gunCooling.ownsCooling) {
             aimInput.stop()
             suppressedKeys = suppressedKeys + physicalKeys
-            keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+            keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire()
             model.stopFiring(); model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
         }
     }
@@ -312,7 +319,7 @@ internal fun RemotePage(
     }
     LaunchedEffect(enabled) {
         if (enabled) focus.requestFocus()
-        else { if (armMode) suppressedKeys = suppressedKeys + physicalKeys; keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; model.robotArm.stopControl(); model.stopFiring() }
+        else { if (armMode) suppressedKeys = suppressedKeys + physicalKeys; keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire(); model.robotArm.stopControl(); model.stopFiring() }
     }
     LaunchedEffect(enabled) {
         while (enabled) {
@@ -340,11 +347,25 @@ internal fun RemotePage(
     }
     val currentShiftHeld = Key.ShiftLeft in currentKeys || Key.ShiftRight in currentKeys
     val fireKeyHeld = currentControl.shortcuts.isHeld(ControlAction.Fire, currentKeys, currentShiftHeld)
-    val shouldFire = enabled && manualActionsEnabled && !gunCooling.ownsCooling && (fireKeyHeld || firePointerHeld || aimState.repeatPrimary)
+    val shouldFire = enabled && manualActionsEnabled && !gunCooling.ownsCooling &&
+        (fireKeyHeld || firePointerHeld || aimState.repeatPrimary || (pressureAllowed && pressureInput.isHeld(model.remoteInputRevision)))
     LaunchedEffect(shouldFire) {
         if (shouldFire) model.startFiring() else model.stopFiring()
     }
-    BoxWithConstraints(modifier.fillMaxSize().testTag("remote-surface").background(if (videoContent == null) colors.background else Color.Transparent).pointerInput(Unit) {
+    BoxWithConstraints(modifier.fillMaxSize().testTag("remote-surface").background(if (videoContent == null) colors.background else Color.Transparent)
+        .pointerInput(pressureInput) {
+            try {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (currentPressureAllowed && pageFocused && inputLifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) &&
+                            model.isForeground && model.videoFrames.isFresh(model.state.value.connectedAddress))
+                            pressureInput.update(event.changes.mapNotNull(::pressureContact), model.remoteInputRevision)
+                        else pressureInput.retire()
+                    }
+                }
+            } finally { pressureInput.retire() }
+        }.pointerInput(Unit) {
         awaitPointerEventScope {
             while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Final)
@@ -359,7 +380,7 @@ internal fun RemotePage(
         if (!it.hasFocus) {
             aimInput.stop()
             if (armMode) suppressedKeys = suppressedKeys + physicalKeys
-            keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+            keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire()
             model.robotArm.stopControl()
             model.stopFiring()
             model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
@@ -373,7 +394,7 @@ internal fun RemotePage(
         if (it.key == Key.Escape && aimState.mode != AimInputMode.OFF) {
             if (it.type == KeyEventType.KeyDown) {
                 aimInput.stop(); suppressedKeys = suppressedKeys + physicalKeys
-                keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+                keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire()
                 model.clearRemoteInputs(); focus.requestFocus()
             }
             return@onPreviewKeyEvent true
@@ -396,7 +417,7 @@ internal fun RemotePage(
         }
         if (supported && enabled && it.type == KeyEventType.KeyDown) {
             keyboardHints = true
-            left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+            left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire()
         }
         if (supported) {
             if (it.type == KeyEventType.KeyUp) {
@@ -435,9 +456,9 @@ internal fun RemotePage(
                 aimInput.stop()
         }
         val compactHud = maxWidth < 800.dp
-        LaunchedEffect(landscapeReady) { if (!landscapeReady) { firePointerHeld = false; model.stopFiring(); model.haltRemote() } }
+        LaunchedEffect(landscapeReady) { if (!landscapeReady) { firePointerHeld = false; pressureInput.retire(); model.stopFiring(); model.haltRemote() } }
         LaunchedEffect(landscapeReady, foreground, connected.connected) {
-            keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; model.stopFiring()
+            keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire(); model.stopFiring()
             if (landscapeReady && foreground) focus.requestFocus()
         }
         LaunchedEffect(landscapeReady, foreground, pageFocused, connected.connected, inputEnabled) {
@@ -472,7 +493,7 @@ internal fun RemotePage(
                 cn.elonzh.hanppie.ui.robot.device.RobotHealthAlertButton(model, onHealth)
             if (hasArmControls) Button({
                 aimInput.stop()
-                keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; keyboardHints = false
+                keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire(); keyboardHints = false
                 suppressedKeys = suppressedKeys + physicalKeys
                 model.clearRemoteInputs(); armMode = !armMode; focus.requestFocus()
             }, Modifier.heightIn(min = 48.dp).widthIn(max = 156.dp).testTag("remote-arm-toggle").semantics { selected = armMode },
@@ -526,7 +547,7 @@ internal fun RemotePage(
             OnboardCaptureControls(model.robotCamera, connected.connected, inputEnabled && foreground,
                 captureMaxHeight,
                 Modifier.widthIn(max = HanppieDesignTokens.RemoteTaskSideMaxWidth).then(reserveVisionSpace("capture")), onAlbum = onAlbum) {
-                keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+                keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire()
                 model.robotArm.stopControl(); model.stopFiring(); model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
                 (onPushToTalkStop ?: model::endPushToTalk)()
             }
@@ -539,12 +560,12 @@ internal fun RemotePage(
                     Modifier.then(reserveVisionSpace("vision")),
                     onStart = { mode, color ->
                         aimInput.stop()
-                        keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+                        keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire()
                         model.startVision(mode, color); focus.requestFocus()
                     }, onStop = { model.stopVision(); focus.requestFocus() },
                     onStartTracking = {
                         aimInput.stop()
-                        keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+                        keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire()
                         model.startObjectTracking(); focus.requestFocus()
                     }, onConfirmTracking = { model.confirmObjectTracking(); focus.requestFocus() },
                     onStopTracking = { model.stopObjectTracking(); focus.requestFocus() },
@@ -600,7 +621,7 @@ internal fun RemotePage(
             Column(Modifier.align(Alignment.BottomEnd).padding(end = touchInset, bottom = 32.dp).testTag("remote-touch-right").then(reserveVisionSpace("right")),
                 horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    HudIconButton(if (gelSelected) tr(Res.string.fire_one_gel_bead) else tr(Res.string.fire_infrared),
+                    if (!pressureMode) HudIconButton(if (gelSelected) tr(Res.string.fire_one_gel_bead) else tr(Res.string.fire_infrared),
                         WorkbenchGlyph.CROSSHAIR, enabled = enabled && manualActionsEnabled && !gunCooling.ownsCooling && !connected.busy, selected = firePointerHeld,
                         onPressChange = { held ->
                             firePointerHeld = held
@@ -613,6 +634,7 @@ internal fun RemotePage(
                             model.fireSelected()
                             focus.requestFocus()
                         })
+                    if (pressureMode) Spacer(Modifier.size(48.dp))
 
                 }
                 key(control.inputSensitivities) {
@@ -649,7 +671,7 @@ internal fun RemotePage(
                 enabled && manualActionsEnabled && !gunCooling.ownsCooling && !vision.ownsGimbal && !connected.busy && inputLifecycleState.isAtLeast(Lifecycle.State.RESUMED),
                 Modifier) inputStart@ { mode ->
                 if (!inputLifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@inputStart
-                model.clearRemoteInputs(); keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+                model.clearRemoteInputs(); keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire()
                 suppressedKeys = suppressedKeys + physicalKeys
                 // Transfer focus before acquisition: the button-to-cockpit transition retires old input.
                 focus.requestFocus()

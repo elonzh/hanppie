@@ -602,6 +602,16 @@ SDK `EscSubject` 的 `<hhhhhhhhIIIIBBBB`：四项有符号 RPM、四项编码器
 
 Hanppie 采用显式单页启用、Escape 释放和原有速度控制，保留默认键盘/屏幕输入，未复制自动捕获、Tab 松开重捕获或持久启用，记录为[冲突 C17](./official-app-capability-implementation.md#冲突记录保持现状留待决策)。其灵敏度/反向、屏幕轴补偿与角速度换算见[当前实现](./architecture.md#134-遥控操纵镜头坐标系与安全联动)，不宣称 Unity 触感等价。原生 API 依据为 [Java Robot](https://docs.oracle.com/en/java/javase/25/docs/api/java.desktop/java/awt/Robot.html)、[Android SensorEvent](https://developer.android.com/reference/android/hardware/SensorEvent#sensor.type_gyroscope)、[Apple rotationRate](https://developer.apple.com/documentation/coremotion/cmdevicemotion/rotationrate)；真实捕获、权限、朝向/偏置、输入频率和机械动作均未验收。**API / 当前边界**
 
+#### 压力触摸射击与终端振动
+
+固定 macOS 1.1.5/build 239 的 `SettingManager` 将 `Control.ForceTouch` 初始化为关闭、`ForceTouchSensitivity` 为 3。`ViewSettingControl` 只在 iPhone 且 `Input.touchPressureSupported` 时显示压力设置，缺少发射器也隐藏相关节点；灵敏度回调直接保存整数。真实 `ControlScrollView/Viewport/Content/ForceTouchSensitivityNode/Slider` 的 GameObject 为 6286、Slider 组件为 49503；从同包 `UnityEngine.UI.dll` 恢复类型树并完整校验 576 字节对象，得到范围 **1–4**、整数步进。预制体初值 1 会被运行时偏好 3 覆盖，不能混为默认配置。**固定版消费者 / 资源**
+
+`Element.S1/S1_Fire.StateTouch.Execute` 遍历当前触点，任一触点满足严格条件 `touch.pressure > 7 - sensitivity` 即保持发射；空触点归零。`Set3DTouchSetting` 隐藏左右发射按钮，对应普通触摸回调在压力模式返回；按压状态仍汇入同一个 `Controller.SendFire`，没有专属压力射击设备命令。原 SafeMode 策略仍属 C01，不由新输入处理。该行为不等于长按，也不能把默认压力 1 当作达到阈值。**固定版代码**
+
+当前 Compose UI 1.12.1 的 `ComposeSceneMediator.ios.kt` 直接保留 `UITouch.force`，UIKit 通过 [`forceTouchCapability`](https://developer.apple.com/documentation/uikit/uitraitcollection/forcetouchcapability) 查询能力；SDK 的 `UITouch.h` 将 [`force`](https://developer.apple.com/documentation/uikit/uitouch/force) 的 1 定义为普通触摸力度。Hanppie 按已恢复阈值消费此原始值，不按最大压力再次归一化；当前共享准入与停止策略见[应用实现](./architecture.md#134-遥控操纵镜头坐标系与安全联动)，原生事件、实际力度与官方触感对照未验。来源哈希、完整 Slider 读取和最小四个 DLL 的可重现脚本保存在忽略目录 `.hanppie/validation/2026-10-24-official-gap/I01-pressure/`；分析工具 `TypeTreeGeneratorAPI 0.0.10` 仅安装于已有私有分析虚拟环境，没有加入产品依赖。**依赖源码 / SDK / 未验边界**
+
+同包 `COMMON/HandheldVibrate.CreateVibrate` 只打印调试信息和读取控制器/振动偏好，四个等级没有执行系统振动。此证据仅说明固定 macOS 实现为空，不能推断移动平台没有反馈或据此制造可用开关；移动端反馈消费者、实际原生实现和设备体验仍待单独核对。**固定平台边界**
+
 #### 官方 GamePad 的独立链路与输入
 
 本节保留上游协议与历史调查。用户已排除官方 GamePad 连接支持，当前产品不再接入这条专用链路；移除范围统一见[实施台账](./official-app-capability-implementation.md#i02-用户排除与专用链路移除)。

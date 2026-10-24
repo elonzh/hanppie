@@ -52,6 +52,20 @@ internal fun ControlSettingsContent(model: ConsoleController) {
         model.settingsMessage.value = null
         model.controlSettings.value = control.copy(aimInput = value)
     }
+    if (cn.elonzh.hanppie.ui.robot.remote.input.LocalPressureTouchAvailable.current()) {
+        SettingsDropdown(tr(Res.string.pressure_fire), "pressure-fire", control.pressureFire.toString(),
+            listOf("false" to tr(Res.string.pressure_fire_off), "true" to tr(Res.string.pressure_fire_on)), !busy) {
+            model.settingsMessage.value = null
+            model.controlSettings.value = control.copy(pressureFire = it.toBoolean())
+        }
+        if (control.pressureFire) SettingsDropdown(tr(Res.string.pressure_fire_sensitivity), "pressure-fire-sensitivity",
+            control.pressureFireSensitivity.toString(), (1..4).map { it.toString() to it.toString() }, !busy) {
+            model.settingsMessage.value = null
+            model.controlSettings.value = control.copy(pressureFireSensitivity = it.toInt())
+        }
+        Text(tr(Res.string.pressure_fire_help), Modifier.testTag("pressure-fire-help"), fontSize = 13.sp,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+    }
     Text(tr(Res.string.input_host_limits), fontSize = 15.sp)
     SettingsDropdown(tr(Res.string.gimbal_sensitivity), "gimbal-sensitivity", control.gimbalSpeed.toString(),
         listOf(15, 30, 45, 60, 90, 120).map { it.toString() to tr(Res.string.degrees_per_second_value, it) }, !busy) { value ->

@@ -1650,4 +1650,9 @@
     <string name="aim_sensor_failed">Gyroscope unavailable. Check motion access and try again.</string>
     <string name="aim_sensor_stale">Gyroscope stopped updating. Tap to restart.</string>
     <string name="aim_orientation_changed">Screen direction changed. Tap to restart.</string>
+    <string name="pressure_fire">Pressure firing</string>
+    <string name="pressure_fire_off">Off</string>
+    <string name="pressure_fire_on">On</string>
+    <string name="pressure_fire_sensitivity">Pressure sensitivity</string>
+    <string name="pressure_fire_help">Press firmly anywhere on the cockpit to fire; release to stop. The on-screen fire button is hidden while enabled. Higher sensitivity needs less pressure.</string>
 </resources>

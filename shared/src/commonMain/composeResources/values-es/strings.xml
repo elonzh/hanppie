@@ -1650,4 +1650,9 @@
     <string name="aim_sensor_failed">Giroscopio no disponible. Comprueba el permiso de movimiento y reintenta.</string>
     <string name="aim_sensor_stale">El giroscopio dejó de actualizar. Toca para reiniciar.</string>
     <string name="aim_orientation_changed">Cambió la orientación de pantalla. Toca para reiniciar.</string>
+    <string name="pressure_fire">Disparo por presión</string>
+    <string name="pressure_fire_off">Desactivado</string>
+    <string name="pressure_fire_on">Activado</string>
+    <string name="pressure_fire_sensitivity">Sensibilidad a la presión</string>
+    <string name="pressure_fire_help">Presiona con fuerza en cualquier punto de la cabina para disparar; suelta para parar. Al activarlo se oculta el botón de disparo en pantalla. Una sensibilidad mayor requiere menos presión.</string>
 </resources>

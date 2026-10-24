@@ -1650,4 +1650,9 @@
     <string name="aim_sensor_failed">Gyroscope indisponible. Vérifiez l’accès aux mouvements et réessayez.</string>
     <string name="aim_sensor_stale">Le gyroscope ne s’actualise plus. Touchez pour redémarrer.</string>
     <string name="aim_orientation_changed">L’orientation de l’écran a changé. Touchez pour redémarrer.</string>
+    <string name="pressure_fire">Tir par pression</string>
+    <string name="pressure_fire_off">Désactivé</string>
+    <string name="pressure_fire_on">Activé</string>
+    <string name="pressure_fire_sensitivity">Sensibilité à la pression</string>
+    <string name="pressure_fire_help">Appuyez fermement sur un point de la vue de pilotage pour tirer ; relâchez pour arrêter. Le bouton de tir à l’écran est masqué lorsque cette option est activée. Une sensibilité plus élevée demande moins de pression.</string>
 </resources>

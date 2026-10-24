@@ -1650,4 +1650,9 @@
     <string name="aim_sensor_failed">ジャイロを利用できません。モーションへのアクセスを確認して再試行してください。</string>
     <string name="aim_sensor_stale">ジャイロの更新が止まりました。タップして再開してください。</string>
     <string name="aim_orientation_changed">画面の向きが変わりました。タップして再開してください。</string>
+    <string name="pressure_fire">感圧射撃</string>
+    <string name="pressure_fire_off">オフ</string>
+    <string name="pressure_fire_on">オン</string>
+    <string name="pressure_fire_sensitivity">圧力感度</string>
+    <string name="pressure_fire_help">操縦画面の任意の場所を強く押すと発射し、指を離すと停止します。有効時は画面の発射ボタンが非表示になります。感度が高いほど弱い圧力で発射できます。</string>
 </resources>

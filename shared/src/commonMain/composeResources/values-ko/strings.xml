@@ -1650,4 +1650,9 @@
     <string name="aim_sensor_failed">자이로를 사용할 수 없습니다. 동작 접근 권한을 확인하고 다시 시도하세요.</string>
     <string name="aim_sensor_stale">자이로 갱신이 멈췄습니다. 눌러 다시 시작하세요.</string>
     <string name="aim_orientation_changed">화면 방향이 바뀌었습니다. 눌러 다시 시작하세요.</string>
+    <string name="pressure_fire">압력 사격</string>
+    <string name="pressure_fire_off">끄기</string>
+    <string name="pressure_fire_on">켜기</string>
+    <string name="pressure_fire_sensitivity">압력 감도</string>
+    <string name="pressure_fire_help">조종 화면의 아무 곳이나 세게 누르면 발사하고 손을 떼면 멈춥니다. 켜면 화면의 발사 버튼이 숨겨집니다. 감도가 높을수록 필요한 압력이 작아집니다.</string>
 </resources>

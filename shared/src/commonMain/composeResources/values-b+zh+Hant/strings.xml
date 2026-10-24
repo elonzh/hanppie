@@ -1650,4 +1650,9 @@
     <string name="aim_sensor_failed">陀螺儀不可用，請檢查運動訪問權限後重試。</string>
     <string name="aim_sensor_stale">陀螺儀讀數已過期，請點擊重新開啟。</string>
     <string name="aim_orientation_changed">螢幕方向已改變，請點擊重新開啟。</string>
+    <string name="pressure_fire">壓力射擊</string>
+    <string name="pressure_fire_off">關閉</string>
+    <string name="pressure_fire_on">開啟</string>
+    <string name="pressure_fire_sensitivity">壓力靈敏度</string>
+    <string name="pressure_fire_help">用力按壓操控畫面任意位置發射，抬手停止。開啟後隱藏螢幕發射按鈕；靈敏度越高，所需壓力越小。</string>
 </resources>

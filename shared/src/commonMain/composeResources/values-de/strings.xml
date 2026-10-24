@@ -1650,4 +1650,9 @@
     <string name="aim_sensor_failed">Gyroskop nicht verfügbar. Bewegungszugriff prüfen und erneut versuchen.</string>
     <string name="aim_sensor_stale">Gyroskopdaten bleiben aus. Zum Neustart tippen.</string>
     <string name="aim_orientation_changed">Bildschirmausrichtung geändert. Zum Neustart tippen.</string>
+    <string name="pressure_fire">Druckauslösung</string>
+    <string name="pressure_fire_off">Aus</string>
+    <string name="pressure_fire_on">Ein</string>
+    <string name="pressure_fire_sensitivity">Druckempfindlichkeit</string>
+    <string name="pressure_fire_help">Zum Feuern fest auf eine beliebige Stelle im Cockpit drücken, zum Stoppen loslassen. Die Feuertaste auf dem Bildschirm wird dabei ausgeblendet. Höhere Empfindlichkeit erfordert weniger Druck.</string>
 </resources>

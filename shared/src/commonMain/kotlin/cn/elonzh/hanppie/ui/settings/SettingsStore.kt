@@ -55,6 +55,8 @@ internal data class ControlSettings(
     val remoteLeds: RemoteLedSettings = RemoteLedSettings(),
     val inputSensitivities: InputSensitivities = InputSensitivities(),
     val aimInput: AimInputSettings = AimInputSettings(),
+    val pressureFire: Boolean = false,
+    val pressureFireSensitivity: Int = 3,
 ) {
     init {
         require(gimbalSpeed in 15..120)
@@ -63,6 +65,7 @@ internal data class ControlSettings(
         require(translationSpeeds.zipWithNext().all { (a, b) -> a <= b })
         require(rotationSpeeds.zipWithNext().all { (a, b) -> a <= b })
         require(joystickDeadZone.isFinite() && joystickDeadZone in 0.0..0.4)
+        require(pressureFireSensitivity in 1..4)
     }
 }
 

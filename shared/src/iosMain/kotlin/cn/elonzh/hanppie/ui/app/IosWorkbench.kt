@@ -1,5 +1,7 @@
 package cn.elonzh.hanppie.ui.app
 
+import platform.UIKit.UIForceTouchCapabilityAvailable
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -36,10 +38,12 @@ fun MainViewController(platform: IosPlatformServices): UIViewController = Compos
 ) {
     // Filament's transparent UIKit surface is placed above Compose, hiding home controls.
     val controller = androidx.compose.ui.uikit.LocalUIViewController.current
+    val pressureTouch = remember(controller) { { controller.traitCollection.forceTouchCapability == UIForceTouchCapabilityAvailable } }
     val gyroscope = remember(controller) { { IosAimGyroscope {
         controller.view.window?.windowScene?.interfaceOrientation ?: UIInterfaceOrientationUnknown
     } } }
     CompositionLocalProvider(LocalIosPlatformServices provides platform, LocalRobotSceneTransparency provides false,
+        cn.elonzh.hanppie.ui.robot.remote.input.LocalPressureTouchAvailable provides pressureTouch,
         cn.elonzh.hanppie.ui.robot.remote.input.LocalAimGyroscope provides gyroscope) { IosWorkbench(platform) }
 }
 
