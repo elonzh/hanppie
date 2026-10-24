@@ -612,7 +612,17 @@ Hanppie 采用显式单页启用、Escape 释放和原有速度控制，保留�
 
 当前 Compose UI 1.12.1 的 `ComposeSceneMediator.ios.kt` 直接保留 `UITouch.force`，UIKit 通过 [`forceTouchCapability`](https://developer.apple.com/documentation/uikit/uitraitcollection/forcetouchcapability) 查询能力；SDK 的 `UITouch.h` 将 [`force`](https://developer.apple.com/documentation/uikit/uitouch/force) 的 1 定义为普通触摸力度。Hanppie 按已恢复阈值消费此原始值，不按最大压力再次归一化；当前共享准入与停止策略见[应用实现](./architecture.md#134-遥控操纵镜头坐标系与安全联动)，原生事件、实际力度与官方触感对照未验。来源哈希、完整 Slider 读取和最小四个 DLL 的可重现脚本保存在忽略目录 `.hanppie/validation/2026-10-24-official-gap/I01-pressure/`；分析工具 `TypeTreeGeneratorAPI 0.0.10` 仅安装于已有私有分析虚拟环境，没有加入产品依赖。**依赖源码 / SDK / 未验边界**
 
-同包 `COMMON/HandheldVibrate.CreateVibrate` 只打印调试信息和读取控制器/振动偏好，四个等级没有执行系统振动。此证据仅说明固定 macOS 实现为空，不能推断移动平台没有反馈或据此制造可用开关；移动端反馈消费者、实际原生实现和设备体验仍待单独核对。**固定平台边界**
+同包 `COMMON/HandheldVibrate.CreateVibrate` 只打印调试信息和读取控制器/振动偏好，四个等级没有执行系统振动。这只限定固定 macOS 实现；不能用它推断移动平台。**固定 macOS 边界**
+
+**Android 1.2.0/build 382（arm64）的实际分支：** 从[官方固定安装包入口](https://service-adhoc.dji.com/download/app/android/54b7114a-ada9-4151-ab85-50b19c5336d2)按已归档 ZIP 目录取得 `libil2cpp.so` 与 `global-metadata.dat`，校验条目长度、CRC 并记录 SHA-256；没有对整包签名作新的验证。使用 [Il2CppDumper 6.7.46](https://github.com/Perfare/Il2CppDumper/releases/tag/v6.7.46)恢复元数据/方法地址，再检查原始 ARM64 指令，不能把工具生成的空方法体当作真实实现。元数据为 24.2，`COMMON.HandheldVibrate` 为 TypeDef 7192。
+
+四个包装入口分别向 `CreateVibrate`（`0xa97e08`）传入 1519、1520、4095、1521。函数先记录日志，读取 `Control.Controller` 和 `Control.HandheldVibrate`；ELF 重定位、字符串元数据及泛型 getter 地址相互对应。控制器读取结果没有参与后续分支；`0xa97fb0–0xa97fd4` 只在 **sound ID=4095 且振动偏好为真** 时转入 `UnityEngine.Handheld.Vibrate`（`0x1532fe4`），其他等级返回。该 Unity 方法解析并跳转 `UnityEngine.Handheld::Vibrate()` icall；这里只建立调用链，没有执行 Unity/Android、确认振动硬件、波形或时长。**固定 Android 原始指令 / 元数据**
+
+全部可执行 ELF 段中的直接 B/BL 引用显示：发射及录音播放成功提示使用 Level1=1519；`UI.FPVScreen.OnRobotHPChange` 使用 Level3=4095 或 Level2=1520。后者的原始分支（`0xa75f9c–0xa75fd8`）在当前血量转整数为 0 且总血量大于 0 时选 Level3；正血量小于总量时选 Level2。因上述 Android 实现只执行 4095，这不能写成“Android 每次发射或受击都会振动”。直接引用扫描不证明运行时所有间接调用已穷尽；对战相关引用只作范围归属，不继续已暂缓的多人调查。**有界原生消费者结论**
+
+该血量来源也存在于公开单机：`SystemSinglePlayer.StatePlay` 订阅并查询 `CurrentHP/TotalHP`，setter 发出 `Event_RobotHPChange`；`ViewSinglePlayer.OnRobotHPChange` 在当前血量等于 0 时进入视图 Safe/Dead 状态，隐藏摇杆、显示复活面板并发送 `Event_RobotLockControl(true)`，离开 Dead 时还原界面并发送 false。已读的 `StandaloneControl` 消费者只切换鼠标捕获/显示，不能仅凭事件名宣称所有输入或机器人均已制动。复活按钮经 `OnRobotRevied` 调用 `SetRobotState(ReviveWithWudi)`。血量 setter 与触感回调本身不按“由活到死”边沿去重，首次或重复零值也可能触发，不能把每次回调解释为新的死亡。完整输入归属、停止及恢复与当前实现存在差异，按台账 C24 保持现状。**固定单机源码 / 未实机验证**
+
+本地隔离仿真执行 4 个原始包装、12 个偏好读取后的条件片段、9 个参数拆箱后的血量分支，共 25 个向量。它不执行设置存储、事件系统、Unity icall、Android 或真实振动；非整数血量向量只核对转换，不证明是合法设备输入。原始文件身份、指令、元数据解析和向量归档于 `.hanppie/validation/2026-10-24-official-gap/mobile-haptics/`。iOS 当前只有旧包内的 `PlaySystemSound` 声明和枚举，未获得实际 iOS 方法体/原生调用路径，不从 Android 分支、声明或系统声音 ID 推定 iOS 的有效反馈。**离线证据与平台边界**
 
 #### 画面效果偏好的有效消费边界
 
