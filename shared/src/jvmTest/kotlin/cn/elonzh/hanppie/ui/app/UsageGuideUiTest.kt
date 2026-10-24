@@ -24,6 +24,7 @@ class UsageGuideUiTest {
     @Test fun compactLandscape() = scenario(844, 390, "zh", 1f, false)
     @Test fun mediumDarkLandscape() = scenario(1024, 768, "zh", 1f, true)
     @Test fun desktopLandscape() = scenario(1280, 720, "zh", 1f, false)
+    @Test fun largeChineseLandscape() = scenario(844, 390, "zh", 1.4f, true)
     @Test fun largeEnglishLandscape() = scenario(844, 390, "en", 1.4f, true)
 
     @Test fun destinationActionsUseExistingRoutesWithoutStartingControl() = runDesktopComposeUiTest(width = 1024, height = 768) {
@@ -87,7 +88,7 @@ class UsageGuideUiTest {
                 onNodeWithTag("usage-guide-previous").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
             }
             fun inspectDestination(target: GuideDestination, captureName: String) {
-                if (width == 844 && language == "zh") onNodeWithTag("usage-guide-more").assertDoesNotExist()
+                if (width == 844 && language == "zh" && scale == 1f) onNodeWithTag("usage-guide-more").assertDoesNotExist()
                 val overflows = onAllNodesWithTag("usage-guide-more").fetchSemanticsNodes().isNotEmpty()
                 if (overflows) onNodeWithTag("usage-guide-more").assertIsDisplayed().assertHeightIsAtLeast(48.dp).performClick()
                 val action = onNodeWithTag("usage-guide-open-${target.name}").assertIsDisplayed().assertHeightIsAtLeast(48.dp)

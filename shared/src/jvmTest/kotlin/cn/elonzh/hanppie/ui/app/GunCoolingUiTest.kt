@@ -32,6 +32,7 @@ class GunCoolingUiTest {
     @Test fun compact() = scenario(844, 390, "zh", 1f, false)
     @Test fun tabletDark() = scenario(1024, 768, "zh", 1f, true)
     @Test fun desktop() = scenario(1280, 720, "zh", 1f, false)
+    @Test fun largeChinese() = scenario(844, 390, "zh", 1.4f, true)
     @Test fun largeEnglish() = scenario(844, 390, "en", 1.4f, false)
 
     private class InputLifecycle : LifecycleOwner {
@@ -62,7 +63,7 @@ class GunCoolingUiTest {
                 val pixels = IntArray(image.width * image.height); image.readPixels(pixels)
                 val bitmap = BufferedImage(image.width, image.height, BufferedImage.TYPE_INT_ARGB)
                 bitmap.setRGB(0,0,image.width,image.height,pixels,0,image.width)
-                val file = File("build/reports/ui/gun-cooling-$width-$height-$language-${if (dark) "dark" else "light"}-$name.png")
+                val file = File("build/reports/ui/gun-cooling-$width-$height-$language-$scale-${if (dark) "dark" else "light"}-$name.png")
                 file.parentFile.mkdirs(); ImageIO.write(bitmap,"png",file)
             }
             try {

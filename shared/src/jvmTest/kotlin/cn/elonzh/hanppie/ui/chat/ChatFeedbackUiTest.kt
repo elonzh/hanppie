@@ -84,6 +84,7 @@ class ChatFeedbackUiTest {
     @Test fun scriptHandoffCompactLandscape() = scriptHandoff(844, 390)
     @Test fun scriptHandoffTabletDark() = scriptHandoff(1024, 768, dark = true)
     @Test fun scriptHandoffDesktop() = scriptHandoff(1280, 720, language = "en")
+    @Test fun scriptHandoffLargeChinese() = scriptHandoff(844, 390, 1.4f, dark = true, language = "zh")
     @Test fun scriptHandoffLargeEnglish() = scriptHandoff(844, 390, 1.4f, dark = true, language = "en")
 
     private fun scriptHandoff(width: Int, height: Int, scale: Float = 1f, dark: Boolean = false, language: String = "zh") =

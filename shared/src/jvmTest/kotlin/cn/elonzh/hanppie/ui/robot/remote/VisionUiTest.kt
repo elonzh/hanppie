@@ -147,6 +147,7 @@ class VisionLayoutTest {
     @Test fun phoneLandscape() = capture(844, 390)
     @Test fun tabletLandscape() = capture(1024, 600)
     @Test fun desktopLandscape() = capture(1280, 720)
+    @Test fun largeChinese() = capture(844, 390, "zh", 1.4f)
     @Test fun largeEnglish() = capture(844, 390, "en", 1.4f)
 
     private fun capture(width: Int, height: Int, language: String = "zh", fontScale: Float = 1f) =
@@ -217,7 +218,7 @@ class VisionLayoutTest {
                     val pixels = IntArray(image.width * image.height); image.readPixels(pixels)
                     val buffered = BufferedImage(image.width, image.height, BufferedImage.TYPE_INT_ARGB)
                     buffered.setRGB(0, 0, image.width, image.height, pixels, 0, image.width)
-                    val file = File("build/reports/ui/vision-v03-$width-$height-$language-$name.png"); file.parentFile.mkdirs()
+                    val file = File("build/reports/ui/vision-v03-$width-$height-$language-$fontScale-$name.png"); file.parentFile.mkdirs()
                     ImageIO.write(buffered, "png", file)
                     if (name in listOf("chooser", "marker-colors", "line-colors")) onNodeWithTag("vision-tools").performClick()
                 }

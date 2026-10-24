@@ -157,6 +157,7 @@ class OnboardCaptureLayoutTest {
     @Test fun compactLandscape() = layout(844, 390)
     @Test fun tabletLandscape() = layout(1024, 600)
     @Test fun desktopLandscape() = layout(1280, 720)
+    @Test fun chineseLargeText() = layout(844, 390, "zh", 1.4f)
     @Test fun englishLargeText() = layout(844, 390, "en", 1.4f)
 
     private fun layout(width: Int, height: Int, language: String = "zh", fontScale: Float = 1f) =
@@ -185,14 +186,14 @@ class OnboardCaptureLayoutTest {
                 val tracking = onNodeWithTag("tracking-start").fetchSemanticsNode().boundsInRoot
                 val touch = onNodeWithTag("remote-touch-left").fetchSemanticsNode().boundsInRoot
                 assertTrue(button.right <= tracking.left && button.bottom <= touch.top)
-                snapshot("sd-capture-$width-$height-$language", onNodeWithTag("remote-surface"))
+                snapshot("sd-capture-$width-$height-$language-$fontScale", onNodeWithTag("remote-surface"))
                 onNodeWithTag("onboard-capture-open").performClick()
                 onNodeWithTag("onboard-photo").performScrollTo().assertIsDisplayed()
                 onNodeWithTag("onboard-record-start").assertIsDisplayed()
                 onNodeWithTag("onboard-record-stop").performScrollTo().assertIsDisplayed()
                 onNodeWithTag("onboard-album-open").performScrollTo().assertIsDisplayed()
                 onNodeWithTag("onboard-capture-close").performScrollTo().assertIsDisplayed()
-                snapshot("sd-capture-panel-$width-$height-$language",
+                snapshot("sd-capture-panel-$width-$height-$language-$fontScale",
                     onNode(isRoot() and hasAnyDescendant(hasTestTag("onboard-photo"))))
             } finally { model.close(); Localization.initialize("zh", null) }
         }

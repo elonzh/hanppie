@@ -27,6 +27,7 @@ class MotionSettingsUiTest {
     @Test fun shortLandscape() = scenario(844, 390, "zh", 1f, false)
     @Test fun mediumDarkLandscape() = scenario(1024, 600, "zh", 1f, true)
     @Test fun desktopLandscape() = scenario(1280, 720, "zh", 1f, false)
+    @Test fun largeChineseLandscape() = scenario(844, 390, "zh", 1.4f, true)
     @Test fun largeEnglishLandscape() = scenario(844, 390, "en", 1.4f, false)
 
     private fun scenario(width: Int, height: Int, language: String, scale: Float, dark: Boolean) =
@@ -35,7 +36,7 @@ class MotionSettingsUiTest {
             val peer = MotionFixture(); val session = RobotSessionFixture().apply { motion = peer }
             val model = testConsoleModel(robotRuntime = powerRuntime(listOf(session)))
             val appearance = AppearanceController(AppearanceSettings(if (dark) NightMode.DARK else NightMode.LIGHT))
-            val prefix = "motion-settings-$width-$height-$language-${if (dark) "dark" else "light"}"
+            val prefix = "motion-settings-$width-$height-$language-$scale-${if (dark) "dark" else "light"}"
             fun capture(state: String) {
                 waitForIdle()
                 val image = onRoot().captureToImage()

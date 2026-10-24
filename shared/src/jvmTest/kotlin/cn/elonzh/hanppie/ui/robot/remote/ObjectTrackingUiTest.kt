@@ -167,6 +167,7 @@ class ObjectTrackingLayoutTest {
     @Test fun phoneLandscape() = verifyLayout(844, 390)
     @Test fun tabletLandscape() = verifyLayout(1024, 600)
     @Test fun desktopLandscape() = verifyLayout(1280, 720)
+    @Test fun largeChineseText() = verifyLayout(844, 390, "zh", 1.4f)
     @Test fun largeEnglishText() = verifyLayout(844, 390, "en", 1.4f)
 
     private fun verifyLayout(width: Int, height: Int, language: String = "zh", fontScale: Float = 1f) =
@@ -216,7 +217,7 @@ class ObjectTrackingLayoutTest {
                 val pixels = IntArray(image.width * image.height); image.readPixels(pixels)
                 val buffered = BufferedImage(image.width, image.height, BufferedImage.TYPE_INT_ARGB)
                 buffered.setRGB(0, 0, image.width, image.height, pixels, 0, image.width)
-                val file = File("build/reports/ui/tracking-v01-$width-$height-$language-$name.png"); file.parentFile.mkdirs()
+                val file = File("build/reports/ui/tracking-v01-$width-$height-$language-$fontScale-$name.png"); file.parentFile.mkdirs()
                 ImageIO.write(buffered, "png", file)
                 }
             } finally { model.close(); Localization.initialize("zh", null) }
