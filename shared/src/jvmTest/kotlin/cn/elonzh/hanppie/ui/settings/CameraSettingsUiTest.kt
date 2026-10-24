@@ -61,7 +61,7 @@ class CameraSettingsUiTest {
             rule.onNodeWithTag("settings-category-media").performScrollTo().performClick()
             rule.waitUntil(3_000) { rule.onAllNodes(hasTestTag("camera-anti-flicker-selector")).fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithTag("camera-anti-flicker-selector").performScrollTo().performClick()
-            rule.onNodeWithContentDescription("camera-anti-flicker-HZ_60").performClick()
+            rule.onNodeWithTag("camera-anti-flicker-HZ_60").performClick()
             rule.waitUntil(3_000) { camera.antiFlicker == 1 }
             rule.onNodeWithTag("camera-sync-clock").performScrollTo().performClick()
             rule.waitUntil(3_000) { camera.date.year == 2026 }
@@ -82,8 +82,8 @@ class CameraSettingsUiTest {
             rule.onNodeWithTag("camera-settings-refresh").performScrollTo().performClick()
             rule.waitUntil(3_000) { rule.onAllNodes(hasTestTag("camera-anti-flicker-selector")).fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithTag("camera-anti-flicker-selector").performScrollTo().assertTextContains("自动", substring = true).performClick()
-            rule.onNodeWithContentDescription("camera-anti-flicker-AUTO").assertDoesNotExist()
-            rule.onNodeWithContentDescription("camera-anti-flicker-HZ_50").performClick()
+            rule.onNodeWithTag("camera-anti-flicker-AUTO").assertDoesNotExist()
+            rule.onNodeWithTag("camera-anti-flicker-HZ_50").performClick()
             rule.runOnIdle { model.robotCamera.clear(); model.state.value = model.state.value.copy(connected = false) }
             rule.onNodeWithTag("camera-sync-clock").assertDoesNotExist()
             rule.onNodeWithTag("camera-anti-flicker-selector").assertDoesNotExist()

@@ -37,13 +37,13 @@ class CameraImagingUiTest {
             rule.onNodeWithTag("settings-category-media").performScrollTo().performClick()
             rule.onNodeWithTag("camera-video-format").performScrollTo().assertTextEquals("当前视频：1080p · 30 fps")
             rule.onNodeWithTag("camera-photo-size-selector").performScrollTo().performClick()
-            rule.onNodeWithContentDescription("camera-photo-size-R1440P").performClick()
+            rule.onNodeWithTag("camera-photo-size-R1440P").performClick()
             rule.waitUntil(3_000) { camera.requests.contains("photo:2") }
             rule.onNodeWithTag("camera-source-selector").performScrollTo().performClick()
-            rule.onNodeWithContentDescription("camera-source-1").performClick()
+            rule.onNodeWithTag("camera-source-1").performClick()
             rule.waitUntil(3_000) { camera.state.value.imaging?.cameraIndex == 1 }
             rule.onNodeWithTag("camera-transmission-rate-selector").performScrollTo().performClick()
-            rule.onNodeWithContentDescription("camera-transmission-rate-BEST").performClick()
+            rule.onNodeWithTag("camera-transmission-rate-BEST").performClick()
             rule.onNodeWithTag("camera-rate-result").performScrollTo().assertTextEquals("码率请求已确认：6 Mbps")
             camera.failure = RequestProblem.TIMED_OUT
             rule.onNodeWithTag("camera-request-keyframe").performScrollTo().performClick()

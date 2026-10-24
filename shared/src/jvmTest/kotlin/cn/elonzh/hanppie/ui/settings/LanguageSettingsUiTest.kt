@@ -124,7 +124,7 @@ class LanguageSettingsUiTest {
                 categories(); onNodeWithTag("settings-category-control").performScrollTo().performClick()
                 onNodeWithTag("settings-detail-control").assertIsDisplayed(); capture("control")
                 categories()
-                onNodeWithContentDescription("restore-default-settings").performClick()
+                onNodeWithTag("restore-default-settings").performClick()
                 onNodeWithText(resetQuestion).assertIsDisplayed()
                 onNodeWithTag("restore-defaults-confirm").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
                 if (language in listOf("de", "es", "fr", "ko", "ru")) {

@@ -17,7 +17,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -131,7 +130,7 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                     if (activeCategory == null) settingsMessage?.let { Text(it.resolve(), fontSize = 13.sp) }
                     Button({ confirmDefaults = true }, enabled = !settingsBusy && !chat.running,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                            .semantics { contentDescription = "restore-default-settings" }) {
+                            .testTag("restore-default-settings")) {
                         Text(tr(Res.string.restore_defaults))
                     }
                 }

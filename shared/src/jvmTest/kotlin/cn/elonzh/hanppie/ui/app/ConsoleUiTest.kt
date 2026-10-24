@@ -142,8 +142,8 @@ class ConsoleUiTest {
             rule.onNodeWithText("S1").assertDoesNotExist()
             rule.onNodeWithContentDescription("设置").performClick()
             openSettingsCategory("general")
-            rule.onNodeWithContentDescription("language-selector").performClick()
-            rule.onNodeWithContentDescription("language-en").performClick()
+            rule.onNodeWithTag("language-selector").performClick()
+            rule.onNodeWithTag("language-en").performClick()
             rule.onNodeWithText("Language").assertIsDisplayed()
             rule.onNode(hasContentDescription("Settings") and hasClickAction()).assertIsDisplayed()
             assertEquals("print('用户脚本')",document.value.source)
@@ -157,8 +157,8 @@ class ConsoleUiTest {
             snapshot("phone-debug-en")
             rule.onNodeWithContentDescription("Settings").performClick()
             openSettingsCategory("general")
-            rule.onNodeWithContentDescription("language-selector").performClick()
-            rule.onNodeWithContentDescription("language-zh").performClick()
+            rule.onNodeWithTag("language-selector").performClick()
+            rule.onNodeWithTag("language-zh").performClick()
             rule.onNodeWithText("语言").assertIsDisplayed()
         } finally { model.close(); Localization.initialize("zh",null) }
     }
@@ -1223,22 +1223,22 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.setContent { WorkbenchTheme(appearance) { Box(Modifier.requiredSize(393.dp, 740.dp)) { Console(model, document) } } }
             rule.onNodeWithContentDescription("设置").performClick()
             openSettingsCategory("general")
-            rule.onNodeWithContentDescription("theme-selector").assertDoesNotExist()
+            rule.onNodeWithTag("theme-selector").assertDoesNotExist()
             rule.onNodeWithTag("palette-editor").assertDoesNotExist()
-            rule.onNodeWithContentDescription("night-mode-selector").performClick()
+            rule.onNodeWithTag("night-mode-selector").performClick()
             settleTransitions()
-            rule.onNodeWithContentDescription("night-mode-LIGHT").assertIsDisplayed().assertIsEnabled()
+            rule.onNodeWithTag("night-mode-LIGHT").assertIsDisplayed().assertIsEnabled()
                 .assertHeightIsAtLeast(48.dp)
                 .performMouseInput { click(center.copy(x = width - 4f)) }
             rule.waitUntil(5_000) { appearance.settings.nightMode == NightMode.LIGHT }
-            rule.waitUntil(5_000) { rule.onAllNodesWithContentDescription("night-mode-LIGHT").fetchSemanticsNodes().isEmpty() }
+            rule.waitUntil(5_000) { rule.onAllNodesWithTag("night-mode-LIGHT").fetchSemanticsNodes().isEmpty() }
             snapshot("appearance-light")
-            rule.onNodeWithContentDescription("night-mode-selector").performClick()
+            rule.onNodeWithTag("night-mode-selector").performClick()
             settleTransitions()
-            rule.onNodeWithContentDescription("night-mode-DARK").assertIsDisplayed().assertIsEnabled()
+            rule.onNodeWithTag("night-mode-DARK").assertIsDisplayed().assertIsEnabled()
                 .performClick()
             rule.waitUntil(5_000) { appearance.settings.nightMode == NightMode.DARK }
-            rule.waitUntil(5_000) { rule.onAllNodesWithContentDescription("night-mode-DARK").fetchSemanticsNodes().isEmpty() }
+            rule.waitUntil(5_000) { rule.onAllNodesWithTag("night-mode-DARK").fetchSemanticsNodes().isEmpty() }
             snapshot("appearance-dark")
             rule.runOnIdle {
                 assertEquals(NightMode.DARK, appearance.settings.nightMode)
@@ -1385,29 +1385,29 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.onNodeWithContentDescription("设置").performClick()
             openSettingsCategory("model")
             rule.onNodeWithText("供应商").performScrollTo().assertExists()
-            rule.onNodeWithContentDescription("model-provider-selector").performScrollTo().performClick()
+            rule.onNodeWithTag("model-provider-selector").performScrollTo().performClick()
             ModelProviderPreset.entries.forEach { provider ->
-                rule.onNodeWithContentDescription("model-provider-${provider.name}").assertExists()
+                rule.onNodeWithTag("model-provider-${provider.name}").assertExists()
             }
-            rule.onNodeWithContentDescription("model-provider-DEEPSEEK").performClick()
+            rule.onNodeWithTag("model-provider-DEEPSEEK").performClick()
             rule.runOnIdle {
                 assertEquals(ModelProviderPreset.DEEPSEEK, model.modelSettings.value.provider)
                 assertEquals(ModelProviderPreset.DEEPSEEK.defaultEndpoint, model.modelSettings.value.endpoint)
             }
             rule.onNodeWithText("自动朗读").assertDoesNotExist()
             openSettingsCategory("control")
-            rule.onNodeWithContentDescription("gimbal-sensitivity-selector").assertExists()
+            rule.onNodeWithTag("gimbal-sensitivity-selector").assertExists()
             openSettingsCategory("lights")
             val original = model.controlSettings.value.remoteLeds.standby
-            rule.onNodeWithContentDescription("remote-led-standby").performScrollTo().performClick()
+            rule.onNodeWithTag("remote-led-standby").performScrollTo().performClick()
             rule.onNodeWithTag("led-brightness").performTouchInput {
                 swipe(center.copy(x = width - 12f, y = height - 24f), center.copy(x = width * 0.5f, y = height - 24f))
             }
             rule.onNodeWithTag("led-color-apply").performClick()
             rule.runOnIdle { assertTrue(original != model.controlSettings.value.remoteLeds.standby) }
-            rule.onNodeWithContentDescription("remote-led-talking").performScrollTo().assertExists()
+            rule.onNodeWithTag("remote-led-talking").performScrollTo().assertExists()
             if (rule.onAllNodesWithTag("settings-back").fetchSemanticsNodes().isNotEmpty()) rule.onNodeWithTag("settings-back").performClick()
-            rule.onNodeWithContentDescription("restore-default-settings").assertIsEnabled().performClick()
+            rule.onNodeWithTag("restore-default-settings").assertIsEnabled().performClick()
             rule.onNodeWithText("恢复所有默认设置？").assertIsDisplayed()
             rule.onNodeWithText("取消").performClick()
             rule.onNodeWithText("恢复所有默认设置？").assertDoesNotExist()
@@ -1471,7 +1471,7 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             }
         }
 
-        rule.onNodeWithContentDescription("unavailable-value-selector")
+        rule.onNodeWithTag("unavailable-value-selector")
             .assertTextContains("custom-model")
     }
 
@@ -1727,17 +1727,17 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.onNodeWithText("我的脚本").assertIsDisplayed()
             rule.onNodeWithText("预置脚本").performScrollTo().assertIsDisplayed()
             snapshot("phone-script-library")
-            rule.onNodeWithContentDescription("script-preset-music-sprinkler").performScrollTo().performClick()
+            rule.onNodeWithTag("script-preset-music-sprinkler").performScrollTo().performClick()
             rule.onNodeWithTag("script-editor").assertIsDisplayed()
             rule.onNodeWithText("Python 3.6.6").assertDoesNotExist()
             rule.runOnIdle { assertTrue(document.value.source.contains("media_sound_solmization")) }
             rule.onNodeWithTag("script-back").performClick()
             rule.onNodeWithText("替换未保存的脚本？").assertDoesNotExist()
             rule.onNodeWithTag("script-library").assertIsDisplayed()
-            rule.onNodeWithContentDescription("script-preset-music-sprinkler").performScrollTo().performClick()
+            rule.onNodeWithTag("script-preset-music-sprinkler").performScrollTo().performClick()
             snapshot("phone-script-preset-editor")
             rule.onNodeWithTag("script-save").performClick()
-            rule.onNodeWithContentDescription("script-name").performTextReplacement("我的电量脚本")
+            rule.onNodeWithTag("script-name").performTextReplacement("我的电量脚本")
             rule.onNodeWithText("保存", substring = false).performClick()
             rule.waitUntil(3_000) { model.scriptLibrary.state.value.scripts.singleOrNull()?.name == "我的电量脚本" }
             val id = model.scriptLibrary.state.value.scripts.single().id
@@ -1747,7 +1747,7 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             // List management lives behind a long press, so the card itself stays button-free.
             rule.onNodeWithTag("script-card-$id").performTouchInput { longClick() }
             rule.onNodeWithTag("script-rename-$id").performClick()
-            rule.onNodeWithContentDescription("script-name").performTextReplacement("电量检查")
+            rule.onNodeWithTag("script-name").performTextReplacement("电量检查")
             rule.onNodeWithText("保存", substring = false).performClick()
             rule.waitUntil(3_000) { model.scriptLibrary.state.value.scripts.singleOrNull()?.name == "电量检查" }
             rule.onNodeWithTag("script-back").performClick()

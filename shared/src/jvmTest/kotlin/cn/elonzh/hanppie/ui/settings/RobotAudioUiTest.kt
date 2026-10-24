@@ -71,7 +71,7 @@ class RobotAudioUiTest {
             rule.onNodeWithTag("robot-audio-apply-volume").performClick()
             rule.onNodeWithText("机器人返回的音量：65%").assertIsDisplayed()
             rule.onNodeWithTag("robot-speaker-language-selector").performClick()
-            rule.onNodeWithContentDescription("robot-speaker-language-CHINESE").performClick()
+            rule.onNodeWithTag("robot-speaker-language-CHINESE").performClick()
             rule.waitForIdle()
             assertEquals(SpeakerLanguage.CHINESE, audio.settings.language)
             audio.failure = true
@@ -104,7 +104,7 @@ class RobotAudioUiTest {
             audio.playback.value = RobotSpeakerPlayback(11, 65536, 35, 0)
             rule.onNodeWithTag("robot-playback-status").performScrollTo().assertTextEquals("机器人扬声器：播放中 · 35%")
             rule.onNodeWithTag("robot-anti-feedback-selector").performScrollTo().performClick()
-            rule.onNodeWithContentDescription("robot-anti-feedback-true").performClick()
+            rule.onNodeWithTag("robot-anti-feedback-true").performClick()
             rule.waitUntil(3_000) { model.robotAudio.state.value.antiFeedback == AudioSetting.Value(true) }
             rule.onNodeWithTag("robot-feedback-result").performScrollTo().assertTextEquals("已确认防啸叫开启请求")
             audio.signalFailure = true

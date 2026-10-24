@@ -37,8 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
@@ -288,7 +287,7 @@ internal fun ScriptPage(
                 onValueChange = { if (it.length <= 64) nameDraft = it },
                 label = tr(Res.string.script_name),
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth().semantics { contentDescription = "script-name" },
+                modifier = Modifier.fillMaxWidth().testTag("script-name"),
             )
             if (!nameAvailable && nameDraft.isNotBlank()) {
                 Text(tr(Res.string.script_name_unavailable), color = MiuixTheme.colorScheme.error, fontSize = 12.sp)
@@ -335,7 +334,7 @@ internal fun ScriptPage(
                 onValueChange = { if (it.length <= LabAudioClip.MAX_NAME_LENGTH) audioNameDraft = it },
                 label = tr(Res.string.script_audio_rename),
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth().semantics { contentDescription = "script-audio-name" },
+                modifier = Modifier.fillMaxWidth().testTag("script-audio-name"),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button({ audioRename = null }, Modifier.weight(1f).heightIn(min = 48.dp)) {
@@ -753,11 +752,12 @@ private fun StoredScriptCard(
         Card(modifier.testTag("script-card-${script.id}")
             .combinedClickable(
                 enabled = !busy,
+                role = Role.Button,
                 onClick = { onOpen(script) },
+                onLongClickLabel = tr(Res.string.more_actions),
                 onLongClick = { onManage(script) },
             )
-            .then(Modifier.secondaryClick { onManage(script) })
-            .semantics { contentDescription = "script-open-${script.id}" }) {
+            .then(Modifier.secondaryClick { onManage(script) })) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(script.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
                     overflow = TextOverflow.Ellipsis)
@@ -770,8 +770,8 @@ private fun StoredScriptCard(
 
 @Composable
 private fun PresetScriptCard(preset: StoredScript, compact: Boolean, onOpen: (StoredScript) -> Unit) {
-    Card(ProgramCardModifier(compact).clickable { onOpen(preset) }
-        .semantics { contentDescription = "script-preset-${preset.id}" }) {
+    Card(ProgramCardModifier(compact).testTag("script-preset-${preset.id}")
+        .clickable(role = Role.Button) { onOpen(preset) }) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(preset.name, Modifier.fillMaxWidth(), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             preset.summary?.takeIf { it.isNotBlank() }?.let {

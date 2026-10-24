@@ -31,8 +31,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -362,12 +363,12 @@ internal fun ShortcutsSettingsContent(model: ConsoleController, capturing: Contr
 internal fun RemoteLedColorPicker(label: String, tag: String, value: RobotLedColor, modifier: Modifier,
                                   onValid: (RobotLedColor) -> Unit) {
     var open by remember { mutableStateOf(false) }
-    Button({ open = true }, modifier.heightIn(min = 56.dp).semantics { contentDescription = tag }) {
+    Button({ open = true }, modifier.heightIn(min = 56.dp).testTag(tag).semantics { stateDescription = value.hex }) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.size(28.dp).background(rgbColor(value.hex), RoundedCornerShape(8.dp)))
             Text(label, Modifier.weight(1f), fontSize = 14.sp)
-            Text("›", color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            Text("›", Modifier.clearAndSetSemantics {}, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
         }
     }
     if (open) {

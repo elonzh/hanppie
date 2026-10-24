@@ -70,7 +70,7 @@ internal fun AboutSettingsContent(
             ) {
                 Image(
                     painter = painterResource(Res.drawable.hanppie_app_icon),
-                    contentDescription = "Hanppie Icon",
+                    contentDescription = null,
                     modifier = Modifier
                         .size(76.dp)
                         .clip(RoundedCornerShape(20.dp))

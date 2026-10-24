@@ -38,14 +38,14 @@ class DesignUiTest {
         setContent { TestWorkbenchTheme {
             RemoteLedColorPicker("待机", "test-led", color.value, androidx.compose.ui.Modifier) { color.value = it }
         } }
-        onNodeWithContentDescription("test-led").performClick()
+        onNodeWithTag("test-led").performClick()
         onNodeWithTag("led-brightness").performTouchInput { swipe(center.copy(x = width - 12f, y = height - 24f), center.copy(x = width * 0.5f, y = height - 24f)) }
         onNodeWithText("取消").performClick()
         runOnIdle { assertEquals(RobotLedColor(255, 0, 0), color.value) }
-        onNodeWithContentDescription("test-led").performClick()
+        onNodeWithTag("test-led").performClick()
         onNodeWithTag("led-color-apply").assertIsDisplayed().performClick()
         runOnIdle { assertEquals(RobotLedColor(255, 0, 0), color.value) }
-        onNodeWithContentDescription("test-led").performClick()
+        onNodeWithTag("test-led").performClick()
         onNodeWithTag("led-brightness").performTouchInput { swipe(center.copy(x = width - 12f, y = height - 24f), center.copy(x = width * 0.5f, y = height - 24f)) }
         saveDesignSnapshot("led-color-picker-phone", onAllNodes(isRoot()).onLast(), 320, 640)
         onNodeWithTag("led-color-apply").performClick()
@@ -139,7 +139,7 @@ class DesignUiTest {
             onNodeWithTag("connection-guide").assertDoesNotExist()
             onNodeWithContentDescription("设置").performClick()
             onNodeWithTag("settings-category-control").performScrollTo().performClick()
-            onNodeWithContentDescription("gimbal-sensitivity-selector").performScrollTo().assertIsDisplayed()
+            onNodeWithTag("gimbal-sensitivity-selector").performScrollTo().assertIsDisplayed()
             saveDesignSnapshot("desktop-minimum-settings", onRoot(), 900, 572)
             onNodeWithContentDescription("设备").performClick()
             saveDesignSnapshot("desktop-minimum-device", onRoot(), 900, 572)

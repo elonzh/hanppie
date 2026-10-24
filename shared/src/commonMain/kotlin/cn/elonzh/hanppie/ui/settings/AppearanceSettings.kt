@@ -4,8 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.elonzh.hanppie.resources.*
@@ -49,17 +48,17 @@ internal fun SettingsDropdown(
         Button({
             if (!expanded) onOpen()
             expanded = true
-        }, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("$tag-selector").semantics { contentDescription = "$tag-selector" }, enabled = enabled) {
+        }, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("$tag-selector"), enabled = enabled) {
             Text(label, Modifier.weight(1f), fontSize = 15.sp)
             Text(selectedLabel, fontSize = 14.sp,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             Spacer(Modifier.width(12.dp))
-            Text("⌄")
+            Text("⌄", Modifier.clearAndSetSemantics {})
         }
         WindowListPopup(expanded, onDismissRequest = { expanded = false }) {
             ListPopupColumn {
                 values.forEachIndexed { index, (id, title) ->
-                    Box(Modifier.heightIn(min = 48.dp).testTag("$tag-$id").semantics(mergeDescendants = true) { contentDescription = "$tag-$id" },
+                    Box(Modifier.heightIn(min = 48.dp).testTag("$tag-$id"),
                         propagateMinConstraints = true) {
                         DropdownImpl(DropdownItem(title), values.size, selected == id, index,
                             onSelectedIndexChange = { expanded = false; change(id) })
