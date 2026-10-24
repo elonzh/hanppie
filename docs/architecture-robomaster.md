@@ -1193,7 +1193,7 @@ S1 的红外能力至少包含三层，不能把其中任意一层统称为“�
 | 其他管理器值 | `UseWebSockets=false`、`UseSimulator=false`、`MaxBufferedPackets=16`、`AllowFragmentation=true`、`MaxDelay≈0.01`、`RunInBackground=false`；构造器默认不能覆盖预制体事实 |
 | 大厅 | `MaxPlayers=16`、`MaxPlayersPerConnection=1`、`MinPlayers=0`，场景 `RoomScene`/`BattleScene`，`lobbySlots` 初始为空；`AutoNetworkManager.OnStartHost` 会按 HostInfo 覆盖人数并按模式替换玩家预制体，不代表所有 UI 都允许 16 人 |
 
-两个实际 DLL 的 SHA-256 分别为 `46496a54c3b49bd2af55d220295575807424a9d10789de0e1c5b2f08c566c702`（HLAPI，AssemblyVersion 1.0.0.0）与 `fd9037e0241d00c1605da420dd3902c5e07352d51355529f5690c68c857bc474`（UNETModule，AssemblyVersion 0.0.0.0）；程序集版本不是 Unity 注册表包版本。此前按 SHA-1 核对的 HLAPI 1.0.2/1.0.4 源码仍只是参考，不宣称整个参考包与实际 DLL 相同。连接配置一致性和传输服务属于 LLAPI；参数表不等于完整传输实现，广播、配置 CRC 和普通请求的恢复分别见后文，完整连接状态推进与重传仍欠，详见上述 Unity 传输层文档。
+两个实际 DLL 的 SHA-256 分别为 `46496a54c3b49bd2af55d220295575807424a9d10789de0e1c5b2f08c566c702`（HLAPI，AssemblyVersion 1.0.0.0）与 `fd9037e0241d00c1605da420dd3902c5e07352d51355529f5690c68c857bc474`（UNETModule，AssemblyVersion 0.0.0.0）；程序集版本不是 Unity 注册表包版本。此前按 SHA-1 核对的 HLAPI 1.0.2/1.0.4 源码仍只是参考，不宣称整个参考包与实际 DLL 相同。连接配置一致性和传输服务属于 LLAPI；参数表不等于完整传输实现，普通连接、数据、关闭及 HLAPI 消息的分层证据见后文，真实网络、多 peer/边界和房间互通仍待验，详见上述 Unity 传输层文档。
 
 ##### 广播原生封包与离线仿真
 
@@ -1317,7 +1317,7 @@ S1 的红外能力至少包含三层，不能把其中任意一层统称为“�
 
 本阶段补充执行实际全局配置工厂、11 项 GlobalConfigInternal setter 与双端配置复制，并记录逐项原生写入。定时轮由实际 `0xbb16c0` 构造，采用预制体 MinTimerTimeout=1 / MaxTimerTimeout=12000，随后执行真实轮推进和 worker 回调。重传计算还读取 RTT、AckDelay 与 ResendTimeout；harness 按离散时间推进得到的某一次重传延迟不能作为固定协议常量。实际连接构造/初始化/重置、calloc 包装的乘积与清零、包池分配/复用、序号/排序/ACK 和事件消费均未替换为桩。
 
-**证据与边界：** 忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02-data/` 包含 47 段精确函数摘录与 11 个全局 setter 注册/摘录，观察到其中 50 个函数入口执行；其余八个仅作静态调用链或分支核对。双端普通握手后执行两信道数据往返、可靠 ACK 回收、丢数据/丢 ACK/去重、乱序、12 组长度向量和四消息混合批量用例。内存分配/释放、托管句柄、内存/原子/队列原语、时钟、host 查找、线程交接和网络输出仍为显式桩；host/槽表/池容器由 harness 配置。原生完整 host/worker 工厂、Unity 托管缓冲包装、真实线程/socket、多 peer、碎片、窗口耗尽/回绕、全部恶意长度及 HLAPI 仍未验证；普通槽关闭/重连见下节。两个端点均执行同一固定库，不构成独立 Hanppie 实现或官方房间互通；本轮未新增产品代码，具体交付边界见[台账数据阶段](./official-app-capability-implementation.md#g02-普通信道数据ack-与重传阶段)。
+**证据与边界：** 忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02-data/` 包含 47 段精确函数摘录与 11 个全局 setter 注册/摘录，观察到其中 50 个函数入口执行；其余八个仅作静态调用链或分支核对。双端普通握手后执行两信道数据往返、可靠 ACK 回收、丢数据/丢 ACK/去重、乱序、12 组长度向量和四消息混合批量用例。内存分配/释放、托管句柄、内存/原子/队列原语、时钟、host 查找、线程交接和网络输出仍为显式桩；host/槽表/池容器由 harness 配置。原生完整 host/worker 工厂、Unity 托管缓冲包装、真实线程/socket、多 peer、碎片、窗口耗尽/回绕、全部恶意长度及完整 HLAPI 房间互通仍未验证；普通槽关闭/重连及 HLAPI 消息证据见后文。两个端点均执行同一固定库，不构成独立 Hanppie 实现或官方房间互通；本轮未新增产品代码，具体交付边界见[台账数据阶段](./official-app-capability-implementation.md#g02-普通信道数据ack-与重传阶段)。
 
 ##### 普通连接关闭、槽回收与重连
 
@@ -1349,7 +1349,156 @@ host 最终事件消费执行 `0xbb2ec0` 更新该槽令牌；重连复用相同
 
 丢弃正常关闭包的定向用例中，本端仍完成关闭与槽回收；随后推进 4001 ms 没有再次发送该包。对端保持已连接状态直到真实定时回调在超过固定配置 DisconnectTimeout=4000 ms 后排入超时通知，再完成同样的清理/事件链。发出关闭包和本端 DisconnectEvent 都不能证明远端已经收到；应用退出/停止及设备命令确认需独立处理。
 
-证据位于忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02-close/`：27 段精确原生函数摘录，其中 22 个入口执行；复用的 11 项全局 setter 另有执行记录。包括普通关闭、忙连接关闭/同槽重连、丢关闭包/对端超时三条完整场景，4 组类型 3 独立构造、7 组原因/协议字、8 组 Disconnect 拒绝输入和错误令牌用例。线程交接、队列/原子/内存原语、分配/释放、时钟、托管句柄、host 查找、网络输出及系统服务格式化/地址解析为显式桩；地址解析仅供应合成 loopback sockaddr，没有实际 DNS 或网络。原生 host/worker 工厂、公开托管包装及五个仅静态摘录入口未执行，host 移除、连接中取消、多 peer/特殊封装、全部长度/并发边界及 HLAPI 仍待验。两个端点仍是同一固定库的合成上下文，非产品实现或官方房间互通；执行与待验边界见[台账生命周期阶段](./official-app-capability-implementation.md#g02-普通关闭槽回收与重连阶段)。
+证据位于忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02-close/`：27 段精确原生函数摘录，其中 22 个入口执行；复用的 11 项全局 setter 另有执行记录。包括普通关闭、忙连接关闭/同槽重连、丢关闭包/对端超时三条完整场景，4 组类型 3 独立构造、7 组原因/协议字、8 组 Disconnect 拒绝输入和错误令牌用例。线程交接、队列/原子/内存原语、分配/释放、时钟、托管句柄、host 查找、网络输出及系统服务格式化/地址解析为显式桩；地址解析仅供应合成 loopback sockaddr，没有实际 DNS 或网络。原生 host/worker 工厂、公开托管包装及五个仅静态摘录入口未执行，host 移除、连接中取消、多 peer/特殊封装、全部长度/并发边界及完整 HLAPI 房间互通仍待验。两个端点仍是同一固定库的合成上下文，非产品实现或官方房间互通；执行与待验边界见[台账生命周期阶段](./official-app-capability-implementation.md#g02-普通关闭槽回收与重连阶段)。
+
+##### HLAPI 消息封装、生成注册与状态流
+
+以上 LLAPI 的 DataEvent 正文还包含 HLAPI 消息，不是直接发送房间字段或机器人 opcode。固定 App 内实际 HLAPI DLL 与 Assembly-CSharp 的 CIL 已提取并有界解释执行；以下格式对应这一固定版本。Unity 注册表 1.0.2/1.0.4 源码只作参考，不代替实际 DLL，未运行 CLR/Unity 进程或官方房间。
+
+`NetworkWriter.StartMessage/FinishMessage` 和 `NetworkConnection.HandleReader` 使用下列小端消息头；一个 DataEvent 可带多条消息，每条独立分帧：
+
+| 偏移 | 编码 | 内容 |
+| --- | --- | --- |
+| 0 | little-endian u16 | **正文长度**，不包含这两字节及随后两字节消息类型；FinishMessage 回填 `position-4` |
+| 2 | little-endian i16 | MsgType；不是 LLAPI 包类型或信道号 |
+| 4 | 正文 | 接收者按长度切出独立 reader，再按 MsgType 分派 |
+
+实际枚举中 Command=5、Rpc=2、ObjectSpawn=3、Owner=4、UpdateVars=8、ObjectSpawnScene=10、SpawnFinished=12、CRC=14、Fragment=17、Ready=35、NotReady=36、AddPlayer=37、Scene=39、LobbyReadyToBegin=43。Ready、房间玩家的 ReadyToBegin、AutoLobbyPlayer 的 IsReady 和机器人配置确认是不同状态，不得合并为一个布尔值。HLAPI CRC 是脚本名/信道注册核对，也不是 LLAPI 连接配置 CRC。
+
+生成的 Command/RPC 正文依次为 `packed-u32 functionHash + packed-u32 netId + 参数`。netId 是网络对象 ID，不是 LLAPI 连接槽 ID、Lobby slot 或机器人角色 ID；函数号在 C# 为有符号 int，编码时保留原 32 位。参数 `i4` 及枚举按 unchecked u32 写 packed，`i8` 按 unchecked u64 写 packed；读取后恢复声明的补码表示，不能改用 ZigZag。`r4`、Vector3/Quaternion 分量为 IEEE-754 float32 小端；这只是字节表示，不证明实际坐标系或运动效果。
+
+packed 整数使用原始 writer/reader 的分段格式，不能套 protobuf/LEB128：0–240 为一个字节；241–2287 为 `241+(value-240)/256` 和余数；2288–67823 为 `f9` 加 `value-2288` 的两字节大端；随后 `fa/fb` 分别加 3/4 字节小端原值。u64 再以 `fc/fd/fe/ff` 加 5/6/7/8 字节小端原值。字符串为 u16 小端 UTF-8 **字节数**及正文，null 与空字符串都编码 `00 00`、读回为空字符串；writer 拒绝字节数达到 32768 的字符串。终端间房间发现正文仍是前文单独恢复的 UTF-16LE 路径，不套用此字符串格式。
+
+例如合成 netId=241 的 `CmdSetReady(true)` 完整 HLAPI 消息为 `08 00 05 00 fb c9 44 bb 75 f1 01 01`：正文八字节，函数号 `75bb44c9`，网络对象 ID `f1 01`，末字节为 true。负函数号和负整型参数分别验证其原始位模式；这组值是合成用例，不是设备身份、实际玩家分配或合法配置的完整示例。
+
+`ObjectSpawnMessage` 正文实际写 netId、16 字节 NetworkHash128 assetId、Vector3 position、u16 长度的初始状态 payload、Quaternion rotation。`NetworkIdentity.UNetSerializeAllVars` 的静态调用链按缓存的 NetworkBehaviour 顺序写初始状态，各组件的 OnDeserialize 消费对应流；不能用网络对象 ID 代替预制体 assetId，或随意重排组件。实际房间/裁判预制体的 assetId、组件顺序及全部派生状态布局尚未核对完整，本轮生成用例使用合成 assetId，不构成官方对象生成成功。
+
+`AutoLobbyPlayer` 已执行初始状态与增量状态的编解码。两者先消费 NetworkLobbyPlayer 基类的 `packed 1 + slot u8 + readyToBegin bool`；初始状态再依次写名字、是否房主、是否就绪、队伍 ID、队内人数、队伍数、角色 ID、头像 ID，字符串/布尔/整数按上述编码，**不带该派生类的 dirty mask**。增量状态在基类前缀后写独立 packed-u32 掩码，按位序写变更字段：
+
+| 位 | AutoLobbyPlayer 字段 | 声明类型 |
+| --- | --- | --- |
+| 1 | mName | string |
+| 2 | mIsHost | bool |
+| 4 | mIsReady | bool |
+| 8 | mTeamID | i4 |
+| 16 | mTeamNum | i4 |
+| 32 | mTeamCount | i4 |
+| 64 | mID | i4 |
+| 128 | mAvatarID | i4 |
+
+掩码 0 仍须消费该类掩码和基类前缀；初始反序列化直接赋字段，增量路径分别调用 SetName 等钩子。本轮验证初始和 0/八个单比特/255 共十种增量掩码，不把它推广为所有玩家/裁判派生类的状态布局。完整场景、所有权、就绪/生成顺序和 RPC 权限仍须随实际对象生命周期核对，知道函数号不等于拥有调用权限。
+
+下面注册表来自 14 个实际 G02 NetworkBehaviour 的类型初始化、生成发送/接收方法：**61 个 Command、40 个 RPC，均为信道 0**。14 次 NetworkCRC 注册不是整个 App 的完整脚本表；未证明所有加载脚本或 CRC 对端一致。参数保留实际声明名、类型和拼写，函数号列为无符号 32 位十六进制；对应 Call/Invoke、token、原始 CIL 哈希和逐条字节在本机阶段证据中固定。
+
+| 类型 | 调用 | 函数号 u32（hex） | 信道 | 参数（声明顺序） |
+| --- | --- | --- | --- | --- |
+| `AutoLobbyPlayer` | `CmdSyncBattleParamDataToClient` | `bc8692c2` | 0 | 无 |
+| `AutoLobbyPlayer` | `CmdUpdatePlayerInfo` | `d7004b40` | 0 | `name: string`, `isHost: bool`, `isReady: bool`, `teamID: i4`, `avatarID: i4` |
+| `AutoLobbyPlayer` | `CmdChangeTeamID` | `ca47da70` | 0 | `teamID: i4` |
+| `AutoLobbyPlayer` | `CmdSetReady` | `75bb44c9` | 0 | `isRerady: bool` |
+| `AutoLobbyPlayer` | `CmdChangeID` | `777a9b33` | 0 | `id: i4` |
+| `AutoLobbyPlayer` | `CmdChangeTeamNum` | `7eb38cb1` | 0 | `teamNum: i4` |
+| `AutoLobbyPlayer` | `CmdChangeTeamCount` | `9f65937a` | 0 | `teamCount: i4` |
+| `AutoLobbyPlayer` | `CmdSetSimulator` | `b496ac2a` | 0 | 无 |
+| `AutoLobbyPlayer` | `CmdRequestReady` | `1bde6ebc` | 0 | `isReady: bool` |
+| `AutoLobbyPlayer` | `RpcRoomAllReady` | `4b736fbb` | 0 | `clock: r4` |
+| `AutoLobbyPlayer` | `RpcSetSimulator` | `b98fbf00` | 0 | `value: bool` |
+| `AutoLobbyPlayer` | `RpcReadyResult` | `e0c51ea2` | 0 | `isReady: bool`, `info: string` |
+| `AutoLobbyPlayer` | `RpcSyncBattleParamData` | `4640b4e6` | 0 | `data: string` |
+| `BattleJudgeArena` | `RpcAttackSuccess` | `dad0eefd` | 0 | `id: i4`, `damageDone: r4` |
+| `BattleJudgeArena` | `RpcKillSuccess` | `51b10da7` | 0 | `killerID: i4`, `targetID: i4` |
+| `BattleJudgeArena` | `RpcSynchronousResult` | `3d27ba28` | 0 | `num: i4`, `data: string` |
+| `BattleJudgeArena` | `RpcUpdateRankUI` | `3aee2b47` | 0 | `length: i4`, `data: string` |
+| `BattleLobbyPlayerArena` | `CmdSetTime` | `bf5c1007` | 0 | `value: i4` |
+| `BattleLobbyPlayerArena` | `CmdSetArmor` | `2b1e4b45` | 0 | `value: i4` |
+| `BattleLobbyPlayerArena` | `CmdSetWaterGunType` | `d21a12bd` | 0 | `value: i4` |
+| `BattleLobbyPlayerArena` | `CmdSetSpeedLevel` | `29eb2937` | 0 | `value: i4` |
+| `BattleLobbyPlayerArena` | `CmdServerCalcColorID` | `702bd81e` | 0 | 无 |
+| `BattleLobbyPlayerArena` | `RpcSetColorID` | `c2043c9a` | 0 | `value: i4` |
+| `BattlePlayerArena` | `CmdDead` | `58288972` | 0 | 无 |
+| `BattlePlayerArena` | `CmdRobotKilled` | `a6bb8eb9` | 0 | `targetID: i4` |
+| `BattlePlayerArena` | `CmdDamageDone` | `02a0de1f` | 0 | `value: r4` |
+| `BattlePlayerArena` | `CmdRobotCatchMarker` | `10c51619` | 0 | `markerId: i4` |
+| `BattlePlayerArena` | `CmdSetRandomSkillID` | `9fce6fb5` | 0 | `value: i4` |
+| `BattlePlayerArena` | `CmdSetDeading` | `798024ca` | 0 | `value: bool` |
+| `BattlePlayerArena` | `CmdSetBadInjured` | `9947ca50` | 0 | `value: bool` |
+| `BattlePlayerArena` | `CmdSetColorID` | `564a7f8a` | 0 | `value: i4` |
+| `BattleJudge` | `RpcChangeJudgeState` | `4be324df` | 0 | `value: i4` |
+| `BattleJudge` | `RpcSyncConfiguration` | `db67b366` | 0 | `value: string` |
+| `BattleJudge` | `RpcSyncBattleInfo` | `f78de516` | 0 | `value: string` |
+| `BattlePlayer` | `CmdSpawnRobot` | `656fa2a8` | 0 | 无 |
+| `BattlePlayer` | `CmdSetID` | `1d06d664` | 0 | `id: i4` |
+| `BattlePlayer` | `CmdSetTeamCount` | `abca8f29` | 0 | `count: i4` |
+| `BattlePlayer` | `CmdSetTeamNum` | `7231a820` | 0 | `num: i4` |
+| `BattlePlayer` | `CmdSetHP` | `1d06d651` | 0 | `value: r4` |
+| `BattlePlayer` | `CmdSetMaxHP` | `def63763` | 0 | `value: r4` |
+| `BattlePlayer` | `CmdSetName` | `f6ad8db4` | 0 | `value: string` |
+| `BattlePlayer` | `CmdSetAvatarID` | `a2022edd` | 0 | `value: i4` |
+| `BattlePlayer` | `CmdSetDamageDone` | `d86d23fa` | 0 | `attackid: i4`, `value: r4` |
+| `BattlePlayer` | `CmdSetBuff` | `f6a8637c` | 0 | `buffID: i4`, `isAdd: bool`, `senderID: i4` |
+| `BattlePlayer` | `CmdSetState` | `df531688` | 0 | `value: i4` |
+| `BattlePlayer` | `CmdSycnRobotInfo` | `064d3a4e` | 0 | 无 |
+| `BattlePlayer` | `CmdSycnPublicScreenInfo_One` | `6b29c8b4` | 0 | `infoType: BattlePublicScreenInfoType`, `playerID: i4` |
+| `BattlePlayer` | `CmdSycnPublicScreenInfo_Two` | `6b29dc9a` | 0 | `infoType: BattlePublicScreenInfoType`, `playerAID: i4`, `playerBID: i4` |
+| `BattlePlayer` | `RpcSetBuff` | `9bb862e6` | 0 | `buffID: i4`, `isAdd: bool`, `senderID: i4` |
+| `BattlePlayer` | `RpcSycnRobotInfo` | `a0768238` | 0 | 无 |
+| `BattlePlayer` | `RpcSycnPublicScreenInfo_One` | `5a9f4a8a` | 0 | `infoType: BattlePublicScreenInfoType`, `playerID: i4` |
+| `BattlePlayer` | `RpcSycnPublicScreenInfo_Two` | `5a9f5e70` | 0 | `infoType: BattlePublicScreenInfoType`, `playerAID: i4`, `playerBID: i4` |
+| `BattleJudgeRace` | `RpcUpdateRealTimeRankUI` | `c76c7d1a` | 0 | `data: string` |
+| `BattleJudgeRace` | `RpcInitRealTimeRankUI` | `ee9e1aa1` | 0 | `data: string` |
+| `BattleJudgeRace` | `RpcFinalCountDown` | `faec10c1` | 0 | `count: i4` |
+| `BattleJudgeRace` | `RpcSynchronousResult` | `8c2ee3c0` | 0 | `num: i4`, `data: string` |
+| `BattleLobbyPlayerRace` | `CmdSetCheckPointNum` | `3b127eec` | 0 | `value: i4` |
+| `BattleLobbyPlayerRace` | `CmdSetLAPNum` | `d1aa91bd` | 0 | `value: i4` |
+| `BattleLobbyPlayerRace` | `CmdSetSpeedLevel` | `00782c4f` | 0 | `value: i4` |
+| `BattleLobbyPlayerRace` | `CmdServerCalcColorID` | `63d18f36` | 0 | 无 |
+| `BattleLobbyPlayerRace` | `RpcUpdateClientRoomInfo` | `5bbc6e43` | 0 | `checkpoint: i4`, `lap: i4`, `speedLevel: i4` |
+| `BattleLobbyPlayerRace` | `RpcSetColorID` | `5853d082` | 0 | `value: i4` |
+| `BattlePlayerRace` | `CmdSetCheckPointNum` | `50e78766` | 0 | `value: i4` |
+| `BattlePlayerRace` | `CmdSetCurrentCheckPointID` | `83b87d04` | 0 | `value: i4` |
+| `BattlePlayerRace` | `CmdSetLapNum` | `72463a83` | 0 | `value: i4` |
+| `BattlePlayerRace` | `CmdSetCurrentLap` | `3bac13fa` | 0 | `value: i4` |
+| `BattlePlayerRace` | `CmdSetCurrentCheckPointTime` | `7792e496` | 0 | `value: i8` |
+| `BattlePlayerRace` | `CmdSetColorID` | `12236c26` | 0 | `value: i4` |
+| `BattlePlayerRace` | `CmdSetRandomSkillID` | `94927751` | 0 | `value: i4` |
+| `BattlePlayerRace` | `CmdSetCurrentCheckPointIDChange` | `907ba9d4` | 0 | `value: bool` |
+| `BattleJudgeTeam` | `RpcJudgePlay` | `bb4c85d9` | 0 | `value: bool` |
+| `BattleJudgeTeam` | `RpcHoldStrongholdResult` | `257e22c4` | 0 | `id: i4`, `teamid: i4`, `name: string`, `avatarID: i4`, `markerid: i4`, `progress: r4`, `pulldown: bool`, `holdstrongTeamID: i4`, `teamNum: i4` |
+| `BattleJudgeTeam` | `RpcAttackSuccess` | `808e1c89` | 0 | `id: i4`, `damageDone: r4` |
+| `BattleJudgeTeam` | `RpcKillSuccess` | `6bb42e33` | 0 | `killerID: i4`, `targetID: i4` |
+| `BattleJudgeTeam` | `RpcSynchronousResult` | `3e3b41b4` | 0 | `num: i4`, `data: string` |
+| `BattleJudgeTeam` | `RpcSyncStrongHoldState` | `1759ff8e` | 0 | 无 |
+| `BattleJudgeTeam` | `RpcSyncPublicScreenInfo` | `7412af90` | 0 | 无 |
+| `BattleLobbyPlayerTeam` | `CmdOnRequestChangeIndex` | `a72435ee` | 0 | `team: i4`, `num: i4` |
+| `BattleLobbyPlayerTeam` | `CmdSynExitRoom` | `32c589c5` | 0 | 无 |
+| `BattleLobbyPlayerTeam` | `CmdServerCalcTeamID` | `c24e494c` | 0 | 无 |
+| `BattleLobbyPlayerTeam` | `RpcWaterGunType` | `23d97b15` | 0 | `type: i4` |
+| `BattleLobbyPlayerTeam` | `RpcGameTime` | `936eae71` | 0 | `time: i4` |
+| `BattleLobbyPlayerTeam` | `RpcMaxHp` | `536e9a3a` | 0 | `hp: i4` |
+| `BattleLobbyPlayerTeam` | `RpcStronghold` | `2ba64fe8` | 0 | `hold: i4` |
+| `BattleLobbyPlayerTeam` | `RpcSpeed` | `53c9b4f5` | 0 | `speed: i4` |
+| `BattleLobbyPlayerTeam` | `RpcReviveEnable` | `0b3542ca` | 0 | `enable: i4` |
+| `BattleLobbyPlayerTeam` | `RpcExitRoom` | `7e5ad3ab` | 0 | 无 |
+| `BattleLobbyPlayerTeam` | `RpcRequestChangeIndexResult` | `69163b82` | 0 | `bSuccess: bool` |
+| `BattlePlayerTeam` | `CmdDead` | `4cd4209a` | 0 | 无 |
+| `BattlePlayerTeam` | `CmdKillRobot` | `3f30b736` | 0 | `targetID: i4` |
+| `BattlePlayerTeam` | `CmdDamageDone` | `9bf87747` | 0 | `value: r4` |
+| `BattlePlayerTeam` | `CmdRobotCatchMarker` | `ea3f3141` | 0 | `markerId: i4` |
+| `BattlePlayerTeam` | `CmdSetDeading` | `12d7bdf2` | 0 | `value: bool` |
+| `BattlePlayerTeam` | `CmdSetBadInjured` | `322fc028` | 0 | `value: bool` |
+| `BattlePlayerTeam` | `CmdSetRandomSkillID` | `79488add` | 0 | `value: i4` |
+| `NetHeartbetTest` | `RpcReceivedHeartbet` | `3448d29c` | 0 | 无 |
+| `NetworkVirtualRobot` | `CmdSpawnBullet` | `fcd4ce90` | 0 | `pos: Vector3`, `quat: Quaternion` |
+| `NetworkVirtualRobot` | `CmdRobotInfraredRay` | `4cde948c` | 0 | `abilities: i4`, `deviceID: i4` |
+| `NetworkVirtualRobot` | `CmdBuffActive` | `7a230ca6` | 0 | `senderID: i4`, `abilities: i4` |
+| `NetworkVirtualRobot` | `RpcRobotInfraredRay` | `36c64c62` | 0 | `abilities: i4`, `deviceID: i4` |
+| `NetworkVirtualRobot` | `RpcBuffActive` | `facedcfc` | 0 | `senderID: i4`, `abilities: i4` |
+
+本阶段提取两份实际 DLL 的 486 个定向方法体；有界解释器实际进入 288 个方法，遇到未支持的指令或外部调用即失败。已通过 15 组 packed-u32、18 组 packed-u64、6 组字符串、101 个生成 Command/RPC 的参数往返、上述 11 组大厅状态、Scene/LobbyReady/Owner/SpawnFinished 四种系统消息、ObjectSpawn 编解码和五条拼接消息的实际 HandleReader 分派；另核对长字符串及截断正文异常。生成消息的业务方法、状态钩子、对象/权限/连接快照、注册回调、Unity 值类型构造、BCL 编码/数组/数值/诊断原语与最终发送/处理回调均为显式依赖桩；真实序列化、长度回填、分帧、位掩码和生成参数读取没有替换为桩。不是完整 CLR 或 Unity 运行。
+
+六条代表性生成消息/对象消息另经过上一阶段实际原生 LLAPI 的双端连接、发送、DataEvent 和 ACK 回收，保持完整 HLAPI 字节，覆盖 Command 客户端到服务端与 RPC/生成服务端到客户端。该桥接直接提交已编码正文，没有执行 ChannelBuffer 的缓存/Fragment=17 分片；不能据字符串最大长度推断单个 LLAPI 数据报可承载任意长消息。完整 host/场景对象、实际预制体与派生状态、所有权/权限校验、就绪/切场景、分片与窗口、真实运行互通均仍待验。
+
+原始 CIL、注册/参数目录、有界解释器、标准库/Unity/发送桩、逐项输入/输出和 native 桥接在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02-hlapi/`。没有新增产品代码、网络依赖或房间入口，没有执行 Unity、真实 socket/机器人或平台构建；G02 仍实施中，交付边界见[台账 HLAPI 阶段](./official-app-capability-implementation.md#g02-hlapi-封装生成调用与状态流阶段)。
 
 ##### 房间准备、规则与裁判同步
 
@@ -1409,7 +1558,7 @@ sequenceDiagram
 
 `BattleJudge.JudgeReady` 对玩家、配置和技能信息有有界等待，其中配置/技能阶段最多按秒循环四次，超时后仍可推进；`BattlePlayer.OnJudgeStateChange` 在 Playing 解开控制锁。这与当前 Hanppie 挑战必须取得配置确认和新鲜报告的准备条件不同，见[台账 C22](./official-app-capability-implementation.md#冲突记录保持现状留待决策)，不能照搬超时放行。房间心跳每秒发送、客户端计数约 4 秒，机器人断连消费者另有 10 秒返回大厅路径；网络存活、机器人新鲜度和操控输入租约必须分开，这些官方计时不替代当前输入失效后的归零。
 
-**未验证边界：** 连接参数、发现包、配置 CRC、普通请求/确认/连接事件、两条有效信道的数据/ACK/排序/重传，以及普通关闭/槽回收/同槽重连已有固定版静态/原生指令仿真依据；真实局域网发现/连接、host 移除/连接中取消、多 peer 与数据窗口/碎片边界、对象生成和 RPC/SyncVar 互通仍待验。固定 App 是 x86-64；当前环境未创建官方房间或采集运行报文，执行环境与系统组件授权记录见台账对应阶段。原调查的来源、预制体、规则/裁判表在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02/`，实际 DLL、广播和连接/数据/关闭仿真分别在相邻 `G02-transport/`、`G02-wire/`、`G02-handshake/`、`G02-connect/`、`G02-data/`、`G02-close/`。这些不是 G02 产品实现、官方房间互通或多机物理验收；当前进度见[独立台账](./official-app-capability-implementation.md#g02-本地多人契约调查与互通边界)。
+**未验证边界：** 连接参数、发现包、配置 CRC、普通请求/确认/连接事件、两条有效信道的数据/ACK/排序/重传，以及普通关闭/槽回收/同槽重连已有固定版静态/原生指令仿真依据；HLAPI 封装、101 项生成调用、大厅状态及对象消息另有有界 CIL 执行依据。真实局域网发现/连接、host 移除/连接中取消、多 peer/窗口/分片、实际预制体/派生状态、对象生成与 RPC/SyncVar 运行互通仍待验。固定 App 是 x86-64；当前环境未创建官方房间或采集运行报文，执行环境与系统组件授权记录见台账对应阶段。原调查的来源、预制体、规则/裁判表在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02/`，实际 DLL、广播和连接/数据/关闭仿真分别在相邻 `G02-transport/`、`G02-wire/`、`G02-handshake/`、`G02-connect/`、`G02-data/`、`G02-close/`、`G02-hlapi/`。这些不是 G02 产品实现、官方房间互通或多机物理验收；当前进度见[独立台账](./official-app-capability-implementation.md#g02-本地多人契约调查与互通边界)。
 
 #### 自主程序与自定义技能安装
 
