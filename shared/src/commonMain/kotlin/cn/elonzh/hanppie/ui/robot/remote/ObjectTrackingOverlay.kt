@@ -3,7 +3,10 @@ package cn.elonzh.hanppie.ui.robot.remote
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.absoluteOffset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,11 +20,16 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.PathEffect
@@ -29,12 +37,15 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
@@ -67,42 +78,84 @@ internal fun ObjectTrackingTargets(state: TrackingState, videoWidth: Int, videoH
     val ink = MiuixTheme.colorScheme.primary
     val muted = HanppieDesignTokens.RemoteHudMuted
     val current by rememberUpdatedState(state)
-    val activate: (VisionRect) -> Unit = { rect ->
-        if (enabled && rect.actionable(state.phase)) when (rect.kind) {
-            TrackingTargetKind.CANDIDATE -> onSelect(rect.x, rect.y)
-            TrackingTargetKind.READY -> onConfirm()
-            TrackingTargetKind.FOLLOWING -> onStop()
-            else -> Unit
+    val density = LocalDensity.current
+    var focused by remember { mutableStateOf<Int?>(null) }
+    val activate: (VisionRect) -> Boolean = { rect ->
+        if (!enabled || !rect.actionable(state.phase) ||
+            rect.kind != TrackingTargetKind.FOLLOWING && rect !in state.targets) false
+        else {
+            when (rect.kind) {
+                TrackingTargetKind.CANDIDATE -> onSelect(rect.x, rect.y)
+                TrackingTargetKind.READY -> onConfirm()
+                TrackingTargetKind.FOLLOWING -> onStop()
+                else -> Unit
+            }
+            true
         }
     }
     val currentActivate by rememberUpdatedState(activate)
     val description = tr(Res.string.tracking_target_frames)
-    val actions = if (!enabled) emptyList() else state.targets.mapIndexedNotNull { index, rect ->
-        val bounds = view.bounds(rect, rect.kind == TrackingTargetKind.FOLLOWING)
-        if (!rect.actionable(state.phase) || bounds.width <= 0 || bounds.height <= 0) null else CustomAccessibilityAction(when (rect.kind) {
-            TrackingTargetKind.CANDIDATE -> tr(Res.string.tracking_candidate_action, (index + 1).toString())
-            TrackingTargetKind.READY -> tr(Res.string.tracking_start_follow)
-            else -> tr(Res.string.tracking_stop)
-        }) { activate(rect); true }
-    }
-    Canvas(Modifier.fillMaxSize().onSizeChanged { measured = it }.testTag("tracking-targets")
-        .semantics { contentDescription = description; customActions = actions }
-        .pointerInput(enabled, videoWidth, videoHeight, fillVideo) {
-            if (enabled) detectTapGestures { offset ->
-                val viewport = VideoViewport.forImage(size.width.toFloat(), size.height.toFloat(), videoWidth, videoHeight, fillVideo)
-                if (viewport.point(offset.x, offset.y) != null) current.targets.asReversed().firstOrNull {
-                    it.actionable(current.phase) && viewport.bounds(it, it.kind == TrackingTargetKind.FOLLOWING).contains(offset)
-                }?.let(currentActivate)
+    Box(Modifier.fillMaxSize().onSizeChanged { measured = it }.testTag("tracking-targets")
+        .semantics { contentDescription = description }) {
+        Canvas(Modifier.fillMaxSize()
+            .pointerInput(enabled, videoWidth, videoHeight, fillVideo) {
+                if (enabled) detectTapGestures { offset ->
+                    val viewport = VideoViewport.forImage(size.width.toFloat(), size.height.toFloat(), videoWidth, videoHeight, fillVideo)
+                    if (viewport.point(offset.x, offset.y) != null) current.targets.asReversed().firstOrNull {
+                        it.actionable(current.phase) && viewport.bounds(it, it.kind == TrackingTargetKind.FOLLOWING).contains(offset)
+                    }?.let(currentActivate)
+                }
+            }) {
+            val viewport = VideoViewport.forImage(size.width, size.height, videoWidth, videoHeight, fillVideo)
+            for ((index, rect) in state.targets.withIndex()) {
+                val bounds = viewport.bounds(rect, rect.kind == TrackingTargetKind.FOLLOWING)
+                val candidate = rect.kind == TrackingTargetKind.CANDIDATE
+                val known = rect.kind in listOf(TrackingTargetKind.CANDIDATE, TrackingTargetKind.READY, TrackingTargetKind.FOLLOWING)
+                drawRect(if (known) ink else muted, bounds.topLeft, bounds.size,
+                    style = Stroke((if (candidate) 2.dp else 3.dp).toPx(),
+                        pathEffect = if (candidate) PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 5.dp.toPx())) else null))
+                if (focused == index && enabled && rect.actionable(state.phase)) {
+                    drawRect(HanppieDesignTokens.RemoteHudSurface, bounds.topLeft, bounds.size, style = Stroke(6.dp.toPx()))
+                    drawRect(HanppieDesignTokens.RemoteHudContent, bounds.topLeft, bounds.size, style = Stroke(2.dp.toPx()))
+                }
             }
-        }) {
-        val viewport = VideoViewport.forImage(size.width, size.height, videoWidth, videoHeight, fillVideo)
-        for (rect in state.targets) {
-            val bounds = viewport.bounds(rect, rect.kind == TrackingTargetKind.FOLLOWING)
-            val candidate = rect.kind == TrackingTargetKind.CANDIDATE
-            val known = rect.kind in listOf(TrackingTargetKind.CANDIDATE, TrackingTargetKind.READY, TrackingTargetKind.FOLLOWING)
-            drawRect(if (known) ink else muted, bounds.topLeft, bounds.size,
-                style = Stroke((if (candidate) 2.dp else 3.dp).toPx(),
-                    pathEffect = if (candidate) PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 5.dp.toPx())) else null))
+        }
+        state.targets.forEachIndexed { index, rect ->
+            val bounds = view.bounds(rect, rect.kind == TrackingTargetKind.FOLLOWING)
+            if (rect.actionable(state.phase) && bounds.width > 0 && bounds.height > 0) key(index) {
+                var enterDown by remember { mutableStateOf(false) }
+                LaunchedEffect(enabled, state.phase) { enterDown = false }
+                val label = when (rect.kind) {
+                    TrackingTargetKind.CANDIDATE -> tr(Res.string.tracking_candidate_action, (index + 1).toString())
+                    TrackingTargetKind.READY -> tr(Res.string.tracking_start_follow)
+                    else -> tr(Res.string.tracking_stop)
+                }
+                // These nodes supply focus and accessibility only; the canvas retains all pointer hit testing.
+                Box(Modifier.absoluteOffset { IntOffset(bounds.left.roundToInt(), bounds.top.roundToInt()) }
+                    .size(with(density) { bounds.width.toDp() }, with(density) { bounds.height.toDp() })
+                    .testTag("tracking-target-$index").semantics {
+                        contentDescription = label
+                        role = Role.Button
+                        if (enabled) onClick { currentActivate(rect) } else disabled()
+                    }.onFocusChanged {
+                        if (it.isFocused) focused = index else {
+                            if (focused == index) focused = null
+                            enterDown = false
+                        }
+                    }.onKeyEvent { event ->
+                        if (event.key != Key.Enter || event.isCtrlPressed || event.isAltPressed || event.isMetaPressed) false
+                        else when (event.type) {
+                            KeyEventType.KeyDown -> { if (enabled) enterDown = true; true }
+                            KeyEventType.KeyUp -> {
+                                val armed = enterDown
+                                enterDown = false
+                                if (armed) currentActivate(rect)
+                                true
+                            }
+                            else -> false
+                        }
+                    }.focusable(enabled))
+            }
         }
     }
 }

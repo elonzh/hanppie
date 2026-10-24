@@ -638,7 +638,7 @@
     <string name="signal_level_unknown">Unbekannt</string>
     <string name="signal_quality_raw">WLAN-Qualitätsrohwert: %1$s (0x07:0x09; weder dBm noch Prozent)</string>
     <string name="object_tracking">Objektverfolgung</string>
-    <string name="tracking_select_target">Zum Auswählen auf einen Kandidatenrahmen tippen</string>
+    <string name="tracking_select_target">Rahmen antippen oder mit Tab und Enter wählen</string>
     <string name="tracking_preparing">Objektverfolgung wird vorbereitet…</string>
     <string name="tracking_selecting">Ziel wird erfasst…</string>
     <string name="tracking_ready">Ziel erfasst. Beim Start bewegt sich der Roboter.</string>

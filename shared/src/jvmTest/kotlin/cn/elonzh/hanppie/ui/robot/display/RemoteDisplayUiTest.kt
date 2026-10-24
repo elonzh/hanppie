@@ -82,8 +82,8 @@ class RemoteDisplayUiTest {
         var selected:Pair<Float,Float>?=null
         setContent{WorkbenchTheme{ObjectTrackingTargets(TrackingState(TrackingPhase.SEARCHING,candidates=targets),1000,1000,true,
             {x,y->selected=x to y},{},{},fillVideo=true)}}
-        val actions=onNodeWithTag("tracking-targets").fetchSemanticsNode().config[SemanticsActions.CustomActions]
-        assertEquals(1,actions.size)
+        onNodeWithTag("tracking-target-0").assertDoesNotExist()
+        onNodeWithTag("tracking-target-1").assertHasClickAction()
         onNodeWithTag("tracking-targets").performTouchInput{click(Offset(500f,2f))}
         assertNull(selected)
         onNodeWithTag("tracking-targets").performTouchInput{click(center)}

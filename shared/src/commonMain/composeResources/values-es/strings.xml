@@ -638,7 +638,7 @@
     <string name="signal_level_unknown">Desconocida</string>
     <string name="signal_quality_raw">Valor sin procesar de calidad Wi-Fi: %1$s (0x07:0x09; no son dBm ni un porcentaje)</string>
     <string name="object_tracking">Seguimiento de objetos</string>
-    <string name="tracking_select_target">Toca un recuadro candidato para seleccionarlo</string>
+    <string name="tracking_select_target">Toca un recuadro o usa Tab y Enter para elegirlo</string>
     <string name="tracking_preparing">Preparando seguimiento de objetos…</string>
     <string name="tracking_selecting">Fijando objetivo…</string>
     <string name="tracking_ready">Objetivo fijado. Al iniciar se moverá el robot.</string>

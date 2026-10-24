@@ -638,7 +638,7 @@
     <string name="signal_level_unknown">Неизвестно</string>
     <string name="signal_quality_raw">Сырое значение качества Wi-Fi: %1$s (0x07:0x09; не дБм и не проценты)</string>
     <string name="object_tracking">Слежение за объектом</string>
-    <string name="tracking_select_target">Нажмите рамку кандидата для выбора</string>
+    <string name="tracking_select_target">Выберите рамку касанием или клавишами Tab и Enter</string>
     <string name="tracking_preparing">Подготовка слежения…</string>
     <string name="tracking_selecting">Захват цели…</string>
     <string name="tracking_ready">Цель захвачена. После запуска робот начнёт двигаться.</string>

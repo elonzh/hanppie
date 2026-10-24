@@ -11,7 +11,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -112,9 +111,8 @@ class ObjectTrackingUiTest {
         } }
         rule.onNodeWithTag("tracking-targets").performTouchInput { click(Offset(width * .05f, height * .05f)) }
         assertNull(selected)
-        val candidateActions = rule.onNodeWithTag("tracking-targets").fetchSemanticsNode().config[SemanticsActions.CustomActions]
-        assertEquals(1, candidateActions.size)
-        assertEquals("选择候选目标 1", candidateActions.single().label)
+        rule.onNodeWithTag("tracking-target-0").assertContentDescriptionEquals("选择候选目标 1").assertHasClickAction()
+        rule.onNodeWithTag("tracking-target-1").assertDoesNotExist()
         rule.onNodeWithTag("tracking-targets").performTouchInput { click(center) }
         assertEquals(.5f to .5f, selected)
         rule.onNodeWithTag("tracking-targets").performTouchInput { click(center) }
@@ -125,7 +123,7 @@ class ObjectTrackingUiTest {
         }
         assertEquals(1, stopped)
         rule.runOnIdle { tracking.value = TrackingState(TrackingPhase.SEARCHING, candidates = listOf(rect.copy(info = 0x80000000.toInt()))) }
-        assertTrue(rule.onNodeWithTag("tracking-targets").fetchSemanticsNode().config[SemanticsActions.CustomActions].isEmpty())
+        rule.onNodeWithTag("tracking-target-0").assertDoesNotExist()
     }
 
     @Test fun deviceFailuresKeepTheirCodesAndSpecificRecoveryControls() {

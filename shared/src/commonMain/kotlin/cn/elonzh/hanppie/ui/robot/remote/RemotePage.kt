@@ -489,7 +489,10 @@ internal fun RemotePage(
         }
         if (videoContent == null) RobotVideo(model, mediaControls, Modifier.fillMaxSize()) else videoContent()
         if (tracking.active && videoFrame != null) ObjectTrackingTargets(tracking, videoFrame.width, videoFrame.height,
-            enabled, model::selectTrackingTarget, model::confirmObjectTracking, model::stopObjectTracking, display.fillVideo)
+            enabled,
+            { x, y -> model.selectTrackingTarget(x, y); focus.requestFocus() },
+            { model.confirmObjectTracking(); focus.requestFocus() },
+            { model.stopObjectTracking(); focus.requestFocus() }, display.fillVideo)
         if (vision.phase == cn.elonzh.hanppie.robot.vision.VisionPhase.ACTIVE && videoFresh && videoFrame != null)
             VisionTargets(vision, videoFrame.width, videoFrame.height, visionOcclusions.filterKeys {
                 it !in listOf("left", "right", "ammo") || !keyboardHints && !armMode

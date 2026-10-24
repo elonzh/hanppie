@@ -638,7 +638,7 @@
     <string name="signal_level_unknown">不明</string>
     <string name="signal_quality_raw">Wi-Fi 品質の生の値: %1$s (0x07:0x09。dBm や割合ではありません)</string>
     <string name="object_tracking">対象追跡</string>
-    <string name="tracking_select_target">候補枠をタップして選んでください</string>
+    <string name="tracking_select_target">候補枠をタップ、または Tab と Enter で選択</string>
     <string name="tracking_preparing">対象追跡を準備中…</string>
     <string name="tracking_selecting">対象をロック中…</string>
     <string name="tracking_ready">対象をロックしました。開始するとロボットが移動します。</string>

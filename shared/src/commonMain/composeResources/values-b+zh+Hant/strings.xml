@@ -638,7 +638,7 @@
     <string name="signal_level_unknown">未知</string>
     <string name="signal_quality_raw">Wi-Fi 品質原始值：%1$s（0x07:0x09；不是 dBm 或百分比）</string>
     <string name="object_tracking">物件跟隨</string>
-    <string name="tracking_select_target">點擊候選框選擇目標</string>
+    <string name="tracking_select_target">點擊候選框，或按 Tab 聚焦、Enter 選擇</string>
     <string name="tracking_preparing">正在準備物件跟隨…</string>
     <string name="tracking_selecting">正在鎖定目標…</string>
     <string name="tracking_ready">目標已鎖定，開始後機器人將自動移動</string>
