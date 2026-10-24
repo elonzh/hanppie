@@ -66,6 +66,21 @@ class AccessibilityLabelsUiTest {
                 if (onAllNodesWithTag("settings-back").fetchSemanticsNodes().isNotEmpty()) onNodeWithTag("settings-back").performClick()
                 onNodeWithTag("settings-category-$id").performScrollTo().performClick()
             }
+            fun categories() {
+                if (onAllNodesWithTag("settings-back").fetchSemanticsNodes().isNotEmpty()) onNodeWithTag("settings-back").performClick()
+                for ((id, title) in listOf(
+                    "general" to Res.string.general_settings, "model" to Res.string.model_service,
+                    "display" to Res.string.display_settings, "media" to Res.string.audio_video,
+                    "robot" to Res.string.robot_maintenance, "control" to Res.string.control,
+                    "lights" to Res.string.remote_led_colors, "shortcuts" to Res.string.keyboard_shortcuts,
+                    "about" to Res.string.about,
+                )) {
+                    val node = onNodeWithTag("settings-category-$id").assertTextContains(tr(title)).assertHasClickAction()
+                    assertEquals(Role.Button, node.fetchSemanticsNode().config.getOrNull(SemanticsProperties.Role), id)
+                    assertNull(node.fetchSemanticsNode().config.getOrNull(SemanticsProperties.ContentDescription), id)
+                }
+                onNodeWithTag("settings-category-general").performScrollTo()
+            }
             fun field(tag: String, label: String) {
                 val node = onNodeWithTag(tag).assertIsDisplayed().assertTextContains(label)
                 val config = node.fetchSemanticsNode().config
@@ -86,6 +101,7 @@ class AccessibilityLabelsUiTest {
                         }
                     }
                 }
+                categories(); picture("categories", "settings-page")
                 category("general")
                 onNodeWithTag("language-selector").assertTextContains(tr(Res.string.language))
                     .assertTextContains("English").assertHasClickAction()
@@ -100,6 +116,8 @@ class AccessibilityLabelsUiTest {
                     runOnIdle { Localization.select(language.preference) }
                     onNodeWithTag("language-selector").assertTextContains(tr(Res.string.language)).assertTextContains(language.nativeName)
                     cleanDescriptions(); picture("settings-${language.preference}", "settings-page")
+                    categories(); picture("categories-${language.preference}", "settings-page")
+                    category("general")
                 }
                 runOnIdle { Localization.select("en") }
                 category("lights")

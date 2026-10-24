@@ -17,6 +17,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -195,7 +196,7 @@ private fun SettingsCategoryRow(category: SettingsCategory, summary: String, sel
     Card(Modifier.fillMaxWidth().testTag("settings-category-${category.id}")
         .clip(RoundedCornerShape(HanppieDesignTokens.CardRadius))
         .semantics { this.selected = selected }
-        .clickable(onClick = onClick),
+        .clickable(role = Role.Button, onClick = onClick),
         colors = CardDefaults.defaultColors(color = if (selected) MiuixTheme.colorScheme.secondaryContainer
             else MiuixTheme.colorScheme.surfaceContainer)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).padding(16.dp),
