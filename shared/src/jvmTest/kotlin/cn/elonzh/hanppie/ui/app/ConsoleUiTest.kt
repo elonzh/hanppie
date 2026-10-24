@@ -290,6 +290,7 @@ class ConsoleUiTest {
             override fun finish() { state.value = state.value.copy(active = false, result = "看看连接状态", resultId = 1) }
             override fun cancel() { state.value = state.value.copy(active = false) }
             override fun consumeResult() { state.value = state.value.copy(result = "") }
+            override fun dismissError() { state.value = state.value.copy(error = null) }
             override fun close() { cancel() }
         }
         val model = testConsoleModel(input)

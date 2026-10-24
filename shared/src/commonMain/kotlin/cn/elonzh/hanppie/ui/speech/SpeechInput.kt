@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.speech
 
+import cn.elonzh.hanppie.ui.i18n.UiText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -9,7 +10,7 @@ internal data class SpeechInputState(
     val partial: String = "",
     val result: String = "",
     val resultId: Long = 0,
-    val error: String? = null,
+    val error: UiText? = null,
 )
 
 /** Recognized text only. The agent never receives an audio device or starts recording. */
@@ -19,6 +20,7 @@ internal interface SpeechInput {
     fun finish()
     fun cancel()
     fun consumeResult()
+    fun dismissError()
     fun close()
 }
 
@@ -28,5 +30,6 @@ internal class NoSpeechInput : SpeechInput {
     override fun finish() {}
     override fun cancel() {}
     override fun consumeResult() {}
+    override fun dismissError() {}
     override fun close() {}
 }

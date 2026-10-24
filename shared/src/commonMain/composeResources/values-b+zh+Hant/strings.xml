@@ -1669,4 +1669,5 @@
     <string name="talk_retry_hint">放開對講按鈕，再次按住以重新錄音。</string>
     <string name="talk_hold">按住錄音，放開傳送</string>
     <string name="talk_send">結束錄音並傳送</string>
+    <string name="speech_input_failed_value">語音辨識失敗：%1$s</string>
 </resources>

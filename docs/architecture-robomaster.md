@@ -612,6 +612,10 @@ Hanppie 采用显式单页启用、Escape 释放和原有速度控制，保留�
 
 同包 `COMMON/HandheldVibrate.CreateVibrate` 只打印调试信息和读取控制器/振动偏好，四个等级没有执行系统振动。此证据仅说明固定 macOS 实现为空，不能推断移动平台没有反馈或据此制造可用开关；移动端反馈消费者、实际原生实现和设备体验仍待单独核对。**固定平台边界**
 
+#### 画面效果偏好的有效消费边界
+
+固定 macOS 1.1.5/build 239 的 `UI/EffectScreen.Awake` 读取并监听 `Display.FPVEffect`，但 `EnableScreenEffect` 仅赋值私有字段 `mIsScreenEffect`；同一反编译类中，该字段只有初值和上述赋值，没有读取。`Update`、`StateNormal.Execute` 等直接更新材质时不检查它，`ViewSettingDisplay` 也没有该偏好的对应入口。此有界托管源码证据不能将名义默认值、监听或 setter 当作有效画面效果设置，不据此添加空开关。它不证明所有平台、整个着色器或画面效果组件均不工作；渲染与实际场景挂载仍须单独核对。`FPVScreen.OnRobotFire → EffectScreen.Fire` 的发射来源差异继续按台账 C23 处理，不以新效果绕过该决策。**固定版托管源码 / 有界结论**
+
 #### 官方 GamePad 的独立链路与输入
 
 本节保留上游协议与历史调查。用户已排除官方 GamePad 连接支持，当前产品不再接入这条专用链路；移除范围统一见[实施台账](./official-app-capability-implementation.md#i02-用户排除与专用链路移除)。

@@ -1669,4 +1669,5 @@
     <string name="talk_retry_hint">Отпустите кнопку разговора и снова удерживайте её, чтобы записать новый фрагмент.</string>
     <string name="talk_hold">Удерживайте для записи, отпустите для отправки</string>
     <string name="talk_send">Закончить запись и отправить</string>
+    <string name="speech_input_failed_value">Ошибка распознавания речи: %1$s</string>
 </resources>

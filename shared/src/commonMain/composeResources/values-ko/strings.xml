@@ -1669,4 +1669,5 @@
     <string name="talk_retry_hint">음성 버튼에서 손을 뗀 뒤 다시 길게 눌러 새로 녹음하세요.</string>
     <string name="talk_hold">길게 눌러 녹음, 손을 떼면 전송</string>
     <string name="talk_send">녹음을 마치고 전송</string>
+    <string name="speech_input_failed_value">음성 인식 실패: %1$s</string>
 </resources>

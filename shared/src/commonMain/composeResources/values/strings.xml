@@ -1669,4 +1669,5 @@
     <string name="talk_retry_hint">Release the talk button, then hold it again to record a new clip.</string>
     <string name="talk_hold">Hold to record; release to send</string>
     <string name="talk_send">Finish recording and send</string>
+    <string name="speech_input_failed_value">Speech recognition failed: %1$s</string>
 </resources>

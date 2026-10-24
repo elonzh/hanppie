@@ -1669,4 +1669,5 @@
     <string name="talk_retry_hint">Suelta el botón de voz y vuelve a mantenerlo pulsado para grabar de nuevo.</string>
     <string name="talk_hold">Mantén pulsado para grabar; suelta para enviar</string>
     <string name="talk_send">Terminar grabación y enviar</string>
+    <string name="speech_input_failed_value">Error de reconocimiento de voz: %1$s</string>
 </resources>

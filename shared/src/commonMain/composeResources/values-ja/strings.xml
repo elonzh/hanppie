@@ -1669,4 +1669,5 @@
     <string name="talk_retry_hint">トークボタンを離し、もう一度長押しして録音し直してください。</string>
     <string name="talk_hold">長押しで録音、離すと送信</string>
     <string name="talk_send">録音を終了して送信</string>
+    <string name="speech_input_failed_value">音声認識に失敗しました：%1$s</string>
 </resources>

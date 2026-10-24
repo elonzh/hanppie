@@ -1669,4 +1669,5 @@
     <string name="talk_retry_hint">Relâchez le bouton vocal, puis maintenez-le à nouveau pour refaire l’enregistrement.</string>
     <string name="talk_hold">Maintenir pour enregistrer, relâcher pour envoyer</string>
     <string name="talk_send">Terminer l’enregistrement et envoyer</string>
+    <string name="speech_input_failed_value">Échec de la reconnaissance vocale : %1$s</string>
 </resources>

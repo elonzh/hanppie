@@ -1669,4 +1669,5 @@
     <string name="talk_retry_hint">松开对讲按钮，再次按住以重新录音。</string>
     <string name="talk_hold">按住录音，松开发送</string>
     <string name="talk_send">结束录音并发送</string>
+    <string name="speech_input_failed_value">语音识别失败：%1$s</string>
 </resources>

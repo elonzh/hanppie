@@ -1669,4 +1669,5 @@
     <string name="talk_retry_hint">Lass die Sprechtaste los und halte sie erneut gedrückt, um neu aufzunehmen.</string>
     <string name="talk_hold">Zum Aufnehmen halten, zum Senden loslassen</string>
     <string name="talk_send">Aufnahme beenden und senden</string>
+    <string name="speech_input_failed_value">Spracherkennung fehlgeschlagen: %1$s</string>
 </resources>

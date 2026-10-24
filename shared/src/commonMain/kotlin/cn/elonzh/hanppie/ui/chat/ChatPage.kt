@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.*
@@ -323,8 +325,21 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
         state.error?.let { error ->
             SelectionContainer { Text(error, color = MiuixTheme.colorScheme.error, fontSize = 12.sp) }
         }
-        microphone.error?.let { Text(it, color = MiuixTheme.colorScheme.error, fontSize = 12.sp) }
-        if (microphone.active) Text(microphone.partial.ifBlank { if (microphone.processing) tr(Res.string.recognizing) else tr(Res.string.listening) }, fontSize = 13.sp)
+        microphone.error?.let { error ->
+            Row(Modifier.fillMaxWidth().testTag("voice-input-feedback"), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SelectionContainer(Modifier.weight(1f)) {
+                    Text(error.resolve(), Modifier.heightIn(max = 80.dp).verticalScroll(rememberScrollState())
+                        .testTag("voice-input-error"), color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
+                }
+                Button(model.voiceInput::dismissError, Modifier.heightIn(min = 48.dp).testTag("voice-input-error-close")) {
+                    Text(tr(Res.string.close))
+                }
+            }
+        }
+        if (microphone.active) Text(listOf(tr(if (microphone.processing) Res.string.recognizing else Res.string.listening),
+            microphone.partial).filter { it.isNotBlank() }.joinToString("\n"),
+            Modifier.heightIn(max = 80.dp).verticalScroll(rememberScrollState()).testTag("voice-input-status"), fontSize = 13.sp)
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
             if (!expanded && shortWindow) ComposerIcon(tr(Res.string.conversations), WorkbenchGlyph.CHAT,
