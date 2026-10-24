@@ -622,7 +622,9 @@ Hanppie 采用显式单页启用、Escape 释放和原有速度控制，保留�
 | uint16LE @12 | bit 7/6 为鼠标左/右；bit 13/14/15/12 为 C1/C2/Fire/Fn |
 | uint8 @18 | 电量读数 |
 
-byte 1 的低三位进入校准/居中/电量告警相关分支，但两份原生实现的通知分发不能仅按 key 名称认定为三个准确独立状态；其余字节也未完整解释，不补造键盘位图。`SystemGamePadStatus` 的部分告警消费者为空；`ViewGamePad` 的停用/激活操作属于内部工具，不能全部变成普通设置。
+沿 macOS `SetGamePadNoCalibrate 15cb0`、`SetGamePadMidError 15c30`、`SetGamePadBatteryWarning 15d30` 与 Android 对应具名函数 `4cf2cc/4cf21c/4cf378` 逐分支核对，`OnGamePadDataPush` 的 byte 1 bit 2/1/0 分别进入与未校准/未回中/低电量 setter 对应的数据流。该对应依据具名函数体和内联分支，不仅依赖 key 名称；它仍是固定客户端的解码语义，真实固件位含义、极性和触发条件未验。**具名 setter / 双架构解码，设备未验**
+
+这三条路径均用同一通知 key `0x0e000013`，比较/写入同一缓存成员（macOS `0x228`、Android `0x1f8`）；未回中/低电量分支却序列化另外的成员（macOS `0x238/0x248`、Android `0x208/0x218`）。因此不能把原生通知当作三个可靠的独立状态事件。`SystemGamePadStatus` 的校准/居中/电量百分比回调为空，低电量回调也未检查布尔值就打开提示；不将这些消费者缺陷当作新实现的状态规则。新增反汇编和来源指纹见忽略目录 `I02-status/native-contracts.json`。其余字节尚未完整解释，`HasKeyboard` 不证明保留字节就是键盘扫描码；`ViewGamePad` 的停用/激活操作属于内部工具，不机械转成普通设置。**客户端缺陷 / 未解释边界**
 
 24 个 GamePad key 中，八个轴增益/斜率/死区及 `ControlEnabled` 由原生事件更新进程内状态，没有为它们建立独立设备设置 opcode。构造默认值依次是 X/Y 增益 1/1，yaw 增益/斜率/死区 1/1/0，pitch 1/1/0；`GetExpValue`（macOS `0x17e40`）先令 `u=(raw-1024)/660`，计算 `sign(u) × min(pow(max(0,(1+deadZone)×abs(u)-deadZone),slope),1) × gain`，再映回中心 1024。该 deadZone 参数不能直接当作摇杆死区百分比。
 

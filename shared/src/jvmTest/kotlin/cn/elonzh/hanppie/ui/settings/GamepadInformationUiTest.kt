@@ -19,6 +19,7 @@ import kotlinx.coroutines.channels.Channel
 import java.awt.image.BufferedImage
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 import javax.imageio.ImageIO
 import kotlin.test.*
 
@@ -44,8 +45,8 @@ class GamepadInformationUiTest {
                 else ByteArray(10).apply { this[1] = 1 }
             incoming.send(Protocol.duss(6, 2, 0x80, 0, request.id, payload, request.sequence))
         }
-        fun report() { incoming.trySend(Protocol.duss(6, 2, 0, 0x3f, 0x90, ByteArray(19).apply {
-            this[1] = 0x18; this[18] = 88
+        fun report(flags: Int = 0x18) { incoming.trySend(Protocol.duss(6, 2, 0, 0x3f, 0x90, ByteArray(19).apply {
+            this[1] = flags.toByte(); this[18] = 88
         }, 9)) }
         override fun close() { incoming.close() }
     }
@@ -62,6 +63,7 @@ class GamepadInformationUiTest {
         runDesktopComposeUiTest(width = width, height = height) {
             Localization.initialize(language, language)
             val connector = Connector(); val model = testConsoleModel(gamepadConnector = connector)
+            val fixtureScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val appearance = AppearanceController(AppearanceSettings(if (dark) NightMode.DARK else NightMode.LIGHT))
             val prefix = "gamepad-info-$width-$height-$language-${if (dark) "dark" else "light"}"
             fun capture(name: String) {
@@ -112,7 +114,21 @@ class GamepadInformationUiTest {
                 wire.report(); waitUntil(timeoutMillis = 5000) { model.gamepad.state.value.report != null }
                 onNodeWithTag("gamepad-phase").performScrollTo().assertIsDisplayed(); capture("connected-actions")
                 onNodeWithTag("gamepad-activation").performScrollTo().assertIsDisplayed(); capture("connected-results")
+                val flags = AtomicInteger(0x1f)
+                val reports = fixtureScope.launch { while (isActive) { wire.report(flags.get()); delay(20) } }
+                waitUntil(timeoutMillis = 5000) { model.gamepad.state.value.report?.warnings?.size == 3 }
+                onNodeWithTag("gamepad-warning-LOW_BATTERY").performScrollTo()
+                for (warning in GamepadWarning.entries) onNodeWithTag("gamepad-warning-${warning.name}").assertIsDisplayed()
+                assertEquals(88, model.gamepad.state.value.report?.batteryPercent)
+                capture("warnings")
+                flags.set(0x18)
+                waitUntil(timeoutMillis = 5000) { model.gamepad.state.value.report?.warnings?.isEmpty() == true }
+                for (warning in GamepadWarning.entries) onNodeWithTag("gamepad-warning-${warning.name}").assertDoesNotExist()
+                runBlocking { reports.cancelAndJoin() }
+                wire.report(0x1f)
+                waitUntil(timeoutMillis = 5000) { model.gamepad.state.value.report?.warnings?.size == 3 }
                 waitUntil(timeoutMillis = 5000) { !model.gamepad.state.value.reportFresh }
+                for (warning in GamepadWarning.entries) onNodeWithTag("gamepad-warning-${warning.name}").assertDoesNotExist()
                 onNodeWithTag("gamepad-stale").performScrollTo().assertIsDisplayed(); capture("stale")
                 wire.invalid = true
                 onNodeWithTag("gamepad-firmware-query").performScrollTo().performClick()
@@ -130,6 +146,6 @@ class GamepadInformationUiTest {
                 onNodeWithTag("settings-gamepad-open").performScrollTo().assertIsDisplayed()
                 onNodeWithTag("gamepad-discover").assertDoesNotExist()
                 onNodeWithTag("gamepad-page").assertDoesNotExist()
-            } finally { model.close() }
+            } finally { fixtureScope.cancel(); model.close() }
         }
 }

@@ -1672,6 +1672,9 @@
     <string name="gamepad_query_timeout">未收到应答，请检查连接后重新查询。</string>
     <string name="gamepad_query_invalid">无法解析应答，请重新查询。</string>
     <string name="gamepad_query_rejected">配件拒绝了查询。</string>
+    <string name="gamepad_warning_calibration">手柄需要校准</string>
+    <string name="gamepad_warning_centering">手柄摇杆未回中</string>
+    <string name="gamepad_warning_battery">手柄电量低</string>
     <string name="gamepad_drive_start">启用手柄驾驶</string>
     <string name="gamepad_drive_stop">释放手柄驾驶</string>
     <string name="gamepad_drive_recenter">请回中并松开全部按键，再启用。</string>

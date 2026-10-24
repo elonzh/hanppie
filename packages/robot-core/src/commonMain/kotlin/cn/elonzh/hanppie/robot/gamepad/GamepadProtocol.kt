@@ -2,6 +2,8 @@ package cn.elonzh.hanppie.robot.gamepad
 
 import cn.elonzh.hanppie.robot.protocol.*
 
+enum class GamepadWarning { NOT_CALIBRATED, NOT_CENTERED, LOW_BATTERY }
+
 /** Fixed official macOS 1.1.5 / Android 1.2.0 native consumers; no motion command is emitted here. */
 data class GamepadReport(val mouseConnected: Boolean, val keyboardConnected: Boolean,
     val batteryPercent: Int?, val rawFlags: Int,
@@ -14,6 +16,12 @@ data class GamepadReport(val mouseConnected: Boolean, val keyboardConnected: Boo
     val c2 get() = buttons and 0x4000 != 0
     val fire get() = buttons and 0x8000 != 0
     val fn get() = buttons and 0x1000 != 0
+    /** Named native setters are inlined in the report decoder; their notification cache is separate. */
+    val warnings: Set<GamepadWarning> get() = buildSet {
+        if (rawFlags and 4 != 0) add(GamepadWarning.NOT_CALIBRATED)
+        if (rawFlags and 2 != 0) add(GamepadWarning.NOT_CENTERED)
+        if (rawFlags and 1 != 0) add(GamepadWarning.LOW_BATTERY)
+    }
 }
 
 internal object GamepadProtocol {

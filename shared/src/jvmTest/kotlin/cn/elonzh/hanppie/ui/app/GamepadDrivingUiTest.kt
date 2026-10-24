@@ -39,7 +39,7 @@ class GamepadDrivingUiTest {
         val incoming = Channel<ByteArray>(Channel.UNLIMITED)
         @Volatile var forward = 1024; @Volatile var lateral = 1024; @Volatile var pitch = 1024; @Volatile var yaw = 1024; @Volatile var buttons = 0
         @Volatile var sending = true
-        var flags = 0xd8
+        @Volatile var flags = 0xd8
         var sequence = 0
         @Synchronized fun send(buttons: Int = this.buttons) {
             val bytes = ByteArray(19); bytes[1] = flags.toByte(); bytes[18] = 88
@@ -100,6 +100,19 @@ class GamepadDrivingUiTest {
                 runOnIdle { lifecycle.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME) }
                 model.enableRemote(); waitUntil(timeoutMillis = 5000) { model.remoteEnabled.value && model.gamepad.state.value.reportFresh }
                 onNodeWithTag("gamepad-drive-toggle").assertIsEnabled().assertIsDisplayed(); capture("ready")
+                val calibrationNotice = if (language == "en") "Gamepad calibration needed" else "手柄需要校准"
+                fun assertNoticeAndSight() {
+                    waitUntil(timeoutMillis = 5000) { onAllNodes(hasTestTag("gamepad-drive-status") and
+                        hasText(calibrationNotice, substring = true)).fetchSemanticsNodes().isNotEmpty() }
+                    assertFalse(onNodeWithTag("gamepad-drive-status").fetchSemanticsNode().boundsInRoot.overlaps(
+                        onNodeWithTag("remote-crosshair").fetchSemanticsNode().boundsInRoot))
+                    onNodeWithTag("gamepad-drive-toggle").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                }
+                runOnIdle { wire.flags = 0xdf; wire.send() }
+                assertNoticeAndSight(); capture("warnings-ready")
+                runOnIdle { wire.flags = 0xd8; wire.send() }
+                waitUntil(timeoutMillis = 5000) { onAllNodes(hasTestTag("gamepad-drive-status") and
+                    hasText(calibrationNotice, substring = true)).fetchSemanticsNodes().isEmpty() }
                 runOnIdle { wire.forward = 1684; wire.send() }
                 waitUntil(timeoutMillis = 5000) { model.gamepad.state.value.report?.forward == 1684 }
                 onNodeWithTag("gamepad-drive-toggle").performClick()
@@ -108,6 +121,13 @@ class GamepadDrivingUiTest {
                 runOnIdle { wire.forward = 1024; wire.send() }
                 waitUntil(timeoutMillis = 5000) { model.gamepad.state.value.report?.forward == 1024 }
                 onNodeWithTag("gamepad-drive-toggle").performClick(); capture("active")
+                runOnIdle { wire.flags = 0xdf; wire.send() }
+                assertNoticeAndSight()
+                onNodeWithTag("gamepad-drive-status").assertTextContains(if (language == "en") "Gamepad driving" else "手柄驾驶中", substring = true)
+                capture("warnings-active")
+                runOnIdle { wire.flags = 0xd8; wire.send() }
+                waitUntil(timeoutMillis = 5000) { onAllNodes(hasTestTag("gamepad-drive-status") and
+                    hasText(calibrationNotice, substring = true)).fetchSemanticsNodes().isEmpty() }
                 onNodeWithContentDescription(if (language == "en") "Chassis joystick" else "底盘 摇杆").assertIsNotEnabled()
                 onNodeWithContentDescription(if (language == "en") "Gimbal joystick" else "云台 摇杆").assertIsNotEnabled()
                 val driveBefore = robot.driveCount.get()

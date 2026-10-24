@@ -56,6 +56,19 @@ class GamepadSessionTest {
         assertFalse(report.copy(buttons = 0).fire)
     }
 
+    @Test fun reportNoticesRemainIndependentOfInputGroupsBatteryPercentAndEachOther() {
+        for (bits in 0..7) {
+            val decoded = checkNotNull(GamepadProtocol.report(Protocol.frames(report(0xd8 or bits, 88)).single()))
+            assertEquals(bits and 4 != 0, GamepadWarning.NOT_CALIBRATED in decoded.warnings)
+            assertEquals(bits and 2 != 0, GamepadWarning.NOT_CENTERED in decoded.warnings)
+            assertEquals(bits and 1 != 0, GamepadWarning.LOW_BATTERY in decoded.warnings)
+            assertTrue(decoded.chassisActive && decoded.gimbalActive && decoded.keyboardConnected && decoded.mouseConnected)
+            assertEquals(88, decoded.batteryPercent)
+        }
+        assertTrue(checkNotNull(GamepadProtocol.report(Protocol.frames(report(0x38, 0)).single())).warnings.isEmpty(),
+            "Neither a reserved bit nor a battery percentage invents a reported notice")
+    }
+
     @Test fun exactSnapshotAndButtonEdgesPreserveBurstButRetireOldConnections(): Unit = runBlocking {
         var now = 0L; val connector = Connector(); val session = GamepadSession(connector, this, { now })
         val events = Channel<GamepadButtonEvent>(Channel.UNLIMITED)

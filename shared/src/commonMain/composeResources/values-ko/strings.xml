@@ -1672,6 +1672,9 @@
     <string name="gamepad_query_timeout">응답을 받지 못했습니다. 연결을 확인하고 다시 조회하세요.</string>
     <string name="gamepad_query_invalid">응답을 읽을 수 없습니다. 다시 조회하세요.</string>
     <string name="gamepad_query_rejected">액세서리가 조회를 거부했습니다.</string>
+    <string name="gamepad_warning_calibration">게임패드 보정 필요</string>
+    <string name="gamepad_warning_centering">게임패드 스틱이 중앙에 있지 않음</string>
+    <string name="gamepad_warning_battery">게임패드 배터리 부족</string>
     <string name="gamepad_drive_start">게임패드 켜기</string>
     <string name="gamepad_drive_stop">게임패드 해제</string>
     <string name="gamepad_drive_recenter">조작부를 중앙에 놓고 모든 버튼을 놓은 후 다시 켜세요.</string>

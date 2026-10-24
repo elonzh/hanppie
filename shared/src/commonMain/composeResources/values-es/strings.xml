@@ -1672,6 +1672,9 @@
     <string name="gamepad_query_timeout">No se recibió respuesta. Comprueba la conexión y reintenta la consulta.</string>
     <string name="gamepad_query_invalid">No se pudo leer la respuesta. Reintenta la consulta.</string>
     <string name="gamepad_query_rejected">El accesorio rechazó la consulta.</string>
+    <string name="gamepad_warning_calibration">Falta calibrar el mando</string>
+    <string name="gamepad_warning_centering">Palanca del mando sin centrar</string>
+    <string name="gamepad_warning_battery">Batería del mando baja</string>
     <string name="gamepad_drive_start">Activar Gamepad</string>
     <string name="gamepad_drive_stop">Liberar Gamepad</string>
     <string name="gamepad_drive_recenter">Centra los controles, suelta todos los botones y activa de nuevo.</string>

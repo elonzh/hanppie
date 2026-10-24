@@ -7,7 +7,8 @@ import kotlin.math.abs
 
 internal enum class GamepadDriveProblem { NO_DATA, RECENTER, STALE, OWNER_CHANGED, SETTINGS_CHANGED }
 internal data class GamepadDriveState(val active: Boolean = false, val repeatPrimary: Boolean = false,
-    val problem: GamepadDriveProblem? = null, val fresh: Boolean = false, val gimbalActive: Boolean = false)
+    val problem: GamepadDriveProblem? = null, val fresh: Boolean = false, val gimbalActive: Boolean = false,
+    val warnings: Set<GamepadWarning> = emptySet())
 internal data class GamepadDriveFrame(val forward: Double = 0.0, val right: Double = 0.0,
     val pitch: Double = 0.0, val yaw: Double = 0.0, val gimbalActive: Boolean = false)
 
@@ -43,7 +44,8 @@ internal class GamepadDriveInput(private val snapshot: () -> GamepadState, priva
     private fun fail(problem: GamepadDriveProblem) { stop(); state.value = state.value.copy(problem = problem) }
     private fun observe(current: GamepadState) {
         val fresh = current.phase == GamepadPhase.CONNECTED && current.reportFresh
-        state.value = state.value.copy(fresh = fresh, gimbalActive = fresh && current.report?.gimbalActive == true)
+        state.value = state.value.copy(fresh = fresh, gimbalActive = fresh && current.report?.gimbalActive == true,
+            warnings = if (fresh) current.report?.warnings.orEmpty() else emptySet())
     }
 
     fun event(event: GamepadButtonEvent, value: GamepadInputSettings, allowed: Boolean) {

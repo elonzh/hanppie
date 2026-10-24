@@ -9,8 +9,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.robot.gamepad.GamepadWarning
 import cn.elonzh.hanppie.ui.design.HanppieDesignTokens
 import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.ui.robot.gamepad.label
 import top.yukonga.miuix.kmp.basic.*
 
 @Composable
@@ -30,7 +32,8 @@ internal fun GamepadDriveControls(state: GamepadDriveState, enabled: Boolean,
             GamepadDriveProblem.NO_DATA -> if (state.fresh) Res.string.gamepad_drive_ready else Res.string.gamepad_drive_wait
             null -> if (state.active) Res.string.gamepad_drive_active else if (!state.fresh) Res.string.gamepad_drive_wait else Res.string.gamepad_drive_ready
         }
-        Text(tr(message), Modifier.background(HanppieDesignTokens.RemoteHudSurface).padding(horizontal = 8.dp, vertical = 4.dp)
+        val warning = GamepadWarning.entries.firstOrNull { it in state.warnings }
+        Text(tr(message) + (warning?.let { "\n" + it.label() } ?: ""), Modifier.background(HanppieDesignTokens.RemoteHudSurface).padding(horizontal = 8.dp, vertical = 4.dp)
             .testTag("gamepad-drive-status"), fontSize = 12.sp, color = HanppieDesignTokens.RemoteHudContent)
     }
 }

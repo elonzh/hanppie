@@ -1672,6 +1672,9 @@
     <string name="gamepad_query_timeout">応答を受信できませんでした。接続を確認してから再照会してください。</string>
     <string name="gamepad_query_invalid">応答を読み取れませんでした。もう一度照会してください。</string>
     <string name="gamepad_query_rejected">アクセサリーが照会を拒否しました。</string>
+    <string name="gamepad_warning_calibration">ゲームパッドの校正が必要です</string>
+    <string name="gamepad_warning_centering">スティックが中央に戻っていません</string>
+    <string name="gamepad_warning_battery">ゲームパッドのバッテリー残量低下</string>
     <string name="gamepad_drive_start">Gamepad を有効化</string>
     <string name="gamepad_drive_stop">Gamepad を解放</string>
     <string name="gamepad_drive_recenter">スティックを中央に戻し、すべてのボタンを離してから再度有効にしてください。</string>

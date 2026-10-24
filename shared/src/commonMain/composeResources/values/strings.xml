@@ -1672,6 +1672,9 @@
     <string name="gamepad_query_timeout">No reply received. Check the connection and retry the query.</string>
     <string name="gamepad_query_invalid">The reply could not be read. Retry the query.</string>
     <string name="gamepad_query_rejected">The accessory rejected the query.</string>
+    <string name="gamepad_warning_calibration">Gamepad calibration needed</string>
+    <string name="gamepad_warning_centering">Gamepad stick is not centered</string>
+    <string name="gamepad_warning_battery">Gamepad battery is low</string>
     <string name="gamepad_drive_start">Enable Gamepad</string>
     <string name="gamepad_drive_stop">Release Gamepad</string>
     <string name="gamepad_drive_recenter">Center the controls and release all buttons, then enable again.</string>

@@ -1672,6 +1672,9 @@
     <string name="gamepad_query_timeout">Ответ не получен. Проверьте соединение и повторите запрос.</string>
     <string name="gamepad_query_invalid">Ответ не удалось прочитать. Повторите запрос.</string>
     <string name="gamepad_query_rejected">Аксессуар отклонил запрос.</string>
+    <string name="gamepad_warning_calibration">Нужна калибровка геймпада</string>
+    <string name="gamepad_warning_centering">Стик геймпада не в центре</string>
+    <string name="gamepad_warning_battery">Низкий заряд геймпада</string>
     <string name="gamepad_drive_start">Включить геймпад</string>
     <string name="gamepad_drive_stop">Освободить геймпад</string>
     <string name="gamepad_drive_recenter">Центрируйте органы управления и отпустите все кнопки, затем включите снова.</string>

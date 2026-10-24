@@ -1672,6 +1672,9 @@
     <string name="gamepad_query_timeout">Keine Antwort empfangen. Verbindung prüfen und Abfrage wiederholen.</string>
     <string name="gamepad_query_invalid">Antwort konnte nicht gelesen werden. Abfrage wiederholen.</string>
     <string name="gamepad_query_rejected">Zubehör hat die Abfrage abgelehnt.</string>
+    <string name="gamepad_warning_calibration">Gamepad-Kalibrierung nötig</string>
+    <string name="gamepad_warning_centering">Gamepad-Stick nicht zentriert</string>
+    <string name="gamepad_warning_battery">Gamepad-Akku schwach</string>
     <string name="gamepad_drive_start">Gamepad aktivieren</string>
     <string name="gamepad_drive_stop">Gamepad freigeben</string>
     <string name="gamepad_drive_recenter">Steuerelemente zentrieren, alle Tasten loslassen und erneut aktivieren.</string>

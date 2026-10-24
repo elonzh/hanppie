@@ -82,6 +82,10 @@ private fun GamepadInformationContent(session: GamepadSession) {
                     Text(tr(Res.string.gamepad_accessories,
                         tr(if (report.mouseConnected) Res.string.connected else Res.string.not_connected),
                         tr(if (report.keyboardConnected) Res.string.connected else Res.string.not_connected)), fontSize = 14.sp)
+                    if (state.reportFresh) report.warnings.forEach { warning ->
+                        Text(warning.label(), Modifier.testTag("gamepad-warning-${warning.name}"),
+                            fontSize = 14.sp, color = MiuixTheme.colorScheme.error)
+                    }
                 }
                 Text(tr(Res.string.gamepad_firmware, state.firmware ?: tr(Res.string.robot_info_unread)), Modifier.testTag("gamepad-firmware"), fontSize = 14.sp)
                 val activation = if (!state.activationRead) tr(Res.string.robot_info_unread)
