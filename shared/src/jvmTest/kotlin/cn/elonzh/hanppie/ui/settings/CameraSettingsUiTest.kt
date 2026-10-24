@@ -96,6 +96,7 @@ class CameraSettingsLayoutTest {
     @Test fun compactLandscape() = layout(844, 390)
     @Test fun tabletLandscape() = layout(1024, 600)
     @Test fun desktopLandscape() = layout(1280, 720)
+    @Test fun chineseLargeText() = layout(844, 390, "zh", 1.4f)
     @Test fun englishLargeText() = layout(844, 390, "en", 1.4f)
 
     private fun layout(width: Int, height: Int, language: String = "zh", fontScale: Float = 1f) =
@@ -122,7 +123,7 @@ class CameraSettingsLayoutTest {
                 val pixels = IntArray(image.width * image.height); image.readPixels(pixels)
                 val out = BufferedImage(image.width, image.height, BufferedImage.TYPE_INT_ARGB)
                 out.setRGB(0, 0, image.width, image.height, pixels, 0, image.width)
-                val file = File("build/reports/ui/camera-settings-$width-$height-$language.png").apply { parentFile.mkdirs() }
+                val file = File("build/reports/ui/camera-settings-$width-$height-$language-$fontScale.png").apply { parentFile.mkdirs() }
                 ImageIO.write(out, "png", file)
             } finally { model.close(); Localization.initialize("zh", null) }
         }

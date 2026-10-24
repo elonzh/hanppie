@@ -134,6 +134,7 @@ class RobotAudioLayoutTest {
     @Test fun compactLandscape() = layout(844, 390)
     @Test fun tabletLandscape() = layout(1024, 600)
     @Test fun desktopLandscape() = layout(1280, 720)
+    @Test fun chineseLargeText() = layout(844, 390, "zh", 1.4f)
     @Test fun englishLargeText() = layout(844, 390, "en", 1.4f)
 
     private fun layout(width: Int, height: Int, language: String = "zh", fontScale: Float = 1f) =
@@ -159,7 +160,7 @@ class RobotAudioLayoutTest {
                 val pixels = IntArray(width * height); image.readPixels(pixels)
                 val out = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
                 out.setRGB(0, 0, width, height, pixels, 0, width)
-                val file = File("build/reports/ui/audio-$width-$height-$language.png").apply { parentFile.mkdirs() }
+                val file = File("build/reports/ui/audio-$width-$height-$language-$fontScale.png").apply { parentFile.mkdirs() }
                 ImageIO.write(out, "png", file)
                 onNodeWithTag("robot-sound-refresh").performScrollTo().assertIsDisplayed().assertIsEnabled()
                 onNodeWithTag("robot-anti-feedback-selector").performScrollTo().assertIsDisplayed().assertIsEnabled()
@@ -167,7 +168,7 @@ class RobotAudioLayoutTest {
                 val signalImage = onNodeWithTag("audio-layout").captureToImage()
                 signalImage.readPixels(pixels)
                 out.setRGB(0, 0, width, height, pixels, 0, width)
-                ImageIO.write(out, "png", File("build/reports/ui/audio-signal-$width-$height-$language.png"))
+                ImageIO.write(out, "png", File("build/reports/ui/audio-signal-$width-$height-$language-$fontScale.png"))
             } finally { model.close(); Localization.initialize("zh", null) }
         }
 }

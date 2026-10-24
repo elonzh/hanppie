@@ -138,6 +138,7 @@ class CameraStorageLayoutTest {
     @Test fun compactLandscape() = layout(844, 390)
     @Test fun tabletLandscape() = layout(1024, 600)
     @Test fun desktopLandscape() = layout(1280, 720)
+    @Test fun chineseLargeText() = layout(844, 390, "zh", 1.4f)
     @Test fun englishLargeText() = layout(844, 390, "en", 1.4f)
 
     private fun layout(width: Int, height: Int, language: String = "zh", fontScale: Float = 1f) =
@@ -145,7 +146,8 @@ class CameraStorageLayoutTest {
             Localization.initialize(language, null)
             val model = testConsoleModel()
             model.state.value = model.state.value.copy(connected = true)
-            model.robotCamera.attach(StorageFixture())
+            val storage = StorageFixture()
+            model.robotCamera.attach(storage)
             try {
                 setContent { TestWorkbenchTheme {
                     CompositionLocalProvider(LocalDensity provides Density(1f, fontScale)) {
@@ -156,14 +158,14 @@ class CameraStorageLayoutTest {
                 waitUntil(timeoutMillis = 3_000) { onAllNodes(hasTestTag("camera-storage-space")).fetchSemanticsNodes().isNotEmpty() }
                 onNodeWithTag("camera-storage-format").performScrollTo().assertIsDisplayed().assertIsEnabled()
                 assertTrue(onNodeWithTag("camera-storage-format").fetchSemanticsNode().boundsInRoot.height >= 48)
-                snapshot("storage-$width-$height-$language", onNodeWithTag("storage-layout"))
-                if (width == 844) {
-                    onNodeWithTag("camera-storage-format").performClick()
-                    onNodeWithTag("camera-storage-format-confirm").assertIsDisplayed()
-                    onNodeWithTag("camera-storage-format-cancel").assertIsDisplayed()
-                    snapshot("storage-confirm-$width-$height-$language",
-                        onNode(isRoot() and hasAnyDescendant(hasTestTag("camera-storage-format-confirm"))))
-                }
+                snapshot("storage-$width-$height-$language-$fontScale", onNodeWithTag("storage-layout"))
+                onNodeWithTag("camera-storage-format").performClick()
+                onNodeWithTag("camera-storage-format-confirm").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                onNodeWithTag("camera-storage-format-cancel").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                snapshot("storage-confirm-$width-$height-$language-$fontScale",
+                    onNode(isRoot() and hasAnyDescendant(hasTestTag("camera-storage-format-confirm"))))
+                onNodeWithTag("camera-storage-format-cancel").performClick()
+                assertEquals(0, storage.formats)
             } finally { model.close(); Localization.initialize("zh", null) }
         }
 
