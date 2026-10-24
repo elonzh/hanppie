@@ -1193,7 +1193,7 @@ S1 的红外能力至少包含三层，不能把其中任意一层统称为“�
 | 其他管理器值 | `UseWebSockets=false`、`UseSimulator=false`、`MaxBufferedPackets=16`、`AllowFragmentation=true`、`MaxDelay≈0.01`、`RunInBackground=false`；构造器默认不能覆盖预制体事实 |
 | 大厅 | `MaxPlayers=16`、`MaxPlayersPerConnection=1`、`MinPlayers=0`，场景 `RoomScene`/`BattleScene`，`lobbySlots` 初始为空；`AutoNetworkManager.OnStartHost` 会按 HostInfo 覆盖人数并按模式替换玩家预制体，不代表所有 UI 都允许 16 人 |
 
-两个实际 DLL 的 SHA-256 分别为 `46496a54c3b49bd2af55d220295575807424a9d10789de0e1c5b2f08c566c702`（HLAPI，AssemblyVersion 1.0.0.0）与 `fd9037e0241d00c1605da420dd3902c5e07352d51355529f5690c68c857bc474`（UNETModule，AssemblyVersion 0.0.0.0）；程序集版本不是 Unity 注册表包版本。此前按 SHA-1 核对的 HLAPI 1.0.2/1.0.4 源码仍只是参考，不宣称整个参考包与实际 DLL 相同。连接配置一致性和传输服务属于 LLAPI，已恢复的连接参数不提供游戏握手、数据封包、重传或配置校验算法，详见上述 Unity 传输层文档。
+两个实际 DLL 的 SHA-256 分别为 `46496a54c3b49bd2af55d220295575807424a9d10789de0e1c5b2f08c566c702`（HLAPI，AssemblyVersion 1.0.0.0）与 `fd9037e0241d00c1605da420dd3902c5e07352d51355529f5690c68c857bc474`（UNETModule，AssemblyVersion 0.0.0.0）；程序集版本不是 Unity 注册表包版本。此前按 SHA-1 核对的 HLAPI 1.0.2/1.0.4 源码仍只是参考，不宣称整个参考包与实际 DLL 相同。连接配置一致性和传输服务属于 LLAPI；参数表不等于完整传输实现，广播、配置 CRC 和普通请求的恢复分别见后文，完整连接状态推进与重传仍欠，详见上述 Unity 传输层文档。
 
 ##### 广播原生封包与离线仿真
 
@@ -1215,6 +1215,43 @@ S1 的红外能力至少包含三层，不能把其中任意一层统称为“�
 实际 HLAPI `StartAsServer` 用端口 0 创建发现 host，再向广播端口发送；`StartAsClient` 则监听预制体广播端口并设置匹配凭据。因此头内本地端口、发现目的端口与管理器游戏端口不能混用。`NatDiscovery.OnReceivedBroadcast` 将来源地址和正文交给房间消费者，房间文本中没有上述原生头。
 
 上述构造、worker、socket 转发、连接/类型分流和接收凭据前缀已用固定原始 x86-64 机器码进行指令仿真；harness 提供合成 host/worker 对象，分配器、锁、时钟、host/地址查询、socket 构造、端口查询、内存函数及系统调用使用显式桩。发送结果只在 `sendto` 桩收集，接收在凭据判定处停止，没有创建真实 socket、执行 Unity 进程、投递 Unity 事件或采集网络包。它提供固定版封包的离线依据，不能抵扣真实局域网发现、完整 RoomInfo、连接握手或多端互通。原生片段、调用绑定、桩清单、输入和逐字节结果在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02-wire/`，执行记录见[台账原生广播阶段](./official-app-capability-implementation.md#g02-原生广播封包与接收判定阶段)。
+
+##### 原生连接配置 CRC 与普通请求
+
+固定库的 Connect 注册 `0xbcf295` 指向 `0xbce2d0`，经 `0xbb47c0` 的普通 host 分支到 `0xbc9c60`。该路径分配连接、登记事件后才由调度构造请求，不能把 Connect 返回连接 ID 当作已经握手成功。Mach-O `LC_FUNCTION_STARTS` 确定下列函数边界，`__mod_init_func` 确认协议初始化 `0xbcb870` 属于加载器初始化项；没有依赖反汇编器的就近符号标签猜测含义。
+
+配置 CRC 来自实际 `ConnectionConfigInternal` 原生构造/设置、复制和运行时定型：`0xbbba20`、对应的 30 项托管入口、`0xbbbbf0`、`0xbbc940`，最终在 `0xbbcb20` 计算。CRC 使用只读表 `0x1552200`，256 项与反射多项式 `0xedb88320` 一致，初值和末尾异或均为 `0xffffffff`。**输入不是序列化的整个 ConnectionConfig，也不是脚本 CRC：**
+
+| 顺序 | 输入与编码 | 本预制体实际值 |
+| --- | --- | --- |
+| 1 | 管理器有效信道，每项 u8，不添加列表数量前缀 | `05 00` |
+| 2 | PacketSize、FragmentSize，各 big-endian u16 | 1440、500 |
+| 3 | ResendTimeout、DisconnectTimeout、ConnectTimeout，各 big-endian u32 | 1200、4000、4000 |
+| 4 | PingTimeout、ReducedPingTimeout，各 big-endian u32 | 1000、100 |
+| 5 | 原生配置偏移 `0x18`、`0x1c` 的两个内部默认，各 big-endian u32 | 均为 5000；尚未给这两项建立公共配置名，不用托管字段顺序替代 |
+| 6 | AllCostTimeout，big-endian u32 | 20 |
+| 7 | 信道属性决定是否需要 ACK 窗口；需要则写 AcksType，否则写 0，u8 | 当前需要，写 `1(Acks32)` |
+| 8 | AcksType 是否为 2，u8 布尔值 | 0 |
+| 9 | UsePlatformSpecificProtocols，u8 布尔值 | 0 |
+
+此输入为 41 字节，数学 CRC32 为 `0x2a5dca8f`；原生进行 bswap 后存储，发送请求原样复制存储字，形成四字节 `2a 5d ca 8f`。原生指令仿真及独立 zlib CRC32 对同一输入一致。定向变更核实当前 MinUpdateTimeout、AckDelay、SendDelay、NetworkDropThreshold、MaxConnectionAttempt 不参与这段校验；它们仍可能影响调度、丢包或重试，CRC 相同不代表连接配置的全部行为相同。信道顺序、上述选入的大小/超时、内部默认、AcksType 和平台协议位改变可使该 CRC 改变。
+
+非 `0x1c0 == 12` 的普通信封分支由 `0xbc1190` 构造以下 19 字节 UDP 载荷；取包池对象、host/worker 和调度条件在本轮为合成依赖，未执行完整 Connect 分配/生命周期。
+
+| 偏移 | 字节数 | 固定分支的内容 |
+| --- | ---: | --- |
+| 0 | 2 | 连接 ID 0 |
+| 2 | 1 | LLAPI 包类型 1 |
+| 3 | 2 | `connection+0x114` 计数递增后写 big-endian，u16 回绕 |
+| 5 | 2 | 连接槽令牌；原生槽初始化生成 16 位奇数并以网络序存储，此处复制存储的两字节 |
+| 7 | 2 | 本地连接 ID，big-endian u16 |
+| 9 | 2 | 对端连接 ID，big-endian u16；合成首请求为 0，不凭构造器推断整个分配流程 |
+| 11 | 4 | 当前原生模式 2 对应的协议字 `0x00030001`，在固定 x86 分支原样复制为 `01 00 03 00` |
+| 15 | 4 | 上述连接配置 CRC 存储字 |
+
+协议字由原始模块初始化前缀写入，不是房间文本的 BattleVersion，也不是发现广播的 version/subversion。接收检查 `0xbc0580` 对协议字和 CRC 有直接或 bswap 后比较的路径；固定 DLL 枚举将版本不匹配定义为 `VersionMismatch=9`，CRC 不匹配为 `CRCMismatch=10`。这仅说明该比较前缀的端序处理，不意味着其他字段也能任意改变端序。类型 2 分支、类型 4 应答、确认/重传、连接状态/事件与断连恢复仍需独立核对。
+
+构造、复制、定型、实际 setter 写入、CRC 原语与普通请求原始机器码已有指令仿真依据；发送经实际 worker/SendTo 前缀到达系统调用桩，接收在版本/CRC 判定处停止。没有执行完整接收状态推进、队列清理、Unity 事件或真实网络；头长/字段边界的完整收包校验不由这一前缀证明。证据在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02-handshake/`，用例与待验项见[台账连接契约阶段](./official-app-capability-implementation.md#g02-连接配置-crc-与普通请求阶段)。
 
 ##### 房间准备、规则与裁判同步
 
@@ -1274,7 +1311,7 @@ sequenceDiagram
 
 `BattleJudge.JudgeReady` 对玩家、配置和技能信息有有界等待，其中配置/技能阶段最多按秒循环四次，超时后仍可推进；`BattlePlayer.OnJudgeStateChange` 在 Playing 解开控制锁。这与当前 Hanppie 挑战必须取得配置确认和新鲜报告的准备条件不同，见[台账 C22](./official-app-capability-implementation.md#冲突记录保持现状留待决策)，不能照搬超时放行。房间心跳每秒发送、客户端计数约 4 秒，机器人断连消费者另有 10 秒返回大厅路径；网络存活、机器人新鲜度和操控输入租约必须分开，这些官方计时不替代当前输入失效后的归零。
 
-**未验证边界：** 游戏信道、自定义连接及全局参数已有固定 App 静态依据，发现包构造另有上述原生指令仿真；真实局域网发现、连接握手、配置校验算法、对象生成与 RPC/SyncVar 完整互通仍待验。固定 App 是 x86-64；此前本机打开失败且独立 x86 检查返回 `Bad CPU type`，本轮没有重复启动、创建官方房间、采集运行报文或安装系统组件。原调查的 51 项来源哈希、两份预制体载荷、规则与裁判表在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02/`；实际 DLL、完整预制体与原生广播证据分别在相邻 `G02-transport/`、`G02-wire/`。这些不是 G02 产品实现、官方房间互通或多机物理验收；当前进度见[独立台账](./official-app-capability-implementation.md#g02-本地多人契约调查与互通边界)。
+**未验证边界：** 连接参数、发现包、配置 CRC 和普通请求已有固定版静态/原生指令仿真依据；真实局域网发现、完整握手与确认/重传、对象生成和 RPC/SyncVar 互通仍待验。固定 App 是 x86-64；当前环境未创建官方房间或采集运行报文，执行环境与系统组件授权记录见台账对应阶段。原调查的来源、预制体、规则/裁判表在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02/`，实际 DLL、广播和连接仿真分别在相邻 `G02-transport/`、`G02-wire/`、`G02-handshake/`。这些不是 G02 产品实现、官方房间互通或多机物理验收；当前进度见[独立台账](./official-app-capability-implementation.md#g02-本地多人契约调查与互通边界)。
 
 #### 自主程序与自定义技能安装
 
