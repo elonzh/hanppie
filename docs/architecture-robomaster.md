@@ -1371,7 +1371,7 @@ packed 整数使用原始 writer/reader 的分段格式，不能套 protobuf/LEB
 
 例如合成 netId=241 的 `CmdSetReady(true)` 完整 HLAPI 消息为 `08 00 05 00 fb c9 44 bb 75 f1 01 01`：正文八字节，函数号 `75bb44c9`，网络对象 ID `f1 01`，末字节为 true。负函数号和负整型参数分别验证其原始位模式；这组值是合成用例，不是设备身份、实际玩家分配或合法配置的完整示例。
 
-`ObjectSpawnMessage` 正文实际写 netId、16 字节 NetworkHash128 assetId、Vector3 position、u16 长度的初始状态 payload、Quaternion rotation。`NetworkIdentity.UNetSerializeAllVars` 的静态调用链按缓存的 NetworkBehaviour 顺序写初始状态，各组件的 OnDeserialize 消费对应流；不能用网络对象 ID 代替预制体 assetId，或随意重排组件。该阶段生成用例使用合成 assetId，不构成官方对象生成成功；实际资源身份、序列组件及应用状态的新证据见下节，Unity 实际组件缓存与 NetworkTransform 状态仍待验。
+`ObjectSpawnMessage` 正文实际写 netId、16 字节 NetworkHash128 assetId、Vector3 position、u16 长度的初始状态 payload、Quaternion rotation。`NetworkIdentity.UNetSerializeAllVars` 的静态调用链按缓存的 NetworkBehaviour 顺序写初始状态，各组件的 OnDeserialize 消费对应流；不能用网络对象 ID 代替预制体 assetId，或随意重排组件。该阶段生成用例使用合成 assetId，不构成官方对象生成成功；实际资源身份、序列组件与应用状态见后续小节，NetworkTransform 编码另见[姿态流与上行权限](#networktransform-姿态流与上行权限)，真实 Unity 组件/场景生命周期仍待验。
 
 `AutoLobbyPlayer` 已执行初始状态与增量状态的编解码。两者先消费 NetworkLobbyPlayer 基类的 `packed 1 + slot u8 + readyToBegin bool`；初始状态再依次写名字、是否房主、是否就绪、队伍 ID、队内人数、队伍数、角色 ID、头像 ID，字符串/布尔/整数按上述编码，**不带该派生类的 dirty mask**。增量状态在基类前缀后写独立 packed-u32 掩码，按位序写变更字段：
 
@@ -1487,7 +1487,7 @@ packed 整数使用原始 writer/reader 的分段格式，不能套 protobuf/LEB
 
 本阶段提取两份实际 DLL 的 486 个定向方法体；有界解释器实际进入 288 个方法，遇到未支持的指令或外部调用即失败。已通过 15 组 packed-u32、18 组 packed-u64、6 组字符串、101 个生成 Command/RPC 的参数往返、上述 11 组大厅状态、Scene/LobbyReady/Owner/SpawnFinished 四种系统消息、ObjectSpawn 编解码和五条拼接消息的实际 HandleReader 分派；另核对长字符串及截断正文异常。生成消息的业务方法、状态钩子、对象/权限/连接快照、注册回调、Unity 值类型构造、BCL 编码/数组/数值/诊断原语与最终发送/处理回调均为显式依赖桩；真实序列化、长度回填、分帧、位掩码和生成参数读取没有替换为桩。不是完整 CLR 或 Unity 运行。
 
-六条代表性生成消息/对象消息另经过上一阶段实际原生 LLAPI 的双端连接、发送、DataEvent 和 ACK 回收，保持完整 HLAPI 字节，覆盖 Command 客户端到服务端与 RPC/生成服务端到客户端。该桥接直接提交已编码正文，没有执行 ChannelBuffer 的缓存/Fragment=17 分片；不能据字符串最大长度推断单个 LLAPI 数据报可承载任意长消息。完整 host/Unity 场景对象与缓存、NetworkTransform 状态、所有权/权限校验、就绪/切场景、分片与窗口、真实运行互通均仍待验；实际资源和应用派生状态见下节。
+六条代表性生成消息/对象消息另经过上一阶段实际原生 LLAPI 的双端连接、发送、DataEvent 和 ACK 回收，保持完整 HLAPI 字节，覆盖 Command 客户端到服务端与 RPC/生成服务端到客户端。该桥接直接提交已编码正文，没有执行 ChannelBuffer 的缓存/Fragment=17 分片；不能据字符串最大长度推断单个 LLAPI 数据报可承载任意长消息。完整 host/Unity 场景对象与缓存、姿态运行效果、所有权分配、就绪/切场景、分片与窗口、真实运行互通均仍待验；实际资源、应用派生状态与姿态编码见后续小节。
 
 原始 CIL、注册/参数目录、有界解释器、标准库/Unity/发送桩、逐项输入/输出和 native 桥接在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02-hlapi/`。没有新增产品代码、网络依赖或房间入口，没有执行 Unity、真实 socket/机器人或平台构建；G02 仍实施中，交付边界见[台账 HLAPI 阶段](./official-app-capability-implementation.md#g02-hlapi-封装生成调用与状态流阶段)。
 
@@ -1525,7 +1525,7 @@ NetworkIdentity 的实际 SerializeField 顺序为 SceneId、AssetId、ServerOnl
 | NetworkVirtualRobot | 1=SyncTransform | float32 约 0.033333335 | 7=AxisXYZ / 2=High | true | 1 / 1 |
 | NetworkVirtualBullet | 3=SyncRigidbody3D | 0 | 0=None / 0=None | false | 0 / 0 |
 
-两者 MovementTheshold 约 0.001、VelocityThreshold 约 0.0001、SnapThreshold=5；名称拼写保留实际字段。标记 SerializeField 的两项 ClientMoveCallback 为 delegate，没有对应序列化正文。这里是固定资源配置，不是实测发送周期、运动阈值或物理速度。AxisSyncMode 是命名枚举，不能假设为轴位掩码。NetworkTransform 编解码、物理/姿态取值及这两个复合预制体的完整状态仍未执行。
+两者 MovementTheshold 约 0.001、VelocityThreshold 约 0.0001、SnapThreshold=5；名称拼写保留实际字段。标记 SerializeField 的两项 ClientMoveCallback 继承 System.MulticastDelegate，没有对应序列化正文。这里是固定资源配置，不是实测发送周期、运动阈值或物理速度。AxisSyncMode 是命名枚举，不能假设为轴位掩码。已解析组件的编码与输入依赖见[姿态流](#networktransform-姿态流与上行权限)；物理/姿态取值及这两个复合预制体的完整运行仍待验。
 
 应用 DLL 内 14 类 G02 NetworkBehaviour 共声明 **76 个 SyncVar**；字段属性与实际生成 setter 的位号同时核对。位号沿继承链分配，派生类不重新从 1 开始。声明顺序与初始写入顺序对应；增量按实际 OnSerialize 的基类调用链分别消费各类掩码，**掩码值是该对象全局 dirty bits，不是各类截取后的局部值**。例如 BattlePlayerRace 的 mLapNum 位号为 0x400，其基类流与派生类流都带相同全局掩码，再各写自己的命中字段。
 
@@ -1616,6 +1616,27 @@ BattleJudge 基类与 NetHeartbetTest 没有这些应用 SyncVar，其生成序�
 
 证据在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02-prefab/`，含五份来源身份、资源/PPtr/脚本原始记录、118 段定向 CIL、76 项属性/位号、170 组状态、十组对象消息/状态应用、四组通道/缓存输入及未解析声明。分配/数组/数值/编码、Unity 对象与 GetComponents、业务钩子等为显式依赖；没有执行真实 Unity Resources.Load/Instantiate、场景/所有权/网络或物理动作。本轮没有新增产品代码或房间入口，G02 仍实施中，交付与待验见[台账预制体阶段](./official-app-capability-implementation.md#g02-实际预制体身份与应用状态布局阶段)。
 
+##### NetworkTransform 姿态流与上行权限
+
+以下针对前表两个实际资源使用的 SyncTransform 与 SyncRigidbody3D；不将 DLL 内其他模式的存在当作已验实现。姿态组件走信道 1（Unreliable），与应用 Command/RPC 和应用状态通道区分。原始 NetworkTransform.OnSerialize 在初始状态直接写模式正文；增量时，dirty bits 为零写一个 packed 0 并返回 false，非零写 packed 1 再写正文。这是有无更新标记，不是前述应用 SyncVar 的全局字段掩码。
+
+| 实际资源的模式 | 初始模式正文 | 初始字节数 | 有更新的增量字节数 |
+| --- | --- | --- | --- |
+| 虚拟机体：SyncTransform、AxisXYZ、High | position 三个 float32，Euler x/y/z 各一个 int16 | 18 | 19 |
+| 虚拟弹丸：SyncRigidbody3D、无旋转/自转同步 | position 三个 float32，velocity 三个 float32 | 24 | 25 |
+
+数值均按原始 writer 的小端编码。WriteAngle 的 None 写 float32；Low 与 High 在这个固定 DLL 中都执行 conv.i2 并写有符号 int16，ReadAngle 对应读回，不按枚举名称推测不同量化精度。这里没有额外的角度比例缩放。八种轴组合按命名顺序选取 x/y/z；Rotation3D 先依赖 Unity 提供 Euler，接收后再依赖 Unity 转回 Quaternion，不能把这条模式流当作四个 Quaternion 浮点数。Velocity3D 不因压缩枚举而缩短；Spin3D 选轴后复用角度编码。虚拟机体虽配置 SyncSpin=true，SyncTransform 分支不写自转字段；不能据这个标志追加字节。
+
+SyncRigidbody3D 序列化在服务器且已有客户端同步时间时转发目标位置/速度，否则读取本地刚体。接收端有 authority 时仍消费对应字段但不应用；服务器与本地客户端同时活动的 OnDeserialize 路径直接返回。普通无 authority 接收会更新目标/姿态，弹丸的零 SendInterval 路径调用 MovePosition 并赋速度。上述引擎调用只核对原始控制流和传入值，不证明实际物理效果或完整插值循环。
+
+客户端上行另走 **消息类型 6**：HLAPI 长度/类型头、packed netId、模式正文；它不带应用 Command 函数号，也不带 OnSerialize 增量标记。SendTransform 先检查 HasMoved 和 ready connection，最终使用信道 1。Update 还要求 hasAuthority、localPlayerAuthority、服务器未激活及发送间隔已过；间隔为零也不绕过这些条件。进入 SendTransform 后即使因没有 ready connection 未发送，Update 仍可推进最近发送时间，不能据这个时间认定远端接受。
+
+服务器 HandleTransform 读取 netId 后依次检查对象、NetworkTransform 组件、localPlayerAuthority 和该连接的 clientOwnedObjects；仅命中拥有集合才消费模式正文并更新同步时间。预制体标志为 true 本身不能替代连接拥有关系。本阶段执行两模式的允许与五类拒绝分支，lookup、组件、拥有集合和可选移动回调由显式快照提供，尚未执行真实所有权授予、回收或场景对象注册。回调拒绝时没有姿态赋值；接受时核对替换参数沿原始消费者传递。
+
+`.hanppie/validation/2026-10-22-official-gap/G02-transform/` 固定 77 段 NetworkTransform 原始 CIL，**124 组定向用例**覆盖 21 组角度、48 组选轴/压缩、三组速度、18 组实际配置状态（各含两种 authority 接收）、六组接收分支、四组客户端发送、12 组拥有关系和 12 组 Update 门槛。实际进入 59 个方法，其中 25 个为 NetworkTransform；另用扩展后的解释器复核前阶段 170 组应用状态，字节/字段/钩子结果相同。
+
+解释器补入 switch 和有符号整数到浮点转换，原始编解码与拒绝分支不作桩替换。Unity 的 Euler/Quaternion 转换、组件/对象查找、属性/刚体赋值、时间、连接与集合为显式依赖；没有完整 CLR/Unity、物理/插值运行或该消息的真实网络互通。虚拟机体两条未解析脚本声明继续原样保留，两个复合预制体不据这些组件用例计为完整通过。没有新增产品代码或房间入口，G02 继续实施中，见[台账姿态阶段](./official-app-capability-implementation.md#g02-姿态编码与上行权限阶段)。
+
 ##### 房间准备、规则与裁判同步
 
 `AutoNetworkManager.ConfigurationPlayerID` 按队伍和队内序号分配 16 槽角色 ID，`IControl.GetTeamID` 由角色 ID 和队伍数反解队伍，`-1` 单独处理；这不是 IP、序列号或机型编号。实际允许的人数/队伍组合仍须沿房间 UI 和线上状态验证。同步与开始的消费者链路如下：
@@ -1674,7 +1695,7 @@ sequenceDiagram
 
 `BattleJudge.JudgeReady` 对玩家、配置和技能信息有有界等待，其中配置/技能阶段最多按秒循环四次，超时后仍可推进；`BattlePlayer.OnJudgeStateChange` 在 Playing 解开控制锁。这与当前 Hanppie 挑战必须取得配置确认和新鲜报告的准备条件不同，见[台账 C22](./official-app-capability-implementation.md#冲突记录保持现状留待决策)，不能照搬超时放行。房间心跳每秒发送、客户端计数约 4 秒，机器人断连消费者另有 10 秒返回大厅路径；网络存活、机器人新鲜度和操控输入租约必须分开，这些官方计时不替代当前输入失效后的归零。
 
-**未验证边界：** 连接参数、发现包、配置 CRC、普通请求/确认/连接事件、两条有效信道的数据/ACK/排序/重传，以及普通关闭/槽回收/同槽重连已有固定版静态/原生指令仿真依据；HLAPI 封装、101 项生成调用、大厅状态及对象消息另有有界 CIL 执行依据。真实局域网发现/连接、host 移除/连接中取消、多 peer/窗口/分片、真实 Unity 预制体/组件缓存、NetworkTransform/未解析脚本、所有权/场景与对象/RPC/SyncVar 运行互通仍待验；固定资源身份与应用生成状态见前节。固定 App 是 x86-64；当前环境未创建官方房间或采集运行报文，执行环境与系统组件授权记录见台账对应阶段。原调查的来源、预制体、规则/裁判表在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02/`，实际 DLL、广播和连接/数据/关闭仿真分别在相邻 `G02-transport/`、`G02-wire/`、`G02-handshake/`、`G02-connect/`、`G02-data/`、`G02-close/`、`G02-hlapi/`、`G02-prefab/`。这些不是 G02 产品实现、官方房间互通或多机物理验收；当前进度见[独立台账](./official-app-capability-implementation.md#g02-本地多人契约调查与互通边界)。
+**未验证边界：** 连接参数、发现包、配置 CRC、普通请求/确认/连接事件、两条有效信道的数据/ACK/排序/重传，以及普通关闭/槽回收/同槽重连已有固定版静态/原生指令仿真依据；HLAPI、生成调用、应用状态、对象消息、两种实际姿态模式与上行权限分支另有有界 CIL 依据。真实局域网发现/连接、host 移除/连接中取消、多 peer/窗口/分片、真实 Unity 预制体/组件缓存、姿态/插值与未解析脚本、所有权授予/回收、就绪/场景及对象/RPC/SyncVar 运行互通仍待验。固定 App 是 x86-64；当前环境未创建官方房间或采集运行报文，执行环境与系统组件授权记录见台账对应阶段。原调查的来源、预制体、规则/裁判表在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02/`，实际 DLL、广播和连接/数据/关闭/状态仿真在相邻 `G02-transport/`、`G02-wire/`、`G02-handshake/`、`G02-connect/`、`G02-data/`、`G02-close/`、`G02-hlapi/`、`G02-prefab/`、`G02-transform/`。这些不是 G02 产品实现、官方房间互通或多机物理验收；当前进度见[独立台账](./official-app-capability-implementation.md#g02-本地多人契约调查与互通边界)。
 
 #### 自主程序与自定义技能安装
 
