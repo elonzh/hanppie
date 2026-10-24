@@ -1660,4 +1660,13 @@
     <string name="host_file_failed_value">Die Dateiaktion konnte nicht abgeschlossen werden: %1$s</string>
     <string name="host_preferences_load_failed_value">Gespeicherte Einstellungen konnten nicht wiederhergestellt werden: %1$s</string>
     <string name="host_preferences_save_failed_value">Diese Einstellung konnte nicht gespeichert werden: %1$s</string>
+    <string name="talk_input_unavailable">Auf diesem Gerät ist keine Sprachübertragung verfügbar.</string>
+    <string name="talk_capture_failed_value">Aufnahme fehlgeschlagen: %1$s</string>
+    <string name="talk_send_failed_value">Audio konnte nicht gesendet werden: %1$s</string>
+    <string name="talk_too_short">Die Aufnahme ist zu kurz. Halte die Sprechtaste länger gedrückt.</string>
+    <string name="talk_problem_details">Problem mit Sprachübertragung anzeigen</string>
+    <string name="talk_problem_title">Problem mit Sprachübertragung</string>
+    <string name="talk_retry_hint">Lass die Sprechtaste los und halte sie erneut gedrückt, um neu aufzunehmen.</string>
+    <string name="talk_hold">Zum Aufnehmen halten, zum Senden loslassen</string>
+    <string name="talk_send">Aufnahme beenden und senden</string>
 </resources>

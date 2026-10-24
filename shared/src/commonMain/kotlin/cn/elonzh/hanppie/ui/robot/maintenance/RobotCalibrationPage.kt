@@ -35,14 +35,13 @@ internal fun RobotCalibrationPage(model: ConsoleController, modifier: Modifier =
     val camera by model.robotCamera.state.collectAsState()
     val album by model.robotAlbum.state.collectAsState()
     val chat by model.chat.state.collectAsState()
-    val talking by model.talking.collectAsState()
-    val talkBusy by model.talkBusy.collectAsState()
+    val talk by model.pushToTalk.state.collectAsState()
     val addressing by model.robotAddressing.state.collectAsState()
     val wifi by model.robotWifi.state.collectAsState()
     val sdr by model.robotSdr.state.collectAsState()
     val task = ui.task
     val canChange = ui.connected && console.connected && !console.busy && !console.scriptRunPhase.mayBeExecuting &&
-        !camera.storageBusy && camera.storage?.recording != true && !album.nativeBusy && !chat.running && !talking && !talkBusy &&
+        !camera.storageBusy && camera.storage?.recording != true && !album.nativeBusy && !chat.running && !talk.active &&
         !addressing.blocksControl && wifi.recovery == null && sdr.recovery == null
     val gimbalOnline = health.modules?.any { it.deviceId == RobotComponent.GIMBAL.deviceId } == true
     val armOnline = health.modules?.any { it.deviceId == RobotComponent.ARM.deviceId } == true

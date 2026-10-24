@@ -1660,4 +1660,13 @@
     <string name="host_file_failed_value">L’action sur le fichier n’a pas pu être terminée : %1$s</string>
     <string name="host_preferences_load_failed_value">Les préférences enregistrées n’ont pas pu être restaurées : %1$s</string>
     <string name="host_preferences_save_failed_value">Cette préférence n’a pas pu être enregistrée : %1$s</string>
+    <string name="talk_input_unavailable">La fonction vocale est indisponible sur cet appareil.</string>
+    <string name="talk_capture_failed_value">Échec de l’enregistrement : %1$s</string>
+    <string name="talk_send_failed_value">Impossible d’envoyer le son : %1$s</string>
+    <string name="talk_too_short">L’enregistrement est trop court. Maintenez le bouton vocal plus longtemps.</string>
+    <string name="talk_problem_details">Voir le problème vocal</string>
+    <string name="talk_problem_title">Problème vocal</string>
+    <string name="talk_retry_hint">Relâchez le bouton vocal, puis maintenez-le à nouveau pour refaire l’enregistrement.</string>
+    <string name="talk_hold">Maintenir pour enregistrer, relâcher pour envoyer</string>
+    <string name="talk_send">Terminer l’enregistrement et envoyer</string>
 </resources>

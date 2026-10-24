@@ -1660,4 +1660,13 @@
     <string name="host_file_failed_value">The file action could not be completed: %1$s</string>
     <string name="host_preferences_load_failed_value">Saved preferences could not be restored: %1$s</string>
     <string name="host_preferences_save_failed_value">This preference could not be saved: %1$s</string>
+    <string name="talk_input_unavailable">Push-to-talk is unavailable on this device.</string>
+    <string name="talk_capture_failed_value">Recording failed: %1$s</string>
+    <string name="talk_send_failed_value">Audio could not be sent: %1$s</string>
+    <string name="talk_too_short">Recording is too short. Hold the talk button longer.</string>
+    <string name="talk_problem_details">View push-to-talk problem</string>
+    <string name="talk_problem_title">Push-to-talk problem</string>
+    <string name="talk_retry_hint">Release the talk button, then hold it again to record a new clip.</string>
+    <string name="talk_hold">Hold to record; release to send</string>
+    <string name="talk_send">Finish recording and send</string>
 </resources>

@@ -33,12 +33,11 @@ internal fun RobotPowerContent(model: ConsoleController) {
     val camera by model.robotCamera.state.collectAsState()
     val album by model.robotAlbum.state.collectAsState()
     val chat by model.chat.state.collectAsState()
-    val talking by model.talking.collectAsState()
-    val talkBusy by model.talkBusy.collectAsState()
+    val talk by model.pushToTalk.state.collectAsState()
     val wifi by model.robotWifi.state.collectAsState()
     val sdr by model.robotSdr.state.collectAsState()
     val canChange = !console.busy && !state.busy && state.connected && !console.scriptRunPhase.mayBeExecuting &&
-        !camera.storageBusy && camera.storage?.recording != true && !album.nativeBusy && !chat.running && !talking && !talkBusy &&
+        !camera.storageBusy && camera.storage?.recording != true && !album.nativeBusy && !chat.running && !talk.active &&
         wifi.recovery == null && sdr.recovery == null
     var pendingAction by remember(state.connection) { mutableStateOf<RobotPowerAction?>(null) }
     var pendingPolicy by remember(state.connection, state.policy) { mutableStateOf<LowPowerPolicy?>(null) }

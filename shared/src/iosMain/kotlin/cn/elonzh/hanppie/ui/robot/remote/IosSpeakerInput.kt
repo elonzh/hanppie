@@ -6,8 +6,8 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-internal class IosSpeakerInput(private val platform: IosPlatformServices, private val report: (String) -> Unit) : SpeakerInput {
-    override fun start(onReady: () -> Unit) = platform.startTalk(onReady, report)
+internal class IosSpeakerInput(private val platform: IosPlatformServices) : SpeakerInput {
+    override fun start(onReady: () -> Unit, onError: (Throwable) -> Unit) = platform.startTalk(onReady) { onError(IllegalStateException(it)) }
     override suspend fun finish(): ByteArray = suspendCancellableCoroutine { continuation ->
         continuation.invokeOnCancellation { platform.cancelTalk() }
         platform.finishTalk { bytes, error ->

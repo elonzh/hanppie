@@ -49,13 +49,12 @@ internal fun RobotAddressingPage(model: ConsoleController, modifier: Modifier = 
     val camera by model.robotCamera.state.collectAsState()
     val album by model.robotAlbum.state.collectAsState()
     val chat by model.chat.state.collectAsState()
-    val talking by model.talking.collectAsState()
-    val talkBusy by model.talkBusy.collectAsState()
+    val talk by model.pushToTalk.state.collectAsState()
     val wifi by model.robotWifi.state.collectAsState()
     val sdr by model.robotSdr.state.collectAsState()
     val task = ui.task
     val canChange = ui.connected && console.connected && !console.busy && !console.scriptRunPhase.mayBeExecuting &&
-        !camera.storageBusy && camera.storage?.recording != true && !album.nativeBusy && !chat.running && !talking && !talkBusy &&
+        !camera.storageBusy && camera.storage?.recording != true && !album.nativeBusy && !chat.running && !talk.active &&
         wifi.recovery == null && sdr.recovery == null
     var selected by remember(ui.connection) { mutableStateOf<ModuleAddressingKind?>(null) }
     var chooseAgain by remember(ui.connection) { mutableStateOf(false) }

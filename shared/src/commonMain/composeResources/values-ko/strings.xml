@@ -1660,4 +1660,13 @@
     <string name="host_file_failed_value">파일 작업을 완료하지 못했습니다: %1$s</string>
     <string name="host_preferences_load_failed_value">저장된 환경설정을 복원하지 못했습니다: %1$s</string>
     <string name="host_preferences_save_failed_value">환경설정을 저장하지 못했습니다: %1$s</string>
+    <string name="talk_input_unavailable">이 기기에서는 음성 전송을 사용할 수 없습니다.</string>
+    <string name="talk_capture_failed_value">녹음 실패: %1$s</string>
+    <string name="talk_send_failed_value">음성을 전송하지 못했습니다: %1$s</string>
+    <string name="talk_too_short">녹음이 너무 짧습니다. 음성 버튼을 조금 더 길게 누르세요.</string>
+    <string name="talk_problem_details">음성 전송 문제 보기</string>
+    <string name="talk_problem_title">음성 전송 문제</string>
+    <string name="talk_retry_hint">음성 버튼에서 손을 뗀 뒤 다시 길게 눌러 새로 녹음하세요.</string>
+    <string name="talk_hold">길게 눌러 녹음, 손을 떼면 전송</string>
+    <string name="talk_send">녹음을 마치고 전송</string>
 </resources>

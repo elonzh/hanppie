@@ -1660,4 +1660,13 @@
     <string name="host_file_failed_value">ファイル操作を完了できませんでした：%1$s</string>
     <string name="host_preferences_load_failed_value">保存した設定を復元できませんでした：%1$s</string>
     <string name="host_preferences_save_failed_value">設定を保存できませんでした：%1$s</string>
+    <string name="talk_input_unavailable">この端末ではトーク機能を利用できません。</string>
+    <string name="talk_capture_failed_value">録音に失敗しました：%1$s</string>
+    <string name="talk_send_failed_value">音声を送信できませんでした：%1$s</string>
+    <string name="talk_too_short">録音が短すぎます。トークボタンをもう少し長く押してください。</string>
+    <string name="talk_problem_details">トークの問題を確認</string>
+    <string name="talk_problem_title">トークの問題</string>
+    <string name="talk_retry_hint">トークボタンを離し、もう一度長押しして録音し直してください。</string>
+    <string name="talk_hold">長押しで録音、離すと送信</string>
+    <string name="talk_send">録音を終了して送信</string>
 </resources>

@@ -47,11 +47,10 @@ internal fun SdrSettingsControls(model: ConsoleController) {
     val album by model.robotAlbum.state.collectAsState()
     val camera by model.robotCamera.state.collectAsState()
     val chat by model.chat.state.collectAsState()
-    val talking by model.talking.collectAsState()
-    val talkBusy by model.talkBusy.collectAsState()
+    val talk by model.pushToTalk.state.collectAsState()
     val wifi by model.robotWifi.state.collectAsState()
     val canChange = !console.busy && !console.scriptRunPhase.mayBeExecuting && !album.nativeBusy && !camera.storageBusy &&
-        camera.storage?.recording != true && !chat.running && !talking && !talkBusy && wifi.recovery == null
+        camera.storage?.recording != true && !chat.running && !talk.active && wifi.recovery == null
     var confirmation by remember { mutableStateOf<SdrChange?>(null) }
     var finishing by remember { mutableStateOf(false) }
     LaunchedEffect(state.connection, state.connected, state.settings, state.busy, canChange) {

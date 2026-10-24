@@ -93,9 +93,7 @@ internal interface ConsoleController : AutoCloseable {
     val firing: StateFlow<Boolean>
     val fireEvents: SharedFlow<AmmoType>
     val driveGear: MutableStateFlow<Int>
-    val talking: MutableStateFlow<Boolean>
-    val microphoneReady: MutableStateFlow<Boolean>
-    val talkBusy: MutableStateFlow<Boolean>
+    val pushToTalk: cn.elonzh.hanppie.ui.robot.remote.PushToTalkController
     val videoFrames: cn.elonzh.hanppie.ui.robot.remote.VideoFrameCache
     var videoSink: ((ByteArray) -> Unit)?
     var audioSink: ((ByteArray) -> Unit)?

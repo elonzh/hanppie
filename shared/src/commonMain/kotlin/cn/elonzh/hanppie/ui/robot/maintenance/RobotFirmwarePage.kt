@@ -41,8 +41,7 @@ internal fun RobotFirmwarePage(model: ConsoleController, modifier: Modifier = Mo
     val album by model.robotAlbum.state.collectAsState()
     val files by model.robotFiles.state.collectAsState()
     val chat by model.chat.state.collectAsState()
-    val talking by model.talking.collectAsState()
-    val talkBusy by model.talkBusy.collectAsState()
+    val talk by model.pushToTalk.state.collectAsState()
     val addressing by model.robotAddressing.state.collectAsState()
     val calibration by model.robotCalibration.state.collectAsState()
     val wifi by model.robotWifi.state.collectAsState()
@@ -54,7 +53,7 @@ internal fun RobotFirmwarePage(model: ConsoleController, modifier: Modifier = Mo
     val file = ui.file
     val comparison = if (configuration != null && file != null) file.inspection.manifest.compatibilityWith(configuration) else null
     val canChange = ui.connected && console.connected && !console.busy && !console.scriptRunPhase.mayBeExecuting &&
-        !camera.storageBusy && camera.storage?.recording != true && !album.nativeBusy && !files.busy && !chat.running && !talking && !talkBusy &&
+        !camera.storageBusy && camera.storage?.recording != true && !album.nativeBusy && !files.busy && !chat.running && !talk.active &&
         !addressing.blocksControl && !calibration.blocksControl && wifi.recovery == null && sdr.recovery == null
     val preparing = !ui.blocksControl || task.phase == FirmwarePhase.FAILED && ui.recovery == null
     var missingConfirmed by remember(ui.connection, file?.token, configuration, readiness.missingMotorIds) { mutableStateOf(false) }

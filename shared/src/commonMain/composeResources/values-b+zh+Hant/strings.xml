@@ -1660,4 +1660,13 @@
     <string name="host_file_failed_value">檔案操作未完成：%1$s</string>
     <string name="host_preferences_load_failed_value">無法還原已儲存的偏好：%1$s</string>
     <string name="host_preferences_save_failed_value">偏好儲存失敗：%1$s</string>
+    <string name="talk_input_unavailable">目前裝置無法使用對講。</string>
+    <string name="talk_capture_failed_value">錄音失敗：%1$s</string>
+    <string name="talk_send_failed_value">語音無法傳送：%1$s</string>
+    <string name="talk_too_short">錄音過短，請按住對講按鈕久一點。</string>
+    <string name="talk_problem_details">查看對講問題</string>
+    <string name="talk_problem_title">對講問題</string>
+    <string name="talk_retry_hint">放開對講按鈕，再次按住以重新錄音。</string>
+    <string name="talk_hold">按住錄音，放開傳送</string>
+    <string name="talk_send">結束錄音並傳送</string>
 </resources>

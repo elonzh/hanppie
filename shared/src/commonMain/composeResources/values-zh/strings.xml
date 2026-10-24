@@ -1660,4 +1660,13 @@
     <string name="host_file_failed_value">文件操作未完成：%1$s</string>
     <string name="host_preferences_load_failed_value">无法恢复已保存的偏好：%1$s</string>
     <string name="host_preferences_save_failed_value">偏好保存失败：%1$s</string>
+    <string name="talk_input_unavailable">当前设备无法使用对讲。</string>
+    <string name="talk_capture_failed_value">录音失败：%1$s</string>
+    <string name="talk_send_failed_value">语音未能发送：%1$s</string>
+    <string name="talk_too_short">录音过短，请按住对讲按钮久一些。</string>
+    <string name="talk_problem_details">查看对讲问题</string>
+    <string name="talk_problem_title">对讲问题</string>
+    <string name="talk_retry_hint">松开对讲按钮，再次按住以重新录音。</string>
+    <string name="talk_hold">按住录音，松开发送</string>
+    <string name="talk_send">结束录音并发送</string>
 </resources>

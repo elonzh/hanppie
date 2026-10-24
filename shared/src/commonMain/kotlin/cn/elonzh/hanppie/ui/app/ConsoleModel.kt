@@ -407,10 +407,9 @@ internal class ConsoleModel(
     private var firingJob: Job? = null
     private val gelFireMutex = Mutex()
     override val driveGear = MutableStateFlow(3)
-    override val talking = MutableStateFlow(false)
-    override val microphoneReady = MutableStateFlow(false)
-    private val talkGeneration = AtomicLong(0L)
-    override val talkBusy = MutableStateFlow(false)
+    override val pushToTalk = cn.elonzh.hanppie.ui.robot.remote.PushToTalkController(scope, speakerInput,
+        onSent = { packets -> log(tr(Res.string.push_to_talk_sent_packets_value, packets)) },
+        onError = { error -> log(error.message ?: error::class.simpleName.orEmpty()) })
     override fun shiftGear(delta: Int) { driveGear.update { (it + delta).coerceIn(1, DriveSpeed.gearCount) } }
     override fun selectGear(gear: Int) { driveGear.value = gear.coerceIn(1, DriveSpeed.gearCount) }
     override fun switchAmmo() { if (!challenge.value.ownsRound) gelSelected.value = !gelSelected.value }
@@ -566,43 +565,14 @@ internal class ConsoleModel(
         }
     }
     override fun beginPushToTalk() {
-        if (!acceptingWork.load() || !remoteEnabled.value || talkBusy.value || !talking.compareAndSet(false, true)) return
-        microphoneReady.value = false
-        val generation = talkGeneration.addAndFetch(1)
-        runCatching { speakerInput.start {
-            if (generation == talkGeneration.load() && talking.value) microphoneReady.value = true
-        } }.onFailure { error ->
-            talking.value = false
-            microphoneReady.value = false
-            val message = error.message ?: error::class.simpleName ?: "Unknown error"
-            log(message)
-            state.update { it.copy(error = message) }
-        }
+        if (acceptingWork.load() && remoteEnabled.value) pushToTalk.start()
     }
     override fun endPushToTalk() {
-        if (!talking.compareAndSet(true, false)) return
-        talkGeneration.addAndFetch(1)
-        val ready = microphoneReady.value.also { microphoneReady.value = false }
-        if (!ready) { speakerInput.cancel(); return }
         val current = session.load()
-        talkBusy.value = true
-        scope.launch {
-            try {
-                val encoded = speakerInput.finish()
-                val packets = checkNotNull(current) { tr(Res.string.robot_is_not_connected) }.playSpeaker(encoded)
-                log(tr(Res.string.push_to_talk_sent_packets_value, packets))
-            } catch (error: Exception) {
-                val message = error.message ?: error::class.simpleName ?: "Unknown error"
-                log(message)
-                state.update { it.copy(error = message) }
-            } finally { talkBusy.value = false }
-        }
+        pushToTalk.finish { encoded -> checkNotNull(current) { tr(Res.string.robot_is_not_connected) }.playSpeaker(encoded) }
     }
     private fun cancelPushToTalk() {
-        talkGeneration.addAndFetch(1)
-        microphoneReady.value = false
-        val cancel = talking.compareAndSet(true, false)
-        if (cancel) runCatching { speakerInput.cancel() }
+        pushToTalk.cancel()
     }
     override fun startMedia(audio: Boolean) {
         val current = session.load() ?: return
@@ -1154,7 +1124,7 @@ internal class ConsoleModel(
             (maintenanceOwner == MaintenanceOwner.EXTENSIONS || !robotExtensions.state.value.changing && !current.extensions.state.value.busy) &&
             acceptingWork.load() && current.connected && matches(current) && robotSdr.state.value.recovery == null && !chat.state.value.running &&
             !snapshot.scriptRunPhase.mayBeExecuting && !robotAlbum.state.value.nativeBusy && !robotCamera.state.value.storageBusy &&
-            robotCamera.state.value.storage?.recording != true && !talkBusy.value && !talking.value) { tr(activeMessage) }
+            robotCamera.state.value.storage?.recording != true && !pushToTalk.state.value.active) { tr(activeMessage) }
         check(!snapshot.busy && state.compareAndSet(snapshot, snapshot.copy(busy = true))) { tr(activeMessage) }
         val revision = connectionRevision.load()
         try {
@@ -1406,5 +1376,5 @@ internal class ConsoleModel(
                 scriptMessage = if (uncertain) uiText(Res.string.connection_closed_robot_state_unknown) else it.scriptMessage)
         }
     }
-    override fun close() { connectionRevision.addAndFetch(1); clearLabUiBinding(); robotFiles.close(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.clear(); robotArm.clear(); robotExtensions.clear(); robotCalibration.clear(); robotAddressing.clear(); robotPower.clear(); robotMotion.clear(); robotDisplay.clear(); robotWifi.close(); robotSdr.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
+    override fun close() { connectionRevision.addAndFetch(1); clearLabUiBinding(); robotFiles.close(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.clear(); robotArm.clear(); robotExtensions.clear(); robotCalibration.clear(); robotAddressing.clear(); robotPower.clear(); robotMotion.clear(); robotDisplay.clear(); robotWifi.close(); robotSdr.close(); pushToTalk.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
 }

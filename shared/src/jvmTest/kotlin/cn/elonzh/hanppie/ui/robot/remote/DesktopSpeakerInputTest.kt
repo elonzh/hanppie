@@ -42,7 +42,7 @@ class DesktopSpeakerInputTest {
         } as javax.sound.sampled.TargetDataLine
         val capture = DesktopSpeakerInput(lineFactory = { line }, encoder = { it })
         try {
-            capture.start { ready.countDown() }
+            capture.start({ ready.countDown() }, { throw it })
             check(entered.await(2, java.util.concurrent.TimeUnit.SECONDS))
             kotlin.test.assertEquals(1L, ready.count, "Starting the device must not announce readiness")
             allowRead.countDown()
@@ -54,7 +54,7 @@ class DesktopSpeakerInputTest {
     @Test fun lateReadinessCannotReactivateCancelledRecording() {
         val callbacks = mutableListOf<() -> Unit>()
         val input = object : SpeakerInput {
-            override fun start(onReady: () -> Unit) { callbacks += onReady }
+            override fun start(onReady: () -> Unit, onError: (Throwable) -> Unit) { callbacks += onReady }
             override suspend fun finish(): ByteArray = error("Unready recording must not be encoded")
             override fun cancel() = Unit
         }
@@ -62,14 +62,14 @@ class DesktopSpeakerInputTest {
         try {
             model.remoteEnabled.value = true
             model.beginPushToTalk()
-            kotlin.test.assertFalse(model.microphoneReady.value)
+            kotlin.test.assertFalse((model.pushToTalk.state.value.phase == TalkPhase.RECORDING))
             model.endPushToTalk()
-            kotlin.test.assertFalse(model.talkBusy.value)
+            kotlin.test.assertFalse(model.pushToTalk.state.value.busy)
             model.beginPushToTalk()
             callbacks[0]()
-            kotlin.test.assertFalse(model.microphoneReady.value)
+            kotlin.test.assertFalse((model.pushToTalk.state.value.phase == TalkPhase.RECORDING))
             callbacks[1]()
-            kotlin.test.assertTrue(model.microphoneReady.value)
+            kotlin.test.assertTrue((model.pushToTalk.state.value.phase == TalkPhase.RECORDING))
         } finally { model.close() }
     }
 
@@ -100,8 +100,8 @@ class DesktopSpeakerInputTest {
             encoder = { it },
         )
 
-        assertFailsWith<IllegalStateException> { capture.start {} }
-        capture.start {}
+        assertFailsWith<IllegalStateException> { capture.start({}, { throw it }) }
+        capture.start({}, { throw it })
         capture.cancel()
     }
 
@@ -140,7 +140,7 @@ class DesktopSpeakerInputTest {
             processFactory = { process },
         )
 
-        input.start { ready.countDown() }
+        input.start({ ready.countDown() }, { throw it })
         assertTrue(ready.await(2, TimeUnit.SECONDS))
         val finisher = thread { runCatching { runBlocking { input.finish() } }.onFailure(failure::set) }
         assertTrue(process.waitEntered.await(2, TimeUnit.SECONDS))

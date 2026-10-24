@@ -36,10 +36,9 @@ internal fun RobotWifiPage(model: ConsoleController, modifier: Modifier = Modifi
     val album by model.robotAlbum.state.collectAsState()
     val camera by model.robotCamera.state.collectAsState()
     val chat by model.chat.state.collectAsState()
-    val talking by model.talking.collectAsState()
-    val talkBusy by model.talkBusy.collectAsState()
+    val talk by model.pushToTalk.state.collectAsState()
     val canChange = !console.busy && !console.scriptRunPhase.mayBeExecuting && !album.nativeBusy && !camera.storageBusy &&
-        camera.storage?.recording != true && !chat.running && !talking && !talkBusy
+        camera.storage?.recording != true && !chat.running && !talk.active
     var confirmation by remember { mutableStateOf<WifiConfirmation?>(null) }
     var showPassword by remember(state.connection) { mutableStateOf(false) }
     var channels by rememberSaveable { mutableStateOf(false) }

@@ -38,7 +38,7 @@ internal class DesktopSpeakerInput(
         encoder = pcmEncoder,
     )
 
-    override fun start(onReady: () -> Unit) = capture.start(onReady)
+    override fun start(onReady: () -> Unit, onError: (Throwable) -> Unit) = capture.start(onReady, onError)
     override suspend fun finish(): ByteArray = capture.finish()
     override fun cancel() {
         activeEncoderProcess.getAndSet(null)?.destroyForcibly()

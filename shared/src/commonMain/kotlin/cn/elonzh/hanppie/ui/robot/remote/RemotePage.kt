@@ -194,9 +194,15 @@ internal fun RemotePage(
     val aimState by aimInput.state.collectAsState()
     val inputLifecycle = LocalLifecycleOwner.current.lifecycle
     val inputLifecycleState by inputLifecycle.currentStateAsState()
-    val talking by model.talking.collectAsState()
-    val microphoneReady by model.microphoneReady.collectAsState()
-    val talkBusy by model.talkBusy.collectAsState()
+    val talk by model.pushToTalk.state.collectAsState()
+    var talkPresses by remember { mutableStateOf(emptySet<String>()) }
+    fun talkPress(source: String, pressed: Boolean) {
+        val previous = talkPresses
+        talkPresses = if (pressed) previous + source else previous - source
+        if (previous.isEmpty() && talkPresses.isNotEmpty()) (onPushToTalkStart ?: model::beginPushToTalk)()
+        else if (previous.isNotEmpty() && talkPresses.isEmpty()) (onPushToTalkStop ?: model::endPushToTalk)()
+    }
+    fun releaseTalk() { talkPresses = emptySet(); (onPushToTalkStop ?: model::endPushToTalk)() }
     val mediaState by mediaControls.state.collectAsState()
     var left by remember { mutableStateOf(Offset.Zero) }
     var right by remember { mutableStateOf(Offset.Zero) }
@@ -218,7 +224,7 @@ internal fun RemotePage(
     val currentGear by rememberUpdatedState(gear)
     val currentControl by rememberUpdatedState(control)
     val currentChallengeBlocked by rememberUpdatedState(challenge.blocksControl || challengeChoosing)
-    val ledState = remoteLedState(enabled, mediaState.recording, talking || talkBusy)
+    val ledState = remoteLedState(enabled, mediaState.recording, talk.active)
     LaunchedEffect(connected.connected, ledState, control.remoteLeds) {
         if (connected.connected) model.setRemoteLed(control.remoteLeds.color(ledState))
     }
@@ -227,12 +233,19 @@ internal fun RemotePage(
         aimInput.stop()
         model.robotArm.stopControl()
         model.stopFiring()
-        (onPushToTalkStop ?: model::endPushToTalk)()
+        releaseTalk()
         model.setRemoteLed(null)
         if (manageSession) { model.leaveRemote(); model.stopMedia() }
     } }
     DisposableEffect(aimInput) { onDispose { aimInput.close() } }
     DisposableEffect(pressureInput) { onDispose { pressureInput.retire() } }
+    LaunchedEffect(enabled, foreground, armMode, challenge.blocksControl, challengeChoosing) {
+        if (!enabled || !foreground || armMode || challenge.blocksControl || challengeChoosing) {
+            suppressedKeys = suppressedKeys + physicalKeys
+            model.pushToTalk.cancel()
+            releaseTalk()
+        }
+    }
     DisposableEffect(aimInput, inputLifecycle, pressureInput, pressureMode) {
         val observer = LifecycleEventObserver { _, event ->
             if (event in listOf(Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP)) model.cameraZoom.cancelTransition()
@@ -391,6 +404,7 @@ internal fun RemotePage(
             model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
         }
     }.onPreviewKeyEvent {
+        val freshDown = it.type == KeyEventType.KeyDown && it.key !in physicalKeys
         val awaitingRelease = it.key in suppressedKeys
         if (it.type == KeyEventType.KeyUp) { physicalKeys = physicalKeys - it.key; suppressedKeys = suppressedKeys - it.key }
         else if (it.type == KeyEventType.KeyDown) physicalKeys = physicalKeys + it.key
@@ -427,7 +441,7 @@ internal fun RemotePage(
         if (supported) {
             if (it.type == KeyEventType.KeyUp) {
                 if (control.shortcuts[ControlAction.PushToTalk].key.matches(it.key))
-                    (onPushToTalkStop ?: model::endPushToTalk)()
+                    talkPress("keyboard", false)
                 keys = keys - it.key
             }
             else if (it.type == KeyEventType.KeyDown) {
@@ -437,7 +451,7 @@ internal fun RemotePage(
                     ControlAction.SwitchAmmo -> model.switchAmmo()
                     ControlAction.Photo -> if (enabled) mediaControls.takePhoto()
                     ControlAction.Recording -> if (enabled) mediaControls.toggleRecording()
-                    ControlAction.PushToTalk -> if (enabled) (onPushToTalkStart ?: model::beginPushToTalk)()
+                    ControlAction.PushToTalk -> if (enabled && freshDown) talkPress("keyboard", true)
                     ControlAction.RobotMicrophone -> if (enabled) mediaControls.toggleRobotMicrophone()
                     ControlAction.Gear1 -> model.selectGear(1)
                     ControlAction.Gear2 -> model.selectGear(2)
@@ -554,7 +568,7 @@ internal fun RemotePage(
                 Modifier.widthIn(max = HanppieDesignTokens.RemoteTaskSideMaxWidth).then(reserveVisionSpace("capture")), onAlbum = onAlbum) {
                 keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire()
                 model.robotArm.stopControl(); model.stopFiring(); model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
-                (onPushToTalkStop ?: model::endPushToTalk)()
+                releaseTalk()
             }
             Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
                 if (challenge.ownsRound) {
@@ -657,9 +671,6 @@ internal fun RemotePage(
                 }
             }
         }
-        if (talking || talkBusy) Text(if (talking) tr(if (microphoneReady) Res.string.talking else Res.string.microphone_preparing) else tr(Res.string.sending_talk),
-            Modifier.align(Alignment.BottomCenter).padding(bottom = 54.dp), color = HanppieDesignTokens.RemoteHudContent,
-            fontSize = 12.sp)
         if (keyboardHints && !armMode && !challenge.ownsRound) {
             Text(keyboardHint(control.shortcuts), Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp)
                 .widthIn(max = 380.dp).background(HanppieDesignTokens.RemoteHudSurface.copy(alpha = .72f),
@@ -672,9 +683,21 @@ internal fun RemotePage(
             GunCoolingControls(gunCooling, enabled && manualActionsEnabled && !connected.busy) {
                 model.coolGun(); focus.requestFocus()
             }
+            Row(Modifier.widthIn(max = 420.dp), verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PushToTalkControls(model.pushToTalk, talk,
+                enabled && foreground && !challenge.blocksControl && !challengeChoosing,
+                onPress = { pressed ->
+                    if (pressed) { keyboardHints = false; focus.requestFocus() }
+                    talkPress("pointer", pressed)
+                }, onToggle = {
+                    focus.requestFocus()
+                    if (talk.recording) releaseTalk()
+                    else { talkPresses = emptySet(); talkPress("accessibility", true) }
+                })
             AimInputControls(aimInput, aimState,
                 enabled && manualActionsEnabled && !gunCooling.ownsCooling && !vision.ownsGimbal && !connected.busy && inputLifecycleState.isAtLeast(Lifecycle.State.RESUMED),
-                Modifier) inputStart@ { mode ->
+                Modifier.weight(1f, fill = false)) inputStart@ { mode ->
                 if (!inputLifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@inputStart
                 model.clearRemoteInputs(); keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire()
                 suppressedKeys = suppressedKeys + physicalKeys
@@ -685,6 +708,7 @@ internal fun RemotePage(
                     AimInputMode.MOUSE -> { keyboardHints = true; aimInput.startMouse() }
                     AimInputMode.GYROSCOPE -> aimInput.startGyroscope()
                 }
+            }
             }
         }
         // Captured clicks belong to the native relative input, never to a control behind the cursor.
@@ -781,7 +805,8 @@ private fun SignalIndicator(quality: Int?) {
 }
 
 @Composable internal fun HudIconButton(label: String, symbol: WorkbenchGlyph, enabled: Boolean = true,
-    selected: Boolean = false, stateLabel: String? = null, artwork: DrawableResource? = null, onPressChange: ((Boolean) -> Unit)? = null, action: () -> Unit = {}) {
+    selected: Boolean = false, stateLabel: String? = null, artwork: DrawableResource? = null, modifier: Modifier = Modifier,
+    onPressChange: ((Boolean) -> Unit)? = null, onAccessibilityClick: (() -> Unit)? = null, action: () -> Unit = {}) {
     val colors = MiuixTheme.colorScheme
     val surface = if (selected) colors.primary else HanppieDesignTokens.RemoteHudSurface.copy(alpha = .60f)
     val ink = when {
@@ -790,15 +815,19 @@ private fun SignalIndicator(quality: Int?) {
         else -> HanppieDesignTokens.RemoteHudContent
     }
     val currentOnPressChange by rememberUpdatedState(onPressChange)
+    val consumePress = onAccessibilityClick != null
     val holdModifier = if (onPressChange != null) {
-        Modifier.pointerInput(enabled) {
+        Modifier.pointerInput(enabled, consumePress) {
             if (enabled) awaitEachGesture {
-                val down = awaitFirstDown(requireUnconsumed = false)
+                val pass = if (consumePress) PointerEventPass.Initial else PointerEventPass.Main
+                val down = awaitFirstDown(requireUnconsumed = false, pass = pass)
+                if (consumePress) down.consume()
                 currentOnPressChange?.invoke(true)
                 try {
                     while (true) {
-                        val event = awaitPointerEvent()
+                        val event = awaitPointerEvent(pass)
                         val pointer = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (consumePress) pointer.consume()
                         if (!pointer.pressed) break
                     }
                 } finally {
@@ -807,8 +836,8 @@ private fun SignalIndicator(quality: Int?) {
             }
         }
     } else Modifier
-    IconButton(onClick = action, enabled = enabled, cornerRadius = 24.dp,
-        modifier = Modifier.size(HanppieDesignTokens.TouchTarget)
+    IconButton(onClick = onAccessibilityClick ?: action, enabled = enabled, cornerRadius = 24.dp,
+        modifier = modifier.size(HanppieDesignTokens.TouchTarget)
             .then(holdModifier)
             .drawBehind {
                 val radius = size.minDimension / 2 - 4.dp.toPx()
@@ -818,7 +847,9 @@ private fun SignalIndicator(quality: Int?) {
                         style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
                 }
             }
-            .semantics { contentDescription = label; stateLabel?.let { stateDescription = it }; if (!enabled) disabled() }, backgroundColor = Color.Transparent) {
+            .semantics {
+                contentDescription = label; stateLabel?.let { stateDescription = it }; if (!enabled) disabled()
+            }, backgroundColor = Color.Transparent) {
         if (artwork != null) Image(painterResource(artwork), null, Modifier.size(40.dp))
         else WorkbenchIcon(symbol, ink, Modifier.size(20.dp))
     }

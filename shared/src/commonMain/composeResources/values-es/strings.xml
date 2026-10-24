@@ -1660,4 +1660,13 @@
     <string name="host_file_failed_value">No se pudo completar la acción del archivo: %1$s</string>
     <string name="host_preferences_load_failed_value">No se pudieron restaurar las preferencias guardadas: %1$s</string>
     <string name="host_preferences_save_failed_value">No se pudo guardar esta preferencia: %1$s</string>
+    <string name="talk_input_unavailable">La función de voz no está disponible en este dispositivo.</string>
+    <string name="talk_capture_failed_value">Error de grabación: %1$s</string>
+    <string name="talk_send_failed_value">No se pudo enviar el audio: %1$s</string>
+    <string name="talk_too_short">La grabación es demasiado corta. Mantén pulsado el botón de voz más tiempo.</string>
+    <string name="talk_problem_details">Ver problema de voz</string>
+    <string name="talk_problem_title">Problema de voz</string>
+    <string name="talk_retry_hint">Suelta el botón de voz y vuelve a mantenerlo pulsado para grabar de nuevo.</string>
+    <string name="talk_hold">Mantén pulsado para grabar; suelta para enviar</string>
+    <string name="talk_send">Terminar grabación y enviar</string>
 </resources>

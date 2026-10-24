@@ -54,10 +54,9 @@ private fun createIosWorkbench(platform: IosPlatformServices): WorkbenchViewMode
     applyAppLocale("en-US")
     val storage = WorkbenchStorage.create()
     return try {
-        lateinit var model: ConsoleModel
-        model = ConsoleModel(
+        val model = ConsoleModel(
             voiceInput = IosSpeechInput(platform),
-            speakerInput = IosSpeakerInput(platform) { message -> model.endPushToTalk(); model.log(message) },
+            speakerInput = IosSpeakerInput(platform),
             audioImporter = IosLabAudioImporter(platform),
             audioPlayer = IosLabAudioPlayer(platform),
             robotRuntime = PlatformRobotRuntime(mobileSensors = { IosMobileSensors() }),

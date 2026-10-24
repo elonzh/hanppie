@@ -1660,4 +1660,13 @@
     <string name="host_file_failed_value">Не удалось выполнить операцию с файлом: %1$s</string>
     <string name="host_preferences_load_failed_value">Не удалось восстановить сохранённые настройки: %1$s</string>
     <string name="host_preferences_save_failed_value">Не удалось сохранить настройку: %1$s</string>
+    <string name="talk_input_unavailable">На этом устройстве голосовая передача недоступна.</string>
+    <string name="talk_capture_failed_value">Ошибка записи: %1$s</string>
+    <string name="talk_send_failed_value">Не удалось отправить звук: %1$s</string>
+    <string name="talk_too_short">Запись слишком короткая. Удерживайте кнопку разговора дольше.</string>
+    <string name="talk_problem_details">Показать проблему голосовой передачи</string>
+    <string name="talk_problem_title">Проблема голосовой передачи</string>
+    <string name="talk_retry_hint">Отпустите кнопку разговора и снова удерживайте её, чтобы записать новый фрагмент.</string>
+    <string name="talk_hold">Удерживайте для записи, отпустите для отправки</string>
+    <string name="talk_send">Закончить запись и отправить</string>
 </resources>

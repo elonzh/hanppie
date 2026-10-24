@@ -225,7 +225,8 @@ internal class RobotSessionFixture : RobotSession {
         delay(50)
         return sequence
     }
-    override suspend fun playSpeaker(encoded: ByteArray): Int = 0
+    var speakerPlayback: suspend (ByteArray) -> Int = { 0 }
+    override suspend fun playSpeaker(encoded: ByteArray): Int = speakerPlayback(encoded)
     override fun setLed(red: Int, green: Int, blue: Int, enabled: Boolean) {}
     override fun setSpeakerVolume(volume: Int) {}
     override fun media(start: Boolean, audio: Boolean, resolution: cn.elonzh.hanppie.robot.media.VideoResolution) {

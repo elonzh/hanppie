@@ -11,11 +11,11 @@ import cn.elonzh.hanppie.ui.robot.audio.encodeOpusPackets
 internal class AndroidSpeakerInput(private val context: Context) : SpeakerInput {
     private val capture = BoundedPcmCapture(::createDevice, ::encodeAndroidSpeakerPcm)
 
-    override fun start(onReady: () -> Unit) {
+    override fun start(onReady: () -> Unit, onError: (Throwable) -> Unit) {
         check(context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             "需要麦克风权限才能对讲"
         }
-        capture.start(onReady)
+        capture.start(onReady, onError)
     }
 
     override suspend fun finish(): ByteArray = capture.finish()

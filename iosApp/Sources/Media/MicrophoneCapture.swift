@@ -50,14 +50,26 @@ final class MicrophoneCapture {
                 self.file = file
                 self.captureLock.lock(); self.captureToken = token; self.captureLock.unlock()
                 var frames: AVAudioFrameCount = 0
+                var announcedReady = false
                 engine.inputNode.installTap(onBus: 0, bufferSize: 960, format: format) { [weak self] buffer, _ in
                     guard let self else { return }
                     self.captureLock.lock(); defer { self.captureLock.unlock() }
                     guard self.captureToken == token, frames < AVAudioFrameCount(format.sampleRate * 15) else { return }
-                    do { try file.write(from: buffer); frames += buffer.frameLength }
-                    catch { DispatchQueue.main.async { guard self.generation == token else { return }; self.talkError = error } }
+                    do {
+                        try file.write(from: buffer); frames += buffer.frameLength
+                        if !announcedReady && buffer.frameLength > 0 {
+                            announcedReady = true
+                            DispatchQueue.main.async { guard self.generation == token else { return }; ready() }
+                        }
+                    } catch {
+                        self.captureToken = -1
+                        DispatchQueue.main.async {
+                            guard self.generation == token else { return }
+                            self.talkError = error; onError(error.localizedDescription)
+                        }
+                    }
                 }
-                engine.prepare(); try engine.start(); ready()
+                engine.prepare(); try engine.start()
                 let work = DispatchWorkItem { [weak self] in
                     guard self?.generation == token else { return }; self?.stopEngine()
                 }
