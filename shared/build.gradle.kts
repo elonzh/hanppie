@@ -90,7 +90,10 @@ kotlin {
             implementation(libs.ktor.okhttp)
             runtimeOnly(libs.slf4j.simple)
         } }
-        commonTest.dependencies { implementation(kotlin("test")) }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.ktor.mock)
+        }
         iosMain.dependencies {
             implementation(libs.ktor.darwin)
             implementation(libs.coil.network.ktor)

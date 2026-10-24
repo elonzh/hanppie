@@ -29,7 +29,7 @@ internal data class ModelSettings(
 ) {
     val llModel: LLModel get() = ModelCatalog.resolve(provider, model)
 
-    fun validationError(): UiText? {
+    fun validationError(requireModel: Boolean = true): UiText? {
         val validEndpoint = runCatching { Url(endpoint) }.getOrNull()?.let { url ->
             url.protocolOrNull == URLProtocol.HTTPS &&
                 url.host.isNotBlank() &&
@@ -41,7 +41,7 @@ internal data class ModelSettings(
         } == true
         return when {
             !validEndpoint -> uiText(Res.string.enter_an_https_api_endpoint)
-            model.isBlank() || apiKey.isBlank() -> uiText(Res.string.enter_a_model_and_api_key)
+            (requireModel && model.isBlank()) || apiKey.isBlank() -> uiText(Res.string.enter_a_model_and_api_key)
             else -> null
         }
     }

@@ -165,11 +165,9 @@ internal fun ModelSettingsContent(model: ConsoleController) {
         } else ModelCatalog.defaults(provider).copy(apiKey = config.apiKey)
     }
     TextField(config.endpoint, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(endpoint = it) }, label = tr(Res.string.api_endpoint), modifier = Modifier.fillMaxWidth().testTag("model-endpoint"), enabled = !chat.running && !settingsBusy, singleLine = true)
-    TextField(config.apiKey, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(apiKey = it) }, label = tr(Res.string.api_key), modifier = Modifier.fillMaxWidth(), enabled = !chat.running && !settingsBusy, singleLine = true,
+    TextField(config.apiKey, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(apiKey = it) }, label = tr(Res.string.api_key), modifier = Modifier.fillMaxWidth().testTag("model-api-key"), enabled = !chat.running && !settingsBusy, singleLine = true,
         visualTransformation = PasswordVisualTransformation())
-    val discoveredModels = modelCatalog.models.takeIf {
-        modelCatalog.provider == config.provider && modelCatalog.endpoint == config.endpoint
-    }.orEmpty()
+    val discoveredModels = modelCatalog.models.takeIf { modelCatalog.matches(config) }.orEmpty()
     val availableModels = (
         ModelCatalog.models[config.provider].orEmpty().map { it.id } +
             discoveredModels + config.model
@@ -180,7 +178,7 @@ internal fun ModelSettingsContent(model: ConsoleController) {
     // the catalog instead of repeating the id in a second control.
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        TextField(config.model, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(model = it) }, label = tr(Res.string.custom_model_id), modifier = Modifier.weight(1f), enabled = !chat.running && !settingsBusy, singleLine = true)
+        TextField(config.model, { model.settingsMessage.value = null; model.modelSettings.value = config.copy(model = it) }, label = tr(Res.string.custom_model_id), modifier = Modifier.weight(1f).testTag("model-id"), enabled = !chat.running && !settingsBusy, singleLine = true)
         WorkbenchIconButton(
             label = tr(Res.string.choose_model),
             glyph = WorkbenchGlyph.CHEVRON_RIGHT,
@@ -189,14 +187,15 @@ internal fun ModelSettingsContent(model: ConsoleController) {
             tag = "model-picker",
         )
     }
-    if (modelCatalog.provider == config.provider && modelCatalog.endpoint == config.endpoint) {
+    if (modelCatalog.matches(config)) {
         val catalogMessage = if (modelCatalog.loading) {
             tr(Res.string.loading_model_catalog)
         } else {
-            modelCatalog.message
+            modelCatalog.message?.resolve()
         }
         catalogMessage?.let {
-            Text(it, fontSize = 12.sp,
+            Text(it, Modifier.fillMaxWidth().heightIn(max = 96.dp).verticalScroll(rememberScrollState())
+                .testTag("model-catalog-message"), fontSize = 12.sp,
                 color = if (modelCatalog.failed) MiuixTheme.colorScheme.error
                 else MiuixTheme.colorScheme.onSurfaceVariantSummary)
         }
@@ -237,13 +236,16 @@ internal fun ModelSettingsContent(model: ConsoleController) {
     // Model facts read as a short summary. Provider capability identifiers and per-stage test detail
     // are diagnostics: they belong in the log, not in front of the user.
     ModelSummary(config.llModel)
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Button(model::testModelSettings, enabled = !modelTest.running && !chat.running && !settingsBusy && config.apiKey.isNotBlank()) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Button(model::testModelSettings, Modifier.heightIn(min = 48.dp).testTag("model-test"),
+            enabled = !modelTest.running && !chat.running && !settingsBusy && config.apiKey.isNotBlank()) {
             Text(if (modelTest.running) tr(Res.string.testing_model_configuration) else tr(Res.string.test_model_configuration))
         }
-        modelTest.message?.let { message ->
+        modelTest.message?.takeIf { modelTest.matches(config) }?.let { message ->
             Text(
-                (if (modelTest.success == false) "✗ " else "✓ ") + message,
+                (if (modelTest.success == false) "✗ " else "✓ ") + message.resolve(),
+                Modifier.weight(1f).heightIn(max = 96.dp).verticalScroll(rememberScrollState())
+                    .testTag("model-test-message"),
                 fontSize = 13.sp,
                 color = if (modelTest.success == false) MiuixTheme.colorScheme.error
                 else MiuixTheme.colorScheme.onSurfaceVariantSummary,

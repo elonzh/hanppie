@@ -51,6 +51,7 @@ koog-agents = { module = "ai.koog:agents-core", version.ref = "koog" }
 koog-openai = { module = "ai.koog:prompt-executor-openai-client", version.ref = "koog" }
 koog-ktor = { module = "ai.koog:http-client-ktor", version.ref = "koog" }
 ktor-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 ktor-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 ktor-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
