@@ -1193,7 +1193,30 @@ S1 的红外能力至少包含三层，不能把其中任意一层统称为“�
 | 其他管理器值 | `UseWebSockets=false`、`UseSimulator=false`、`MaxBufferedPackets=16`、`AllowFragmentation=true`、`MaxDelay≈0.01`、`RunInBackground=false`；构造器默认不能覆盖预制体事实 |
 | 大厅 | `MaxPlayers=16`、`MaxPlayersPerConnection=1`、`MinPlayers=0`，场景 `RoomScene`/`BattleScene`，`lobbySlots` 初始为空；`AutoNetworkManager.OnStartHost` 会按 HostInfo 覆盖人数并按模式替换玩家预制体，不代表所有 UI 都允许 16 人 |
 
-两个实际 DLL 的 SHA-256 分别为 `46496a54c3b49bd2af55d220295575807424a9d10789de0e1c5b2f08c566c702`（HLAPI，AssemblyVersion 1.0.0.0）与 `fd9037e0241d00c1605da420dd3902c5e07352d51355529f5690c68c857bc474`（UNETModule，AssemblyVersion 0.0.0.0）；程序集版本不是 Unity 注册表包版本。此前按 SHA-1 核对的 HLAPI 1.0.2/1.0.4 源码仍只是参考，不宣称整个参考包与实际 DLL 相同。连接配置一致性和传输服务属于 LLAPI，已恢复参数不提供原生握手、封包、重传或配置校验算法，详见上述 Unity 传输层文档。
+两个实际 DLL 的 SHA-256 分别为 `46496a54c3b49bd2af55d220295575807424a9d10789de0e1c5b2f08c566c702`（HLAPI，AssemblyVersion 1.0.0.0）与 `fd9037e0241d00c1605da420dd3902c5e07352d51355529f5690c68c857bc474`（UNETModule，AssemblyVersion 0.0.0.0）；程序集版本不是 Unity 注册表包版本。此前按 SHA-1 核对的 HLAPI 1.0.2/1.0.4 源码仍只是参考，不宣称整个参考包与实际 DLL 相同。连接配置一致性和传输服务属于 LLAPI，已恢复的连接参数不提供游戏握手、数据封包、重传或配置校验算法，详见上述 Unity 传输层文档。
+
+##### 广播原生封包与离线仿真
+
+固定 App 的 `UnityPlayer.dylib` SHA-256 为 `f2b0bd1d14706096bfc8e9b99351632ccd22799aa730590c1ff557a866925bee`。通过精确 `NetworkTransport` 内部调用名称及 RIP 相对加载确定入口，不采用反汇编器就近显示的符号名：广播注册 `0xbcf3b2` 指向 `0xbcebc0`，经 `0xbb1440` 到构造器 `0xbb7e00`；发送 worker 为 `0xbc5220`，经 socket SendTo `0x7350e0` 调用系统 `sendto`。这条固定版路径的 **UDP 载荷**为 49 字节原生头加广播正文：
+
+| 偏移 | 字节数 | 固定版构造与接收含义 |
+| --- | ---: | --- |
+| 0 | 2 | big-endian 连接 ID，发现包为 0；非零走已建立连接的分流 |
+| 2 | 1 | LLAPI 包类型 9；零连接的其他类型走不同分支 |
+| 3 | 2 | big-endian 发现发送端 host socket 的本地端口，由 `getsockname` 取得；不是固定游戏端口 7777 |
+| 5 | 4 | big-endian broadcast key，此预制体为 2222 |
+| 9 | 32 | 此版本构造为全零，接收时与前四字节合成 36 字节凭据块逐字节比较；不是可任意忽略的填充 |
+| 41 | 4 | big-endian broadcast version，此预制体为 1 |
+| 45 | 4 | big-endian broadcast subversion，此预制体为 1 |
+| 49 | 剩余全部 | 广播正文；本 App 由前述 16 位字符复制生成，little-endian 并含 NUL，不额外改成 UTF-8 |
+
+构造器将正文长度加 49 交给发送 worker，worker 把同一缓冲区和长度原样交给 `sendto`；这条已核对路径没有另加应用层 CRC 尾部。连接 ID 在 `0xbbd1e0` 读取，`0xbb2140` 分流到 `0xbbe750`，类型 9 进入 `0xbbe830`：长度小于 49 返回，随后比较 36 字节凭据块、version 和 subversion，再将正文起点设为原载荷偏移 49。`0xbc9f80` 配置接收凭据时也以同样字节序写入，并清零那 32 字节。该凭据只是这一发现路径的匹配条件，不据此推断入房口令或游戏握手。
+
+实际 HLAPI `StartAsServer` 用端口 0 创建发现 host，再向广播端口发送；`StartAsClient` 则监听预制体广播端口并设置匹配凭据。因此头内本地端口、发现目的端口与管理器游戏端口不能混用。`NatDiscovery.OnReceivedBroadcast` 将来源地址和正文交给房间消费者，房间文本中没有上述原生头。
+
+上述构造、worker、socket 转发、连接/类型分流和接收凭据前缀已用固定原始 x86-64 机器码进行指令仿真；harness 提供合成 host/worker 对象，分配器、锁、时钟、host/地址查询、socket 构造、端口查询、内存函数及系统调用使用显式桩。发送结果只在 `sendto` 桩收集，接收在凭据判定处停止，没有创建真实 socket、执行 Unity 进程、投递 Unity 事件或采集网络包。它提供固定版封包的离线依据，不能抵扣真实局域网发现、完整 RoomInfo、连接握手或多端互通。原生片段、调用绑定、桩清单、输入和逐字节结果在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02-wire/`，执行记录见[台账原生广播阶段](./official-app-capability-implementation.md#g02-原生广播封包与接收判定阶段)。
+
+##### 房间准备、规则与裁判同步
 
 `AutoNetworkManager.ConfigurationPlayerID` 按队伍和队内序号分配 16 槽角色 ID，`IControl.GetTeamID` 由角色 ID 和队伍数反解队伍，`-1` 单独处理；这不是 IP、序列号或机型编号。实际允许的人数/队伍组合仍须沿房间 UI 和线上状态验证。同步与开始的消费者链路如下：
 
@@ -1251,7 +1274,7 @@ sequenceDiagram
 
 `BattleJudge.JudgeReady` 对玩家、配置和技能信息有有界等待，其中配置/技能阶段最多按秒循环四次，超时后仍可推进；`BattlePlayer.OnJudgeStateChange` 在 Playing 解开控制锁。这与当前 Hanppie 挑战必须取得配置确认和新鲜报告的准备条件不同，见[台账 C22](./official-app-capability-implementation.md#冲突记录保持现状留待决策)，不能照搬超时放行。房间心跳每秒发送、客户端计数约 4 秒，机器人断连消费者另有 10 秒返回大厅路径；网络存活、机器人新鲜度和操控输入租约必须分开，这些官方计时不替代当前输入失效后的归零。
 
-**未验证边界：** 游戏信道、自定义连接及全局参数已有固定 App 静态依据；LLAPI 线上广播封包、连接握手、配置校验算法、对象生成与 RPC/SyncVar 完整互通仍无报文证明。固定 App 是 x86-64；此前本机打开失败且独立 x86 检查返回 `Bad CPU type`，本轮没有重复启动、创建官方房间、采集运行报文或安装系统组件。原调查的 51 项来源哈希、两份预制体载荷、规则与裁判表在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02/`；实际 DLL 元数据、定向 CIL、逐偏移的完整管理器解析及断言在相邻 `G02-transport/`。这些是静态和本机环境证据，不是 G02 产品实现、官方房间互通或多机物理验收；当前进度见[独立台账](./official-app-capability-implementation.md#g02-本地多人契约调查与互通边界)。
+**未验证边界：** 游戏信道、自定义连接及全局参数已有固定 App 静态依据，发现包构造另有上述原生指令仿真；真实局域网发现、连接握手、配置校验算法、对象生成与 RPC/SyncVar 完整互通仍待验。固定 App 是 x86-64；此前本机打开失败且独立 x86 检查返回 `Bad CPU type`，本轮没有重复启动、创建官方房间、采集运行报文或安装系统组件。原调查的 51 项来源哈希、两份预制体载荷、规则与裁判表在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02/`；实际 DLL、完整预制体与原生广播证据分别在相邻 `G02-transport/`、`G02-wire/`。这些不是 G02 产品实现、官方房间互通或多机物理验收；当前进度见[独立台账](./official-app-capability-implementation.md#g02-本地多人契约调查与互通边界)。
 
 #### 自主程序与自定义技能安装
 
