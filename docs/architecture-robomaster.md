@@ -642,6 +642,18 @@ Android 平台边界依据 [USB accessory 官方指南](https://developer.androi
 
 证据位于忽略目录 `.hanppie/validation/2026-10-22-official-gap/I02-native-*.txt`、`I02-android-*.txt`，Android 原始条目在 `.hanppie/app-analysis/2026-10-24-android-1.2.0/`；初始文件指纹在 `2026-10-24-27a7293-audit.json`，后续原生补证在 `I02-link-native-contracts.json`。共享会话、信息页与驾驶输入的实施状态由台账维护；没有构建或运行 Hanppie Android，也未连接真实手柄。全部输入接入、升级与平台完成状态见[实施台账](./official-app-capability-implementation.md)，不以源码或合成字节流计作原生运行通过。
 
+#### iOS 官方手柄链路的来源与接入前提
+
+2026-10-24 对现有材料的复核仍未恢复 RoboMaster iOS 的实际附件 API、协议标识及会话字节流契约。官方手册能确认移动终端连接手柄的用户流程，不能确定 iOS 使用哪个系统框架；Android 的 AOA 文件描述符和原始字节读写也不能自动推广到 iOS。当前 Hanppie 的 `IosWorkbench` 没有注入配件 connector，沿用 `ConsoleModel` 的 `NoGamepadConnector`；`iosApp/Sources/Info.plist` 没有声明附件协议，未提供 iOS 手柄入口。**当前实现 / 缺失契约**
+
+[Apple ExternalAccessory](https://developer.apple.com/documentation/externalaccessory/)要求应用取得配件厂商的通信协议资料；若实际设备采用该框架，应用须在 [UISupportedExternalAccessoryProtocols](https://developer.apple.com/documentation/bundleresources/information-property-list/uisupportedexternalaccessoryprotocols) 中声明实际支持的协议名，再用 [EASession](https://developer.apple.com/documentation/externalaccessory/easession) 选择配件公布的协议并取得输入/输出流。`EASession` 不处理配件数据格式，因此即使取得真实协议名，仍需确认握手、封装/复用、路由和关闭行为，不能直接认定流内容等于 Android DUML。Apple 同时明确：在 Apple silicon Mac 上运行的 iPhone/iPad App 不能通过该框架连接外部配件；编译或在该环境运行其他功能不能抵扣 iOS 真机附件验收。这些是条件性的平台事实，**不证明 RoboMaster iOS 实际采用 ExternalAccessory**。**平台官方依据 / 适用边界**
+
+[DJI Mobile SDK 集成示例](https://developer.dji.com/mobile-sdk/documentation/application-development-workflow/workflow-integrate.html)列出 `com.dji.video`、`com.dji.protocol`、`com.dji.common`，来源是该 SDK 的 USB 产品集成说明，不是 RoboMaster GamePad 的协议声明、设备广播或原生实现证据。不能据此把这三个值填入 Hanppie，或为手柄接入引入 DJI SDK、账号注册与后台模式。**其他产品资料 / 不可直接复用的标识**
+
+固定 macOS 主程序、`unitybridge`、`djinative` 的定向字符串扫描及已有符号表，没有找到附件协议标识或 EA 会话入口；恢复的通用 iOS C# facade 只暴露 Wi-Fi、权限、传感器和其他平台服务，没有附件打开/读写/关闭契约。`com.dji.compressionThread`、`com.dji.videodecoderunloop` 是线程名，不是附件协议。上述负面结果只限定于所检查材料，不能证明完整 iOS App 没有该实现；当前没有完整 iOS 包。**有界静态调查 / 不能反推不存在**
+
+接入前仍需取得实际 API 与产品绑定依据；若为 ExternalAccessory，则需真实协议声明/广告及标识。随后确认官方原生或真实配件的打开、握手、读写封装、查询/输入路由与关闭契约，再仅把平台 transport 注入既有共享配件会话，保留前台释放、输入所有权与不自动恢复规则。调查指纹和原始官方资料位于忽略目录 `I02-ios/investigation.json`、`official-source-fetch.json` 与 `bounded-local-source-scan.json`；当前不新增猜测的 connector、协议标识、HID 替代路径或可用入口，实施与待验状态见[台账](./official-app-capability-implementation.md#i02-ios-链路来源复核与剩余前提)。
+
 #### 官方 GamePad 的本地 V1 升级
 
 固定 macOS 1.1.5/build 239 的 `DJIFirmwareUpgradeController.SendStartGamePadFirmwareUpgrade` 把文件路径通过 FirmwareUpgrade 子事件 10 交给原生，而非普通机器人的子事件 1。`SystemFirmwareUpgrade.UpdateGamePadVersionInfo` 从发布清单选择模块 ID `0600` 的版本和文件名。原生 `OnEventArrival`（`0x4ad70`）将该分支类型设为 1，再进入同一升级处理器的 GamePad 路径；因此本地模块文件和机器人 TAR 不是可互换输入。**固定版托管消费者 / 原生构造**
