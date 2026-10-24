@@ -17,7 +17,7 @@ import top.yukonga.miuix.kmp.basic.Text
 internal fun CameraZoomControls(state: CameraZoomState, enabled: Boolean, modifier: Modifier = Modifier, onZoom: (Int) -> Unit) {
     val target = if ((state.hundredths ?: 100) > 100) 100 else 400
     val action = tr(if (target == 100) Res.string.camera_zoom_to_normal else Res.string.camera_zoom_to_four)
-    Column(modifier.widthIn(max = 200.dp)
+    Column(modifier.widthIn(max = HanppieDesignTokens.RemoteTaskSideMaxWidth)
         .background(HanppieDesignTokens.RemoteHudSurface.copy(alpha = HanppieDesignTokens.RemoteHudAlpha), RoundedCornerShape(12.dp))
         .padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         HudTextButton(when {

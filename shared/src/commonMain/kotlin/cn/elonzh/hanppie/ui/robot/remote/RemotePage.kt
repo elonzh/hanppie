@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -31,6 +32,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.runtime.DisposableEffect
@@ -76,6 +78,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextAlign
 import cn.elonzh.hanppie.resources.Res
 import cn.elonzh.hanppie.resources.back_to_console
 import cn.elonzh.hanppie.resources.chassis
@@ -540,39 +543,46 @@ internal fun RemotePage(
                 color = colors.onSurface, style = MiuixTheme.textStyles.subtitle)
             return@BoxWithConstraints
         }
-        if (manualActionsEnabled && !vision.ownsPipeline && !challenge.ownsRound) CameraZoomControls(zoom, enabled && videoFresh && !connected.busy,
-            Modifier.align(Alignment.TopEnd).padding(top = 76.dp, end = HanppieDesignTokens.RemoteEdgePadding),
-            model.cameraZoom::setZoom)
-        OnboardCaptureControls(model.robotCamera, connected.connected, inputEnabled && foreground,
-            (maxHeight - 180.dp).coerceAtLeast(80.dp),
-            Modifier.align(Alignment.TopStart).padding(top = 76.dp, start = HanppieDesignTokens.RemoteEdgePadding).then(reserveVisionSpace("capture")), onAlbum = onAlbum) {
-            gamepadInput.stop()
-            keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
-            model.robotArm.stopControl(); model.stopFiring(); model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
-            (onPushToTalkStop ?: model::endPushToTalk)()
-        }
-        if (challenge.ownsRound) {
-            if (challenge.phase != ChallengePhase.RESULT) ChallengeHud(challenge,
-                Modifier.align(Alignment.TopCenter).padding(top = 76.dp).then(reserveVisionSpace("challenge")), model::stopChallenge)
-        }
-        else if (!armMode) VisionModeControls(vision, tracking, enabled && videoFrame != null && videoFresh && !zoom.busy && (zoom.hundredths == null || zoom.hundredths == 100),
-            Modifier.align(Alignment.TopCenter).padding(top = 76.dp).then(reserveVisionSpace("vision")),
-            onStart = { mode, color ->
-                aimInput.stop(); gamepadInput.stop()
+        val captureMaxHeight = (maxHeight - 180.dp).coerceAtLeast(80.dp)
+        Row(Modifier.align(Alignment.TopCenter).fillMaxWidth()
+            .padding(top = 76.dp, start = HanppieDesignTokens.RemoteEdgePadding, end = HanppieDesignTokens.RemoteEdgePadding),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+            OnboardCaptureControls(model.robotCamera, connected.connected, inputEnabled && foreground,
+                captureMaxHeight,
+                Modifier.widthIn(max = HanppieDesignTokens.RemoteTaskSideMaxWidth).then(reserveVisionSpace("capture")), onAlbum = onAlbum) {
+                gamepadInput.stop()
                 keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
-                model.startVision(mode, color); focus.requestFocus()
-            }, onStop = { model.stopVision(); focus.requestFocus() },
-            onStartTracking = {
-                aimInput.stop(); gamepadInput.stop()
-                keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
-                model.startObjectTracking(); focus.requestFocus()
-            }, onConfirmTracking = { model.confirmObjectTracking(); focus.requestFocus() },
-            onStopTracking = { model.stopObjectTracking(); focus.requestFocus() },
-            unavailableReason = if ((zoom.hundredths ?: 100) > 100) Res.string.camera_zoom_tracking_unavailable else null,
-            onChallenge = {
-                aimInput.stop(); gamepadInput.stop(); model.clearRemoteInputs()
-                challengeChoosing = true
-            })
+                model.robotArm.stopControl(); model.stopFiring(); model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
+                (onPushToTalkStop ?: model::endPushToTalk)()
+            }
+            Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
+                if (challenge.ownsRound) {
+                    if (challenge.phase != ChallengePhase.RESULT) ChallengeHud(challenge,
+                        Modifier.then(reserveVisionSpace("challenge")), model::stopChallenge)
+                }
+                else if (!armMode) VisionModeControls(vision, tracking, enabled && videoFrame != null && videoFresh && !zoom.busy && (zoom.hundredths == null || zoom.hundredths == 100),
+                    Modifier.then(reserveVisionSpace("vision")),
+                    onStart = { mode, color ->
+                        aimInput.stop(); gamepadInput.stop()
+                        keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+                        model.startVision(mode, color); focus.requestFocus()
+                    }, onStop = { model.stopVision(); focus.requestFocus() },
+                    onStartTracking = {
+                        aimInput.stop(); gamepadInput.stop()
+                        keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+                        model.startObjectTracking(); focus.requestFocus()
+                    }, onConfirmTracking = { model.confirmObjectTracking(); focus.requestFocus() },
+                    onStopTracking = { model.stopObjectTracking(); focus.requestFocus() },
+                    unavailableReason = if ((zoom.hundredths ?: 100) > 100) Res.string.camera_zoom_tracking_unavailable else null,
+                    onChallenge = {
+                        aimInput.stop(); gamepadInput.stop(); model.clearRemoteInputs()
+                        challengeChoosing = true
+                    })
+            }
+            if (manualActionsEnabled && !vision.ownsPipeline && !challenge.ownsRound) CameraZoomControls(zoom, enabled && videoFresh && !connected.busy,
+                Modifier,
+                model.cameraZoom::setZoom)
+        }
         ChallengeDialogs(challengeChoosing, challenge, enabled && videoFresh && !connected.busy, challengeSoundEnabled,
             { challengeSoundEnabled = it },
             (maxHeight - 144.dp).coerceAtLeast(128.dp), { challengeChoosing = false }, model::startChallenge, model::stopChallenge,
@@ -731,7 +741,7 @@ private fun SignalIndicator(quality: Int?) {
     var position by remember(enabled) { mutableStateOf(Offset.Zero) }
     val callback by rememberUpdatedState(update)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Canvas(Modifier.size(132.dp).semantics { contentDescription = tr(Res.string.value_joystick,semanticLabel); if (!enabled) disabled() }
+        Canvas(Modifier.size(HanppieDesignTokens.RemoteStick).semantics { contentDescription = tr(Res.string.value_joystick,semanticLabel); if (!enabled) disabled() }
             .pointerInput(enabled) {
                 if (enabled) awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed=false)
@@ -767,7 +777,10 @@ private fun SignalIndicator(quality: Int?) {
                 style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
         }
         Text(label, color = HanppieDesignTokens.RemoteHudContent, fontSize = 12.sp,
-            modifier = Modifier.padding(top = 6.dp))
+            modifier = Modifier.width(HanppieDesignTokens.RemoteStick).padding(top = 6.dp)
+                .background(HanppieDesignTokens.RemoteHudSurface.copy(alpha = .8f), RoundedCornerShape(4.dp))
+                .padding(horizontal = 4.dp, vertical = 2.dp).testTag("remote-stick-caption"),
+            textAlign = TextAlign.Center)
     }
 }
 

@@ -36,10 +36,10 @@ internal fun VisionModeControls(vision: VisionState, tracking: TrackingState, en
     var colorMode by remember { mutableStateOf<VisionMode?>(null) }
     LaunchedEffect(enabled, tracking.active, vision.phase) { if (!enabled || tracking.active || vision.phase != VisionPhase.OFF) choosing = false }
     if (vision.phase in listOf(VisionPhase.OFF, VisionPhase.CLOSED)) {
-        Column(modifier.widthIn(max = 360.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
             ObjectTrackingControls(tracking, enabled, Modifier, onStartTracking, onConfirmTracking, onStopTracking, unavailableReason) {
-                HudTextButton(tr(Res.string.vision_tools), enabled, "vision-tools") { choosing = !choosing; colorMode = null }
-                if (onChallenge != null) HudTextButton(tr(Res.string.challenge_entry), enabled, "challenge-open", action = onChallenge)
+                HudTextButton(tr(Res.string.vision_tools), enabled, "vision-tools", modifier = Modifier.weight(1f)) { choosing = !choosing; colorMode = null }
+                if (onChallenge != null) HudTextButton(tr(Res.string.challenge_entry), enabled, "challenge-open", modifier = Modifier.weight(1f), action = onChallenge)
             }
             if (choosing) Column(Modifier.background(HanppieDesignTokens.RemoteHudSurface.copy(alpha = HanppieDesignTokens.RemoteHudAlpha),
                 RoundedCornerShape(12.dp)).padding(horizontal = 8.dp, vertical = 4.dp).testTag("vision-picker"),

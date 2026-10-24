@@ -8,10 +8,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -36,6 +39,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextAlign
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.tracking.TrackingPhase
 import cn.elonzh.hanppie.robot.tracking.TrackingProblem
@@ -107,7 +111,7 @@ internal fun ObjectTrackingTargets(state: TrackingState, videoWidth: Int, videoH
 internal fun ObjectTrackingControls(state: TrackingState, enabled: Boolean, modifier: Modifier,
     onStart: () -> Unit, onConfirm: () -> Unit, onStop: () -> Unit,
     unavailableReason: org.jetbrains.compose.resources.StringResource? = null,
-    additionalActions: @Composable () -> Unit = {}) {
+    additionalActions: @Composable RowScope.() -> Unit = {}) {
     val phase = state.phase
     val status = when (phase) {
         TrackingPhase.OFF -> unavailableReason
@@ -128,7 +132,7 @@ internal fun ObjectTrackingControls(state: TrackingState, enabled: Boolean, modi
             else -> Res.string.tracking_timeout
         }
     }
-    Column(modifier.widthIn(max = 360.dp)
+    Column(modifier
         .background(HanppieDesignTokens.RemoteHudSurface.copy(alpha = HanppieDesignTokens.RemoteHudAlpha), RoundedCornerShape(12.dp))
         .padding(horizontal = 12.dp, vertical = 4.dp).testTag("tracking-controls"),
         horizontalAlignment = Alignment.CenterHorizontally) {
@@ -145,23 +149,25 @@ internal fun ObjectTrackingControls(state: TrackingState, enabled: Boolean, modi
             else -> null
         }
         detail?.let { Text(it, Modifier.testTag("tracking-report-detail"), color = HanppieDesignTokens.RemoteHudContent, fontSize = 12.sp) }
-        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)) {
-            if (!state.blocksManualControl) HudTextButton(tr(if (phase == TrackingPhase.ERROR) Res.string.tracking_retry else Res.string.object_tracking), enabled, "tracking-start", action = onStart)
+        Row(Modifier.width(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            if (!state.blocksManualControl) HudTextButton(tr(if (phase == TrackingPhase.ERROR) Res.string.tracking_retry else Res.string.object_tracking), enabled, "tracking-start", modifier = Modifier.weight(1f), action = onStart)
             if (!state.blocksManualControl) additionalActions()
-            if (phase == TrackingPhase.TARGET_READY) HudTextButton(tr(Res.string.tracking_start_follow), enabled, "tracking-confirm", action = onConfirm)
+            if (phase == TrackingPhase.TARGET_READY) HudTextButton(tr(Res.string.tracking_start_follow), enabled, "tracking-confirm", modifier = Modifier.weight(1f), action = onConfirm)
             if (state.blocksManualControl) HudTextButton(tr(Res.string.tracking_stop),
-                phase != TrackingPhase.STOPPING, "tracking-stop", action = onStop)
+                phase != TrackingPhase.STOPPING, "tracking-stop", modifier = Modifier.weight(1f), action = onStop)
         }
     }
 }
 
 @Composable
-internal fun HudTextButton(label: String, enabled: Boolean, tag: String, description: String = label, action: () -> Unit) {
-    Box(Modifier.heightIn(min = HanppieDesignTokens.TouchTarget).testTag(tag)
+internal fun HudTextButton(label: String, enabled: Boolean, tag: String, description: String = label,
+    modifier: Modifier = Modifier, action: () -> Unit) {
+    Box(modifier.heightIn(min = HanppieDesignTokens.TouchTarget).testTag(tag)
         .semantics { contentDescription = description }
         .clickable(enabled = enabled, role = Role.Button, onClick = action).padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center) {
         Text(label, color = if (enabled) HanppieDesignTokens.RemoteHudContent else HanppieDesignTokens.RemoteHudMuted,
-            fontSize = 14.sp)
+            fontSize = 14.sp, textAlign = TextAlign.Center)
     }
 }
