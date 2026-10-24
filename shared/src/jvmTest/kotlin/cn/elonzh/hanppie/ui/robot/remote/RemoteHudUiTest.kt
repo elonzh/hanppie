@@ -10,12 +10,16 @@ import androidx.compose.ui.unit.dp
 import cn.elonzh.hanppie.ui.app.ConsoleController
 import cn.elonzh.hanppie.ui.app.testConsoleModel
 import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme
+import cn.elonzh.hanppie.ui.i18n.Localization
 import kotlin.test.*
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
 class RemoteHudUiTest {
     @get:Rule val rule = createComposeRule()
+
+    @Before fun initializeLanguage() { Localization.initialize("zh", "zh") }
 
     @Test fun telemetryWidthIsStableAcrossSignalChanges() {
         val model = testConsoleModel()

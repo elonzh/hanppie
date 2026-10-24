@@ -74,6 +74,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -849,6 +850,7 @@ private fun SignalIndicator(quality: Int?) {
                 }
             }
             .semantics {
+                role = Role.Button
                 contentDescription = label; stateLabel?.let { stateDescription = it }; if (!enabled) disabled()
             }, backgroundColor = Color.Transparent) {
         if (artwork != null) Image(painterResource(artwork), null, Modifier.size(40.dp))

@@ -7,6 +7,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Density
@@ -88,6 +90,7 @@ class PushToTalkUiTest {
                 model.enableRemote(); waitUntil(timeoutMillis = 5_000) { model.remoteEnabled.value && !model.state.value.busy }
                 if (!supported) { onNodeWithTag("push-to-talk-button").assertDoesNotExist(); return@runDesktopComposeUiTest }
                 onNodeWithTag("push-to-talk-button").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                    .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
                 onNodeWithTag("push-to-talk-button").performTouchInput { down(center) }
                 phase(TalkPhase.PREPARING); capture("preparing")
                 onNodeWithTag("push-to-talk-button").performTouchInput { up() }
@@ -101,7 +104,9 @@ class PushToTalkUiTest {
                 onNodeWithTag("push-to-talk-button").performTouchInput { up() }
                 phase(TalkPhase.RECORDING)
                 onNodeWithTag("remote-surface").performKeyInput { keyUp(Key.T) }
-                phase(TalkPhase.SENDING); onNodeWithTag("push-to-talk-button").assertIsNotEnabled(); capture("sending")
+                phase(TalkPhase.SENDING); onNodeWithTag("push-to-talk-button").assertIsNotEnabled()
+                    .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+                    .assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnClick)); capture("sending")
                 release.complete(Unit); phase(TalkPhase.IDLE)
                 assertEquals(1, sent.size); assertContentEquals(byteArrayOf(1, 2, 3), sent.single())
                 runOnIdle { microphoneFixture.failure = IllegalStateException("synthetic EACCES " + "device/".repeat(180)) }
@@ -137,7 +142,9 @@ class PushToTalkUiTest {
                 runOnIdle { microphoneFixture.failure = null }
                 onNodeWithTag("push-to-talk-button").performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }; phase(TalkPhase.PREPARING)
                 runOnIdle { model.setForeground(false); microphoneFixture.announceReady() }
-                phase(TalkPhase.IDLE); onNodeWithTag("push-to-talk-button").assertIsNotEnabled(); capture("background")
+                phase(TalkPhase.IDLE); onNodeWithTag("push-to-talk-button").assertIsNotEnabled()
+                    .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+                    .assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnClick)); capture("background")
                 runOnIdle { model.setForeground(true) }
                 phase(TalkPhase.IDLE); assertEquals(3, sent.size)
             } finally { release.complete(Unit); model.close() }

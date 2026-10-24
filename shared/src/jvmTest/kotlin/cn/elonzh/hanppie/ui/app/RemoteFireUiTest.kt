@@ -3,7 +3,15 @@ package cn.elonzh.hanppie.ui.app
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -363,23 +371,41 @@ class RemoteFireUiTest {
     @Test
     fun hudIconButtonPressChangeTriggersOnDownAndUp() {
         val history = mutableListOf<Boolean>()
+        val enabled = mutableStateOf(true)
+        var clicks = 0
         rule.setContent {
             WorkbenchTheme {
                 cn.elonzh.hanppie.ui.robot.remote.HudIconButton(
                     label = "Test Fire",
                     symbol = WorkbenchGlyph.CROSSHAIR,
-                    enabled = true,
-                    onPressChange = { history.add(it) }
+                    enabled = enabled.value,
+                    onPressChange = { history.add(it) },
+                    action = { clicks++ },
                 )
             }
         }
         val button = rule.onNodeWithContentDescription("Test Fire")
+        button.assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button)).assertHasClickAction()
         button.performTouchInput {
             down(center)
             up()
         }
         rule.waitForIdle()
         assertEquals(listOf(true, false), history, "onPressChange must record press down and release")
+        assertEquals(1, clicks)
+        button.performTouchInput { down(center) }
+        rule.runOnIdle { enabled.value = false }
+        button.assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button)).assertIsNotEnabled()
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnClick))
+        assertEquals(listOf(true, false, true, false), history, "Disabling must release the old hold")
+        button.performTouchInput { up() }
+        assertEquals(1, clicks)
+        rule.runOnIdle { enabled.value = true }
+        rule.waitForIdle()
+        assertEquals(listOf(true, false, true, false), history, "Enabling must not resume input")
+        button.assertHasClickAction().performTouchInput { down(center); up() }
+        assertEquals(listOf(true, false, true, false, true, false), history)
+        assertEquals(2, clicks)
     }
 
     @Test
