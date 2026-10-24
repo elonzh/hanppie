@@ -9,30 +9,15 @@ import org.jetbrains.compose.resources.StringResource
 /** One catalog list for selection, preference validation and native resource loading. */
 internal enum class AppLanguage(val preference: String, val languageTag: String, val nativeName: String) {
     SIMPLIFIED_CHINESE("zh", "zh-CN", "简体中文"),
-    TRADITIONAL_CHINESE("zh-Hant", "zh-Hant-TW", "繁體中文"),
-    ENGLISH("en", "en-US", "English"),
-    JAPANESE("ja", "ja-JP", "日本語"),
-    GERMAN("de", "de-DE", "Deutsch"),
-    SPANISH("es", "es-ES", "Español"),
-    FRENCH("fr", "fr-FR", "Français"),
-    KOREAN("ko", "ko-KR", "한국어"),
-    RUSSIAN("ru", "ru-RU", "Русский");
+    ENGLISH("en", "en-US", "English");
 
     companion object {
         fun isPreference(value: String) = value == "system" || entries.any { it.preference == value }
 
         fun forSystem(languageTag: String): AppLanguage {
             require(languageTag.isNotBlank()) { "System language tag must not be blank" }
-            val parts = languageTag.replace('_', '-').lowercase().split('-')
-            val locale = Locale(languageTag.replace('_', '-'))
-            val language = locale.language.lowercase()
-            if (language != "zh") return entries.firstOrNull { it.preference == language } ?: ENGLISH
-            return when {
-                parts.getOrNull(1) == "hant" -> TRADITIONAL_CHINESE
-                parts.getOrNull(1) == "hans" -> SIMPLIFIED_CHINESE
-                locale.region.lowercase() in listOf("tw", "hk", "mo") -> TRADITIONAL_CHINESE
-                else -> SIMPLIFIED_CHINESE
-            }
+            return if (Locale(languageTag.replace('_', '-')).language.equals("zh", ignoreCase = true))
+                SIMPLIFIED_CHINESE else ENGLISH
         }
     }
 }

@@ -1,6 +1,8 @@
 package cn.elonzh.hanppie.ui.settings
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.ui.app.testConsoleModel
 import cn.elonzh.hanppie.ui.robot.remote.RemoteLedState
@@ -77,7 +79,8 @@ class SettingsStoreTest {
         val directory = java.nio.file.Files.createTempDirectory("hanppie-settings-")
         val file = directory.resolve("settings.preferences_pb").toFile()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val store = DataStoreSettingsStore(PreferenceDataStoreFactory.create(scope = scope, produceFile = { file }))
+        val dataStore = PreferenceDataStoreFactory.create(scope = scope, produceFile = { file })
+        val store = DataStoreSettingsStore(dataStore)
         try {
             val expected = SavedSettings(ModelSettings(endpoint = "https://example.test/v1", model = "test", apiKey = "secret-value"))
             store.save(expected)
@@ -95,22 +98,18 @@ class SettingsStoreTest {
 
             assertEquals(expected, store.load())
             assertEquals(UiPreferences("en", AppearanceSettings(NightMode.DARK), "test.service/.Recognizer", SavedWindowPosition(-320f, 72f)), store.loadUi())
-            store.saveLanguage("zh-Hant")
-            assertEquals("zh-Hant", store.loadUi().language)
-            store.saveLanguage("ja")
-            assertEquals("ja", store.loadUi().language)
-            store.saveLanguage("de")
-            assertEquals("de", store.loadUi().language)
-            store.saveLanguage("es")
-            assertEquals("es", store.loadUi().language)
-            store.saveLanguage("fr")
-            assertEquals("fr", store.loadUi().language)
-            store.saveLanguage("ko")
-            assertEquals("ko", store.loadUi().language)
-            store.saveLanguage("ru")
-            assertEquals("ru", store.loadUi().language)
-            assertFailsWith<IllegalArgumentException> { store.saveLanguage("zh-Hans") }
-            assertEquals("ru", store.loadUi().language)
+            for (language in listOf("zh", "en", "system")) {
+                store.saveLanguage(language)
+                assertEquals(language, store.loadUi().language)
+            }
+            for (language in listOf("zh-Hant", "ja", "de", "es", "fr", "ko", "ru", "invalid")) {
+                assertFailsWith<IllegalArgumentException> { store.saveLanguage(language) }
+                assertEquals("system", store.loadUi().language)
+                // Exercise preferences written by the removed catalogs, not a second settings store.
+                dataStore.edit { it[stringPreferencesKey("language")] = language }
+                assertEquals(UiPreferences("system", AppearanceSettings(NightMode.DARK), "test.service/.Recognizer", SavedWindowPosition(-320f, 72f)), store.loadUi())
+            }
+            assertEquals(expected, store.load())
             assertEquals(connection.copy(appId = "abcdef12", robots = listOf(connection.robots.single().copy(appId = "abcdef12"))), store.loadConnection())
             assertTrue(file.readBytes().toString(Charsets.ISO_8859_1).contains("secret-value"))
 

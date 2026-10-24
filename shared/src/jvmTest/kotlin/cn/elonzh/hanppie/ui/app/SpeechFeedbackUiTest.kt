@@ -27,7 +27,7 @@ class SpeechFeedbackUiTest {
     @Test fun compact() = scenario(844, 390, 1f, false)
     @Test fun tabletDark() = scenario(1024, 768, 1f, true)
     @Test fun desktop() = scenario(1280, 720, 1f, false)
-    @Test fun largeNineLanguages() = scenario(844, 390, 1.4f, true)
+    @Test fun largeSupportedLanguages() = scenario(844, 390, 1.4f, true)
 
     private class Capture : SpeechCapture {
         val listeners = mutableListOf<SpeechCaptureListener>()

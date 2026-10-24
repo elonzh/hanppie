@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -180,7 +181,7 @@ internal class DataStoreSettingsStore(
     override suspend fun loadUi(): UiPreferences {
         val preferences = dataStore.data.first()
         return UiPreferences(
-            language = preferences[Keys.language] ?: "system",
+            language = preferences[Keys.language]?.takeIf(AppLanguage::isPreference) ?: "system",
             appearance = AppearanceSettings.decode(preferences[Keys.appearance]),
             speechService = preferences[Keys.speechService],
             windowPosition = preferences[Keys.windowPosition]?.let { settingsJson.decodeFromString<SavedWindowPosition>(it) },
@@ -188,7 +189,7 @@ internal class DataStoreSettingsStore(
     }
 
     override suspend fun saveLanguage(language: String) {
-        require(cn.elonzh.hanppie.ui.i18n.AppLanguage.isPreference(language))
+        require(AppLanguage.isPreference(language))
         dataStore.edit { it[Keys.language] = language }
     }
 

@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.scripts
 
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
 import cn.elonzh.hanppie.agent.tools.ListLabScriptsTool
 import cn.elonzh.hanppie.agent.tools.NoToolArgs
 import cn.elonzh.hanppie.resources.*
@@ -271,7 +272,7 @@ class ScriptLibraryTest {
         assertEquals(Res.string.script_library_name_in_use, duplicate.resource)
         assertEquals(listOf("kept"), duplicate.arguments)
         try {
-            for (language in listOf("zh", "zh-Hant", "en", "ja", "de", "es", "fr", "ko", "ru")) {
+            for (language in AppLanguage.entries.map { it.preference }) {
                 Localization.initialize(language,language)
                 assertEquals(tr(Res.string.script_library_name_in_use,"kept"),duplicate.resolve())
                 assertEquals(duplicate,library.state.value.error)

@@ -16,6 +16,10 @@ import cn.elonzh.hanppie.robot.telemetry.*
 import cn.elonzh.hanppie.ui.app.*
 import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
+import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.ui.settings.*
 import cn.elonzh.hanppie.ui.scripts.EditorDocument
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.io.Buffer
@@ -196,17 +200,17 @@ private fun serviceConfigurationReady(model: ConsoleModel) = model.robotFirmware
 @OptIn(ExperimentalTestApi::class)
 class RobotFirmwareLayoutTest {
     @Test fun compactLandscape() = layout(844, 390)
-    @Test fun tabletLandscape() = layout(1024, 600)
+    @Test fun tabletLandscape() = layout(1024, 600, dark = true)
     @Test fun desktopLandscape() = layout(1280, 720)
-    @Test fun englishLargeText() = layout(844, 390, "en", 1.4f)
-    private fun layout(width: Int, height: Int, language: String = "zh", scale: Float = 1f) = runDesktopComposeUiTest(width = width, height = height) {
+    @Test fun largeSupportedLanguages() { AppLanguage.entries.forEach { layout(844, 390, it.preference, 1.4f) } }
+    private fun layout(width: Int, height: Int, language: String = "zh", scale: Float = 1f, dark: Boolean = false) = runDesktopComposeUiTest(width = width, height = height) {
         Localization.initialize(language, null)
         val service = FirmwareServiceFixture(); val fresh = FirmwareServiceFixture()
         val model = testConsoleModel(robotRuntime = AddressingRuntime(listOf(firmwareSession(service), firmwareSession(fresh))))
-        val prefix = "firmware-$width-$height-$language"
+        val prefix = "firmware-$width-$height-$language-$scale-${if (dark) "dark" else "light"}"
         File("build/reports/ui").listFiles()?.filter { it.name.startsWith(prefix) }?.forEach { it.delete() }
         try {
-            setContent { TestWorkbenchTheme { CompositionLocalProvider(LocalDensity provides Density(1f, scale)) {
+            setContent { TestWorkbenchTheme(AppearanceController(AppearanceSettings(if (dark) NightMode.DARK else NightMode.LIGHT))) { CompositionLocalProvider(LocalDensity provides Density(1f, scale)) {
                 Box(Modifier.fillMaxSize().padding(16.dp).testTag("firmware-layout")) {
                     RobotFirmwarePage(model, onBack = {}, onSelectFile = { chooseFirmware(model) })
                 }
@@ -231,7 +235,7 @@ class RobotFirmwareLayoutTest {
             onNodeWithTag("firmware-module-241b-hw02").performScrollTo().assertIsDisplayed()
             saveFirmware("$prefix-package", onNodeWithTag("firmware-layout"))
             assertEquals(header, onNodeWithTag("firmware-header").fetchSemanticsNode().boundsInRoot)
-            onNodeWithTag("firmware-install").performClick(); onNodeWithTag("firmware-confirm").assertIsDisplayed()
+            onNodeWithTag("firmware-install").performClick(); onNodeWithTag("firmware-confirm").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
             saveFirmware("$prefix-install", onNode(isRoot() and hasAnyDescendant(hasTestTag("firmware-confirm"))))
             onNodeWithTag("firmware-confirm-cancel").performClick()
             waitUntil(timeoutMillis = 3000) { onAllNodesWithTag("firmware-confirm").fetchSemanticsNodes().isEmpty() }
@@ -241,7 +245,7 @@ class RobotFirmwareLayoutTest {
             waitUntil(timeoutMillis = 3000) { onAllNodesWithTag("firmware-upload-progress").fetchSemanticsNodes().isNotEmpty() }
             onNodeWithTag("firmware-upload-progress").performScrollTo().assertIsDisplayed()
             saveFirmware("$prefix-transfer", onNodeWithTag("firmware-layout"))
-            onNodeWithTag("firmware-interrupt").performClick(); onNodeWithTag("firmware-confirm").assertIsDisplayed()
+            onNodeWithTag("firmware-interrupt").performClick(); onNodeWithTag("firmware-confirm").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
             saveFirmware("$prefix-interrupt", onNode(isRoot() and hasAnyDescendant(hasTestTag("firmware-confirm"))))
             onNodeWithTag("firmware-confirm-cancel").performClick()
             waitUntil(timeoutMillis = 3000) { onAllNodesWithTag("firmware-confirm").fetchSemanticsNodes().isEmpty() }
@@ -259,12 +263,12 @@ class RobotFirmwareLayoutTest {
             onNodeWithTag("firmware-reconnect").performScrollTo().assertIsDisplayed()
             saveFirmware("$prefix-disconnected", onNodeWithTag("firmware-layout"))
             onNodeWithTag("firmware-reconnect").performClick(); waitUntil(timeoutMillis = 5000) { model.state.value.connected && firmwareIdle(model) }
-            onNodeWithTag("firmware-observe").performScrollTo().performClick(); onNodeWithTag("firmware-confirm").assertIsDisplayed()
+            onNodeWithTag("firmware-observe").performScrollTo().performClick(); onNodeWithTag("firmware-confirm").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
             saveFirmware("$prefix-observe", onNode(isRoot() and hasAnyDescendant(hasTestTag("firmware-confirm"))))
             onNodeWithTag("firmware-confirm").performClick()
             waitUntil(timeoutMillis = 3000) { fresh.state.value.observingInterrupted && firmwareIdle(model) && onAllNodesWithTag("firmware-confirm").fetchSemanticsNodes().isEmpty() }
             model.robotFirmware.refresh(); waitUntil(timeoutMillis = 3000) { serviceConfigurationReady(model) }
-            onNodeWithTag("firmware-restarted").performScrollTo().performClick(); onNodeWithTag("firmware-confirm").assertIsDisplayed()
+            onNodeWithTag("firmware-restarted").performScrollTo().performClick(); onNodeWithTag("firmware-confirm").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
             saveFirmware("$prefix-restarted", onNode(isRoot() and hasAnyDescendant(hasTestTag("firmware-confirm"))))
             onNodeWithTag("firmware-confirm-cancel").performClick()
             waitUntil(timeoutMillis = 3000) { onAllNodesWithTag("firmware-confirm").fetchSemanticsNodes().isEmpty() }
@@ -273,7 +277,7 @@ class RobotFirmwareLayoutTest {
             onNodeWithTag("firmware-problem").performScrollTo().assertIsDisplayed()
             saveFirmware("$prefix-stale", onNodeWithTag("firmware-layout"))
             assertTrue(onNodeWithTag("firmware-back").fetchSemanticsNode().boundsInRoot.height >= 48)
-        } finally { model.close() }
+        } finally { model.close(); Localization.initialize("zh", null) }
     }
 }
 

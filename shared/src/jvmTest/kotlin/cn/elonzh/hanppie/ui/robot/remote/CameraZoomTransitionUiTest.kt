@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.robot.remote
 
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
@@ -34,7 +35,7 @@ class CameraZoomTransitionUiTest {
     @Test fun compact() = scenario(844, 390, 1f, false)
     @Test fun tabletDark() = scenario(1024, 768, 1f, true)
     @Test fun desktop() = scenario(1280, 720, 1f, false)
-    @Test fun largeNineLanguages() = scenario(844, 390, 1.4f, true, allLanguages = true)
+    @Test fun largeSupportedLanguages() = scenario(844, 390, 1.4f, true, allLanguages = true)
 
     private class InputLifecycle : LifecycleOwner {
         override val lifecycle = LifecycleRegistry(this).apply { handleLifecycleEvent(Lifecycle.Event.ON_RESUME) }
@@ -104,7 +105,7 @@ class CameraZoomTransitionUiTest {
                 waitUntil(timeoutMillis = 5_000) { model.cameraZoom.state.value.busy && model.cameraZoom.state.value.hundredths == 200 }
                 onNodeWithTag("camera-zoom").assertIsNotEnabled(); onNodeWithTag("tracking-start").assertIsNotEnabled()
                 capture("transition"); fits()
-                if (allLanguages) for (language in listOf("zh", "zh-Hant", "en", "ja", "de", "es", "fr", "ko", "ru")) {
+                if (allLanguages) for (language in AppLanguage.entries.map { it.preference }) {
                     runOnIdle { Localization.initialize(language, language) }; fits(); capture("transition-$language")
                 }
                 finish.complete(Unit); ready(); assertEquals(400, model.cameraZoom.state.value.hundredths)
@@ -114,7 +115,7 @@ class CameraZoomTransitionUiTest {
                 fits(); capture("partial-error")
                 onNodeWithContentDescription(tr(Res.string.camera_zoom_error_details)).assertIsDisplayed().assertHeightIsAtLeast(48.dp).performClick()
                 onNodeWithTag("camera-zoom-error").assertIsDisplayed(); capture("error-details")
-                if (allLanguages) for (language in listOf("zh", "zh-Hant", "en", "ja", "de", "es", "fr", "ko", "ru")) {
+                if (allLanguages) for (language in AppLanguage.entries.map { it.preference }) {
                     runOnIdle { Localization.initialize(language, language) }
                     onNodeWithTag("camera-zoom-error").assertTextEquals(checkNotNull(model.cameraZoom.state.value.error).resolve())
                     onNodeWithTag("camera-zoom-error-close").assertIsDisplayed().assertHeightIsAtLeast(48.dp)

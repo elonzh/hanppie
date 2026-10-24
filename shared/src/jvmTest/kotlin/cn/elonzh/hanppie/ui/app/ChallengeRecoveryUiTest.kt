@@ -29,13 +29,13 @@ class ChallengeRecoveryUiTest {
     @Test fun compactLandscape() = recovery(844, 390)
     @Test fun tabletDark() = recovery(1024, 600, dark = true)
     @Test fun desktopLandscape() = recovery(1280, 720)
-    @Test fun largeNineLanguages() = recovery(844, 390, scale = 1.4f, nineLanguages = true)
+    @Test fun largeSupportedLanguages() = recovery(844, 390, scale = 1.4f)
 
     private class InputLifecycle : LifecycleOwner {
         override val lifecycle = LifecycleRegistry(this).apply { handleLifecycleEvent(Lifecycle.Event.ON_RESUME) }
     }
 
-    private fun recovery(width: Int, height: Int, scale: Float = 1f, dark: Boolean = false, nineLanguages: Boolean = false) =
+    private fun recovery(width: Int, height: Int, scale: Float = 1f, dark: Boolean = false) =
         runDesktopComposeUiTest(width = width, height = height) {
             Localization.initialize("en", "en")
             val robot = RobotSessionFixture()
@@ -52,7 +52,7 @@ class ChallengeRecoveryUiTest {
             val model = testConsoleModel(robotRuntime = powerRuntime(listOf(robot)))
             val video = displayFixtureVideo()
             val appearance = AppearanceController(AppearanceSettings(if (dark) NightMode.DARK else NightMode.LIGHT))
-            val languages = if (nineLanguages) AppLanguage.entries else listOf(AppLanguage.ENGLISH, AppLanguage.GERMAN)
+            val languages = AppLanguage.entries
             fun capture(name: String) {
                 val tag = if (onAllNodesWithTag("challenge-result").fetchSemanticsNodes().isNotEmpty()) "challenge-result" else "challenge-setup"
                 val bitmap = onNode(isRoot() and hasAnyDescendant(hasTestTag(tag))).captureToImage()

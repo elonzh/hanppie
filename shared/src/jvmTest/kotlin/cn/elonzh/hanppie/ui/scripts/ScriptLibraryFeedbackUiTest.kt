@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.scripts
 
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
@@ -76,7 +77,7 @@ class ScriptLibraryFeedbackUiTest {
                 onNodeWithTag("script-editor").performTextReplacement("print('draft')")
                 waitUntil(timeoutMillis=5000) { document.value.source == "print('draft')" }
                 val feedback=checkNotNull(model.scriptLibrary.state.value.error)
-                for(language in listOf("zh","zh-Hant","en","ja","de","es","fr","ko","ru")) {
+                for(language in AppLanguage.entries.map { it.preference }) {
                     runOnIdle { Localization.select(language) }
                     capture("load-$language");inspectError();onNodeWithTag("script-save").assertIsNotEnabled()
                     assertEquals(feedback,model.scriptLibrary.state.value.error)

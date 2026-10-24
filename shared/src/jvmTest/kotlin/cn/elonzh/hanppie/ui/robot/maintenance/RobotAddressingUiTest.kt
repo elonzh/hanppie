@@ -15,6 +15,10 @@ import cn.elonzh.hanppie.robot.telemetry.RobotHealth
 import cn.elonzh.hanppie.ui.app.*
 import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
+import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.ui.settings.*
 import cn.elonzh.hanppie.ui.scripts.EditorDocument
 import org.junit.Test
 import java.awt.image.BufferedImage
@@ -224,26 +228,26 @@ class RobotAddressingUiTest {
 @OptIn(ExperimentalTestApi::class)
 class RobotAddressingLayoutTest {
     @Test fun compactLandscape() = layout(844, 390)
-    @Test fun tabletLandscape() = layout(1024, 600)
+    @Test fun tabletLandscape() = layout(1024, 600, dark = true)
     @Test fun desktopLandscape() = layout(1280, 720)
-    @Test fun englishLargeText() = layout(844, 390, "en", 1.4f)
-    private fun layout(width: Int, height: Int, language: String = "zh", scale: Float = 1f) =
+    @Test fun largeSupportedLanguages() { AppLanguage.entries.forEach { layout(844, 390, it.preference, 1.4f) } }
+    private fun layout(width: Int, height: Int, language: String = "zh", scale: Float = 1f, dark: Boolean = false) =
         runDesktopComposeUiTest(width = width, height = height) {
             Localization.initialize(language, null)
             val service = AddressingServiceFixture(); val model = addressingModel(service)
-            val prefix = "addressing-$width-$height-$language"
+            val prefix = "addressing-$width-$height-$language-$scale-${if (dark) "dark" else "light"}"
             try {
-                setContent { TestWorkbenchTheme { CompositionLocalProvider(LocalDensity provides Density(1f, scale)) {
+                setContent { TestWorkbenchTheme(AppearanceController(AppearanceSettings(if (dark) NightMode.DARK else NightMode.LIGHT))) { CompositionLocalProvider(LocalDensity provides Density(1f, scale)) {
                     Box(Modifier.fillMaxSize().padding(16.dp).testTag("addressing-layout")) { RobotAddressingPage(model, onBack = {}) }
                 } } }
                 model.connect("127.0.0.1", "12345678")
                 waitUntil(timeoutMillis = 5000) { model.state.value.connected && !model.state.value.busy }
-                onNodeWithTag("addressing-kind-wheels").performClick()
+                onNodeWithTag("addressing-kind-wheels").performScrollTo().performClick()
                 onNodeWithTag("addressing-start").performScrollTo().assertIsDisplayed()
                 val headerBounds = onNodeWithTag("addressing-header").fetchSemanticsNode().boundsInRoot
                 saveAddressing("$prefix-prepare", onNodeWithTag("addressing-layout"))
                 onNodeWithTag("addressing-start").performClick()
-                onNodeWithTag("addressing-confirm").assertIsDisplayed()
+                onNodeWithTag("addressing-confirm").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
                 saveAddressing("$prefix-start", onNode(isRoot() and hasAnyDescendant(hasTestTag("addressing-confirm"))))
                 onNodeWithTag("addressing-confirm-cancel").performClick()
                 waitUntil(timeoutMillis = 3000) { onAllNodesWithTag("addressing-confirm").fetchSemanticsNodes().isEmpty() }
@@ -261,7 +265,7 @@ class RobotAddressingLayoutTest {
                 onNodeWithTag("addressing-assign").performScrollTo().assertIsDisplayed()
                 onNodeWithTag("addressing-header").assertIsDisplayed()
                 assertEquals(headerBounds, onNodeWithTag("addressing-header").fetchSemanticsNode().boundsInRoot)
-                onNodeWithText(if (language == "en") "Component addressing" else "部件编址").assertIsDisplayed()
+                onNodeWithText(tr(Res.string.addressing_title)).assertIsDisplayed()
                 saveAddressing("$prefix-servo", onNodeWithTag("addressing-layout"))
                 runOnIdle { service.state.value = RobotAddressingState(ModuleAddressingKind.SENSOR_ADAPTER, AddressingPhase.VERIFYING,
                     inventoryKnown = true, onlineIds = setOf(6)) }
@@ -270,13 +274,13 @@ class RobotAddressingLayoutTest {
                 onNodeWithTag("addressing-adapter-led-4").performScrollTo().assertIsDisplayed()
                 onNodeWithTag("addressing-header").assertIsDisplayed()
                 assertEquals(headerBounds, onNodeWithTag("addressing-header").fetchSemanticsNode().boundsInRoot)
-                onNodeWithText(if (language == "en") "Component addressing" else "部件编址").assertIsDisplayed()
+                onNodeWithText(tr(Res.string.addressing_title)).assertIsDisplayed()
                 saveAddressing("$prefix-adapter", onNodeWithTag("addressing-layout"))
                 onNodeWithTag("addressing-adapter-confirm").performScrollTo().assertIsDisplayed()
                 runOnIdle { service.state.value = RobotAddressingState(ModuleAddressingKind.WHEELS, AddressingPhase.UNCERTAIN, problem = AddressingProblem.RESULT_UNKNOWN) }
                 waitUntil(timeoutMillis = 3000) { onAllNodesWithTag("addressing-problem").fetchSemanticsNodes().isNotEmpty() }
                 onNodeWithTag("addressing-problem").performScrollTo().assertIsDisplayed()
-                onNodeWithTag("addressing-end").performClick(); onNodeWithTag("addressing-confirm").assertIsDisplayed()
+                onNodeWithTag("addressing-end").performClick(); onNodeWithTag("addressing-confirm").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
                 saveAddressing("$prefix-end", onNode(isRoot() and hasAnyDescendant(hasTestTag("addressing-confirm"))))
                 onNodeWithTag("addressing-confirm-cancel").performClick()
                 waitUntil(timeoutMillis = 3000) { onAllNodesWithTag("addressing-confirm").fetchSemanticsNodes().isEmpty() }

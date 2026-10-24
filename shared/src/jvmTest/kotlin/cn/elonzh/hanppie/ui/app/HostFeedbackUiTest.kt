@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.app
 
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -33,7 +34,7 @@ class HostFeedbackUiTest {
     @Test fun compact() = scenario(844, 390, 1f, false)
     @Test fun tabletDark() = scenario(1024, 768, 1f, true)
     @Test fun desktop() = scenario(1280, 720, 1f, false)
-    @Test fun largeNineLanguages() = scenario(844, 390, 1.4f, true, allLanguages = true)
+    @Test fun largeSupportedLanguages() = scenario(844, 390, 1.4f, true, allLanguages = true)
 
     private fun scenario(width: Int, height: Int, scale: Float, dark: Boolean, allLanguages: Boolean = false) =
         runDesktopComposeUiTest(width = width, height = height) {
@@ -95,7 +96,7 @@ class HostFeedbackUiTest {
                 runOnIdle { Localization.select("en") }
                 waitUntil(timeoutMillis = 5_000) { holder.hostError?.resource == Res.string.host_preferences_save_failed_value }
                 feedback(); capture("settings-save-error")
-                if (allLanguages) for (language in listOf("zh", "zh-Hant", "en", "ja", "de", "es", "fr", "ko", "ru")) {
+                if (allLanguages) for (language in AppLanguage.entries.map { it.preference }) {
                     runOnIdle { Localization.select(language) }; feedback(); capture("preferences-$language")
                 }
                 runOnIdle { failSave.set(false); Localization.select("en") }
@@ -118,7 +119,7 @@ class HostFeedbackUiTest {
                 onNodeWithTag("host-feedback-message").performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 100f) }
                 capture("script-file-scrolled")
                 onNodeWithTag("host-feedback-message").performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, -10_000f) }
-                if (allLanguages) for (language in listOf("zh", "zh-Hant", "en", "ja", "de", "es", "fr", "ko", "ru")) {
+                if (allLanguages) for (language in AppLanguage.entries.map { it.preference }) {
                     runOnIdle { Localization.select(language) }; feedback(); onNodeWithTag("script-editor").assertIsDisplayed()
                     assertEquals(Res.string.host_file_failed_value, holder.hostError?.resource)
                     capture("file-$language")

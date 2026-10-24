@@ -17,6 +17,10 @@ import cn.elonzh.hanppie.robot.telemetry.RobotHealth
 import cn.elonzh.hanppie.ui.app.*
 import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
+import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.ui.settings.*
 import cn.elonzh.hanppie.ui.scripts.EditorDocument
 import org.junit.Test
 import java.awt.image.BufferedImage
@@ -200,27 +204,27 @@ private fun serviceIdle(model: ConsoleModel): Boolean = !model.state.value.busy 
 @OptIn(ExperimentalTestApi::class)
 class RobotCalibrationLayoutTest {
     @Test fun compactLandscape() = layout(844, 390)
-    @Test fun tabletLandscape() = layout(1024, 600)
+    @Test fun tabletLandscape() = layout(1024, 600, dark = true)
     @Test fun desktopLandscape() = layout(1280, 720)
-    @Test fun englishLargeText() = layout(844, 390, "en", 1.4f)
-    private fun layout(width: Int, height: Int, language: String = "zh", scale: Float = 1f) =
+    @Test fun largeSupportedLanguages() { AppLanguage.entries.forEach { layout(844, 390, it.preference, 1.4f) } }
+    private fun layout(width: Int, height: Int, language: String = "zh", scale: Float = 1f, dark: Boolean = false) =
         runDesktopComposeUiTest(width = width, height = height) {
             Localization.initialize(language, null)
             val service = CalibrationServiceFixture(); val fresh = CalibrationServiceFixture()
             val model = testConsoleModel(robotRuntime = AddressingRuntime(listOf(calibrationSession(service), calibrationSession(fresh))))
-            val prefix = "calibration-$width-$height-$language"
+            val prefix = "calibration-$width-$height-$language-$scale-${if (dark) "dark" else "light"}"
             try {
-                setContent { TestWorkbenchTheme { CompositionLocalProvider(LocalDensity provides Density(1f, scale)) {
+                setContent { TestWorkbenchTheme(AppearanceController(AppearanceSettings(if (dark) NightMode.DARK else NightMode.LIGHT))) { CompositionLocalProvider(LocalDensity provides Density(1f, scale)) {
                     Box(Modifier.fillMaxSize().padding(16.dp).testTag("calibration-layout")) { RobotCalibrationPage(model, onBack = {}) }
                 } } }
                 model.connect("127.0.0.1", "12345678")
                 waitUntil(timeoutMillis = 5000) { model.state.value.connected && !model.state.value.busy }
-                onNodeWithTag("calibration-kind-chassis_and_gimbal").performClick()
+                onNodeWithTag("calibration-kind-chassis_and_gimbal").performScrollTo().performClick()
                 onNodeWithTag("calibration-start").performScrollTo().assertIsDisplayed()
                 val header = onNodeWithTag("calibration-header").fetchSemanticsNode().boundsInRoot
                 saveCalibration("$prefix-prepare", onNodeWithTag("calibration-layout"))
                 onNodeWithTag("calibration-start").performClick()
-                onNodeWithTag("calibration-confirm").assertIsDisplayed()
+                onNodeWithTag("calibration-confirm").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
                 saveCalibration("$prefix-start", onNode(isRoot() and hasAnyDescendant(hasTestTag("calibration-confirm"))))
                 onNodeWithTag("calibration-confirm-cancel").performClick()
                 waitUntil(timeoutMillis = 3000) { onAllNodesWithTag("calibration-confirm").fetchSemanticsNodes().isEmpty() }
@@ -229,7 +233,7 @@ class RobotCalibrationLayoutTest {
                 waitUntil(timeoutMillis = 3000) { onAllNodesWithTag("calibration-current-pose").fetchSemanticsNodes().isNotEmpty() }
                 onNodeWithTag("calibration-current-pose").performScrollTo().assertIsDisplayed()
                 saveCalibration("$prefix-poses", onNodeWithTag("calibration-layout"))
-                onNodeWithTag("calibration-stop").performClick(); onNodeWithTag("calibration-confirm").assertIsDisplayed()
+                onNodeWithTag("calibration-stop").performClick(); onNodeWithTag("calibration-confirm").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
                 saveCalibration("$prefix-stop", onNode(isRoot() and hasAnyDescendant(hasTestTag("calibration-confirm"))))
                 onNodeWithTag("calibration-confirm-cancel").performClick()
                 waitUntil(timeoutMillis = 3000) { onAllNodesWithTag("calibration-confirm").fetchSemanticsNodes().isEmpty() }
@@ -249,7 +253,7 @@ class RobotCalibrationLayoutTest {
                 onNodeWithTag("calibration-restarted").assertDoesNotExist()
                 onNodeWithTag("calibration-restart-help").performScrollTo().assertIsDisplayed()
                 onNodeWithTag("calibration-restart-help").assertTextContains(
-                    if (language == "zh") "观测上次任务" else "Observe the previous task", substring = true)
+                    tr(Res.string.calibration_restart_help), substring = true)
                 saveCalibration("$prefix-timeout-recovery", onNodeWithTag("calibration-layout"))
                 runOnIdle { service.state.value = RobotCalibrationState() }
                 waitUntil(timeoutMillis = 3000) { onAllNodesWithTag("calibration-choose-another").fetchSemanticsNodes().isNotEmpty() }
@@ -258,7 +262,7 @@ class RobotCalibrationLayoutTest {
                 onNodeWithTag("calibration-start").performScrollTo().assertIsDisplayed()
                 saveCalibration("$prefix-arm", onNodeWithTag("calibration-layout"))
                 onNodeWithTag("calibration-start").performClick()
-                onNodeWithTag("calibration-confirm").assertIsDisplayed()
+                onNodeWithTag("calibration-confirm").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
                 saveCalibration("$prefix-arm-confirm", onNode(isRoot() and hasAnyDescendant(hasTestTag("calibration-confirm"))))
                 onNodeWithTag("calibration-confirm-cancel").performClick()
                 waitUntil(timeoutMillis = 3000) { onAllNodesWithTag("calibration-confirm").fetchSemanticsNodes().isEmpty() }
@@ -272,7 +276,7 @@ class RobotCalibrationLayoutTest {
                 waitUntil(timeoutMillis = 5000) { model.state.value.connected && serviceIdle(model) }
                 onNodeWithTag("calibration-observe").performScrollTo().performClick(); onNodeWithTag("calibration-confirm").performClick()
                 waitUntil(timeoutMillis = 3000) { serviceIdle(model) && onAllNodesWithTag("calibration-confirm").fetchSemanticsNodes().isEmpty() }
-                onNodeWithTag("calibration-restarted").performScrollTo().performClick(); onNodeWithTag("calibration-confirm").assertIsDisplayed()
+                onNodeWithTag("calibration-restarted").performScrollTo().performClick(); onNodeWithTag("calibration-confirm").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
                 saveCalibration("$prefix-restart", onNode(isRoot() and hasAnyDescendant(hasTestTag("calibration-confirm"))))
                 onNodeWithTag("calibration-confirm-cancel").performClick()
                 waitUntil(timeoutMillis = 3000) { onAllNodesWithTag("calibration-confirm").fetchSemanticsNodes().isEmpty() }

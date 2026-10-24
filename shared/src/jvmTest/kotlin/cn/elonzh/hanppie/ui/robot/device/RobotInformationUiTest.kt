@@ -83,7 +83,7 @@ class RobotInformationLayoutTest {
     @Test fun compactLandscape() = layout(844, 390)
     @Test fun tabletLandscape() = layout(1024, 600, dark = true)
     @Test fun desktopLandscape() = layout(1280, 720)
-    @Test fun nineLanguagesLargeText() = layout(844, 390, "en", 1.4f, dark = true)
+    @Test fun supportedLanguagesLargeText() = layout(844, 390, "en", 1.4f, dark = true)
     private fun layout(width: Int, height: Int, language: String = "zh", scale: Float = 1f, dark: Boolean = false) =
         runDesktopComposeUiTest(width = width, height = height) {
             Localization.initialize(language, null)

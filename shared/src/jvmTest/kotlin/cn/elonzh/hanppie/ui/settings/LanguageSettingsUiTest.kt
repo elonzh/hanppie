@@ -6,8 +6,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -24,59 +22,27 @@ import kotlin.test.*
 /** Actual settings page and preference callback; no network, hardware or native audio. */
 @OptIn(ExperimentalTestApi::class)
 class LanguageSettingsUiTest {
-    @Test fun compactLandscape() = scenario(844, 390, 1f, false)
-    @Test fun mediumDarkLandscape() = scenario(1024, 768, 1f, true)
-    @Test fun desktopLandscape() = scenario(1280, 720, 1f, false)
-    @Test fun largeTraditionalLandscape() = scenario(844, 390, 1.4f, true)
+    @Test fun chineseCompactLandscape() = scenario(844, 390, 1f, false, "zh")
+    @Test fun chineseMediumDarkLandscape() = scenario(1024, 768, 1f, true, "zh")
+    @Test fun chineseDesktopLandscape() = scenario(1280, 720, 1f, false, "zh")
+    @Test fun chineseLargeLandscape() = scenario(844, 390, 1.4f, true, "zh")
+    @Test fun englishCompactLandscape() = scenario(844, 390, 1f, false, "en")
+    @Test fun englishMediumDarkLandscape() = scenario(1024, 768, 1f, true, "en")
+    @Test fun englishDesktopLandscape() = scenario(1280, 720, 1f, false, "en")
+    @Test fun englishLargeLandscape() = scenario(844, 390, 1.4f, true, "en")
 
-    @Test fun japaneseCompactLandscape() = scenario(844, 390, 1f, false, "ja")
-    @Test fun japaneseMediumDarkLandscape() = scenario(1024, 768, 1f, true, "ja")
-    @Test fun japaneseDesktopLandscape() = scenario(1280, 720, 1f, false, "ja")
-    @Test fun japaneseLargeLandscape() = scenario(844, 390, 1.4f, true, "ja")
-
-    @Test fun germanCompactLandscape() = scenario(844, 390, 1f, false, "de")
-    @Test fun germanMediumDarkLandscape() = scenario(1024, 768, 1f, true, "de")
-    @Test fun germanDesktopLandscape() = scenario(1280, 720, 1f, false, "de")
-    @Test fun germanLargeLandscape() = scenario(844, 390, 1.4f, true, "de")
-
-    @Test fun spanishCompactLandscape() = scenario(844, 390, 1f, false, "es")
-    @Test fun spanishMediumDarkLandscape() = scenario(1024, 768, 1f, true, "es")
-    @Test fun spanishDesktopLandscape() = scenario(1280, 720, 1f, false, "es")
-    @Test fun spanishLargeLandscape() = scenario(844, 390, 1.4f, true, "es")
-
-    @Test fun frenchCompactLandscape() = scenario(844, 390, 1f, false, "fr")
-    @Test fun frenchMediumDarkLandscape() = scenario(1024, 768, 1f, true, "fr")
-    @Test fun frenchDesktopLandscape() = scenario(1280, 720, 1f, false, "fr")
-    @Test fun frenchLargeLandscape() = scenario(844, 390, 1.4f, true, "fr")
-
-    @Test fun koreanCompactLandscape() = scenario(844, 390, 1f, false, "ko")
-    @Test fun koreanMediumDarkLandscape() = scenario(1024, 768, 1f, true, "ko")
-    @Test fun koreanDesktopLandscape() = scenario(1280, 720, 1f, false, "ko")
-    @Test fun koreanLargeLandscape() = scenario(844, 390, 1.4f, true, "ko")
-
-    @Test fun russianCompactLandscape() = scenario(844, 390, 1f, false, "ru")
-    @Test fun russianMediumDarkLandscape() = scenario(1024, 768, 1f, true, "ru")
-    @Test fun russianDesktopLandscape() = scenario(1280, 720, 1f, false, "ru")
-    @Test fun russianLargeLandscape() = scenario(844, 390, 1.4f, true, "ru")
-
-    private fun scenario(width: Int, height: Int, scale: Float, dark: Boolean, language: String = "zh-Hant") =
+    private fun scenario(width: Int, height: Int, scale: Float, dark: Boolean, language: String) =
         runDesktopComposeUiTest(width = width, height = height) {
             val (nativeName, languageLabel, systemLabel, resetQuestion, cancelLabel) = when (language) {
-                "ja" -> listOf("日本語", "言語", "システムに従う", "すべての設定を既定値に戻しますか？", "キャンセル")
-                "de" -> listOf("Deutsch", "Sprache", "Systemsprache", "Alle Einstellungen zurücksetzen?", "Abbrechen")
-                "es" -> listOf("Español", "Idioma", "Idioma del sistema", "¿Restablecer todos los ajustes?", "Cancelar")
-                "fr" -> listOf("Français", "Langue", "Langue du système", "Réinitialiser tous les paramètres ?", "Annuler")
-                "ko" -> listOf("한국어", "언어", "시스템 설정 따르기", "모든 설정을 초기화할까요?", "취소")
-                "ru" -> listOf("Русский", "Язык", "Как в системе", "Сбросить все настройки?", "Отмена")
-                else -> listOf("繁體中文", "語言", "跟隨系統", "恢復所有預設設定？", "取消")
+                "en" -> listOf("English", "Language", "System default", "Restore all defaults?", "Cancel")
+                else -> listOf("简体中文", "语言", "跟随系统", "恢复所有默认设置？", "取消")
             }
-            val languageTag = when (language) { "ja" -> "ja-JP"; "de" -> "de-DE"; "es" -> "es-ES"; "fr" -> "fr-FR"; "ko" -> "ko-KR"; "ru" -> "ru-RU"; else -> "zh-Hant-TW" }
-            val captureLanguage = when (language) { "ja" -> "japanese"; "de" -> "german"; "es" -> "spanish"; "fr" -> "french"; "ko" -> "korean"; "ru" -> "russian"; else -> "traditional" }
+            val languageTag = if (language == "en") "en-US" else "zh-CN"
             val store = MemorySettingsStore()
             Localization.initialize("zh-CN", null) { runBlocking { store.saveLanguage(it) } }
             val model = testConsoleModel(settingsStore = store)
             val appearance = AppearanceController(AppearanceSettings(if (dark) NightMode.DARK else NightMode.LIGHT))
-            val prefix = "language-${if (language == "zh-Hant") "" else "$language-"}$width-$height-$scale-${if (dark) "dark" else "light"}"
+            val prefix = "language-$language-$width-$height-$scale-${if (dark) "dark" else "light"}"
             fun capture(name: String, popup: Boolean = false) {
                 waitForIdle()
                 val node = if (popup) onNode(isRoot() and hasAnyDescendant(hasTestTag("language-$language")))
@@ -101,15 +67,17 @@ class LanguageSettingsUiTest {
                 }
                 onNodeWithTag("settings-category-general").performClick()
                 onNodeWithTag("language-selector").assertIsDisplayed().performClick()
-                for (choice in listOf("system", "zh", "en", "zh-Hant", "ja", "de", "es", "fr", "ko", "ru")) {
-                    onNodeWithTag("language-$choice").assertExists()
+                for (choice in listOf("system", "zh", "en")) {
+                    onNodeWithTag("language-$choice").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
                 }
-                if (language in listOf("fr", "ko", "ru")) onNodeWithTag("language-$language").performScrollTo().assertIsDisplayed()
+                for (choice in listOf("zh-Hant", "ja", "de", "es", "fr", "ko", "ru")) {
+                    onNodeWithTag("language-$choice").assertDoesNotExist()
+                }
                 capture("options", popup = true)
                 onNodeWithTag("language-$language").performScrollTo().performClick()
                 onNodeWithText(nativeName).assertIsDisplayed()
                 onNodeWithText(languageLabel).assertIsDisplayed()
-                onNodeWithText("语言").assertDoesNotExist(); capture(captureLanguage)
+                capture("selected")
                 assertEquals(language, runBlocking { store.loadUi() }.language)
                 runOnIdle { Localization.initialize("en-GB", runBlocking { store.loadUi() }.language) { runBlocking { store.saveLanguage(it) } } }
                 onNodeWithText(nativeName).assertIsDisplayed()
@@ -118,7 +86,7 @@ class LanguageSettingsUiTest {
                 onNodeWithText("Language").assertIsDisplayed()
                 onNodeWithTag("language-selector").performClick(); onNodeWithTag("language-zh").performScrollTo().performClick()
                 onNodeWithText("语言").assertIsDisplayed()
-                runOnIdle { Localization.initialize(if (language == "zh-Hant") "zh-HK" else languageTag, "system") { runBlocking { store.saveLanguage(it) } } }
+                runOnIdle { Localization.initialize(if (language == "en") "fr-FR" else "zh-HK", "system") { runBlocking { store.saveLanguage(it) } } }
                 onNodeWithText(languageLabel).assertIsDisplayed()
                 onNodeWithText(systemLabel).assertIsDisplayed()
                 categories(); onNodeWithTag("settings-category-control").performScrollTo().performClick()
@@ -126,15 +94,7 @@ class LanguageSettingsUiTest {
                 categories()
                 onNodeWithTag("restore-default-settings").performClick()
                 onNodeWithText(resetQuestion).assertIsDisplayed()
-                onNodeWithTag("restore-defaults-confirm").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
-                if (language in listOf("de", "es", "fr", "ko", "ru")) {
-                    val confirmText = when (language) { "ru" -> "Сбросить"; "ko" -> "초기화"; "fr" -> "Réinitialiser"; "es" -> "Restablecer"; else -> "Zurücksetzen" }
-                    val layouts = mutableListOf<TextLayoutResult>()
-                    onNode(hasText(confirmText) and hasAnyAncestor(hasTestTag("restore-defaults-confirm")), useUnmergedTree = true)
-                        .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
-                    assertTrue(layouts.isNotEmpty())
-                    assertTrue(layouts.all { it.lineCount == 1 }, "The complete reset action must fit without splitting its word")
-                }
+                onNodeWithTag("restore-defaults-confirm").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
                 capture("reset")
                 onNodeWithText(cancelLabel).performClick()
                 assertEquals("system", Localization.choice)

@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.scripts
 
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.ui.i18n.Localization
 import cn.elonzh.hanppie.ui.i18n.tr
@@ -249,7 +250,7 @@ class ScriptAudioLibraryTest {
         assertEquals(listOf(50), feedback.arguments)
         assertEquals(0, importer.imports, "Reject the host size before decoding")
         try {
-            for (language in listOf("zh", "zh-Hant", "en", "ja", "de", "es", "fr", "ko", "ru")) {
+            for (language in AppLanguage.entries.map { it.preference }) {
                 Localization.initialize(language, language)
                 assertEquals(tr(Res.string.script_audio_file_too_large, 50), feedback.resolve())
                 assertEquals(feedback, library.state.value.error, "Changing language does not mutate the operation state")
@@ -273,8 +274,8 @@ class ScriptAudioLibraryTest {
         try {
             Localization.initialize("en", "en")
             assertContains(feedback.resolve(), "Could not load audio")
-            Localization.select("fr")
-            assertContains(feedback.resolve(), "Impossible de charger")
+            Localization.select("zh")
+            assertEquals(tr(Res.string.script_audio_load_failed_value, "synthetic disk I/O: EACCES"), feedback.resolve())
             assertContains(feedback.resolve(), "synthetic disk I/O: EACCES")
         } finally { Localization.initialize("zh", null) }
         assertTrue(library.state.value.clips.isEmpty())

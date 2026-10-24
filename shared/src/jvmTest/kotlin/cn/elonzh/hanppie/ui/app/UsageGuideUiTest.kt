@@ -22,15 +22,9 @@ import kotlin.test.*
 @OptIn(ExperimentalTestApi::class)
 class UsageGuideUiTest {
     @Test fun compactLandscape() = scenario(844, 390, "zh", 1f, false)
-    @Test fun mediumDarkLandscape() = scenario(1024, 768, "zh-Hant", 1f, true)
+    @Test fun mediumDarkLandscape() = scenario(1024, 768, "zh", 1f, true)
     @Test fun desktopLandscape() = scenario(1280, 720, "zh", 1f, false)
     @Test fun largeEnglishLandscape() = scenario(844, 390, "en", 1.4f, true)
-    @Test fun largeJapaneseLandscape() = scenario(844, 390, "ja", 1.4f, true)
-    @Test fun largeGermanLandscape() = scenario(844, 390, "de", 1.4f, true)
-    @Test fun largeSpanishLandscape() = scenario(844, 390, "es", 1.4f, true)
-    @Test fun largeFrenchLandscape() = scenario(844, 390, "fr", 1.4f, true)
-    @Test fun largeKoreanLandscape() = scenario(844, 390, "ko", 1.4f, true)
-    @Test fun largeRussianLandscape() = scenario(844, 390, "ru", 1.4f, true)
 
     @Test fun destinationActionsUseExistingRoutesWithoutStartingControl() = runDesktopComposeUiTest(width = 1024, height = 768) {
         Localization.initialize("zh", "zh")

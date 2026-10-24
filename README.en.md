@@ -36,6 +36,7 @@ The official RoboMaster app is not required. Manual IPv4/AppID entry is availabl
 
 | Task | How |
 | --- | --- |
+| App language | In Settings → General → Language, choose 简体中文, English or System default. Changes apply immediately and are saved; robot voice language is configured separately |
 | Drive | Enter the cockpit after connecting. Use the twin sticks, or WASD to move, Q/E to turn and arrow keys for the gimbal. Esc returns to the workbench. See Settings → Shortcuts for all controls |
 | Control settings | In Settings → Controls, tune keyboard/screen-stick response and app speed limits separately. Connect to read robot motion parameters, explicitly write changes and check readback. Hardware behavior is [pending validation](docs/official-app-capability-implementation.md#i01-输入响应与运动参数实施进度及设备待验) |
 | Object tracking | In the cockpit, choose Object tracking, tap a target, then select Start following after it locks. Stop tracking or use a direction control to take over. See the [hardware validation boundary](./docs/architecture.md#134-遥控操纵镜头坐标系与安全联动) (Chinese) |

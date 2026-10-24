@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.app
 
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
@@ -31,7 +32,7 @@ class PressureFireUiTest {
     @Test fun compactLandscape() = scenario(844, 390, "zh", 1f, false)
     @Test fun tabletDarkLandscape() = scenario(1024, 768, "zh", 1f, true)
     @Test fun desktopLandscape() = scenario(1280, 720, "zh", 1f, false)
-    @Test fun largeNineLanguageLandscape() = scenario(844, 390, "en", 1.4f, true, allLanguages = true)
+    @Test fun largeSupportedLanguageLandscape() = scenario(844, 390, "en", 1.4f, true, allLanguages = true)
 
     private class InputLifecycle : LifecycleOwner {
         override val lifecycle = LifecycleRegistry(this).apply { handleLifecycleEvent(Lifecycle.Event.ON_RESUME) }
@@ -88,7 +89,7 @@ class PressureFireUiTest {
                 assertTrue(runBlocking { store.load() }.control.pressureFire)
                 assertEquals(4, runBlocking { store.load() }.control.pressureFireSensitivity)
                 onNodeWithTag("pressure-fire-help").performScrollTo().assertIsDisplayed(); capture("settings-on")
-                if (allLanguages) for (locale in listOf("zh", "zh-Hant", "ja", "de", "es", "fr", "ko", "ru", "en")) {
+                if (allLanguages) for (locale in AppLanguage.entries.map { it.preference }) {
                     runOnIdle { Localization.initialize(locale, locale) }
                     onNodeWithTag("pressure-fire-help").performScrollTo().assertIsDisplayed()
                     onNodeWithTag("pressure-fire-sensitivity-selector").assertIsDisplayed()
@@ -107,7 +108,7 @@ class PressureFireUiTest {
                 waitUntil(timeoutMillis = 5_000) { !model.firing.value }
                 onNodeWithTag("remote-surface").performTouchInput { click(center) }
                 capture("cockpit-on")
-                if (allLanguages) for (locale in listOf("zh", "zh-Hant", "ja", "de", "es", "fr", "ko", "ru", "en")) {
+                if (allLanguages) for (locale in AppLanguage.entries.map { it.preference }) {
                     runOnIdle { Localization.initialize(locale, locale) }
                     capture("cockpit-$locale")
                 }

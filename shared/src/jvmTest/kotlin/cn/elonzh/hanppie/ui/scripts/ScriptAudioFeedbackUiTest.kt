@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.scripts
 
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
@@ -83,7 +84,7 @@ class ScriptAudioFeedbackUiTest {
                 onNodeWithTag("script-audio-import").performScrollTo().performClick()
                 waitUntil(timeoutMillis=5000) { model.scriptAudio.state.value.error?.resource == Res.string.script_audio_budget_limit }
                 val feedback=checkNotNull(model.scriptAudio.state.value.error)
-                for (language in listOf("zh","zh-Hant","en","ja","de","es","fr","ko","ru")) {
+                for (language in AppLanguage.entries.map { it.preference }) {
                     runOnIdle { Localization.select(language) }
                     capture("budget-$language");inspectError()
                     assertEquals(feedback,model.scriptAudio.state.value.error)

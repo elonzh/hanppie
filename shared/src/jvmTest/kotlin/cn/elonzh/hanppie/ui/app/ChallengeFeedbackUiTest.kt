@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.app
 
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
@@ -135,7 +136,7 @@ class ChallengeFeedbackUiTest {
                 onNodeWithTag("challenge-countdown-start").assertExists(); capture("countdown-start")
                 assertFalse(onNodeWithTag("challenge-countdown-start").fetchSemanticsNode().config.contains(SemanticsProperties.Text),
                     "The decorative cue must not duplicate the HUD's accessible countdown")
-                if (scale > 1f) for (choice in listOf("zh", "zh-Hant", "en", "ja", "de", "es", "fr", "ko", "ru")) {
+                if (scale > 1f) for (choice in AppLanguage.entries.map { it.preference }) {
                     runOnIdle { Localization.select(choice) }; mainClock.advanceTimeByFrame()
                     onNodeWithTag("challenge-status").assertTextEquals(tr(Res.string.challenge_go))
                     onNodeWithTag("challenge-countdown-start").assertIsDisplayed()

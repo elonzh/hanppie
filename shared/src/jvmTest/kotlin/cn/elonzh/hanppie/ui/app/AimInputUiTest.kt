@@ -119,9 +119,9 @@ class AimInputUiTest {
                     assertTrue(statusBounds.bottom - statusBounds.top <= 80.dp)
                     onNodeWithTag("aim-mouse-toggle").assertIsEnabled().assertHeightIsAtLeast(48.dp)
                     capture("permission-${selected.preference}")
-                    if (selected == AppLanguage.GERMAN) {
+                    if (selected == AppLanguage.SIMPLIFIED_CHINESE) {
                         onNodeWithTag("aim-input-status").performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 500f) }
-                        capture("permission-de-scrolled")
+                        capture("permission-zh-scrolled")
                     }
                 }
                 runOnIdle {

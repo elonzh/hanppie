@@ -27,9 +27,9 @@ class ChatFeedbackUiTest {
     @Test fun compactLandscape() = feedback(844, 390)
     @Test fun tabletDark() = feedback(1024, 768, dark = true)
     @Test fun desktopLandscape() = feedback(1280, 720)
-    @Test fun largeNineLanguages() = feedback(844, 390, 1.4f, dark = true, nineLanguages = true)
+    @Test fun largeSupportedLanguages() = feedback(844, 390, 1.4f, dark = true)
 
-    private fun feedback(width: Int, height: Int, scale: Float = 1f, dark: Boolean = false, nineLanguages: Boolean = false) =
+    private fun feedback(width: Int, height: Int, scale: Float = 1f, dark: Boolean = false) =
         runDesktopComposeUiTest(width = width, height = height) {
             Localization.initialize("zh", "zh")
             val failure = IllegalStateException("offline history EIO / 原始诊断 / détails\n".repeat(40))
@@ -55,7 +55,7 @@ class ChatFeedbackUiTest {
                 onNodeWithTag("navigate-3").performClick()
                 waitUntil(timeoutMillis = 5_000) { model.chat.state.value.ready && model.chat.state.value.error != null }
                 val retainedError = model.chat.state.value.error
-                val languages = if (nineLanguages) AppLanguage.entries else listOf(AppLanguage.SIMPLIFIED_CHINESE, AppLanguage.ENGLISH)
+                val languages = AppLanguage.entries
                 for (language in languages) {
                     runOnIdle { Localization.select(language.preference) }
                     onNodeWithText(tr(Res.string.conversation_history_could_not_be_loaded, failure.toString()), substring = true).assertExists()

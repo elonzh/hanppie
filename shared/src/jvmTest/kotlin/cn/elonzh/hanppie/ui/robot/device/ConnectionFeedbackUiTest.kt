@@ -26,9 +26,9 @@ class ConnectionFeedbackUiTest {
     @Test fun compactLandscape() = feedback(844, 390)
     @Test fun tabletDark() = feedback(1024, 600, dark = true)
     @Test fun desktopLandscape() = feedback(1280, 720)
-    @Test fun largeNineLanguages() = feedback(844, 390, scale = 1.4f, nineLanguages = true)
+    @Test fun largeSupportedLanguages() = feedback(844, 390, scale = 1.4f)
 
-    private fun feedback(width: Int, height: Int, scale: Float = 1f, dark: Boolean = false, nineLanguages: Boolean = false) =
+    private fun feedback(width: Int, height: Int, scale: Float = 1f, dark: Boolean = false) =
         runDesktopComposeUiTest(width = width, height = height) {
             Localization.initialize("en", "en")
             val preparations = AtomicInteger()
@@ -62,7 +62,7 @@ class ConnectionFeedbackUiTest {
                 onNodeWithTag("manual-connect-submit").performScrollTo().assertIsEnabled().assertHeightIsAtLeast(48.dp).performClick()
                 waitUntil(timeoutMillis = 5000) { !model.state.value.busy && model.state.value.error != null }
             }
-            val languages = if (nineLanguages) AppLanguage.entries else listOf(AppLanguage.ENGLISH, AppLanguage.GERMAN)
+            val languages = AppLanguage.entries
             try {
                 setContent { TestWorkbenchTheme(appearance) {
                     CompositionLocalProvider(LocalDensity provides Density(1f, scale)) {

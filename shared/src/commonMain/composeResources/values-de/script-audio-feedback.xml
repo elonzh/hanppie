@@ -1,8 +1,0 @@
-<resources>
-    <string name="script_audio_slots_full">Alle %1$s Audioplätze sind belegt. Löschen Sie vor dem Import einen Clip.</string>
-    <string name="script_audio_file_too_large">Die Audiodatei überschreitet das Limit von %1$s MB. Wählen Sie eine kleinere Datei.</string>
-    <string name="script_audio_budget_limit">Die Audiodaten überschreiten das Uploadlimit von %1$s MB für das Programm. Wählen Sie einen kürzeren Clip.</string>
-    <string name="script_audio_missing">Dieser Audioclip ist nicht mehr vorhanden. Öffnen Sie die Audioliste erneut.</string>
-    <string name="script_audio_load_failed_value">Audio konnte nicht geladen werden: %1$s</string>
-    <string name="script_audio_operation_failed_value">Audio konnte nicht aktualisiert werden: %1$s</string>
-</resources>

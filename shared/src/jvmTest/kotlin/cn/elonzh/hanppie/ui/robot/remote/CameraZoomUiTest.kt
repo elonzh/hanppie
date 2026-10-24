@@ -115,13 +115,6 @@ class CameraZoomLayoutTest {
     @Test fun desktopLandscape() = layout(1280, 720)
     @Test fun englishLargeText() = layout(844, 390, "en", 1.4f)
     @Test fun chineseLargeText() = layout(844, 390, "zh", 1.4f, true)
-    @Test fun traditionalChineseLargeText() = layout(844, 390, "zh-Hant", 1.4f, true)
-    @Test fun japaneseLargeText() = layout(844, 390, "ja", 1.4f, true)
-    @Test fun germanLargeText() = layout(844, 390, "de", 1.4f, true)
-    @Test fun spanishLargeText() = layout(844, 390, "es", 1.4f, true)
-    @Test fun frenchLargeText() = layout(844, 390, "fr", 1.4f, true)
-    @Test fun koreanLargeText() = layout(844, 390, "ko", 1.4f, true)
-    @Test fun russianLargeText() = layout(844, 390, "ru", 1.4f, true)
 
     private fun layout(width: Int, height: Int, language: String = "zh", fontScale: Float = 1f, dark: Boolean = false) =
         runDesktopComposeUiTest(width = width, height = height) {
@@ -184,7 +177,7 @@ class CameraZoomLayoutTest {
                 waitUntil(timeoutMillis = 3_000) { model.cameraZoom.state.value.hundredths == 100 && !model.cameraZoom.state.value.busy }
                 onNodeWithTag("tracking-start").assertIsEnabled()
                 capture("1x"); assertHudFit()
-                if (language in listOf("en", "ru") && fontScale > 1f) {
+                if (language == "en" && fontScale > 1f) {
                     onNodeWithTag("vision-tools").performClick()
                     onNodeWithTag("vision-start-aim").assertIsDisplayed()
                     onNodeWithTag("vision-start-lines").assertIsDisplayed()

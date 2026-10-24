@@ -29,7 +29,7 @@ class DiagnosticNavigationUiTest {
     @Test fun compactLandscape() = scenario(844, 390, "zh", 1f, false)
     @Test fun mediumDarkLandscape() = scenario(1024, 600, "zh", 1f, true)
     @Test fun desktopLandscape() = scenario(1280, 720, "zh", 1f, false)
-    @Test fun largeNineLanguages() = scenario(844, 390, "en", 1.4f, false)
+    @Test fun largeSupportedLanguages() = scenario(844, 390, "en", 1.4f, false)
 
     private fun scenario(width: Int, height: Int, language: String, scale: Float, dark: Boolean) =
         runDesktopComposeUiTest(width = width, height = height) {

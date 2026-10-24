@@ -27,9 +27,9 @@ class ModelFeedbackUiTest {
     @Test fun compactLandscape() = feedback(844, 390)
     @Test fun tabletDark() = feedback(1024, 768, dark = true)
     @Test fun desktopLandscape() = feedback(1280, 720)
-    @Test fun largeNineLanguages() = feedback(844, 390, 1.4f, dark = true, nineLanguages = true)
+    @Test fun largeSupportedLanguages() = feedback(844, 390, 1.4f, dark = true)
 
-    private fun feedback(width: Int, height: Int, scale: Float = 1f, dark: Boolean = false, nineLanguages: Boolean = false) =
+    private fun feedback(width: Int, height: Int, scale: Float = 1f, dark: Boolean = false) =
         runDesktopComposeUiTest(width = width, height = height) {
             Localization.initialize("zh", "zh")
             val config = ModelSettings(ModelProviderPreset.CUSTOM, "https://offline-model.example.test/v1",
@@ -74,7 +74,7 @@ class ModelFeedbackUiTest {
                 pickModel()
                 val testError = assertNotNull(model.modelTestState.value.message)
                 val catalogError = assertNotNull(model.modelCatalogState.value.message)
-                val languages = if (nineLanguages) AppLanguage.entries else listOf(AppLanguage.SIMPLIFIED_CHINESE, AppLanguage.ENGLISH)
+                val languages = AppLanguage.entries
                 for (language in languages) {
                     runOnIdle { Localization.select(language.preference) }
                     assertSame(testError, model.modelTestState.value.message)
@@ -85,7 +85,7 @@ class ModelFeedbackUiTest {
                     assertTrue(onNodeWithTag("model-test-message").fetchSemanticsNode().boundsInRoot.height <= 96.5f)
                     onNodeWithTag("model-test").assertIsDisplayed().assertIsEnabled()
                     assertFalse(testError.resolve().contains(config.apiKey))
-                    if (nineLanguages || language == AppLanguage.ENGLISH) picture("test-${language.preference}")
+                    picture("test-${language.preference}")
                 }
                 onNodeWithTag("model-catalog-message").performScrollTo()
                 onNodeWithTag("model-catalog-message").performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 500f) }

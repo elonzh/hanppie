@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.app
 
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
@@ -33,7 +34,7 @@ class PushToTalkUiTest {
     @Test fun compact() = scenario(844, 390, 1f, false)
     @Test fun tabletDark() = scenario(1024, 768, 1f, true)
     @Test fun desktop() = scenario(1280, 720, 1f, false)
-    @Test fun largeNineLanguages() = scenario(844, 390, 1.4f, true)
+    @Test fun largeSupportedLanguages() = scenario(844, 390, 1.4f, true)
     @Test fun unsupportedInputHasNoTouchEntry() = scenario(844, 390, 1f, false, supported = false)
 
     private class Owner : LifecycleOwner {
@@ -116,7 +117,7 @@ class PushToTalkUiTest {
                 onNodeWithTag("push-to-talk-problem").performClick()
                 onNodeWithTag("push-to-talk-error").assertTextEquals(checkNotNull(model.pushToTalk.state.value.error).resolve())
                 onNodeWithTag("push-to-talk-error-close").assertHeightIsAtLeast(48.dp); capture("capture-details")
-                if (scale > 1f) for (language in listOf("zh", "zh-Hant", "en", "ja", "de", "es", "fr", "ko", "ru")) {
+                if (scale > 1f) for (language in AppLanguage.entries.map { it.preference }) {
                     runOnIdle { Localization.select(language) }
                     onNodeWithTag("push-to-talk-error").assertTextEquals(checkNotNull(model.pushToTalk.state.value.error).resolve())
                     onNodeWithTag("push-to-talk-error-close").assertIsDisplayed(); capture("error-$language")

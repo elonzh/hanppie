@@ -56,7 +56,7 @@ class ConfirmationDialogsUiTest {
                 }
             }
             try {
-                Localization.initialize("de","de")
+                Localization.initialize("en","en")
                 waitUntil(timeoutMillis=5_000) { !model.settingsBusy.value }
                 setContent { TestWorkbenchTheme(appearance) {
                     CompositionLocalProvider(LocalDensity provides Density(1f,scale)) {
@@ -68,7 +68,7 @@ class ConfirmationDialogsUiTest {
                 for(language in languages) {
                     runOnIdle { Localization.select(language.preference) }
                     onNodeWithTag("restore-default-settings").performClick()
-                    if(language==AppLanguage.GERMAN) picture("${language.preference}-reset-top","restore-defaults-confirm")
+                    if(language==AppLanguage.SIMPLIFIED_CHINESE) picture("${language.preference}-reset-top","restore-defaults-confirm")
                     checkSummary(tr(Res.string.restore_default_settings_summary))
                     onNodeWithTag("restore-defaults-confirm").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
                     picture("${language.preference}-reset","restore-defaults-confirm")
@@ -83,7 +83,7 @@ class ConfirmationDialogsUiTest {
                 for(language in languages) {
                     runOnIdle { Localization.select(language.preference) }
                     onNodeWithTag("calibration-start").performScrollTo().performClick()
-                    if(language==AppLanguage.GERMAN) picture("${language.preference}-calibration-top","calibration-confirm")
+                    if(language==AppLanguage.SIMPLIFIED_CHINESE) picture("${language.preference}-calibration-top","calibration-confirm")
                     checkSummary(tr(Res.string.calibration_start_confirm))
                     onNodeWithTag("calibration-confirm").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
                     picture("${language.preference}-calibration","calibration-confirm")

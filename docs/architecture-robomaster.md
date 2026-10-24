@@ -568,7 +568,7 @@ SDK `EscSubject` 的 `<hhhhhhhhIIIIBBBB`：四项有符号 RPM、四项编码器
 
 #### 官方 App 本地界面语言
 
-固定 macOS 1.1.5/build 239 的 `COMMON/DJILanguageType.cs` 定义 `zh/en/ja/zhHant/de/es/ko/fr/ru`。`COMMON/Languages.cs` 根据选中类型载入本地 CSV，查找文本并处理换行；`Module.Setting.System/SystemSetting.start` 从 `System.Language` 读取选择。它们是本地界面配置，不是账号或机器人语言指令；`Languages.AppLanguageType2RobotLanguageType` 的语音映射也不能作为界面语言支持表。Hanppie 的实现和剩余语言统一见[当前语言架构](./architecture.md#132-客户端架构与分层设计)与[实施台账 D02](./official-app-capability-implementation.md#d02-繁体中文阶段与剩余范围)。**固定版托管消费者；没有导入官方翻译表**
+固定 macOS 1.1.5/build 239 的 `COMMON/DJILanguageType.cs` 定义 `zh/en/ja/zhHant/de/es/ko/fr/ru`。`COMMON/Languages.cs` 根据选中类型载入本地 CSV，查找文本并处理换行；`Module.Setting.System/SystemSetting.start` 从 `System.Language` 读取选择。它们是本地界面配置，不是账号或机器人语言指令；`Languages.AppLanguageType2RobotLanguageType` 的语音映射也不能作为界面语言支持表。Hanppie 当前仅支持中英文；具体范围与验证统一见[当前语言架构](./architecture.md#132-客户端架构与分层设计)与[实施台账 D02](./official-app-capability-implementation.md#d02-仅保留中英文界面阶段)。**固定版托管消费者；没有导入官方翻译表**
 
 #### 官方本地场景引导与重置
 

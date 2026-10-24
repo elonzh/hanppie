@@ -35,14 +35,8 @@ class ChallengeUiTest {
     @Test fun compactLandscape() = scenario(844, 390, "zh", 1f, false)
     @Test fun mediumDarkLandscape() = scenario(1024, 768, "zh", 1f, true)
     @Test fun desktopLandscape() = scenario(1280, 720, "zh", 1f, false)
+    @Test fun largeChineseLandscape() = scenario(844, 390, "zh", 1.4f, true)
     @Test fun largeEnglishLandscape() = scenario(844, 390, "en", 1.4f, false)
-    @Test fun traditionalChineseLandscape() = scenario(844, 390, "zh-Hant", 1.4f, true)
-    @Test fun japaneseLandscape() = scenario(844, 390, "ja", 1.4f, true)
-    @Test fun germanLandscape() = scenario(844, 390, "de", 1.4f, true)
-    @Test fun spanishLandscape() = scenario(844, 390, "es", 1.4f, true)
-    @Test fun frenchLandscape() = scenario(844, 390, "fr", 1.4f, true)
-    @Test fun koreanLandscape() = scenario(844, 390, "ko", 1.4f, true)
-    @Test fun russianLandscape() = scenario(844, 390, "ru", 1.4f, true)
 
     private class InputLifecycle : LifecycleOwner {
         val registry = LifecycleRegistry(this)
