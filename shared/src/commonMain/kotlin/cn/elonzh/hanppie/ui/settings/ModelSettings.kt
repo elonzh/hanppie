@@ -13,7 +13,8 @@ import cn.elonzh.hanppie.resources.thinking_depth_low
 import cn.elonzh.hanppie.resources.thinking_depth_medium
 import cn.elonzh.hanppie.resources.thinking_depth_high
 import cn.elonzh.hanppie.resources.enter_an_https_api_endpoint
-import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.ui.i18n.UiText
+import cn.elonzh.hanppie.ui.i18n.uiText
 import io.ktor.http.URLProtocol
 import io.ktor.http.Url
 import kotlinx.serialization.Serializable
@@ -28,7 +29,7 @@ internal data class ModelSettings(
 ) {
     val llModel: LLModel get() = ModelCatalog.resolve(provider, model)
 
-    fun validate() {
+    fun validationError(): UiText? {
         val validEndpoint = runCatching { Url(endpoint) }.getOrNull()?.let { url ->
             url.protocolOrNull == URLProtocol.HTTPS &&
                 url.host.isNotBlank() &&
@@ -38,8 +39,15 @@ internal data class ModelSettings(
                 url.fragment.isEmpty() &&
                 !url.trailingQuery
         } == true
-        require(validEndpoint) { tr(Res.string.enter_an_https_api_endpoint) }
-        require(model.isNotBlank() && apiKey.isNotBlank()) { tr(Res.string.enter_a_model_and_api_key) }
+        return when {
+            !validEndpoint -> uiText(Res.string.enter_an_https_api_endpoint)
+            model.isBlank() || apiKey.isBlank() -> uiText(Res.string.enter_a_model_and_api_key)
+            else -> null
+        }
+    }
+
+    fun validate() {
+        validationError()?.let { throw IllegalArgumentException(it.resolve()) }
     }
 
     override fun toString() = "ModelSettings(provider=$provider, endpoint=$endpoint, model=$model, apiKey=[redacted])"

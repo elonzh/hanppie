@@ -20,8 +20,8 @@
     <string name="conversation_title">Conversation title</string>
     <string name="conversation_actions">Conversation actions</string>
     <string name="what_would_you_like_to_do">What would you like to do?</string>
-    <string name="conversation_history_could_not_be_loaded">Conversation history could not be loaded.</string>
-    <string name="conversation_history_operation_failed">Conversation history operation failed.</string>
+    <string name="conversation_history_could_not_be_loaded">Conversation history could not be loaded.\n%1$s</string>
+    <string name="conversation_history_operation_failed">Conversation history operation failed.\n%1$s</string>
     <string name="agent_runtime_cannot_accept_commands_value">The agent runtime cannot accept this command while its state is %1$s.</string>
     <string name="agent_runtime_unavailable">The agent runtime is unavailable. Restart Hanppie if the problem persists.</string>
     <string name="previous_run_interrupted">The previous agent run was interrupted and will not be retried automatically. Review the tool history before continuing.</string>

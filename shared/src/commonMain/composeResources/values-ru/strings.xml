@@ -20,8 +20,8 @@
     <string name="conversation_title">Название беседы</string>
     <string name="conversation_actions">Действия с беседой</string>
     <string name="what_would_you_like_to_do">Что вы хотите сделать?</string>
-    <string name="conversation_history_could_not_be_loaded">Не удалось загрузить историю беседы.</string>
-    <string name="conversation_history_operation_failed">Не удалось выполнить действие с историей беседы.</string>
+    <string name="conversation_history_could_not_be_loaded">Не удалось загрузить историю беседы.\n%1$s</string>
+    <string name="conversation_history_operation_failed">Не удалось выполнить действие с историей беседы.\n%1$s</string>
     <string name="agent_runtime_cannot_accept_commands_value">Среда агента не может принять эту команду в состоянии %1$s.</string>
     <string name="agent_runtime_unavailable">Среда агента недоступна. Если проблема сохраняется, перезапустите Hanppie.</string>
     <string name="previous_run_interrupted">Предыдущее выполнение агента прервано и не будет повторено автоматически. Перед продолжением проверьте историю инструментов.</string>

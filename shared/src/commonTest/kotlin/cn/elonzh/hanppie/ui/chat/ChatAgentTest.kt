@@ -14,8 +14,9 @@ import ai.koog.prompt.message.MessagePart
 import ai.koog.prompt.streaming.StreamFrame
 import cn.elonzh.hanppie.agent.runtime.*
 import cn.elonzh.hanppie.agent.tools.*
-import cn.elonzh.hanppie.resources.Res
-import cn.elonzh.hanppie.resources.agent_model_request_limit_reached
+import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
+import cn.elonzh.hanppie.ui.i18n.Localization
 import cn.elonzh.hanppie.robot.lab.ScriptRunPhase
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.settings.ModelSettings
@@ -290,6 +291,81 @@ class ChatAgentTest {
             assertFalse(failed.running, "a storage failure must not leave the conversation running")
             assertTrue(failed.ready, "the composer has to stay usable after a storage failure")
             assertNull(failed.sessionId)
+            assertEquals(Res.string.conversation_history_operation_failed, failed.error?.resource)
+            assertContains(failed.error!!.arguments.single().toString(), "storage is full")
+        }
+    }
+
+    @Test fun historyFailureChangesLanguageWithoutRepeatingWorkAndDismissesOnlyFeedback(): Unit = runBlocking {
+        Localization.initialize("zh", "zh")
+        val failure = IllegalStateException("EIO / 原始诊断 / détails")
+        var initializationCalls = 0
+        val sessions = object : SessionHistory by TestSessionHistory() {
+            override suspend fun initialize(): Unit { initializationCalls++; throw failure }
+        }
+        val fake = Fake { error("No model request expected") }
+        try {
+            agent({ "未连接" }, { error("No robot") }, { error("No robot") }, fake, sessions).use { agent ->
+                val failed = withTimeout(5_000) { agent.state.first { it.ready && it.error != null } }
+                val feedback = assertNotNull(failed.error)
+                assertEquals(Res.string.conversation_history_could_not_be_loaded, feedback.resource)
+                assertEquals(listOf(failure.toString()), feedback.arguments)
+                agent.updateDraft("Keep this draft")
+                for (language in AppLanguage.entries) {
+                    Localization.select(language.preference)
+                    assertSame(feedback, agent.state.value.error)
+                    assertEquals(tr(Res.string.conversation_history_could_not_be_loaded, failure.toString()), feedback.resolve())
+                }
+                val before = agent.state.value
+                agent.dismissError()
+                assertEquals(before.copy(error = null), agent.state.value)
+                assertEquals(1, initializationCalls)
+                assertTrue(fake.prompts.isEmpty())
+            }
+        } finally { Localization.initialize("zh", null) }
+    }
+
+    @Test fun inputValidationKeepsResourceIdentityAndNeverStartsARequest(): Unit = runBlocking {
+        val fake = Fake { error("No model request expected") }
+        val history = TestSessionHistory()
+        agent({ "未连接" }, { error("No robot") }, { error("No robot") }, fake, history).use { agent ->
+            agent.ready()
+            assertFalse(agent.send("hello", config.copy(endpoint = "http://private-user:private-password@example.test")))
+            assertEquals(Res.string.enter_an_https_api_endpoint, agent.state.value.error?.resource)
+            assertTrue(agent.state.value.error!!.arguments.isEmpty())
+            assertFalse(agent.send("hello", config.copy(apiKey = "")))
+            assertEquals(Res.string.enter_a_model_and_api_key, agent.state.value.error?.resource)
+            assertFalse(agent.send("x".repeat(12001), config))
+            assertEquals(Res.string.message_too_long, agent.state.value.error?.resource)
+            assertTrue(agent.state.value.ready)
+            assertTrue(history.events.isEmpty())
+            assertTrue(fake.prompts.isEmpty())
+        }
+    }
+
+    @Test fun fullContextRejectsTheNextMessageWithoutCallingTheModelAgain(): Unit = runBlocking {
+        val fake = Fake { text("A".repeat(192000)) }
+        val small = config.copy(model = "offline-unknown-context")
+        agent({ "未连接" }, { error("No robot") }, { error("No robot") }, fake).use { agent ->
+            agent.ready()
+            assertTrue(agent.send("first", small))
+            assertNull(agent.finished().error)
+            assertFalse(agent.send("next", small))
+            assertEquals(Res.string.context_full_start_a_new_chat, agent.state.value.error?.resource)
+            assertEquals(1, fake.prompts.size)
+        }
+    }
+
+    @Test fun timedOutModelRequestKeepsLocalizedFeedbackAndReturnsToIdle(): Unit = runBlocking {
+        val fake = Fake { awaitCancellation() }
+        agent({ "未连接" }, { error("No robot") }, { error("No robot") }, fake,
+            operationTimeoutMillis = 100).use { agent ->
+            agent.ready()
+            assertTrue(agent.send("timeout", config))
+            val finished = agent.finished()
+            assertEquals(ChatPhase.IDLE, finished.phase)
+            assertEquals(Res.string.model_or_tool_operation_timed_out_review_tool_history, finished.error?.resource)
+            assertEquals(1, fake.prompts.size)
         }
     }
 
@@ -528,7 +604,7 @@ class ChatAgentTest {
         agent({ "未连接" }, { error("No robot") }, { error("No robot") }, fake, history).use { agent ->
             agent.ready()
             assertTrue(agent.send("停", config))
-            val error = requireNotNull(agent.finished().error)
+            val error = requireNotNull(agent.finished().error).resolve()
             val failedRun = history.events.filterIsInstance<AgentStartingEvent>().single().runId
             assertFalse(error.contains(failedRun))
             val failure = history.events.filterIsInstance<AgentExecutionFailedEvent>().single()
@@ -549,7 +625,7 @@ class ChatAgentTest {
             agent.state.value = agent.state.value.copy(phase = ChatPhase.MANAGING)
 
             assertFalse(agent.send("不会丢失", config))
-            val error = requireNotNull(agent.state.value.error)
+            val error = requireNotNull(agent.state.value.error).resolve()
             assertContains(error, ChatPhase.MANAGING.name)
             assertFalse(Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}").containsMatchIn(error))
         }
@@ -569,7 +645,7 @@ class ChatAgentTest {
             agent.ready()
             agent.send("持续读取", config)
 
-            val error = requireNotNull(agent.finished().error)
+            val error = requireNotNull(agent.finished().error).resolve()
             assertEquals(tr(Res.string.agent_model_request_limit_reached), error)
             assertEquals(8, requests)
             assertEquals(8, statusReads)
@@ -824,7 +900,7 @@ class ChatAgentTest {
         agent({ "disconnected" }, { error("Must not execute") }, { error("Must not stop") }, fake, history).use { agent ->
             agent.ready()
             agent.send("hello", config)
-            val error = requireNotNull(agent.finished().error)
+            val error = requireNotNull(agent.finished().error).resolve()
             val runId = history.events.filterIsInstance<AgentStartingEvent>().single().runId
             assertFalse(error.contains(runId))
             assertContains(error, "request-private-content")

@@ -20,8 +20,8 @@
     <string name="conversation_title">Título de la conversación</string>
     <string name="conversation_actions">Acciones de la conversación</string>
     <string name="what_would_you_like_to_do">¿Qué quieres hacer?</string>
-    <string name="conversation_history_could_not_be_loaded">No se pudo cargar el historial de conversaciones.</string>
-    <string name="conversation_history_operation_failed">Falló la operación del historial de conversaciones.</string>
+    <string name="conversation_history_could_not_be_loaded">No se pudo cargar el historial de conversaciones.\n%1$s</string>
+    <string name="conversation_history_operation_failed">Falló la operación del historial de conversaciones.\n%1$s</string>
     <string name="agent_runtime_cannot_accept_commands_value">El entorno del agente no puede aceptar este comando en el estado %1$s.</string>
     <string name="agent_runtime_unavailable">El entorno del agente no está disponible. Reinicia Hanppie si el problema persiste.</string>
     <string name="previous_run_interrupted">La ejecución anterior del agente se interrumpió y no se repetirá automáticamente. Revisa el historial de herramientas antes de continuar.</string>

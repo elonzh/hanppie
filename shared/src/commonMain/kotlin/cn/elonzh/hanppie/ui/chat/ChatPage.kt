@@ -324,7 +324,16 @@ internal fun ChatPage(model: ConsoleController, modifier: Modifier = Modifier, o
             DesktopListScrollbar(list, Modifier.align(Alignment.CenterEnd).fillMaxHeight().testTag("chat-scrollbar"), scrollbarInteraction)
         }
         state.error?.let { error ->
-            SelectionContainer { Text(error, color = MiuixTheme.colorScheme.error, fontSize = 12.sp) }
+            Row(Modifier.fillMaxWidth().testTag("chat-feedback"), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SelectionContainer(Modifier.weight(1f)) {
+                    Text(error.resolve(), Modifier.heightIn(max = 80.dp).verticalScroll(rememberScrollState())
+                        .testTag("chat-error"), color = MiuixTheme.colorScheme.error, fontSize = 12.sp)
+                }
+                Button(model.chat::dismissError, Modifier.heightIn(min = 48.dp).testTag("chat-error-close")) {
+                    Text(tr(Res.string.close))
+                }
+            }
         }
         microphone.error?.let { error ->
             Row(Modifier.fillMaxWidth().testTag("voice-input-feedback"), verticalAlignment = Alignment.CenterVertically,

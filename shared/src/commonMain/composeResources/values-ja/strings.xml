@@ -20,8 +20,8 @@
     <string name="conversation_title">会話のタイトル</string>
     <string name="conversation_actions">会話の操作</string>
     <string name="what_would_you_like_to_do">何をしますか？</string>
-    <string name="conversation_history_could_not_be_loaded">会話履歴を読み込めませんでした。</string>
-    <string name="conversation_history_operation_failed">会話履歴の操作に失敗しました。</string>
+    <string name="conversation_history_could_not_be_loaded">会話履歴を読み込めませんでした。\n%1$s</string>
+    <string name="conversation_history_operation_failed">会話履歴の操作に失敗しました。\n%1$s</string>
     <string name="agent_runtime_cannot_accept_commands_value">エージェントの状態が %1$s の間は、このコマンドを受け付けられません。</string>
     <string name="agent_runtime_unavailable">エージェントを利用できません。問題が続く場合は Hanppie を再起動してください。</string>
     <string name="previous_run_interrupted">前回のエージェント実行は中断されました。自動では再試行しません。続ける前にツール履歴を確認してください。</string>

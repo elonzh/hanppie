@@ -20,8 +20,8 @@
     <string name="conversation_title">Titel der Unterhaltung</string>
     <string name="conversation_actions">Aktionen für die Unterhaltung</string>
     <string name="what_would_you_like_to_do">Was möchten Sie tun?</string>
-    <string name="conversation_history_could_not_be_loaded">Der Unterhaltungsverlauf konnte nicht geladen werden.</string>
-    <string name="conversation_history_operation_failed">Der Vorgang im Unterhaltungsverlauf ist fehlgeschlagen.</string>
+    <string name="conversation_history_could_not_be_loaded">Der Unterhaltungsverlauf konnte nicht geladen werden.\n%1$s</string>
+    <string name="conversation_history_operation_failed">Der Vorgang im Unterhaltungsverlauf ist fehlgeschlagen.\n%1$s</string>
     <string name="agent_runtime_cannot_accept_commands_value">Die Agent-Laufzeit kann diesen Befehl im Zustand %1$s nicht annehmen.</string>
     <string name="agent_runtime_unavailable">Die Agent-Laufzeit ist nicht verfügbar. Starten Sie Hanppie neu, falls das Problem weiterhin besteht.</string>
     <string name="previous_run_interrupted">Die vorherige Agent-Ausführung wurde unterbrochen und wird nicht automatisch wiederholt. Prüfen Sie vor dem Fortfahren den Werkzeugverlauf.</string>

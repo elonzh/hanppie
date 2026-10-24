@@ -27,7 +27,9 @@ import ai.koog.prompt.streaming.StreamFrame
 import cn.elonzh.hanppie.agent.runtime.*
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.ui.i18n.Localization
+import cn.elonzh.hanppie.ui.i18n.UiText
 import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.ui.i18n.uiText
 import cn.elonzh.hanppie.ui.settings.ModelSettings
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
@@ -71,7 +73,7 @@ internal data class ToolApproval(val toolCall: MessagePart.Tool.Call, val previe
 internal enum class ChatPhase { INITIALIZING, IDLE, RUNNING, MANAGING, CLOSED }
 internal data class ChatState(
     val lines: List<ChatLine> = emptyList(), val phase: ChatPhase = ChatPhase.INITIALIZING,
-    val streaming: String = "", val streamingReasoning: String = "", val approval: ToolApproval? = null, val error: String? = null,
+    val streaming: String = "", val streamingReasoning: String = "", val approval: ToolApproval? = null, val error: UiText? = null,
     val firstTokenMs: Long? = null, val elapsedMs: Long? = null,
     val replyRevision: Long = 0, val lastReply: String = "",
     val userMessageRevision: Long = 0,
@@ -124,7 +126,7 @@ internal class ChatAgent(
                 state.update { current ->
                     if (current.phase == ChatPhase.INITIALIZING) current.copy(
                         phase = ChatPhase.IDLE,
-                        error = "${tr(Res.string.conversation_history_could_not_be_loaded)}\n$error",
+                        error = uiText(Res.string.conversation_history_could_not_be_loaded, error.toString()),
                     ) else current
                 }
             }
@@ -136,13 +138,15 @@ internal class ChatAgent(
         val reference = Uuid.random().toString()
         val snapshot = state.value
         if (!snapshot.ready) return rejectCommand("agent.send", reference)
-        try {
-            config.validate(); require(text.length <= 12000) { tr(Res.string.message_too_long) }
-            val approximateCharacterLimit = ((config.llModel.contextLength ?: 64_000L) * 3L).coerceAtMost(3_000_000L)
-            require(history.sumOf { it.toString().length }.toLong() + text.length < approximateCharacterLimit) { tr(Res.string.context_full_start_a_new_chat) }
+        val validationError = config.validationError() ?: when {
+            text.length > 12000 -> uiText(Res.string.message_too_long)
+            history.sumOf { it.toString().length }.toLong() + text.length >=
+                ((config.llModel.contextLength ?: 64_000L) * 3L).coerceAtMost(3_000_000L) ->
+                uiText(Res.string.context_full_start_a_new_chat)
+            else -> null
         }
-        catch (e: IllegalArgumentException) {
-            state.update { it.copy(error = e.toString()) }
+        if (validationError != null) {
+            state.update { it.copy(error = validationError) }
             return false
         }
         val runId = Uuid.random().toString()
@@ -181,7 +185,7 @@ internal class ChatAgent(
                     state.update {
                         it.copy(
                             phase = if (it.phase == ChatPhase.RUNNING) ChatPhase.IDLE else it.phase,
-                            error = "${tr(Res.string.conversation_history_operation_failed)}\n$error",
+                            error = uiText(Res.string.conversation_history_operation_failed, error.toString()),
                         )
                     }
                     return@launch
@@ -351,7 +355,7 @@ internal class ChatAgent(
                 } catch (error: Exception) {
                     logFailure("session.refresh", runId, currentSessionId, error)
                     state.update { it.copy(
-                        error = "${tr(Res.string.conversation_history_operation_failed)}\n$error",
+                        error = uiText(Res.string.conversation_history_operation_failed, error.toString()),
                     ) }
                 }
             } catch (e: ModelRequestLimitExceededException) {
@@ -364,7 +368,7 @@ internal class ChatAgent(
                 } catch (persistenceError: Exception) {
                     logFailure("agent.run.persist-failure", runId, currentSessionId, persistenceError)
                 }
-                state.update { it.copy(error = tr(Res.string.agent_model_request_limit_reached)) }
+                state.update { it.copy(error = uiText(Res.string.agent_model_request_limit_reached)) }
             } catch (e: TimeoutCancellationException) {
                 logFailure("agent.run", runId, currentSessionId, e)
                 if (runStarted && !runTerminal) try {
@@ -375,7 +379,7 @@ internal class ChatAgent(
                 } catch (persistenceError: Exception) {
                     logFailure("agent.run.persist-failure", runId, currentSessionId, persistenceError)
                 }
-                state.update { it.copy(error = tr(Res.string.model_or_tool_operation_timed_out_review_tool_history)) }
+                state.update { it.copy(error = uiText(Res.string.model_or_tool_operation_timed_out_review_tool_history)) }
             } catch (e: CancellationException) {
                 if (runStarted && !runTerminal) withContext(NonCancellable) {
                     try {
@@ -399,7 +403,7 @@ internal class ChatAgent(
                 } catch (persistenceError: Exception) {
                     logFailure("agent.run.persist-failure", runId, currentSessionId, persistenceError)
                 }
-                state.update { it.copy(error = tr(
+                state.update { it.copy(error = uiText(
                     Res.string.run_incomplete_value_check_network_model_settings_and_tool, e.toString(),
                 )) }
             } finally {
@@ -422,7 +426,7 @@ internal class ChatAgent(
                 "Agent runtime unavailable operation=agent.send.start reference=$reference " +
                     "sessionId=${snapshot.sessionId ?: "draft"}"
             }
-            state.update { it.copy(error = tr(Res.string.agent_runtime_unavailable)) }
+            state.update { it.copy(error = uiText(Res.string.agent_runtime_unavailable)) }
             return false
         }
         return true
@@ -487,6 +491,7 @@ internal class ChatAgent(
 
     fun approve(accepted: Boolean) { approval.load()?.complete(accepted) }
     fun cancel() { job.load()?.cancel() }
+    fun dismissError() { state.update { it.copy(error = null) } }
     suspend fun cancelAndJoin() { job.load()?.cancelAndJoin() }
     fun clear() = newSession()
 
@@ -532,7 +537,7 @@ internal class ChatAgent(
             catch (error: Exception) {
                 logFailure(operation, reference, sessionId, error)
                 state.update { it.copy(
-                    error = "${tr(Res.string.conversation_history_operation_failed)}\n$error",
+                    error = uiText(Res.string.conversation_history_operation_failed, error.toString()),
                 ) }
             }
             finally {
@@ -548,7 +553,7 @@ internal class ChatAgent(
                 "Agent runtime unavailable operation=$operation.start reference=$reference " +
                     "sessionId=${sessionId ?: "none"}"
             }
-            state.update { it.copy(error = tr(Res.string.agent_runtime_unavailable)) }
+            state.update { it.copy(error = uiText(Res.string.agent_runtime_unavailable)) }
             return false
         }
         return true
@@ -743,7 +748,7 @@ internal class ChatAgent(
                 "sessionId=${snapshot.sessionId ?: "none"} phase=${snapshot.phase.name}"
         }
         if (snapshot.phase != ChatPhase.CLOSED) state.update { current ->
-            if (current.phase == snapshot.phase) current.copy(error = tr(
+            if (current.phase == snapshot.phase) current.copy(error = uiText(
                 Res.string.agent_runtime_cannot_accept_commands_value, snapshot.phase.name,
             )) else current
         }
