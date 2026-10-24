@@ -793,7 +793,7 @@
     <string name="anti_feedback_off_ack">Solicitud para desactivar la supresión de acoples confirmada</string>
     <string name="robot_wifi">Wi-Fi del robot</string>
     <string name="wifi_connect_first">Conecta un robot para consultar y gestionar su Wi-Fi.</string>
-    <string name="wifi_read_failed">No se pudo leer la información Wi-Fi. Consulta de nuevo.</string>
+    <string name="wifi_read_failed">No se pudo leer la información de conexión. Consulta de nuevo.</string>
     <string name="wifi_save_uncertain">Algunos ajustes del punto de acceso están sin confirmar. Revisa cada resultado y consulta o guarda de nuevo.</string>
     <string name="wifi_reboot_rejected">No se pudo enviar o confirmar el reinicio. Revisa las tareas activas antes de reintentar.</string>
     <string name="wifi_reboot_uncertain">Reinicio sin confirmar. Comprueba el Wi-Fi del sistema e intenta reconectar.</string>
@@ -802,6 +802,7 @@
     <string name="wifi_verification_failed">Los ajustes de red indicados por el robot no son los esperados.</string>
     <string name="wifi_target_changed">La conexión del robot cambió. Consulta de nuevo su información Wi-Fi.</string>
     <string name="wifi_task_active">Termina los scripts, las capturas, la voz o las transferencias antes de cambiar la red.</string>
+    <string name="wifi_no_active_link">Sin enlace activo</string>
     <string name="wifi_mode">Modo de conexión: %1$s</string>
     <string name="wifi_current_name">Nombre Wi-Fi consultado: %1$s</string>
     <string name="wifi_name">Nombre del punto de acceso</string>
@@ -817,8 +818,8 @@
     <string name="wifi_restart_only">Reiniciar Wi-Fi</string>
     <string name="wifi_restart_question">¿Reiniciar el Wi-Fi del robot?</string>
     <string name="wifi_restart_summary">La conexión actual terminará. Únete a la red adecuada en los ajustes del sistema y vuelve aquí para reconectar.</string>
-    <string name="wifi_query">Consultar información Wi-Fi</string>
-    <string name="wifi_reading">Leyendo información Wi-Fi…</string>
+    <string name="wifi_query">Consultar información de conexión</string>
+    <string name="wifi_reading">Leyendo información de conexión…</string>
     <string name="wifi_saving">Guardando punto de acceso…</string>
     <string name="wifi_ssid_ack">Solicitud de nombre del punto de acceso confirmada</string>
     <string name="wifi_password_ack">Solicitud de contraseña del punto de acceso confirmada</string>

@@ -12,13 +12,21 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import cn.elonzh.hanppie.resources.Res
+import cn.elonzh.hanppie.resources.wifi_no_active_link
+import cn.elonzh.hanppie.resources.wifi_network_tab
 import cn.elonzh.hanppie.robot.network.*
 import cn.elonzh.hanppie.robot.protocol.*
 import cn.elonzh.hanppie.robot.session.*
 import cn.elonzh.hanppie.ui.app.*
 import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
+import cn.elonzh.hanppie.ui.i18n.uiText
 import cn.elonzh.hanppie.ui.scripts.EditorDocument
+import cn.elonzh.hanppie.ui.settings.AppearanceController
+import cn.elonzh.hanppie.ui.settings.AppearanceSettings
+import cn.elonzh.hanppie.ui.settings.NightMode
 import kotlinx.coroutines.*
 import org.junit.Rule
 import org.junit.Test
@@ -165,7 +173,8 @@ class RobotWifiLayoutTest {
             model.robotWifi.attach(service, origin)
             model.state.value = model.state.value.copy(connected = true)
             try {
-                setContent { TestWorkbenchTheme {
+                setContent { TestWorkbenchTheme(AppearanceController(AppearanceSettings(
+                    if (width == 1024 || fontScale > 1f) NightMode.DARK else NightMode.LIGHT))) {
                     CompositionLocalProvider(LocalDensity provides Density(1f, fontScale)) {
                         RobotWifiPage(model, Modifier.fillMaxSize().padding(16.dp), onBack = {}, onOpenWifiSettings = {})
                     }
@@ -203,6 +212,54 @@ class RobotWifiLayoutTest {
                 onNodeWithTag("wifi-confirm").performClick()
                 waitUntil(timeoutMillis = 3_000) { model.robotWifi.state.value.recovery == null }
                 assertNull(model.robotWifi.state.value.draft)
+                runOnIdle { model.state.value = model.state.value.copy(connected = true) }
+                for (code in listOf(2, 1, 4, 255)) {
+                    runOnIdle {
+                        service.profile = RobotWifiProfile(code, if (code == 2) "router" else null, null)
+                        model.robotWifi.attach(service, origin)
+                    }
+                    waitUntil(timeoutMillis = 3_000) { model.robotWifi.state.value.profile?.modeCode == code }
+                    onNodeWithTag("wifi-mode").assertIsDisplayed()
+                    onNodeWithTag("wifi-ssid").assertDoesNotExist()
+                    onNodeWithTag("wifi-password").assertDoesNotExist()
+                    if (code == 2) {
+                        onNodeWithTag("wifi-tabs").assertIsDisplayed()
+                        onNodeWithText(uiText(Res.string.wifi_network_tab).resolve()).performClick()
+                        onNodeWithTag("wifi-reboot").performScrollTo().assertIsEnabled()
+                        onNodeWithTag("wifi-body").performScrollToIndex(0)
+                    } else {
+                        onNodeWithTag("wifi-tabs").assertDoesNotExist()
+                        onNodeWithTag("wifi-reboot").assertDoesNotExist()
+                    }
+                    if (code == 1) onNodeWithTag("wifi-mode").assertTextContains("SDR", substring = true)
+                    if (code == 4) onNodeWithTag("wifi-mode").assertTextContains(uiText(Res.string.wifi_no_active_link).resolve(), substring = true)
+                    onNodeWithTag("wifi-query").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                    snapshot("wifi-mode-$code-$width-$height-$language", onNodeWithTag("robot-wifi-page"))
+                    if (width == 844 && fontScale == 1.4f && code in listOf(1, 4)) {
+                        for (locale in AppLanguage.entries) {
+                            runOnIdle { Localization.select(locale.preference) }
+                            if (code == 1) onNodeWithTag("wifi-mode").assertTextContains("SDR", substring = true)
+                            else onNodeWithTag("wifi-mode").assertTextContains(uiText(Res.string.wifi_no_active_link).resolve(), substring = true)
+                            onNodeWithTag("wifi-query").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                            snapshot("wifi-mode-$code-$width-$height-${locale.preference}-large", onNodeWithTag("robot-wifi-page"))
+                        }
+                        runOnIdle { Localization.select(language) }
+                    }
+                }
+                val beforeFailure = service.reads
+                runOnIdle { service.readError = RobotRequestException(RequestProblem.TIMED_OUT); model.robotWifi.refresh() }
+                waitUntil(timeoutMillis = 3_000) { model.robotWifi.state.value.error != null && !model.robotWifi.state.value.busy }
+                onNodeWithTag("wifi-mode").assertDoesNotExist()
+                onNodeWithTag("wifi-error").assertIsDisplayed()
+                mainClock.advanceTimeBy(500); waitForIdle()
+                assertEquals(beforeFailure + 1, service.reads, "A failed mode query must wait for the user's retry")
+                snapshot("wifi-mode-error-$width-$height-$language", onNodeWithTag("robot-wifi-page"))
+                runOnIdle { service.readError = null; service.profile = RobotWifiProfile(1, null, null) }
+                onNodeWithTag("wifi-query").performClick()
+                waitUntil(timeoutMillis = 3_000) { model.robotWifi.state.value.profile?.modeCode == 1 }
+                onNodeWithTag("wifi-mode").assertTextContains("SDR", substring = true)
+                onNodeWithTag("wifi-error").assertDoesNotExist()
+                snapshot("wifi-mode-retry-$width-$height-$language", onNodeWithTag("robot-wifi-page"))
             } finally { model.close(); Localization.initialize("zh", null) }
         }
 

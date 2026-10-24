@@ -22,6 +22,12 @@ internal data class WifiDraft(val ssid: String, val password: String) {
     override fun toString() = "WifiDraft(<redacted>)"
 }
 
+internal fun RobotWifiProfile.apDraft(): WifiDraft? {
+    val name = ssid ?: return null
+    val secret = password ?: return null
+    return if (accessPoint) WifiDraft(name, secret) else null
+}
+
 internal enum class WifiPhase { IDLE, READING, EDITING, SAVING, READY, REBOOTING, RADIO_CHANGING, NETWORK_REQUIRED, RECONNECTING, VERIFIED }
 internal data class WifiRecovery(val origin: RobotTarget, val previous: RobotWifiProfile, val expected: RobotWifiProfile,
     val configurationRequested: Boolean, val expectedRadio: WifiRadioTarget? = null)
@@ -102,7 +108,8 @@ internal class RobotWifiController(private val scope: CoroutineScope,
     }
 
     fun edit(ssid: String, password: String) {
-        if (!state.value.busy && state.value.connected && state.value.phase in setOf(WifiPhase.EDITING, WifiPhase.READY, WifiPhase.VERIFIED))
+        if (!state.value.busy && state.value.connected && state.value.profile?.accessPoint == true &&
+            state.value.phase in setOf(WifiPhase.EDITING, WifiPhase.READY, WifiPhase.VERIFIED))
             state.update { it.copy(draft = WifiDraft(ssid, password), phase = WifiPhase.EDITING, error = null) }
     }
 
@@ -113,7 +120,8 @@ internal class RobotWifiController(private val scope: CoroutineScope,
                 val profile = current.service.read()
                 currentCoroutineContext().ensureActive()
                 update(token) { it.copy(profile = profile, phase = WifiPhase.EDITING,
-                    draft = if (profile.accessPoint) it.draft ?: profile.password?.let { secret -> WifiDraft(profile.ssid, secret) } else null) }
+                    draft = if (profile.accessPoint) it.draft ?: profile.apDraft() else null,
+                    radio = it.radio?.takeIf { radio -> profile.hasWifiConfiguration && radio.modeCode == profile.modeCode }) }
             } catch (error: CancellationException) { throw error }
             catch (_: Exception) { update(token) { it.copy(profile = null, phase = WifiPhase.EDITING, error = uiText(Res.string.wifi_read_failed)) } }
         }
@@ -142,7 +150,7 @@ internal class RobotWifiController(private val scope: CoroutineScope,
 
     fun refreshRadio() {
         val current = binding ?: return
-        if (state.value.recovery != null) return
+        if (state.value.recovery != null || state.value.profile?.hasWifiConfiguration != true) return
         launch(WifiPhase.READING, current) { token ->
             try {
                 val radio = current.service.readRadio()
@@ -201,6 +209,7 @@ internal class RobotWifiController(private val scope: CoroutineScope,
         val current = binding ?: return
         val before = state.value
         val profile = before.profile ?: return
+        if (!profile.hasWifiConfiguration) return
         val recovery = before.recovery ?: WifiRecovery(current.origin, profile, profile, false)
         if (recovery.configurationRequested && (before.phase != WifiPhase.READY || before.confirmed.size != 2)) return
         launch(WifiPhase.REBOOTING, current) { token ->
@@ -235,7 +244,7 @@ internal class RobotWifiController(private val scope: CoroutineScope,
                 val profile = verified.profile
                 currentCoroutineContext().ensureActive()
                 update(token) { it.copy(phase = WifiPhase.VERIFIED, profile = profile, radio = verified.radio, recovery = null,
-                    draft = profile.password?.let { secret -> WifiDraft(profile.ssid, secret) }, confirmed = emptySet()) }
+                    draft = profile.apDraft(), confirmed = emptySet()) }
             } catch (error: CancellationException) { throw error }
             catch (_: Exception) { update(token) { it.copy(phase = WifiPhase.NETWORK_REQUIRED, error = uiText(Res.string.wifi_reconnect_failed)) } }
         }

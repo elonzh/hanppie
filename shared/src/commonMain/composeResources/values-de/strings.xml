@@ -793,7 +793,7 @@
     <string name="anti_feedback_off_ack">Deaktivierung der Rückkopplungsunterdrückung bestätigt</string>
     <string name="robot_wifi">Roboter-WLAN</string>
     <string name="wifi_connect_first">Verbinden Sie den Roboter, um sein WLAN abzufragen und zu verwalten.</string>
-    <string name="wifi_read_failed">WLAN-Informationen konnten nicht gelesen werden. Fragen Sie erneut ab.</string>
+    <string name="wifi_read_failed">Verbindungsinformationen konnten nicht gelesen werden. Fragen Sie erneut ab.</string>
     <string name="wifi_save_uncertain">Einige Hotspot-Einstellungen sind unbestätigt. Prüfen Sie jedes Ergebnis und fragen oder speichern Sie erneut.</string>
     <string name="wifi_reboot_rejected">Neustartanfrage konnte nicht gesendet oder bestätigt werden. Prüfen Sie vor einem erneuten Versuch aktive Aufgaben.</string>
     <string name="wifi_reboot_uncertain">Neustartergebnis unbestätigt. Prüfen Sie das System-WLAN und versuchen Sie erneut zu verbinden.</string>
@@ -802,6 +802,7 @@
     <string name="wifi_verification_failed">Die vom Roboter gemeldeten Netzwerkeinstellungen weichen von der Erwartung ab.</string>
     <string name="wifi_target_changed">Roboterverbindung geändert. Fragen Sie seine WLAN-Informationen erneut ab.</string>
     <string name="wifi_task_active">Beenden Sie Skripte, Aufnahmen, Gegensprechen oder Medienübertragungen vor einer Netzwerkänderung.</string>
+    <string name="wifi_no_active_link">Keine aktive Verbindung</string>
     <string name="wifi_mode">Verbindungsmodus: %1$s</string>
     <string name="wifi_current_name">Abgefragter WLAN-Name: %1$s</string>
     <string name="wifi_name">Hotspot-Name</string>
@@ -817,8 +818,8 @@
     <string name="wifi_restart_only">WLAN neu starten</string>
     <string name="wifi_restart_question">Roboter-WLAN neu starten?</string>
     <string name="wifi_restart_summary">Die aktuelle Verbindung wird beendet. Verbinden Sie sich in den Systemeinstellungen mit dem passenden Netzwerk und kehren Sie zum erneuten Verbinden hierher zurück.</string>
-    <string name="wifi_query">WLAN-Informationen abfragen</string>
-    <string name="wifi_reading">WLAN-Informationen werden gelesen…</string>
+    <string name="wifi_query">Verbindungsinformationen abfragen</string>
+    <string name="wifi_reading">Verbindungsinformationen werden gelesen…</string>
     <string name="wifi_saving">Hotspot-Einstellungen werden gespeichert…</string>
     <string name="wifi_ssid_ack">Anfrage zum Hotspot-Namen bestätigt</string>
     <string name="wifi_password_ack">Anfrage zum Hotspot-Passwort bestätigt</string>

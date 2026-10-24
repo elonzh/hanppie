@@ -12,12 +12,13 @@ internal class WifiFixture : RobotWifiService {
     val channelWrites = mutableListOf<Int>()
     val modeWrites = mutableListOf<WifiChannelMode>()
     var radioError: Exception? = null
+    var radioReads = 0
     var radioWriteError: Exception? = null
     var radioBeforeWriteError: Exception? = null
     var applyRadioWrites = true
     var reportGate: CompletableDeferred<Unit>? = null
     var reportError: Exception? = null
-    override suspend fun readRadio(): WifiRadioSettings { radioError?.let { throw it }; return radio }
+    override suspend fun readRadio(): WifiRadioSettings { radioReads++; radioError?.let { throw it }; return radio }
     override suspend fun setChannelMode(mode: WifiChannelMode, onDispatch: () -> Unit) {
         radioBeforeWriteError?.let { throw it }; onDispatch(); modeWrites += mode
         radioWriteError?.let { throw it }; if (applyRadioWrites) radio = radio.copy(selectionCode = mode.code)

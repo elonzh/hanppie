@@ -27,8 +27,16 @@ data class RobotApCredentials(val ssid: String, val password: String) {
     }
 }
 
-data class RobotWifiProfile(val modeCode: Int, val ssid: String, val password: String?) {
-    val accessPoint: Boolean get() = modeCode == 0
+enum class RobotLinkMode(val code: Int) {
+    ACCESS_POINT(0), SDR(1), STATION(2), NONE(4);
+
+    companion object { fun fromCode(code: Int): RobotLinkMode? = entries.firstOrNull { it.code == code } }
+}
+
+data class RobotWifiProfile(val modeCode: Int, val ssid: String?, val password: String?) {
+    val linkMode: RobotLinkMode? get() = RobotLinkMode.fromCode(modeCode)
+    val accessPoint: Boolean get() = linkMode == RobotLinkMode.ACCESS_POINT
+    val hasWifiConfiguration: Boolean get() = accessPoint || linkMode == RobotLinkMode.STATION
     override fun toString(): String = "RobotWifiProfile(mode=$modeCode, <redacted>)"
 }
 
@@ -72,6 +80,8 @@ internal class WifiCommands(private val nowMillis: () -> Long = { robotNanoTime(
 
     override suspend fun read(): RobotWifiProfile = task {
         val mode = mode()
+        if (mode != RobotLinkMode.ACCESS_POINT.code && mode != RobotLinkMode.STATION.code)
+            return@task RobotWifiProfile(mode, null, null)
         val ssid = decode(command(Protocol.CMD_WIFI_AP_GET_SSID))
         val password = if (mode == 0) decode(command(Protocol.CMD_WIFI_AP_GET_PASSWORD)) else null
         RobotWifiProfile(mode, ssid, password)
@@ -91,6 +101,7 @@ internal class WifiCommands(private val nowMillis: () -> Long = { robotNanoTime(
 
     private suspend fun readRadioUnlocked(): WifiRadioSettings {
         val mode = mode()
+        check(mode == RobotLinkMode.ACCESS_POINT.code || mode == RobotLinkMode.STATION.code) { "当前连接没有 Wi-Fi 信道配置" }
         val (channel, available) = WifiChannelProtocol.channels(command(0x28))
         val selection = command(0x17)
         if (selection.size < 2) invalid()

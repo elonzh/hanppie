@@ -793,7 +793,7 @@
     <string name="anti_feedback_off_ack">已确认防啸叫关闭请求</string>
     <string name="robot_wifi">机器人 Wi-Fi</string>
     <string name="wifi_connect_first">连接机器人后可查询和管理 Wi-Fi。</string>
-    <string name="wifi_read_failed">未能读取 Wi-Fi 信息，请重新查询。</string>
+    <string name="wifi_read_failed">未能读取连接信息，请重新查询。</string>
     <string name="wifi_save_uncertain">有热点设置未确认。请查看各项结果，再查询或重试保存。</string>
     <string name="wifi_reboot_rejected">未能发送或确认重启请求，请检查当前任务后重试。</string>
     <string name="wifi_reboot_uncertain">重启结果未确认。请检查系统 Wi-Fi，再尝试重新连接。</string>
@@ -802,6 +802,7 @@
     <string name="wifi_verification_failed">机器人返回的网络配置与本次期望不一致。</string>
     <string name="wifi_target_changed">机器人连接已变化，请重新查询网络信息。</string>
     <string name="wifi_task_active">请先结束脚本、拍录、对讲或媒体传输，再修改网络。</string>
+    <string name="wifi_no_active_link">无活动链路</string>
     <string name="wifi_mode">连接方式：%1$s</string>
     <string name="wifi_current_name">查询到的 Wi-Fi 名称：%1$s</string>
     <string name="wifi_name">热点名称</string>
@@ -817,8 +818,8 @@
     <string name="wifi_restart_only">重启 Wi-Fi</string>
     <string name="wifi_restart_question">重启机器人 Wi-Fi？</string>
     <string name="wifi_restart_summary">当前连接将断开。请在系统网络设置中加入对应网络，再回到这里重新连接。</string>
-    <string name="wifi_query">查询 Wi-Fi 信息</string>
-    <string name="wifi_reading">正在查询 Wi-Fi 信息…</string>
+    <string name="wifi_query">查询连接信息</string>
+    <string name="wifi_reading">正在查询连接信息…</string>
     <string name="wifi_saving">正在保存热点设置…</string>
     <string name="wifi_ssid_ack">热点名称请求已确认</string>
     <string name="wifi_password_ack">热点密码请求已确认</string>

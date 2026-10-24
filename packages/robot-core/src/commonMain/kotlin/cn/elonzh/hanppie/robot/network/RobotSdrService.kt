@@ -74,7 +74,7 @@ internal class SdrCommands(private val request: suspend (Int, Int, Int, ByteArra
     private suspend fun readUnlocked(): SdrSettings? {
         val mode = command(Protocol.HOST_WIFI, Protocol.CMDSET_WIFI, Protocol.CMD_WIFI_GET_WORK_MODE)
         if (mode.size < 2) invalid()
-        if (mode.u8(1) != 1) return null
+        if (RobotLinkMode.fromCode(mode.u8(1)) != RobotLinkMode.SDR) return null
         val p = command(0x0e, Protocol.CMDSET_HDVT, 0x21)
         if (p.size < 7) invalid()
         return SdrSettings(p.u8(1), p.u8(2), p.u16(3), p.u8(5), p.u8(6) != 0)

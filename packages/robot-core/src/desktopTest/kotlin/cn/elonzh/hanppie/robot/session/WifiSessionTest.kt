@@ -6,6 +6,7 @@ import kotlinx.coroutines.*
 import java.net.*
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 import kotlin.test.*
 
@@ -14,6 +15,7 @@ class WifiSessionTest {
         val socket = DatagramSocket(0, InetAddress.getLoopbackAddress()).apply { soTimeout = 30 }
         val running = AtomicBoolean(true)
         val drop = AtomicBoolean(false)
+        val mode = AtomicInteger(0)
         val requests = CopyOnWriteArrayList<DussFrame>()
         val worker = thread(isDaemon = true) {
             while (running.get()) try {
@@ -24,7 +26,7 @@ class WifiSessionTest {
                     requests += frame
                     if (drop.get()) continue
                     val body = when (frame.id) {
-                        0x39 -> byteArrayOf(0, 0)
+                        0x39 -> byteArrayOf(0, mode.get().toByte())
                         7 -> byteArrayOf(0, 4) + "RMS1".encodeToByteArray()
                         0x0e -> byteArrayOf(0, 8) + "password".encodeToByteArray()
                         else -> byteArrayOf(0)
@@ -46,6 +48,13 @@ class WifiSessionTest {
                 assertEquals(WifiConfirmedField.entries.toList(), confirmed)
                 assertEquals(listOf(0x39, 7, 0x0e, 0x39, 8, 0x0d, 0x15), requests.map { it.id })
                 assertTrue(requests.all { it.sender == 2 && it.attr == 0x40 })
+                for (code in listOf(1, 4, 255)) {
+                    mode.set(code)
+                    val before = requests.size
+                    assertEquals(RobotWifiProfile(code, null, null), session.wifi.read())
+                    assertEquals(listOf(0x39), requests.drop(before).map { it.id })
+                }
+                mode.set(0)
                 session.enterRemote()
                 assertFailsWith<IllegalStateException> { session.wifi.reboot() }
                 assertFailsWith<IllegalStateException> { session.wifi.setChannelMode(WifiChannelMode.MANUAL) {} }
@@ -53,8 +62,9 @@ class WifiSessionTest {
                 assertFailsWith<IllegalStateException> { session.wifi.configure(RobotApCredentials("test", "password")) {} }
                 assertFailsWith<IllegalStateException> { session.wifi.setChannel(6) {} }
                 session.normalMode(); drop.set(true)
+                val beforePending = requests.size
                 val pending = async { runCatching { session.wifi.read() }.exceptionOrNull() }
-                withTimeout(2_000) { while (requests.size < 8) delay(10) }
+                withTimeout(2_000) { while (requests.size <= beforePending) delay(10) }
                 session.close()
                 assertEquals(RequestProblem.DISCONNECTED, (pending.await() as RobotRequestException).problem)
             }

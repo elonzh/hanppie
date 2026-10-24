@@ -793,7 +793,7 @@
     <string name="anti_feedback_off_ack">ハウリング抑制を無効にする要求の確認応答を受信しました</string>
     <string name="robot_wifi">ロボットの Wi-Fi</string>
     <string name="wifi_connect_first">ロボットを接続すると、Wi-Fi の照会と管理ができます。</string>
-    <string name="wifi_read_failed">Wi-Fi 情報を読み取れませんでした。もう一度照会してください。</string>
+    <string name="wifi_read_failed">接続情報を読み取れませんでした。もう一度照会してください。</string>
     <string name="wifi_save_uncertain">アクセスポイントの設定に未確認の項目があります。各結果を確認してから、再照会または再保存してください。</string>
     <string name="wifi_reboot_rejected">再起動要求を送信または確認できませんでした。再試行する前に実行中のタスクを確認してください。</string>
     <string name="wifi_reboot_uncertain">再起動の結果を確認できません。システムの Wi-Fi を確認してから再接続してください。</string>
@@ -802,6 +802,7 @@
     <string name="wifi_verification_failed">ロボットが想定と異なるネットワーク設定を報告しました。</string>
     <string name="wifi_target_changed">接続先のロボットが変わりました。Wi-Fi 情報をもう一度照会してください。</string>
     <string name="wifi_task_active">ネットワークを変更する前に、スクリプト、撮影、通話、メディア転送を終了してください。</string>
+    <string name="wifi_no_active_link">有効なリンクなし</string>
     <string name="wifi_mode">接続モード: %1$s</string>
     <string name="wifi_current_name">照会した Wi-Fi 名: %1$s</string>
     <string name="wifi_name">アクセスポイント名</string>
@@ -817,8 +818,8 @@
     <string name="wifi_restart_only">Wi-Fi を再起動</string>
     <string name="wifi_restart_question">ロボットの Wi-Fi を再起動しますか？</string>
     <string name="wifi_restart_summary">現在の接続は終了します。システム設定で対象のネットワークに接続し、ここに戻って再接続してください。</string>
-    <string name="wifi_query">Wi-Fi 情報を照会</string>
-    <string name="wifi_reading">Wi-Fi 情報を読み取り中…</string>
+    <string name="wifi_query">接続情報を照会</string>
+    <string name="wifi_reading">接続情報を読み取り中…</string>
     <string name="wifi_saving">アクセスポイント設定を保存中…</string>
     <string name="wifi_ssid_ack">アクセスポイント名の要求に確認応答がありました</string>
     <string name="wifi_password_ack">パスワードの要求に確認応答がありました</string>

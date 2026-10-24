@@ -793,7 +793,7 @@
     <string name="anti_feedback_off_ack">Disable feedback suppression request acknowledged</string>
     <string name="robot_wifi">Robot Wi-Fi</string>
     <string name="wifi_connect_first">Connect a robot to query and manage its Wi-Fi.</string>
-    <string name="wifi_read_failed">Could not read Wi-Fi information. Please query again.</string>
+    <string name="wifi_read_failed">Could not read connection information. Please query again.</string>
     <string name="wifi_save_uncertain">Some hotspot settings are unconfirmed. Check each result, then query or save again.</string>
     <string name="wifi_reboot_rejected">Could not send or confirm the restart request. Check active tasks before retrying.</string>
     <string name="wifi_reboot_uncertain">Restart outcome is unconfirmed. Check system Wi-Fi, then try reconnecting.</string>
@@ -802,6 +802,7 @@
     <string name="wifi_verification_failed">The robot reported different network settings than expected.</string>
     <string name="wifi_target_changed">The robot connection changed. Query its Wi-Fi information again.</string>
     <string name="wifi_task_active">End scripts, capture, talk or media transfers before changing the network.</string>
+    <string name="wifi_no_active_link">No active link</string>
     <string name="wifi_mode">Connection mode: %1$s</string>
     <string name="wifi_current_name">Queried Wi-Fi name: %1$s</string>
     <string name="wifi_name">Hotspot name</string>
@@ -817,8 +818,8 @@
     <string name="wifi_restart_only">Restart Wi-Fi</string>
     <string name="wifi_restart_question">Restart robot Wi-Fi?</string>
     <string name="wifi_restart_summary">The current connection will end. Join the appropriate network in system settings, then return here to reconnect.</string>
-    <string name="wifi_query">Query Wi-Fi information</string>
-    <string name="wifi_reading">Reading Wi-Fi information…</string>
+    <string name="wifi_query">Query connection information</string>
+    <string name="wifi_reading">Reading connection information…</string>
     <string name="wifi_saving">Saving hotspot settings…</string>
     <string name="wifi_ssid_ack">Hotspot name request acknowledged</string>
     <string name="wifi_password_ack">Hotspot password request acknowledged</string>

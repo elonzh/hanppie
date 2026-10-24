@@ -374,6 +374,8 @@ SNR 转换要求物理载荷至少 18 字节；偏移 0 为 uint32LE 声明总�
 
 固定 macOS 1.1.5/build 239 包含 `RobomasterSDRLink`；它与 Wi-Fi 的节点、命令和枚举独立。`Base.CONTROL/LinkMode.cs` 为 AP=0、SDR=1、Station=2、None=4，`RealController` 将 `DJIWiFiLinkMode` 的读取值直接转换为该枚举；这为当前模式探测提供客户端依据，但没有证明现有 UDP 入口在 SDR 硬件上的可达性。**客户端代码 / 待实机验证**
 
+`Module.Setting.View/ViewSettingConnect.OnUpdateConnectionState` 在 AP/Station/SDR 之间选择不同面板，None 不进入已连接分支；这不是将所有非 AP 值当作路由器或未知 Wi-Fi 的依据。该枚举比 `RobotService/DJI/DJIWiFiMode.cs` 的 AP/Station 定义更广，需连同具名消费者解释。Hanppie 复用既有 `07:39` 查询及原始模式字节，仅对 AP/Station 继续查询 Wi-Fi 字段；不为其他模式猜测 SSID、凭据、信道或新的 SDR 传输路径。实际固件是否报告各值、何时变化及各物理连接模式仍未验。**客户端 / 当前代码 / 待验证**
+
 | 操作 | 原生目的字节 / cmdset:id / 载荷 | 原生入口 |
 | --- | --- | --- |
 | 更新配置快照 | `0x0e` / `09:21` / 空 | ActionUpdateConfigs `0x6d61c0`；目的字节 `0x6d628a` |

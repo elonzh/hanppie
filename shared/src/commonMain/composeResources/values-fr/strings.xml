@@ -793,7 +793,7 @@
     <string name="anti_feedback_off_ack">Demande de désactivation de la suppression du Larsen acquittée</string>
     <string name="robot_wifi">Wi-Fi du robot</string>
     <string name="wifi_connect_first">Connectez un robot pour consulter et gérer son Wi-Fi.</string>
-    <string name="wifi_read_failed">Impossible de lire les informations Wi-Fi. Interrogez à nouveau.</string>
+    <string name="wifi_read_failed">Impossible de lire les informations de connexion. Interrogez à nouveau.</string>
     <string name="wifi_save_uncertain">Certains paramètres du point d’accès ne sont pas confirmés. Vérifiez chaque résultat, puis interrogez ou enregistrez à nouveau.</string>
     <string name="wifi_reboot_rejected">Impossible d’envoyer ou de confirmer le redémarrage. Vérifiez les tâches actives avant de réessayer.</string>
     <string name="wifi_reboot_uncertain">Résultat du redémarrage non confirmé. Vérifiez le Wi-Fi du système, puis reconnectez-vous.</string>
@@ -802,6 +802,7 @@
     <string name="wifi_verification_failed">Le robot a indiqué des paramètres réseau différents de ceux attendus.</string>
     <string name="wifi_target_changed">La connexion au robot a changé. Interrogez à nouveau ses informations Wi-Fi.</string>
     <string name="wifi_task_active">Terminez les scripts, captures, conversations audio et transferts multimédias avant de modifier le réseau.</string>
+    <string name="wifi_no_active_link">Aucune liaison active</string>
     <string name="wifi_mode">Mode de connexion : %1$s</string>
     <string name="wifi_current_name">Nom Wi-Fi lu : %1$s</string>
     <string name="wifi_name">Nom du point d’accès</string>
@@ -817,8 +818,8 @@
     <string name="wifi_restart_only">Redémarrer le Wi-Fi</string>
     <string name="wifi_restart_question">Redémarrer le Wi-Fi du robot ?</string>
     <string name="wifi_restart_summary">La connexion actuelle sera interrompue. Rejoignez le réseau approprié dans les réglages système, puis revenez ici pour vous reconnecter.</string>
-    <string name="wifi_query">Interroger les informations Wi-Fi</string>
-    <string name="wifi_reading">Lecture des informations Wi-Fi…</string>
+    <string name="wifi_query">Interroger les informations de connexion</string>
+    <string name="wifi_reading">Lecture des informations de connexion…</string>
     <string name="wifi_saving">Enregistrement des paramètres du point d’accès…</string>
     <string name="wifi_ssid_ack">Demande de nom du point d’accès acquittée</string>
     <string name="wifi_password_ack">Demande de mot de passe du point d’accès acquittée</string>

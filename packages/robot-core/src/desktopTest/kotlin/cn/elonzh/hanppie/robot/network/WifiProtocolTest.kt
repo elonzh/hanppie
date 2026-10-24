@@ -16,22 +16,39 @@ class WifiProtocolTest {
         assertEquals(listOf(0x39, 7, 0x0e), calls)
     }
 
-    @Test fun stationAndUnknownModesNeverQueryARouterPasswordAndMalformedRepliesFail(): Unit = runBlocking {
+    @Test fun stationNeverQueriesARouterPasswordAndMalformedRepliesFail(): Unit = runBlocking {
         var mode = byteArrayOf(0, 2)
         var name = reply("router")
         val ids = mutableListOf<Int>()
         val service = WifiCommands { _, _, id, _ -> ids += id; if (id == 0x39) mode else name }
-        for (code in listOf(2, 255)) {
-            mode = byteArrayOf(0, code.toByte())
-            assertEquals(RobotWifiProfile(code, "router", null), service.read())
-        }
-        assertEquals(listOf(0x39, 7, 0x39, 7), ids)
+        assertEquals(RobotWifiProfile(2, "router", null), service.read())
+        assertEquals(listOf(0x39, 7), ids)
         for (invalid in listOf(byteArrayOf(), byteArrayOf(0), byteArrayOf(0, 9, 65), byteArrayOf(0, 1, 0), byteArrayOf(0, 1, 0xff.toByte()))) {
             name = invalid
             assertEquals(RequestProblem.INVALID_RESPONSE, assertFailsWith<RobotRequestException> { service.read() }.problem)
         }
         mode = byteArrayOf(0)
         assertEquals(RequestProblem.INVALID_RESPONSE, assertFailsWith<RobotRequestException> { service.read() }.problem)
+    }
+
+    @Test fun sdrNoneAndUnknownModesDoNotDependOnWifiNamesPasswordsOrChannels(): Unit = runBlocking {
+        var mode = 1
+        val ids = mutableListOf<Int>()
+        val service = WifiCommands { node, set, id, payload ->
+            assertEquals(7, node); assertEquals(7, set); assertTrue(payload.isEmpty())
+            ids += id
+            check(id == 0x39) { "Non-Wi-Fi links must not query Wi-Fi configuration" }
+            byteArrayOf(0, mode.toByte())
+        }
+        for (code in listOf(1, 4, 255)) {
+            mode = code
+            val profile = service.read()
+            assertEquals(code, profile.modeCode)
+            assertNull(profile.ssid); assertNull(profile.password)
+            assertFalse(profile.accessPoint); assertFalse(profile.hasWifiConfiguration)
+            assertFailsWith<IllegalStateException> { service.readRadio() }
+        }
+        assertEquals(List(6) { 0x39 }, ids)
     }
 
     @Test fun writesUseUtf8ByteLengthsAndExposeEachAcknowledgementWithoutRebooting(): Unit = runBlocking {

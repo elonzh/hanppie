@@ -793,7 +793,7 @@
     <string name="anti_feedback_off_ack">已確認防嘯叫關閉請求</string>
     <string name="robot_wifi">機器人 Wi-Fi</string>
     <string name="wifi_connect_first">連線機器人後可查詢和管理 Wi-Fi。</string>
-    <string name="wifi_read_failed">未能讀取 Wi-Fi 資訊，請重新查詢。</string>
+    <string name="wifi_read_failed">未能讀取連線資訊，請重新查詢。</string>
     <string name="wifi_save_uncertain">有熱點設定未確認。請查看各項結果，再查詢或重試儲存。</string>
     <string name="wifi_reboot_rejected">未能發送或確認重啟請求，請檢查當前任務後重試。</string>
     <string name="wifi_reboot_uncertain">重啟結果未確認。請檢查系統 Wi-Fi，再嘗試重新連線。</string>
@@ -802,6 +802,7 @@
     <string name="wifi_verification_failed">機器人返回的網路配置與本次期望不一致。</string>
     <string name="wifi_target_changed">機器人連線已變化，請重新查詢網路資訊。</string>
     <string name="wifi_task_active">請先結束腳本、拍錄、對講或媒體傳輸，再修改網路。</string>
+    <string name="wifi_no_active_link">無活動連線</string>
     <string name="wifi_mode">連線方式：%1$s</string>
     <string name="wifi_current_name">查詢到的 Wi-Fi 名稱：%1$s</string>
     <string name="wifi_name">熱點名稱</string>
@@ -817,8 +818,8 @@
     <string name="wifi_restart_only">重啟 Wi-Fi</string>
     <string name="wifi_restart_question">重啟機器人 Wi-Fi？</string>
     <string name="wifi_restart_summary">當前連線將斷開。請在系統網路設定中加入對應網路，再回到這裡重新連線。</string>
-    <string name="wifi_query">查詢 Wi-Fi 資訊</string>
-    <string name="wifi_reading">正在查詢 Wi-Fi 資訊…</string>
+    <string name="wifi_query">查詢連線資訊</string>
+    <string name="wifi_reading">正在查詢連線資訊…</string>
     <string name="wifi_saving">正在儲存熱點設定…</string>
     <string name="wifi_ssid_ack">熱點名稱請求已確認</string>
     <string name="wifi_password_ack">熱點密碼請求已確認</string>

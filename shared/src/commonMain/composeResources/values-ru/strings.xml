@@ -793,7 +793,7 @@
     <string name="anti_feedback_off_ack">Получение запроса выключения подавления подтверждено</string>
     <string name="robot_wifi">Wi-Fi робота</string>
     <string name="wifi_connect_first">Подключите робота для запроса и управления Wi-Fi.</string>
-    <string name="wifi_read_failed">Не удалось прочитать данные Wi-Fi. Запросите снова.</string>
+    <string name="wifi_read_failed">Не удалось прочитать данные соединения. Запросите снова.</string>
     <string name="wifi_save_uncertain">Часть настроек точки доступа не подтверждена. Проверьте каждый результат, затем запросите или сохраните снова.</string>
     <string name="wifi_reboot_rejected">Не удалось отправить или подтвердить перезапуск. Перед повтором проверьте активные задачи.</string>
     <string name="wifi_reboot_uncertain">Результат перезапуска не подтверждён. Проверьте Wi-Fi системы и попробуйте подключиться заново.</string>
@@ -802,6 +802,7 @@
     <string name="wifi_verification_failed">Робот сообщил сетевые настройки, отличные от ожидаемых.</string>
     <string name="wifi_target_changed">Соединение с роботом изменилось. Снова запросите данные Wi-Fi.</string>
     <string name="wifi_task_active">Завершите скрипты, съёмку, голосовую связь и передачу медиа перед сменой сети.</string>
+    <string name="wifi_no_active_link">Нет активного соединения</string>
     <string name="wifi_mode">Режим соединения: %1$s</string>
     <string name="wifi_current_name">Запрошенное имя Wi-Fi: %1$s</string>
     <string name="wifi_name">Имя точки доступа</string>
@@ -817,8 +818,8 @@
     <string name="wifi_restart_only">Перезапустить Wi-Fi</string>
     <string name="wifi_restart_question">Перезапустить Wi-Fi робота?</string>
     <string name="wifi_restart_summary">Текущее соединение завершится. Подключитесь к нужной сети в настройках системы и вернитесь сюда для повторного подключения.</string>
-    <string name="wifi_query">Запросить данные Wi-Fi</string>
-    <string name="wifi_reading">Чтение данных Wi-Fi…</string>
+    <string name="wifi_query">Запросить данные соединения</string>
+    <string name="wifi_reading">Чтение данных соединения…</string>
     <string name="wifi_saving">Сохранение точки доступа…</string>
     <string name="wifi_ssid_ack">Получение запроса имени точки доступа подтверждено</string>
     <string name="wifi_password_ack">Получение запроса пароля точки доступа подтверждено</string>

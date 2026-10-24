@@ -8,6 +8,41 @@ import kotlin.test.*
 class RobotWifiControllerTest {
     private val origin = RobotTarget("127.0.0.1", "12345678")
 
+    @Test fun changingLinkModeRetiresApDraftAndRadioAndNonWifiModesRemainQueryable(): Unit = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        try {
+            val service = WifiFixture().apply { radio = radio.copy(selectionCode = 1) }
+            val controller = RobotWifiController(scope, { _, action -> action() }, {}, { _, _, _ -> error("unused") })
+            controller.attach(service, origin); controller.refresh(); controller.refreshRadio()
+            controller.showChannels(true)
+            withTimeout(2_000) { while (service.reportWrites.lastOrNull() != true) delay(1) }
+            controller.edit("unsaved", "secret_password")
+            assertNotNull(controller.state.value.radio)
+            for (code in listOf(1, 4, 255)) {
+                service.profile = RobotWifiProfile(code, null, null)
+                controller.refresh()
+                assertEquals(code, controller.state.value.profile?.modeCode)
+                assertNull(controller.state.value.draft); assertNull(controller.state.value.radio)
+                controller.edit("not_ap", "secret_password"); controller.refreshRadio(); controller.apply(); controller.reboot()
+                assertNull(controller.state.value.draft)
+                assertEquals(1, service.radioReads)
+                assertTrue(service.writes.isEmpty()); assertEquals(0, service.reboots)
+                assertNull(controller.state.value.recovery)
+                withTimeout(2_000) { while (service.reportWrites.lastOrNull() != false) delay(1) }
+                assertFalse(controller.state.value.monitoring)
+            }
+            service.readError = RobotRequestException(RequestProblem.TIMED_OUT)
+            controller.refresh(); assertNull(controller.state.value.profile); assertNotNull(controller.state.value.error)
+            service.readError = null; service.profile = RobotWifiProfile(2, "router", null)
+            controller.refresh(); assertEquals(2, controller.state.value.profile?.modeCode)
+            assertNull(controller.state.value.error); assertNull(controller.state.value.draft)
+            service.profile = RobotWifiProfile(0, "new_ap", "new_pass")
+            controller.refresh(); assertEquals(WifiDraft("new_ap", "new_pass"), controller.state.value.draft)
+            controller.detach(); assertNull(controller.state.value.profile); assertNull(controller.state.value.draft)
+            controller.close()
+        } finally { scope.cancel() }
+    }
+
     @Test fun savingAndRestartingAreSeparateAndRecoverySurvivesItsExpectedDisconnect(): Unit = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         try {

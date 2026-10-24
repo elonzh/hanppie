@@ -793,7 +793,7 @@
     <string name="anti_feedback_off_ack">하울링 억제 끄기 요청 수신 확인됨</string>
     <string name="robot_wifi">로봇 Wi-Fi</string>
     <string name="wifi_connect_first">로봇을 연결해 Wi-Fi를 조회하고 관리하세요.</string>
-    <string name="wifi_read_failed">Wi-Fi 정보를 읽을 수 없습니다. 다시 조회하세요.</string>
+    <string name="wifi_read_failed">연결 정보를 읽을 수 없습니다. 다시 조회하세요.</string>
     <string name="wifi_save_uncertain">일부 핫스폿 설정이 확인되지 않았습니다. 각 결과를 확인한 후 다시 조회하거나 저장하세요.</string>
     <string name="wifi_reboot_rejected">재시작 요청을 보내거나 확인할 수 없습니다. 재시도 전에 활성 작업을 확인하세요.</string>
     <string name="wifi_reboot_uncertain">재시작 결과가 확인되지 않았습니다. 시스템 Wi-Fi를 확인한 후 다시 연결하세요.</string>
@@ -802,6 +802,7 @@
     <string name="wifi_verification_failed">로봇이 예상과 다른 네트워크 설정을 보고했습니다.</string>
     <string name="wifi_target_changed">로봇 연결이 변경되었습니다. Wi-Fi 정보를 다시 조회하세요.</string>
     <string name="wifi_task_active">네트워크를 변경하기 전에 스크립트, 촬영, 음성 및 미디어 전송을 마치세요.</string>
+    <string name="wifi_no_active_link">활성 링크 없음</string>
     <string name="wifi_mode">연결 모드: %1$s</string>
     <string name="wifi_current_name">조회한 Wi-Fi 이름: %1$s</string>
     <string name="wifi_name">핫스폿 이름</string>
@@ -817,8 +818,8 @@
     <string name="wifi_restart_only">Wi-Fi 재시작</string>
     <string name="wifi_restart_question">로봇 Wi-Fi를 다시 시작할까요?</string>
     <string name="wifi_restart_summary">현재 연결이 종료됩니다. 시스템 설정에서 올바른 네트워크에 접속한 후 여기로 돌아와 다시 연결하세요.</string>
-    <string name="wifi_query">Wi-Fi 정보 조회</string>
-    <string name="wifi_reading">Wi-Fi 정보 읽는 중…</string>
+    <string name="wifi_query">연결 정보 조회</string>
+    <string name="wifi_reading">연결 정보 읽는 중…</string>
     <string name="wifi_saving">핫스폿 설정 저장 중…</string>
     <string name="wifi_ssid_ack">핫스폿 이름 요청 수신 확인됨</string>
     <string name="wifi_password_ack">핫스폿 비밀번호 요청 수신 확인됨</string>
