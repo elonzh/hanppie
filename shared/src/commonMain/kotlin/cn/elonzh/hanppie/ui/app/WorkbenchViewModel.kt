@@ -8,9 +8,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cn.elonzh.hanppie.resources.Res
 import cn.elonzh.hanppie.resources.no_application_can_open_this_file
+import cn.elonzh.hanppie.resources.host_file_failed_value
+import cn.elonzh.hanppie.resources.host_preferences_load_failed_value
+import cn.elonzh.hanppie.resources.host_preferences_save_failed_value
 import cn.elonzh.hanppie.robot.files.RobotFileEntry
 import cn.elonzh.hanppie.ui.i18n.Localization
-import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.ui.i18n.UiText
+import cn.elonzh.hanppie.ui.i18n.uiText
 import cn.elonzh.hanppie.ui.scripts.EditorDocument
 import cn.elonzh.hanppie.ui.scripts.suggestedScriptFileName
 import cn.elonzh.hanppie.ui.settings.AppearanceController
@@ -48,6 +52,7 @@ import kotlinx.io.buffered
 import kotlinx.io.readByteArray
 
 private val workbenchLogger = KotlinLogging.logger {}
+private class HostFileFailure(val feedback: UiText, cause: Exception) : IllegalStateException(cause)
 
 /** Container formats the platform importers can decode; the DSP itself always stores Opus. */
 private val AUDIO_EXTENSIONS = FileKitType.File("wav", "mp3", "ogg", "opus", "m4a", "aac", "flac", "wma")
@@ -71,8 +76,9 @@ internal class WorkbenchViewModel(
     }
 
     val document: MutableState<EditorDocument> = mutableStateOf(EditorDocument())
-    var fileError by mutableStateOf<String?>(null)
+    var hostError by mutableStateOf<UiText?>(null)
         private set
+    private var preferenceFailure: String? = null
     val appearance = AppearanceController { encoded ->
         viewModelScope.launch {
             persistUi("appearance") { storage.settings.saveAppearance(AppearanceSettings.decode(encoded)) }
@@ -101,7 +107,7 @@ internal class WorkbenchViewModel(
                 throw error
             } catch (error: Exception) {
                 workbenchLogger.error(error) { "Could not load UI preferences" }
-                fileError = error.message ?: error::class.simpleName.orEmpty()
+                hostError = uiText(Res.string.host_preferences_load_failed_value, error.message ?: error::class.simpleName.orEmpty())
             } finally {
                 uiPreferencesLoaded = true
             }
@@ -114,8 +120,9 @@ internal class WorkbenchViewModel(
         Localization.initialize(language, Localization.choice, persistLanguage)
     }
 
-    fun updateFileError(message: String?) {
-        fileError = message
+    fun updateHostError(message: UiText?) {
+        preferenceFailure = null
+        hostError = message
     }
 
     fun saveSpeechService(service: String) {
@@ -177,10 +184,12 @@ internal class WorkbenchViewModel(
             viewModelScope.launch {
                 try {
                     FileKit.openFileWithDefaultApplication(temporary)
-                    fileError = null
+                    clearFileError()
+                } catch (error: CancellationException) {
+                    throw error
                 } catch (error: Exception) {
                     workbenchLogger.warn(error) { "No application could open ${entry.name}" }
-                    fileError = tr(Res.string.no_application_can_open_this_file)
+                    updateHostError(uiText(Res.string.no_application_can_open_this_file))
                 }
             }
         }
@@ -189,7 +198,7 @@ internal class WorkbenchViewModel(
     fun openRobotMedia(file: LocalRobotMedia) = launchFileAction("open downloaded robot media") {
         try { FileKit.openFileWithDefaultApplication(file.file) }
         catch (error: CancellationException) { throw error }
-        catch (error: Exception) { throw IllegalStateException(tr(Res.string.no_application_can_open_this_file), error) }
+        catch (error: Exception) { throw HostFileFailure(uiText(Res.string.no_application_can_open_this_file), error) }
     }
 
     fun exportRobotMedia(file: LocalRobotMedia) = launchFileAction("export downloaded robot media") {
@@ -243,12 +252,12 @@ internal class WorkbenchViewModel(
         fileAction = viewModelScope.launch {
             try {
                 action()
-                fileError = null
+                clearFileError()
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
                 workbenchLogger.error(error) { "Could not $name" }
-                fileError = error.message ?: error::class.simpleName.orEmpty()
+                updateHostError((error as? HostFileFailure)?.feedback ?: uiText(Res.string.host_file_failed_value, error.message ?: error::class.simpleName.orEmpty()))
             } finally {
                 document.value = document.value.copy(busy = false)
             }
@@ -260,12 +269,12 @@ internal class WorkbenchViewModel(
         fileAction = viewModelScope.launch {
             try {
                 action()
-                fileError = null
+                clearFileError()
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
                 workbenchLogger.error(error) { "Could not $name" }
-                fileError = error.message ?: error::class.simpleName.orEmpty()
+                updateHostError((error as? HostFileFailure)?.feedback ?: uiText(Res.string.host_file_failed_value, error.message ?: error::class.simpleName.orEmpty()))
             }
         }
     }
@@ -273,11 +282,18 @@ internal class WorkbenchViewModel(
     private suspend fun persistUi(name: String, action: suspend () -> Unit) {
         try {
             action()
+            if (preferenceFailure == name && hostError?.resource == Res.string.host_preferences_save_failed_value) updateHostError(null)
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
             workbenchLogger.error(error) { "Could not persist $name preference" }
-            fileError = error.message ?: error::class.simpleName.orEmpty()
+            preferenceFailure = name
+            hostError = uiText(Res.string.host_preferences_save_failed_value, error.message ?: error::class.simpleName.orEmpty())
         }
+    }
+
+    private fun clearFileError() {
+        if (hostError?.resource == Res.string.host_file_failed_value || hostError?.resource == Res.string.no_application_can_open_this_file)
+            updateHostError(null)
     }
 }

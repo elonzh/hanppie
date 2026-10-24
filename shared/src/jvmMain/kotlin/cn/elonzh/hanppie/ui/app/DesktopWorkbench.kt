@@ -36,6 +36,7 @@ import cn.elonzh.hanppie.ui.chat.createAgentHttpClient
 import cn.elonzh.hanppie.ui.design.WorkbenchDialog
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.ui.i18n.uiText
 import cn.elonzh.hanppie.ui.robot.audio.DesktopLabAudioImporter
 import cn.elonzh.hanppie.ui.robot.audio.DesktopLabAudioPlayer
 import cn.elonzh.hanppie.ui.robot.remote.DesktopSpeakerInput
@@ -209,8 +210,8 @@ private fun DesktopWorkbenchWindow(onExit: () -> Unit) {
                     onImport = holder::importScript,
                     onExport = holder::exportScript,
                     onImportAudio = holder::importScriptAudio, onImportRobotFirmware = holder::importRobotFirmware,
-                    fileError = holder.fileError,
-                    onFileError = holder::updateFileError,
+                    hostError = holder.hostError,
+                    onHostError = holder::updateHostError,
                     onRobotFileUpload = holder::uploadRobotFile,
                     onRobotFileDownload = holder::downloadRobotFile,
                     onRobotFileOpen = holder::openRobotFile,
@@ -219,7 +220,7 @@ private fun DesktopWorkbenchWindow(onExit: () -> Unit) {
                     onOpenWifiSettings = wifiSettingsCommand?.let { command ->
                         {
                             try { ProcessBuilder(command).start() }
-                            catch (_: Exception) { holder.updateFileError(tr(Res.string.could_not_open_wifi_settings)) }
+                            catch (_: Exception) { holder.updateHostError(uiText(Res.string.could_not_open_wifi_settings)) }
                         }
                     },
                 )

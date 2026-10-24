@@ -96,6 +96,7 @@ import cn.elonzh.hanppie.ui.design.secondaryClick
 import cn.elonzh.hanppie.ui.i18n.DateTimeStyle
 import cn.elonzh.hanppie.ui.i18n.formatLocalDateTime
 import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.resources.host_file_failed_value
 import cn.elonzh.hanppie.ui.robot.device.ConnectionStatusChip
 import cn.elonzh.hanppie.ui.scripts.editor.CodeHistory
 import cn.elonzh.hanppie.ui.scripts.editor.ScriptCodeEditor
@@ -120,8 +121,7 @@ internal fun ScriptPage(
     compact: Boolean,
     onImport: () -> Unit,
     onExport: () -> Unit,
-    fileError: String?,
-    onFileError: (String?) -> Unit,
+    onHostError: (cn.elonzh.hanppie.ui.i18n.UiText?) -> Unit,
     onConnectionDetails: () -> Unit = {},
     onImportAudio: () -> Unit = {},
     onBackToOrigin: (() -> Unit)? = null,
@@ -176,7 +176,7 @@ internal fun ScriptPage(
         editorGeneration++
         editorField.value = TextFieldValue(next.source, TextRange(next.source.length))
         document.value = next
-        onFileError(null)
+        onHostError(null)
         editorOpen = true
     }
 
@@ -187,7 +187,8 @@ internal fun ScriptPage(
     fun report(error: Throwable) {
         if (error is CancellationException) throw error
         // Library failures have a live, localized owner; file/audio persistence failures may not.
-        onFileError(if (model.scriptLibrary.state.value.error != null) null else error.message ?: error::class.simpleName.orEmpty())
+        onHostError(if (model.scriptLibrary.state.value.error != null) null else cn.elonzh.hanppie.ui.i18n.uiText(
+            Res.string.host_file_failed_value, error.message ?: error::class.simpleName.orEmpty()))
     }
 
     fun deleteScript(target: StoredScript) {
@@ -198,7 +199,7 @@ internal fun ScriptPage(
                     document.value = EditorDocument()
                     editorOpen = false
                 }
-                onFileError(null)
+                onHostError(null)
             } catch (error: Exception) {
                 report(error)
             }
@@ -209,12 +210,12 @@ internal fun ScriptPage(
         scope.launch {
             try {
                 action()
-                onFileError(null)
+                onHostError(null)
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
                 // The audio library owns localized feedback; do not copy it into a stale file error.
-                onFileError(null)
+                onHostError(null)
             }
         }
     }
@@ -234,7 +235,7 @@ internal fun ScriptPage(
                     model.scriptLibrary.update(snapshot.scriptId, snapshot.source)
                 }
                 document.value = snapshot.stored(saved)
-                onFileError(null)
+                onHostError(null)
             } catch (error: Exception) {
                 document.value = snapshot.copy(busy = false)
                 report(error)
@@ -308,7 +309,7 @@ internal fun ScriptPage(
                             try {
                                 val renamed = model.scriptLibrary.rename(checkNotNull(snapshot.scriptId), nameDraft.trim())
                                 document.value = snapshot.stored(renamed).copy(source = snapshot.source, savedSource = snapshot.savedSource)
-                                onFileError(null)
+                                onHostError(null)
                             } catch (error: Exception) {
                                 document.value = snapshot.copy(busy = false)
                                 report(error)
@@ -494,9 +495,6 @@ internal fun ScriptPage(
                     shortWindow = shortWindow,
                     onProgramPanel = if (hasProgramUi && !programPanelOpen) ({ programPanelOpen = true }) else null,
                 )
-            }
-            fileError?.let {
-                Text(it, Modifier.padding(vertical = 8.dp), color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
             }
             libraryState.error?.let { error ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,

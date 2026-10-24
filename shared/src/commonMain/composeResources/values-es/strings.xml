@@ -1657,4 +1657,7 @@
     <string name="pressure_fire_help">Presiona con fuerza en cualquier punto de la cabina para disparar; suelta para parar. Al activarlo se oculta el botón de disparo en pantalla. Una sensibilidad mayor requiere menos presión.</string>
     <string name="camera_zoom_error_title">Zoom sin confirmar</string>
     <string name="camera_zoom_error_details">Ver problema del zoom</string>
+    <string name="host_file_failed_value">No se pudo completar la acción del archivo: %1$s</string>
+    <string name="host_preferences_load_failed_value">No se pudieron restaurar las preferencias guardadas: %1$s</string>
+    <string name="host_preferences_save_failed_value">No se pudo guardar esta preferencia: %1$s</string>
 </resources>

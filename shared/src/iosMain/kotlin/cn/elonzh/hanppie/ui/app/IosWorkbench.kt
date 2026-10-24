@@ -106,7 +106,7 @@ private fun IosWorkbench(platform: IosPlatformServices) {
                 onImport = holder::importScript, onImportAudio = holder::importScriptAudio, onImportRobotFirmware = holder::importRobotFirmware, onExport = holder::exportScript,
                 onVoiceInput = { if (voiceDisclosureAccepted) startVoice() else voiceDisclosure = true },
                 onPushToTalkStart = holder.model::beginPushToTalk, onPushToTalkStop = holder.model::endPushToTalk,
-                fileError = holder.fileError, onFileError = holder::updateFileError,
+                hostError = holder.hostError, onHostError = holder::updateHostError,
                 onRobotFileUpload = holder::uploadRobotFile, onRobotFileDownload = holder::downloadRobotFile,
                 onRobotFileOpen = holder::openRobotFile, onRobotMediaOpen = holder::openRobotMedia,
                 onRobotMediaExport = holder::exportRobotMedia, onOpenWifiSettings = { wifiGuidance = true })

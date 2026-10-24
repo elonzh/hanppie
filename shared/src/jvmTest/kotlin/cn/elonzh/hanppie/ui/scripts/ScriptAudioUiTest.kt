@@ -40,8 +40,8 @@ class ScriptAudioUiTest {
                             compact = false,
                             onImport = {},
                             onExport = {},
-                            fileError = null,
-                            onFileError = {},
+
+                            onHostError = {},
                             onImportAudio = { importRequested = true },
                         )
                     }
@@ -131,8 +131,8 @@ class ScriptAudioUiTest {
                             compact = true,
                             onImport = {},
                             onExport = {},
-                            fileError = null,
-                            onFileError = {},
+
+                            onHostError = {},
                         )
                     }
                 }

@@ -40,7 +40,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 internal fun RobotAlbumPage(model: ConsoleController, modifier: Modifier = Modifier, onBack: () -> Unit,
-    onOpen: ((LocalRobotMedia) -> Unit)? = null, onExport: ((LocalRobotMedia) -> Unit)? = null, fileError: String? = null) {
+    onOpen: ((LocalRobotMedia) -> Unit)? = null, onExport: ((LocalRobotMedia) -> Unit)? = null) {
     val controller = model.robotAlbum
     val state by controller.state.collectAsState()
     var localTab by remember { mutableStateOf(!state.connected) }
@@ -70,7 +70,6 @@ internal fun RobotAlbumPage(model: ConsoleController, modifier: Modifier = Modif
             modifier = Modifier.fillMaxWidth().testTag("album-tabs"), height = 48.dp)
         (if (localTab) state.localError else state.error)?.let { Text(it.resolve(), Modifier.testTag("album-error"),
             fontSize = 13.sp, color = MiuixTheme.colorScheme.error) }
-        fileError?.let { Text(it, Modifier.testTag("album-file-error"), fontSize = 13.sp, color = MiuixTheme.colorScheme.error) }
         if (state.busy) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(when (state.operation) {

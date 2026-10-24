@@ -1657,4 +1657,7 @@
     <string name="pressure_fire_help">Для стрельбы сильно нажмите в любом месте экрана управления; отпустите для остановки. При включении экранная кнопка стрельбы скрывается. Чем выше чувствительность, тем меньше нужно усилие.</string>
     <string name="camera_zoom_error_title">Масштабирование не подтверждено</string>
     <string name="camera_zoom_error_details">Посмотреть ошибку масштабирования</string>
+    <string name="host_file_failed_value">Не удалось выполнить операцию с файлом: %1$s</string>
+    <string name="host_preferences_load_failed_value">Не удалось восстановить сохранённые настройки: %1$s</string>
+    <string name="host_preferences_save_failed_value">Не удалось сохранить настройку: %1$s</string>
 </resources>

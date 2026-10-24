@@ -1657,4 +1657,7 @@
     <string name="pressure_fire_help">用力按压操控画面任意位置发射，抬手停止。开启后隐藏屏幕发射按钮；灵敏度越高，所需压力越小。</string>
     <string name="camera_zoom_error_title">变焦未确认</string>
     <string name="camera_zoom_error_details">查看变焦问题</string>
+    <string name="host_file_failed_value">文件操作未完成：%1$s</string>
+    <string name="host_preferences_load_failed_value">无法恢复已保存的偏好：%1$s</string>
+    <string name="host_preferences_save_failed_value">偏好保存失败：%1$s</string>
 </resources>

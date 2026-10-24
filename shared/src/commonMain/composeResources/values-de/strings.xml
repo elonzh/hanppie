@@ -1657,4 +1657,7 @@
     <string name="pressure_fire_help">Zum Feuern fest auf eine beliebige Stelle im Cockpit drücken, zum Stoppen loslassen. Die Feuertaste auf dem Bildschirm wird dabei ausgeblendet. Höhere Empfindlichkeit erfordert weniger Druck.</string>
     <string name="camera_zoom_error_title">Zoom nicht bestätigt</string>
     <string name="camera_zoom_error_details">Zoomproblem anzeigen</string>
+    <string name="host_file_failed_value">Die Dateiaktion konnte nicht abgeschlossen werden: %1$s</string>
+    <string name="host_preferences_load_failed_value">Gespeicherte Einstellungen konnten nicht wiederhergestellt werden: %1$s</string>
+    <string name="host_preferences_save_failed_value">Diese Einstellung konnte nicht gespeichert werden: %1$s</string>
 </resources>

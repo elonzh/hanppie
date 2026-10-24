@@ -35,6 +35,7 @@ import cn.elonzh.hanppie.ui.chat.createAgentHttpClient
 import cn.elonzh.hanppie.ui.design.WorkbenchDialog
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.ui.i18n.uiText
 import cn.elonzh.hanppie.ui.robot.audio.AndroidLabAudioImporter
 import cn.elonzh.hanppie.ui.robot.audio.AndroidLabAudioPlayer
 import cn.elonzh.hanppie.ui.robot.remote.AndroidSpeakerInput
@@ -182,13 +183,13 @@ fun AndroidWorkbench(autoConnectOnStart: Boolean = true) {
                             requireNotNull(component)
                             context.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                                 android.net.Uri.fromParts("package", component.packageName, null)))
-                        } catch (_: Exception) { holder.updateFileError(tr(Res.string.could_not_open_recognition_service_permissions)) }
+                        } catch (_: Exception) { holder.updateHostError(uiText(Res.string.could_not_open_recognition_service_permissions)) }
                     }) { Text(tr(Res.string.value_permissions,label)) }
                 }
                 Button({
                     audioSettings = false
                     try { context.startActivity(Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS)) }
-                    catch (_: Exception) { holder.updateFileError(tr(Res.string.could_not_open_default_voice_input_settings)) }
+                    catch (_: Exception) { holder.updateHostError(uiText(Res.string.could_not_open_default_voice_input_settings)) }
                 }) { Text(tr(Res.string.default_voice_input)) }
             }
         }
@@ -211,7 +212,7 @@ fun AndroidWorkbench(autoConnectOnStart: Boolean = true) {
             Console(holder.model, holder.document, onImport = holder::importScript, onImportAudio = holder::importScriptAudio, onImportRobotFirmware = holder::importRobotFirmware,
                 onVoiceInput = { if (voiceDisclosureAccepted) startVoice() else voiceDisclosure = true },
                 onPushToTalkStart = ::startTalk, onPushToTalkStop = ::stopTalk,
-                onExport = holder::exportScript, fileError = holder.fileError, onFileError = holder::updateFileError,
+                onExport = holder::exportScript, hostError = holder.hostError, onHostError = holder::updateHostError,
                 onSpeechSettings = { audioSettings = true },
                 onRobotFileUpload = holder::uploadRobotFile,
                 onRobotFileDownload = holder::downloadRobotFile,
@@ -220,7 +221,7 @@ fun AndroidWorkbench(autoConnectOnStart: Boolean = true) {
                 onRobotMediaExport = holder::exportRobotMedia,
                 onOpenWifiSettings = {
                     try { context.startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)) }
-                    catch (_: Exception) { holder.updateFileError(tr(Res.string.could_not_open_wifi_settings)) }
+                    catch (_: Exception) { holder.updateHostError(uiText(Res.string.could_not_open_wifi_settings)) }
                 })
         }
     }

@@ -69,7 +69,7 @@ class ScriptAudioFeedbackUiTest {
                     val scope=rememberCoroutineScope()
                     CompositionLocalProvider(LocalDensity provides Density(1f,scale)) {
                         WorkbenchTheme(appearance) {
-                            ScriptPage(model,document,compact = width < 1200,onImport = {},onExport = {},fileError = null,onFileError = {},
+                            ScriptPage(model,document,compact = width < 1200,onImport = {},onExport = {},onHostError = {},
                                 onImportAudio = { scope.launch { runCatching { model.scriptAudio.import("fixture.wav",byteArrayOf(1)) } } })
                         }
                     }

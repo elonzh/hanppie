@@ -101,7 +101,7 @@ class ProgramPanelUiTest {
                         CompositionLocalProvider(LocalDensity provides Density(density.density, scale)) {
                             Box(Modifier.fillMaxSize().padding(16.dp)) {
                                 ScriptPage(model, document, compact = width < 1100, onImport = {}, onExport = {},
-                                    fileError = null, onFileError = {})
+                                     onHostError = {})
                             }
                         }
                     }
@@ -159,7 +159,7 @@ class ProgramPanelUiTest {
             try {
                 session.labUiState.value = sample
                 setContent { WorkbenchTheme {
-                    ScriptPage(model, document, compact = false, onImport = {}, onExport = {}, fileError = null, onFileError = {})
+                    ScriptPage(model, document, compact = false, onImport = {}, onExport = {},  onHostError = {})
                 } }
                 waitUntil(timeoutMillis = 5_000) { model.labUi.value.runId == owner }
                 onNodeWithTag("program-panel-open").performClick()

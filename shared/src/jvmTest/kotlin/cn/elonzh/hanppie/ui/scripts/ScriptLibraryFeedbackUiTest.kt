@@ -44,8 +44,7 @@ class ScriptLibraryFeedbackUiTest {
             val model=testConsoleModel(scriptRepository=repository)
             val document=mutableStateOf(EditorDocument.from(original).copy(source="print('before')"))
             val appearance=AppearanceController(AppearanceSettings(if (dark) NightMode.DARK else NightMode.LIGHT))
-            var fileError by mutableStateOf<String?>(null)
-            val copiedErrors=mutableListOf<String>()
+            val copiedErrors=mutableListOf<cn.elonzh.hanppie.ui.i18n.UiText>()
             fun capture(name: String) {
                 waitForIdle()
                 val image=onNode(isRoot() and hasAnyDescendant(hasTestTag("script-editor"))).captureToImage()
@@ -69,8 +68,8 @@ class ScriptLibraryFeedbackUiTest {
                 setContent {
                     CompositionLocalProvider(LocalDensity provides Density(1f,scale)) {
                         WorkbenchTheme(appearance) {
-                            ScriptPage(model,document,compact=width<1200,onImport={},onExport={},fileError=fileError,
-                                onFileError={ fileError=it; if(it!=null) copiedErrors+=it })
+                            ScriptPage(model,document,compact=width<1200,onImport={},onExport={},
+                                onHostError={ if(it!=null) copiedErrors+=it })
                         }
                     }
                 }

@@ -92,8 +92,8 @@ internal fun Console(
     onImport: () -> Unit = {},
     onExport: () -> Unit = {},
     onImportAudio: () -> Unit = {},
-    fileError: String? = null,
-    onFileError: (String?) -> Unit = {},
+    hostError: cn.elonzh.hanppie.ui.i18n.UiText? = null,
+    onHostError: (cn.elonzh.hanppie.ui.i18n.UiText?) -> Unit = {},
     onSpeechSettings: (() -> Unit)? = null,
     onVoiceInput: (() -> Unit)? = null,
     onPushToTalkStart: (() -> Unit)? = null,
@@ -111,6 +111,9 @@ internal fun Console(
     val connectionPreferences by model.connectionPreferences.collectAsState()
     val backStack = rememberNavBackStack(workbenchNavigationConfiguration, RobotRoute)
     val currentRoute = backStack.last() as WorkbenchRoute
+    val currentHostError by rememberUpdatedState(hostError)
+    val currentOnHostError by rememberUpdatedState(onHostError)
+    var cockpitActive by remember { mutableStateOf(false) }
     val armUi by model.robotArm.state.collectAsState()
     val armRemote by model.remoteEnabled.collectAsState()
     val armForeground by model.foregroundState.collectAsState()
@@ -135,7 +138,7 @@ internal fun Console(
     val focus = LocalFocusManager.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     fun openAlbum() {
-        focus.clearFocus(); keyboard?.hide(); onFileError(null)
+        focus.clearFocus(); keyboard?.hide(); currentOnHostError(null)
         if (backStack.lastOrNull() != RobotAlbumRoute) backStack.add(RobotAlbumRoute)
     }
     fun openWifi() {
@@ -350,6 +353,7 @@ internal fun Console(
                                 }
                             }
                             Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                if (!cockpitActive) currentHostError?.let { HostFeedback(it) { currentOnHostError(null) } }
                                 Column(Modifier.weight(1f)
                                     .then(if (workspacePage || route == RobotRoute) Modifier else Modifier.widthIn(max = HanppieDesignTokens.PageMaxWidth))
                                     .fillMaxWidth()
@@ -382,8 +386,6 @@ internal fun Console(
                                                 }
                                             }
                                         }
-                                        if (route == ScriptRoute) fileError?.let { Text(it, Modifier.padding(vertical = 8.dp),
-                                            color = MiuixTheme.colorScheme.error, fontSize = 13.sp) }
                                     }
                                     if (route == ChatRoute) chatScriptError?.let {
                                         Text(it, Modifier.padding(vertical = 8.dp), color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
@@ -435,13 +437,13 @@ internal fun Console(
                                         RobotWifiRoute -> cn.elonzh.hanppie.ui.robot.network.RobotWifiPage(model, Modifier.weight(1f),
                                             ::goBack, onOpenWifiSettings)
                                         RobotAlbumRoute -> cn.elonzh.hanppie.ui.robot.album.RobotAlbumPage(model, Modifier.weight(1f),
-                                            ::goBack, onRobotMediaOpen, onRobotMediaExport, fileError)
+                                            ::goBack, onRobotMediaOpen, onRobotMediaExport)
                                         RobotRoute -> cn.elonzh.hanppie.ui.robot.scene.RobotExperience(
                                             model, state, compact, Modifier.weight(1f),
-                                            { connectionDetails = true }, ::navigate, onCockpitChanged,
+                                            { connectionDetails = true }, ::navigate, { active -> cockpitActive = active; onCockpitChanged(active) },
                                             onPushToTalkStart, onPushToTalkStop, onAlbum = ::openAlbum, onHealth = ::openHealth, onGuide = ::openGuide)
                                         ScriptRoute -> ScriptPage(model, document, compact, onImport, onExport,
-                                            fileError, onFileError, onConnectionDetails = { connectionDetails = true },
+                                            currentOnHostError, onConnectionDetails = { connectionDetails = true },
                                             onImportAudio = onImportAudio,
                                             onBackToOrigin = if (backStack.size > 1 && backStack[backStack.lastIndex - 1] == ChatRoute)
                                                 ::goBack else null)
