@@ -1007,6 +1007,8 @@
     <string name="robot_info_show">查看版本和激活状态</string>
     <string name="robot_info_hide">收起版本和激活状态</string>
     <string name="robot_info_query_all">查询全部</string>
+    <string name="robot_info_query_target">查询%1$s</string>
+    <string name="robot_info_retry_target">重新查询%1$s</string>
     <string name="robot_info_query">查询</string>
     <string name="robot_info_unread">尚未查询</string>
     <string name="robot_info_reading">正在查询…</string>

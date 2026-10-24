@@ -1007,6 +1007,8 @@
     <string name="robot_info_show">Versionen und Aktivierung anzeigen</string>
     <string name="robot_info_hide">Versionen und Aktivierung verbergen</string>
     <string name="robot_info_query_all">Alle abfragen</string>
+    <string name="robot_info_query_target">%1$s abfragen</string>
+    <string name="robot_info_retry_target">Abfrage für %1$s wiederholen</string>
     <string name="robot_info_query">Abfragen</string>
     <string name="robot_info_unread">Nicht abgefragt</string>
     <string name="robot_info_reading">Wird abgefragt…</string>

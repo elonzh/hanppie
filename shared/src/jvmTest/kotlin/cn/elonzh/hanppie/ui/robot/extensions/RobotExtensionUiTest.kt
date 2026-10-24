@@ -1,6 +1,8 @@
 package cn.elonzh.hanppie.ui.robot.extensions
 
 import androidx.compose.runtime.*
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import cn.elonzh.hanppie.robot.extensions.*
@@ -8,6 +10,9 @@ import cn.elonzh.hanppie.robot.product.*
 import cn.elonzh.hanppie.ui.app.*
 import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
+import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.ui.scripts.EditorDocument
 import kotlinx.coroutines.*
 import org.junit.Test
@@ -36,6 +41,19 @@ class RobotExtensionUiTest {
             onNodeWithTag("extensions-raw").performScrollTo().assertTextContains("有效标志 1", substring = true)
             waitUntil(timeoutMillis = 3000) { versions.contains(RobotVersionTarget.SERVO_4) }
             onNodeWithTag("robot-info-value-extension-SERVO_4").performScrollTo().assertTextEquals("01.02.03.04")
+            val count = versions.size
+            for (locale in AppLanguage.entries) {
+                runOnIdle { Localization.select(locale.preference) }
+                val action = onNodeWithTag("robot-info-query-extension-SERVO_4").performScrollTo().fetchSemanticsNode().config
+                assertEquals(listOf(tr(Res.string.robot_info_query_target,
+                    "${tr(Res.string.module_servo, 4)} · ${tr(Res.string.extensions_version)}")), action[SemanticsProperties.ContentDescription])
+                assertEquals("01.02.03.04", action[SemanticsProperties.StateDescription])
+            }
+            assertEquals(count, versions.size)
+            runOnIdle { Localization.select("zh") }
+            onNodeWithTag("robot-info-query-extension-SERVO_4").performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
+            waitUntil(timeoutMillis = 3000) { versions.size == count + 1 }
+            assertEquals(RobotVersionTarget.SERVO_4, versions.last())
             runOnIdle { service.state.value = service.state.value.copy(readings = mapOf(RobotComponent.SERVO_4 to ServoReading(RobotComponent.SERVO_4, false, 32767, -999))) }
             waitUntil(timeoutMillis = 3000) { model.robotExtensions.state.value.task.readings[RobotComponent.SERVO_4] is ServoReading &&
                 (model.robotExtensions.state.value.task.readings[RobotComponent.SERVO_4] as ServoReading).valid == false }
@@ -44,16 +62,26 @@ class RobotExtensionUiTest {
             onNodeWithTag("extensions-raw").performScrollTo().assertTextContains("角度 -999", substring = true)
             onNodeWithTag("extensions-family-TOF").performScrollTo().performClick()
             onNodeWithTag("extensions-module-TOF_2").performScrollTo().performClick()
+            onNodeWithTag("robot-info-query-extension-TOF_2").performScrollTo().assert(SemanticsMatcher.expectValue(
+                SemanticsProperties.ContentDescription, listOf(tr(Res.string.robot_info_query_target,
+                    "${tr(Res.string.module_tof, 2)} · ${tr(Res.string.extensions_version)}"))))
             waitUntil(timeoutMillis = 3000) { extensionIdle(model) && service.state.value.kind == ExtensionKind.TOF }; service.sample()
+            waitUntil(timeoutMillis = 3000) { model.robotExtensions.state.value.task.fresh &&
+                model.robotExtensions.state.value.task.readings[RobotComponent.TOF_2] is TofReading }
             onNodeWithTag("extensions-tof-distance").performScrollTo().assertTextEquals("距离：1234 mm")
             onNodeWithTag("extensions-raw-toggle").performScrollTo().performClick()
             onNodeWithTag("extensions-raw").performScrollTo().assertTextEquals("命令 254 · 方向 171 · 标志 128")
             onNodeWithTag("extensions-family-ADAPTER").performScrollTo().performClick()
             onNodeWithTag("extensions-module-SENSOR_ADAPTER_6").performScrollTo().performClick()
             waitUntil(timeoutMillis = 3000) { extensionIdle(model) && service.state.value.kind == ExtensionKind.ADAPTER }; service.sample()
+            waitUntil(timeoutMillis = 3000) { model.robotExtensions.state.value.task.fresh &&
+                model.robotExtensions.state.value.task.readings[RobotComponent.SENSOR_ADAPTER_6] is AdapterReading }
             onNodeWithTag("extensions-adapter-port1").performScrollTo().assertTextEquals("端口 1：IO 1 · ADC 1023")
             onNodeWithTag("extensions-adapter-port2").assertTextEquals("端口 2：IO 255 · ADC 65535")
             waitUntil(timeoutMillis = 3000) { versions.contains(RobotVersionTarget.ADAPTER_6) }
+            onNodeWithTag("robot-info-query-extension-ADAPTER_6").performScrollTo().assert(SemanticsMatcher.expectValue(
+                SemanticsProperties.ContentDescription, listOf(tr(Res.string.robot_info_query_target,
+                    "${tr(Res.string.module_adapter, 6)} · ${tr(Res.string.extensions_version)}"))))
             runOnIdle { service.state.value = service.state.value.copy(online = service.state.value.online!! - RobotComponent.SENSOR_ADAPTER_6) }
             waitUntil(timeoutMillis = 3000) { model.robotExtensions.state.value.selected == null && extensionIdle(model) }
             onNodeWithTag("extensions-adapter-port1").assertDoesNotExist(); onNodeWithTag("extensions-error").performScrollTo().assertIsDisplayed()

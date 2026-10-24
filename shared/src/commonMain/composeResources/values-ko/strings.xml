@@ -1007,6 +1007,8 @@
     <string name="robot_info_show">버전 및 활성화 보기</string>
     <string name="robot_info_hide">버전 및 활성화 숨기기</string>
     <string name="robot_info_query_all">모두 조회</string>
+    <string name="robot_info_query_target">%1$s 조회</string>
+    <string name="robot_info_retry_target">%1$s 조회 다시 시도</string>
     <string name="robot_info_query">조회</string>
     <string name="robot_info_unread">조회 안 됨</string>
     <string name="robot_info_reading">조회 중…</string>

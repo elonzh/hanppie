@@ -1007,6 +1007,8 @@
     <string name="robot_info_show">Voir les versions et l’activation</string>
     <string name="robot_info_hide">Masquer les versions et l’activation</string>
     <string name="robot_info_query_all">Tout interroger</string>
+    <string name="robot_info_query_target">Consulter %1$s</string>
+    <string name="robot_info_retry_target">Réessayer la consultation de %1$s</string>
     <string name="robot_info_query">Interroger</string>
     <string name="robot_info_unread">Non interrogé</string>
     <string name="robot_info_reading">Interrogation…</string>

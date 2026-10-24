@@ -1007,6 +1007,8 @@
     <string name="robot_info_show">View versions and activation</string>
     <string name="robot_info_hide">Hide versions and activation</string>
     <string name="robot_info_query_all">Query all</string>
+    <string name="robot_info_query_target">Query %1$s</string>
+    <string name="robot_info_retry_target">Retry querying %1$s</string>
     <string name="robot_info_query">Query</string>
     <string name="robot_info_unread">Not queried</string>
     <string name="robot_info_reading">Querying…</string>

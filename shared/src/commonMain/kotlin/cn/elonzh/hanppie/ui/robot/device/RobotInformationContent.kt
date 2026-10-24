@@ -5,6 +5,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -71,20 +74,23 @@ internal fun RobotInformationContent(model: ConsoleController) {
 
 @Composable
 internal fun <T> InformationRow(label: String, value: InformationValue<T>, tag: String, query: () -> Unit,
-    enabled: Boolean = true, render: @Composable (T) -> String) {
+    enabled: Boolean = true, subject: String = label, render: @Composable (T) -> String) {
+    val summary = when (value) {
+        InformationValue.Unread -> tr(Res.string.robot_info_unread)
+        InformationValue.Loading -> tr(Res.string.robot_info_reading)
+        is InformationValue.Value -> render(value.value)
+        is InformationValue.Failed -> value.message.resolve()
+    }
+    val action = tr(if (value is InformationValue.Failed) Res.string.robot_info_retry_target else Res.string.robot_info_query_target, subject)
     Row(Modifier.fillMaxWidth().testTag("robot-info-$tag"), horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Text(when (value) {
-            InformationValue.Unread -> tr(Res.string.robot_info_unread)
-            InformationValue.Loading -> tr(Res.string.robot_info_reading)
-            is InformationValue.Value -> render(value.value)
-            is InformationValue.Failed -> value.message.resolve()
-        }, Modifier.testTag("robot-info-value-$tag"), fontSize = 14.sp,
+        Text(summary, Modifier.testTag("robot-info-value-$tag"), fontSize = 14.sp,
             color = if (value is InformationValue.Failed) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.onSurface)
         }
-        Button(query, Modifier.heightIn(min = 48.dp).testTag("robot-info-query-$tag"), enabled = enabled && value != InformationValue.Loading) {
+        Button(query, Modifier.heightIn(min = 48.dp).testTag("robot-info-query-$tag")
+            .semantics { contentDescription = action; stateDescription = summary }, enabled = enabled && value != InformationValue.Loading) {
             Text(tr(if (value is InformationValue.Failed) Res.string.album_retry else Res.string.robot_info_query))
         }
     }

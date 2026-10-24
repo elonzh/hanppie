@@ -1007,6 +1007,8 @@
     <string name="robot_info_show">Показать версии и активацию</string>
     <string name="robot_info_hide">Скрыть версии и активацию</string>
     <string name="robot_info_query_all">Запросить всё</string>
+    <string name="robot_info_query_target">Запросить: %1$s</string>
+    <string name="robot_info_retry_target">Повторить запрос: %1$s</string>
     <string name="robot_info_query">Запросить</string>
     <string name="robot_info_unread">Не запрашивалось</string>
     <string name="robot_info_reading">Запрос…</string>

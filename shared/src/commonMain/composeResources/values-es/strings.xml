@@ -1007,6 +1007,8 @@
     <string name="robot_info_show">Ver versiones y activación</string>
     <string name="robot_info_hide">Ocultar versiones y activación</string>
     <string name="robot_info_query_all">Consultar todo</string>
+    <string name="robot_info_query_target">Consultar %1$s</string>
+    <string name="robot_info_retry_target">Reintentar consulta de %1$s</string>
     <string name="robot_info_query">Consultar</string>
     <string name="robot_info_unread">Sin consultar</string>
     <string name="robot_info_reading">Consultando…</string>

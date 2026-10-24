@@ -6,11 +6,12 @@ import cn.elonzh.hanppie.robot.session.*
 import cn.elonzh.hanppie.robot.telemetry.RobotHealth
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.*
 
 internal class InformationFixture : RobotInformationService {
     override val systemStatus = MutableStateFlow<RobotSystemStatus?>(null)
-    val reads = mutableListOf<RobotVersionTarget>()
+    val reads = CopyOnWriteArrayList<RobotVersionTarget>()
     var version: suspend (RobotVersionTarget) -> String = { "01.02.03.04" }
     var activation: suspend () -> Boolean = { true }
     override suspend fun readFirmware(target: RobotVersionTarget): String { reads += target; return version(target) }

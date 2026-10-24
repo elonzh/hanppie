@@ -1007,6 +1007,8 @@
     <string name="robot_info_show">バージョンとアクティベーションを表示</string>
     <string name="robot_info_hide">バージョンとアクティベーションを隠す</string>
     <string name="robot_info_query_all">すべて照会</string>
+    <string name="robot_info_query_target">%1$sを照会</string>
+    <string name="robot_info_retry_target">%1$sの照会を再試行</string>
     <string name="robot_info_query">照会</string>
     <string name="robot_info_unread">未照会</string>
     <string name="robot_info_reading">照会中…</string>

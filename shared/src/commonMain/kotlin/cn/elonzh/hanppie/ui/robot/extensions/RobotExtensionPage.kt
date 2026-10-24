@@ -135,7 +135,8 @@ internal fun RobotExtensionPage(model: ConsoleController, modifier: Modifier = M
                     }
                     if (ui.task.identifying == selected) Text(tr(Res.string.arm_identifying), Modifier.testTag("extensions-identifying"), fontSize = 14.sp)
                     if (target != null && hasVersionTarget) InformationRow(tr(Res.string.extensions_version), information.versions[target] ?: InformationValue.Unread,
-                        "extension-${target.name}", { model.robotInformation.readVersion(target) }, enabled = canUse && !ui.busy) { it }
+                        "extension-${target.name}", { model.robotInformation.readVersion(target) }, enabled = canUse && !ui.busy,
+                        subject = "${robotModuleName(selected.deviceId)} · ${tr(Res.string.extensions_version)}") { it }
                 }
                 Button(onAddressing, Modifier.heightIn(min = 48.dp).testTag("extensions-addressing"), enabled = foreground && !ui.busy) {
                     Text(tr(Res.string.addressing_title))
