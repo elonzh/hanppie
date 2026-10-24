@@ -166,18 +166,20 @@ private fun AlbumRow(title: String, subtitle: String, thumbnail: ImageBitmap?, v
 @Composable
 private fun LocalMediaDetail(file: LocalRobotMedia, previewHeight: Dp, onRemove: () -> Unit) {
     val photo = file.content in listOf(MediaContent.JPEG, MediaContent.PNG)
-    val preview by produceState<Result<ImageBitmap>?>(null, file) {
-        if (photo) value = withContext(Dispatchers.IO) {
-            try {
-                check(file.size <= 32L * 1024 * 1024)
-                Result.success(file.file.readBytes().decodeToImageBitmap())
-            } catch (error: CancellationException) { throw error }
-            catch (error: Exception) { Result.failure(error) }
-        }
-    }
     Text(localTitle(file), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-    preview?.getOrNull()?.let { Image(it, localTitle(file), Modifier.fillMaxWidth().height(previewHeight).testTag("album-local-preview"), contentScale = ContentScale.Fit) }
-    if (photo && preview?.isSuccess != true) Text(tr(if (preview == null) Res.string.album_preview_loading else Res.string.album_preview_failed), fontSize = 14.sp)
+    if (photo) key(file) {
+        val preview by produceState<Result<ImageBitmap>?>(null) {
+            value = withContext(Dispatchers.IO) {
+                try {
+                    check(file.size <= 32L * 1024 * 1024)
+                    Result.success(file.file.readBytes().decodeToImageBitmap())
+                } catch (error: CancellationException) { throw error }
+                catch (error: Exception) { Result.failure(error) }
+            }
+        }
+        preview?.getOrNull()?.let { Image(it, localTitle(file), Modifier.fillMaxWidth().height(previewHeight).testTag("album-local-preview"), contentScale = ContentScale.Fit) }
+        if (preview?.isSuccess != true) Text(tr(if (preview == null) Res.string.album_preview_loading else Res.string.album_preview_failed), fontSize = 14.sp)
+    }
     Text(tr(Res.string.album_downloaded_at, formatLocalDateTime(file.downloadedAt, DateTimeStyle.SHORT)), fontSize = 14.sp)
     Text(formatRobotFileSize(file.size), fontSize = 14.sp)
     Button(onRemove, Modifier.heightIn(min = 48.dp).testTag("album-remove")) { Text(tr(Res.string.album_remove_local)) }

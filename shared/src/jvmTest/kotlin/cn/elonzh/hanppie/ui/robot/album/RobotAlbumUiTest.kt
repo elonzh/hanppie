@@ -16,9 +16,11 @@ import cn.elonzh.hanppie.ui.app.Console
 import cn.elonzh.hanppie.ui.app.testConsoleModel
 import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
+import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.ui.robot.camera.RobotCameraUiState
 import cn.elonzh.hanppie.ui.scripts.EditorDocument
-import cn.elonzh.hanppie.ui.settings.SettingsPage
+import cn.elonzh.hanppie.ui.settings.*
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.readBytes
 import kotlinx.coroutines.runBlocking
@@ -101,6 +103,8 @@ class RobotAlbumUiTest {
             rule.onNodeWithTag("camera-storage-format").assertIsEnabled()
         } finally { model.close() }
     }
+
+
 }
 
 @OptIn(ExperimentalTestApi::class)
@@ -144,12 +148,87 @@ class RobotAlbumLayoutTest {
             } finally { model.close(); root.deleteRecursively(); Localization.initialize("zh", null) }
         }
 
-    private fun snapshot(name: String, node: SemanticsNodeInteraction) {
-        val image = node.captureToImage()
-        val pixels = IntArray(image.width * image.height); image.readPixels(pixels)
-        val out = BufferedImage(image.width, image.height, BufferedImage.TYPE_INT_ARGB)
-        out.setRGB(0, 0, image.width, image.height, pixels, 0, image.width)
-        val file = File("build/reports/ui/$name.png").apply { parentFile.mkdirs() }
-        ImageIO.write(out, "png", file)
-    }
+}
+
+/** Selection ownership and recovery in every supported landscape layout. */
+@OptIn(ExperimentalTestApi::class)
+class RobotAlbumLocalMediaTest {
+    @Test fun compactLandscape() = localMedia(844, 390)
+    @Test fun tabletLandscape() = localMedia(1024, 600, dark = true)
+    @Test fun desktopLandscape() = localMedia(1280, 720)
+    @Test fun englishLargeText() = localMedia(844, 390, "en", 1.4f, dark = true)
+
+    private fun localMedia(width: Int, height: Int, language: String = "zh", fontScale: Float = 1f, dark: Boolean = false) =
+        runDesktopComposeUiTest(width = width, height = height) {
+            Localization.initialize(language, null)
+            val root = Files.createTempDirectory("hanppie-album-preview").toFile()
+            fun file(index: Int, extension: String) = File(root, "sd-1000-$index-00000000-0000-0000-0000-000000000000.$extension")
+            val colors = listOf(java.awt.Color(231, 77, 29), java.awt.Color(25, 107, 213))
+            colors.forEachIndexed { index, color ->
+                val image = BufferedImage(32, 32, BufferedImage.TYPE_INT_RGB)
+                image.createGraphics().apply { this.color = color; fillRect(0, 0, 32, 32); dispose() }
+                ImageIO.write(image, "png", file(index + 1, "png"))
+            }
+            file(3, "mp4").writeBytes(byteArrayOf(0, 0, 0, 12, 102, 116, 121, 112, 105, 115, 111, 109))
+            file(4, "bin").writeText("unknown media")
+            file(5, "png").writeText("broken photo")
+            val model = testConsoleModel(albumDirectory = { PlatformFile(root) })
+            var opened: LocalRobotMedia? = null
+            var exported: LocalRobotMedia? = null
+            fun select(title: String) {
+                if (onAllNodesWithTag("album-list-back").fetchSemanticsNodes().isNotEmpty()) {
+                    onNodeWithTag("album-list-back").performClick()
+                }
+                val row = hasText(title, substring = true) and hasClickAction()
+                onNodeWithTag("album-list").performScrollToNode(row)
+                onNode(row).performClick()
+            }
+            fun assertPhoto(color: java.awt.Color) {
+                waitUntil(timeoutMillis = 3_000) { onAllNodesWithTag("album-local-preview").fetchSemanticsNodes().isNotEmpty() }
+                val image = onNodeWithTag("album-local-preview").captureToImage()
+                val pixel = IntArray(1)
+                image.readPixels(pixel, image.width / 2, image.height / 2, 1, 1)
+                assertEquals(color.rgb, pixel.single())
+            }
+            try {
+                setContent { TestWorkbenchTheme(AppearanceController(AppearanceSettings(if (dark) NightMode.DARK else NightMode.LIGHT))) {
+                    CompositionLocalProvider(LocalDensity provides Density(1f, fontScale)) {
+                        RobotAlbumPage(model, Modifier.fillMaxSize().padding(16.dp), onBack = {}, onOpen = { opened = it }, onExport = { exported = it })
+                    }
+                } }
+                waitUntil(timeoutMillis = 3_000) { model.robotAlbum.state.value.local.size == 5 }
+                select(tr(Res.string.album_photo_name, 1))
+                assertPhoto(colors[0])
+                snapshot("album-local-photo-$width-$height-$language", onNodeWithTag("robot-album-page"))
+                select(tr(Res.string.album_video_name, 3))
+                onNodeWithTag("album-local-preview").assertDoesNotExist()
+                snapshot("album-local-video-$width-$height-$language", onNodeWithTag("robot-album-page"))
+                onNodeWithTag("album-open").assertIsDisplayed().performClick()
+                assertEquals(3L, opened?.sourceIndex)
+                select(tr(Res.string.album_photo_name, 2))
+                assertPhoto(colors[1])
+                select(tr(Res.string.album_media_name, 4))
+                onNodeWithTag("album-local-preview").assertDoesNotExist()
+                snapshot("album-local-unknown-$width-$height-$language", onNodeWithTag("robot-album-page"))
+                onNodeWithTag("album-export").assertIsDisplayed().performClick()
+                assertEquals(4L, exported?.sourceIndex)
+                select(tr(Res.string.album_photo_name, 1))
+                assertPhoto(colors[0])
+                select(tr(Res.string.album_photo_name, 5))
+                waitUntil(timeoutMillis = 3_000) { onAllNodesWithText(tr(Res.string.album_preview_failed)).fetchSemanticsNodes().isNotEmpty() }
+                onNodeWithTag("album-local-preview").assertDoesNotExist()
+                snapshot("album-local-broken-$width-$height-$language", onNodeWithTag("robot-album-page"))
+                select(tr(Res.string.album_photo_name, 2))
+                assertPhoto(colors[1])
+            } finally { model.close(); root.deleteRecursively(); Localization.initialize("zh", null) }
+        }
+}
+
+private fun snapshot(name: String, node: SemanticsNodeInteraction) {
+    val image = node.captureToImage()
+    val pixels = IntArray(image.width * image.height); image.readPixels(pixels)
+    val out = BufferedImage(image.width, image.height, BufferedImage.TYPE_INT_ARGB)
+    out.setRGB(0, 0, image.width, image.height, pixels, 0, image.width)
+    val file = File("build/reports/ui/$name.png").apply { parentFile.mkdirs() }
+    ImageIO.write(out, "png", file)
 }
