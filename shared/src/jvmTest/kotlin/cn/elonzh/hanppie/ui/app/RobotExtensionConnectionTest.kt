@@ -21,7 +21,9 @@ class RobotExtensionConnectionTest {
             model.state.value = model.state.value.copy(scriptRunPhase = ScriptRunPhase.RUNNING)
             model.robotExtensions.identify(); delay(30); assertTrue(service.calls.none { it.startsWith("identify:") })
             model.state.value = model.state.value.copy(scriptRunPhase = ScriptRunPhase.IDLE)
-            service.onIdentify = { awaitCancellation() }; model.robotExtensions.identify()
+            val identifyEntered = CompletableDeferred<Unit>()
+            service.onIdentify = { identifyEntered.complete(Unit); awaitCancellation() }; model.robotExtensions.identify()
+            withTimeout(5_000) { identifyEntered.await() }
             waitExtensions { model.state.value.busy && model.robotExtensions.state.value.changing }
             model.robotAddressing.begin(ModuleAddressingKind.ARMOR); model.robotCalibration.begin(CalibrationKind.GIMBAL)
             waitExtensions { !model.robotAddressing.state.value.busy && !model.robotCalibration.state.value.busy }

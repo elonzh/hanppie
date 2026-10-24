@@ -25,9 +25,12 @@ class RobotArmConnectionTest {
             model.robotArm.setBinding(ArmServoBinding(2, 1), ArmServoBinding(1, 2))
             waitArm { arm.state.value.binding == ArmServoBinding(2, 1) && !model.state.value.busy }
             assertFalse(model.remoteEnabled.value); assertTrue(model.remoteInput.value.all { it == 0.0 })
-            arm.onWrite = { awaitCancellation() }
+            val writeEntered = CompletableDeferred<Unit>()
+            arm.onWrite = { writeEntered.complete(Unit); awaitCancellation() }
             model.robotArm.setLoadMode(ArmLoadMode.ON_LOAD, ArmServoBinding(2, 1), 0)
-            waitArm { model.state.value.busy && model.robotArm.state.value.changing }
+            withTimeout(5_000) { writeEntered.await() }
+            waitArm { model.state.value.busy && model.robotArm.state.value.changing &&
+                model.robotArm.state.value.task.requestedLoadMode == ArmLoadMode.ON_LOAD }
             model.robotAddressing.begin(ModuleAddressingKind.ARMOR); model.robotCalibration.begin(CalibrationKind.GIMBAL)
             waitArm { !model.robotAddressing.state.value.busy && !model.robotCalibration.state.value.busy }
             assertFalse(addressing.calls.any { it.startsWith("begin:") }); assertFalse(calibration.calls.any { it.startsWith("begin:") })

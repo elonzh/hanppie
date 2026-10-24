@@ -1043,19 +1043,20 @@ internal class ConsoleModel(
     }
     private fun canObserveArm(source: cn.elonzh.hanppie.robot.extensions.arm.RobotArmService): Boolean {
         val current = session.load() ?: return false
+        // Pending maintenance UI intents must not revoke an already admitted operation.
         return isForeground && acceptingWork.load() && current.connected && current.arm === source &&
             (!state.value.busy || robotArm.state.value.changing) && !chat.state.value.running && !state.value.scriptRunPhase.mayBeExecuting &&
-            !robotFirmware.state.value.blocksControl && !current.firmware.state.value.blocksControl &&
-            !robotCalibration.state.value.blocksControl && !current.calibration.state.value.blocksControl &&
-            !robotAddressing.state.value.blocksControl && !current.addressing.state.value.blocksControl
+            robotFirmware.state.value.recovery == null && !current.firmware.state.value.blocksControl &&
+            robotCalibration.state.value.recovery == null && !current.calibration.state.value.blocksControl &&
+            robotAddressing.state.value.recovery == null && !current.addressing.state.value.blocksControl
     }
     private fun canObserveExtensions(source: cn.elonzh.hanppie.robot.extensions.RobotExtensionService): Boolean {
         val current = session.load() ?: return false
         return isForeground && acceptingWork.load() && current.connected && current.extensions === source &&
             (!state.value.busy || robotExtensions.state.value.changing) && !remoteEnabled.value && !chat.state.value.running &&
-            !state.value.scriptRunPhase.mayBeExecuting && !robotFirmware.state.value.blocksControl && !current.firmware.state.value.blocksControl &&
-            !robotCalibration.state.value.blocksControl && !current.calibration.state.value.blocksControl &&
-            !robotAddressing.state.value.blocksControl && !current.addressing.state.value.blocksControl
+            !state.value.scriptRunPhase.mayBeExecuting && robotFirmware.state.value.recovery == null && !current.firmware.state.value.blocksControl &&
+            robotCalibration.state.value.recovery == null && !current.calibration.state.value.blocksControl &&
+            robotAddressing.state.value.recovery == null && !current.addressing.state.value.blocksControl
     }
     private suspend fun changeExtensions(source: cn.elonzh.hanppie.robot.extensions.RobotExtensionService, action: suspend () -> Unit) {
         check(robotWifi.state.value.recovery == null) { tr(Res.string.extensions_task_active) }
