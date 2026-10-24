@@ -80,6 +80,8 @@ internal interface ConsoleController : AutoCloseable {
     fun startVision(mode: cn.elonzh.hanppie.robot.vision.VisionMode, color: cn.elonzh.hanppie.robot.vision.VisionColor? = null)
     fun stopVision()
     val challenge: StateFlow<cn.elonzh.hanppie.robot.challenge.ChallengeState>
+    val gunCooling: StateFlow<cn.elonzh.hanppie.robot.remote.GunCoolingState>
+    fun coolGun()
     fun startChallenge(configuration: cn.elonzh.hanppie.robot.challenge.ChallengeConfiguration): String?
     fun stopChallenge()
     fun dismissChallenge()

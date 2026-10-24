@@ -114,6 +114,7 @@ object Protocol {
     const val CMD_RM_GUN_LED_SET = 0x55
     const val CMD_RM_GET_SIGHT_BEAD_POSITION = 0x57
     const val CMD_RM_SYSTEM_FUNCTION_CONFIG = 0x59
+    // Existing exported name: 00 requests barrel cooling; 01 resets it (not a status subscription).
     const val CMD_RM_SYSTEM_STATUS_CONFIG = 0x5b
     const val CMD_RM_AUDIO_TRANSFER = 0x5f
     const val CMD_RM_FC_RMC = 0x66

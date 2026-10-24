@@ -1,0 +1,12 @@
+<resources>
+    <string name="gun_heat">Нагрев ствола: %1$s</string>
+    <string name="gun_heat_stale">Данные о нагреве устарели</string>
+    <string name="gun_cooling_start">Охладить ствол</string>
+    <string name="gun_cooling_requesting">Запрос охлаждения…</string>
+    <string name="gun_cooling_active">Охлаждение…</string>
+    <string name="gun_cooling_resetting">Завершение охлаждения…</string>
+    <string name="gun_cooling_unconfirmed">Охлаждение не подтверждено</string>
+    <string name="gun_cooling_rejected">Запрос охлаждения отклонён</string>
+    <string name="gun_overheated">Предел нагрева; дождитесь охлаждения</string>
+    <string name="gun_cooling_retry">Повторить завершение</string>
+</resources>

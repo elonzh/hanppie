@@ -1,0 +1,12 @@
+<resources>
+    <string name="gun_heat">砲身の熱量：%1$s</string>
+    <string name="gun_heat_stale">熱量データが古くなりました</string>
+    <string name="gun_cooling_start">砲身を冷却</string>
+    <string name="gun_cooling_requesting">冷却を要求中…</string>
+    <string name="gun_cooling_active">冷却中…</string>
+    <string name="gun_cooling_resetting">冷却を終了中…</string>
+    <string name="gun_cooling_unconfirmed">冷却状態を確認できません</string>
+    <string name="gun_cooling_rejected">冷却要求が拒否されました</string>
+    <string name="gun_overheated">熱量が上限です。冷却を待ってください</string>
+    <string name="gun_cooling_retry">冷却終了を再試行</string>
+</resources>

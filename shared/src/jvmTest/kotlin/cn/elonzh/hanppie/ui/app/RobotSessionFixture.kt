@@ -14,6 +14,9 @@ import kotlinx.io.Source
 import java.util.concurrent.atomic.AtomicInteger
 
 internal class RobotSessionFixture : RobotSession {
+    override val gunCooling = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.remote.GunCoolingState())
+    var gunCoolingRequest: () -> Unit = {}
+    override fun coolGun() = gunCoolingRequest()
     val challengeState = kotlinx.coroutines.flow.MutableStateFlow(cn.elonzh.hanppie.robot.challenge.ChallengeState())
     override val challenge = challengeState
     var challengeStart: (cn.elonzh.hanppie.robot.challenge.ChallengeConfiguration) -> Unit = {}

@@ -352,6 +352,18 @@ class AppSession(private val target: RobotTarget,
         }
     })
     val challenge get() = challengeRound.state
+    private val gunCoolingControl = cn.elonzh.hanppie.robot.remote.GunCooling({ robotNanoTime() / 1_000_000 }) { payload ->
+        send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_SYSTEM_STATUS_CONFIG, payload)
+    }
+    val gunCooling get() = gunCoolingControl.state
+    private fun gunCoolingAllowed() = remote && active.load() && !labRunning && !powerTransition &&
+        !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl
+    fun coolGun() = txLock.withLock {
+        check(!modeMutex.isLocked && gunCoolingAllowed() && !tracking.value.blocksManualControl &&
+            !vision.value.blocksManualControl && !challenge.value.blocksControl && robotNanoTime() - lastReceivedNanos < 500_000_000) { "当前不能请求枪管冷却" }
+        triggerDeadline = 0
+        gunCoolingControl.request()
+    }
     fun startChallenge(configuration: ChallengeConfiguration) = txLock.withLock {
         check(!modeMutex.isLocked) { "请等待控制模式切换结束" }
         requireVisionAvailable()
@@ -407,6 +419,7 @@ class AppSession(private val target: RobotTarget,
         modeMutex.withLock {
         check(!labRunning && !powerTransition && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl) { "请先结束脚本、电源、编址、校准或固件任务" }
         if (!remote) {
+            txLock.withLock { gunCoolingControl.retire() }
             mode = Protocol.MODE_REMOTE
             for (c in remoteSetup + remoteEffects) {
                 if (c.control) sendNeutral() else send(c.receiver, c.attr, c.set, c.id, c.payload.hexBytes(), flags = c.flags.hexBytes())
@@ -482,7 +495,7 @@ class AppSession(private val target: RobotTarget,
         var blasterLedEnabled = false
         try {
             val fireSequence = txLock.withLock {
-                check(remote && active.load() && !labRunning && !tracking.value.blocksManualControl && !vision.value.blocksManualControl && !challenge.value.blocksControl && (!challenge.value.ownsRound || challenge.value.configuration?.firing == ChallengeFiring.GEL)) { "遥控未启用" }
+                check(remote && active.load() && !labRunning && !gunCooling.value.ownsCooling && !tracking.value.blocksManualControl && !vision.value.blocksManualControl && !challenge.value.blocksControl && (!challenge.value.ownsRound || challenge.value.configuration?.firing == ChallengeFiring.GEL)) { "遥控未启用" }
                 send(Protocol.HOST_HDVT_UAV, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_LED_COLOR_SET, RemoteControl.muzzleFireLed(true))
                 fireLedEnabled = true
                 send(Protocol.HOST_GUN, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_GUN_LED_SET, RemoteControl.blasterLed(true))
@@ -533,11 +546,11 @@ class AppSession(private val target: RobotTarget,
             delay(10)
         }
         if (connected) send(Protocol.HOST_CHASSIS, Protocol.ATTR_NEED_ACK, Protocol.CMDSET_RM, Protocol.CMD_RM_WORK_MODE_SET, byteArrayOf(0))
-        remote = false; normalMode()
+        remote = false; txLock.withLock { gunCoolingControl.retire() }; normalMode()
         }
     }
     fun fireInfrared() = txLock.withLock {
-        check(remote && active.load() && !tracking.value.blocksManualControl && !vision.value.blocksManualControl && !challenge.value.blocksControl && (!challenge.value.ownsRound || challenge.value.configuration?.firing == ChallengeFiring.INFRARED)) { "遥控未启用" }
+        check(remote && active.load() && !gunCooling.value.ownsCooling && !tracking.value.blocksManualControl && !vision.value.blocksManualControl && !challenge.value.blocksControl && (!challenge.value.ownsRound || challenge.value.configuration?.firing == ChallengeFiring.INFRARED)) { "遥控未启用" }
         triggerDeadline = robotNanoTime() + 120_000_000
     }
     fun setLed(red: Int, green: Int, blue: Int, enabled: Boolean = true) = txLock.withLock {
@@ -792,6 +805,7 @@ class AppSession(private val target: RobotTarget,
         audioCommands.close()
         wifiCommands.close()
         healthStore.close()
+        gunCoolingControl.close()
         informationCommands.close()
         powerCommands.close()
         motionCommands.close()
@@ -805,6 +819,7 @@ class AppSession(private val target: RobotTarget,
     }
 
     private fun sendNeutral(forceActuatorStop: Boolean = false) = txLock.withLock {
+        if (gunCoolingAllowed()) gunCoolingControl.tick() else gunCoolingControl.retire()
         cameraCommands.expire()
         labUiCommands.tick(labRunning && robotNanoTime() - lastReceivedNanos < 500_000_000)
         mobileInfo.tick(mobileInfoAllowed())
@@ -897,6 +912,7 @@ class AppSession(private val target: RobotTarget,
                                 objectTracking.receive(frame)
                                 visionControl.receive(frame)
                                 challengeSetup.receive(frame)
+                                if (gunCoolingAllowed()) gunCoolingControl.receive(frame) else gunCoolingControl.retire()
                                 if (challengeFireReport(frame) != null) challenge.value.sight?.let { challengeRound.fireStatus(vision.value, it) }
                                 labUiCommands.receive(frame)
                                 mobileInfo.receive(frame, mobileInfoAllowed())

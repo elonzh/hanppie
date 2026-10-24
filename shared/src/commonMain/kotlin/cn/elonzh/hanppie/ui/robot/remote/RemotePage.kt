@@ -160,6 +160,7 @@ internal fun RemotePage(
     val tracking by model.tracking.collectAsState()
     val vision by model.vision.collectAsState()
     val challenge by model.challenge.collectAsState()
+    val gunCooling by model.gunCooling.collectAsState()
     var challengeSoundEnabled by remember { mutableStateOf(true) }
     var challengeChoosing by remember { mutableStateOf(false) }
     val health by model.robotHealth.state.collectAsState()
@@ -288,6 +289,14 @@ internal fun RemotePage(
             model.stopFiring(); model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
         }
     }
+    LaunchedEffect(gunCooling.ownsCooling) {
+        if (gunCooling.ownsCooling) {
+            aimInput.stop()
+            suppressedKeys = suppressedKeys + physicalKeys
+            keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+            model.stopFiring(); model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
+        }
+    }
     LaunchedEffect(challenge.ownsRound, enabled) {
         while (model.challenge.value.ownsRound) {
             if (!enabled || !model.videoFrames.isFresh(connected.connectedAddress)) { model.stopChallenge(); break }
@@ -331,7 +340,7 @@ internal fun RemotePage(
     }
     val currentShiftHeld = Key.ShiftLeft in currentKeys || Key.ShiftRight in currentKeys
     val fireKeyHeld = currentControl.shortcuts.isHeld(ControlAction.Fire, currentKeys, currentShiftHeld)
-    val shouldFire = enabled && manualActionsEnabled && (fireKeyHeld || firePointerHeld || aimState.repeatPrimary)
+    val shouldFire = enabled && manualActionsEnabled && !gunCooling.ownsCooling && (fireKeyHeld || firePointerHeld || aimState.repeatPrimary)
     LaunchedEffect(shouldFire) {
         if (shouldFire) model.startFiring() else model.stopFiring()
     }
@@ -380,7 +389,8 @@ internal fun RemotePage(
             return@onPreviewKeyEvent false
         }
         val supported = control.shortcuts.supports(it.key)
-        if ((challenge.blocksControl || challengeChoosing) && supported && it.key != Key.Escape) {
+        if (((challenge.blocksControl || challengeChoosing) && supported && it.key != Key.Escape) ||
+            (gunCooling.ownsCooling && control.shortcuts[ControlAction.Fire].key.matches(it.key))) {
             if (it.type == KeyEventType.KeyDown) suppressedKeys = suppressedKeys + it.key
             return@onPreviewKeyEvent true
         }
@@ -591,7 +601,7 @@ internal fun RemotePage(
                 horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     HudIconButton(if (gelSelected) tr(Res.string.fire_one_gel_bead) else tr(Res.string.fire_infrared),
-                        WorkbenchGlyph.CROSSHAIR, enabled = enabled && manualActionsEnabled && !connected.busy, selected = firePointerHeld,
+                        WorkbenchGlyph.CROSSHAIR, enabled = enabled && manualActionsEnabled && !gunCooling.ownsCooling && !connected.busy, selected = firePointerHeld,
                         onPressChange = { held ->
                             firePointerHeld = held
                             if (held) {
@@ -632,8 +642,11 @@ internal fun RemotePage(
         if (!armMode) Column(Modifier.align(Alignment.BottomCenter).padding(bottom = if (keyboardHints) 76.dp else 28.dp)
             .then(reserveVisionSpace("aim-input")), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            GunCoolingControls(gunCooling, enabled && manualActionsEnabled && !connected.busy) {
+                model.coolGun(); focus.requestFocus()
+            }
             AimInputControls(aimInput, aimState,
-                enabled && manualActionsEnabled && !vision.ownsGimbal && !connected.busy && inputLifecycleState.isAtLeast(Lifecycle.State.RESUMED),
+                enabled && manualActionsEnabled && !gunCooling.ownsCooling && !vision.ownsGimbal && !connected.busy && inputLifecycleState.isAtLeast(Lifecycle.State.RESUMED),
                 Modifier) inputStart@ { mode ->
                 if (!inputLifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@inputStart
                 model.clearRemoteInputs(); keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false

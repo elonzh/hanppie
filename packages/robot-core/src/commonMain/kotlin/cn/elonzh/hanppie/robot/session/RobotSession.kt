@@ -58,6 +58,8 @@ interface RobotSession : AutoCloseable {
     val tracking: StateFlow<TrackingState>
     val vision: StateFlow<cn.elonzh.hanppie.robot.vision.VisionState>
     val challenge: StateFlow<cn.elonzh.hanppie.robot.challenge.ChallengeState>
+    val gunCooling: StateFlow<cn.elonzh.hanppie.robot.remote.GunCoolingState>
+    fun coolGun()
     fun startChallenge(configuration: cn.elonzh.hanppie.robot.challenge.ChallengeConfiguration)
     fun stopChallenge()
     fun dismissChallenge()

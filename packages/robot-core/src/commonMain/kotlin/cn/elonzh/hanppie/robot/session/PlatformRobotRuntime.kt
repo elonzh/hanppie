@@ -58,6 +58,8 @@ private class PlatformRobotSession(
     override val tracking get() = app.tracking
     override val vision get() = app.vision
     override val challenge get() = app.challenge
+    override val gunCooling get() = app.gunCooling
+    override fun coolGun() = app.coolGun()
     override fun startChallenge(configuration: cn.elonzh.hanppie.robot.challenge.ChallengeConfiguration) = app.startChallenge(configuration)
     override fun stopChallenge() = app.stopChallenge()
     override fun dismissChallenge() = app.dismissChallenge()

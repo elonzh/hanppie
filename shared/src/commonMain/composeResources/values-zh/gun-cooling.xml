@@ -1,0 +1,12 @@
+<resources>
+    <string name="gun_heat">枪管热量：%1$s</string>
+    <string name="gun_heat_stale">热量数据已过期</string>
+    <string name="gun_cooling_start">冷却枪管</string>
+    <string name="gun_cooling_requesting">正在请求冷却…</string>
+    <string name="gun_cooling_active">冷却中…</string>
+    <string name="gun_cooling_resetting">正在结束冷却…</string>
+    <string name="gun_cooling_unconfirmed">冷却状态未确认</string>
+    <string name="gun_cooling_rejected">冷却请求被拒绝</string>
+    <string name="gun_overheated">热量已达上限，等待冷却</string>
+    <string name="gun_cooling_retry">重试结束冷却</string>
+</resources>

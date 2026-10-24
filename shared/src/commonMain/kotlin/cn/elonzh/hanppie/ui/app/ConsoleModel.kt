@@ -334,6 +334,15 @@ internal class ConsoleModel(
     override val vision = MutableStateFlow(cn.elonzh.hanppie.robot.vision.VisionState())
     private var visionObserver: Job? = null
     override val challenge = MutableStateFlow(cn.elonzh.hanppie.robot.challenge.ChallengeState())
+    override val gunCooling = MutableStateFlow(cn.elonzh.hanppie.robot.remote.GunCoolingState())
+    private var gunCoolingObserver: Job? = null
+    override fun coolGun() {
+        val current = session.load() ?: return
+        if (!remoteEnabled.value || !isForeground || state.value.busy || chat.state.value.running ||
+            !videoFrames.isFresh(state.value.connectedAddress)) return
+        stopFiring()
+        runCatching { current.coolGun() }.onFailure { log(it.message.orEmpty()) }
+    }
     private var challengeObserver: Job? = null
     override fun startChallenge(configuration: cn.elonzh.hanppie.robot.challenge.ChallengeConfiguration): String? {
         val current = session.load() ?: return tr(cn.elonzh.hanppie.resources.Res.string.robot_is_not_connected)
@@ -484,6 +493,7 @@ internal class ConsoleModel(
         }
     }
     override fun startFiring() {
+        if (gunCooling.value.ownsCooling) return
         if (!remoteEnabled.value || !acceptingWork.load() || chat.state.value.running || state.value.busy || tracking.value.blocksManualControl || vision.value.blocksManualControl || challenge.value.blocksControl) return
         firingInternal.store(true)
         firing.value = true
@@ -526,7 +536,8 @@ internal class ConsoleModel(
         }
     }
     override fun fire() {
-        if (remoteEnabled.value && acceptingWork.load() && !chat.state.value.running && !state.value.busy && !tracking.value.blocksManualControl) {
+        if (gunCooling.value.ownsCooling) return
+        if (remoteEnabled.value && acceptingWork.load() && !chat.state.value.running && !state.value.busy && !tracking.value.blocksManualControl && !vision.value.blocksManualControl && !challenge.value.blocksControl) {
             val s = session.load() ?: return
             val ok = runCatching { s.fireInfrared() }.onFailure {
                 state.update { current ->
@@ -537,7 +548,8 @@ internal class ConsoleModel(
         }
     }
     override fun fireGel() {
-        if (!remoteEnabled.value || !acceptingWork.load() || chat.state.value.running || state.value.busy || tracking.value.blocksManualControl || vision.value.blocksManualControl) return
+        if (gunCooling.value.ownsCooling) return
+        if (!remoteEnabled.value || !acceptingWork.load() || chat.state.value.running || state.value.busy || tracking.value.blocksManualControl || vision.value.blocksManualControl || challenge.value.blocksControl) return
         scope.launch {
             val s = session.load() ?: return@launch
             gelFireMutex.withLock {
@@ -967,6 +979,14 @@ internal class ConsoleModel(
             candidate.vision.collect { value -> if (session.load() === candidate) vision.value = value }
         }
         challengeObserver?.cancel()
+        gunCoolingObserver?.cancel()
+        gunCooling.value = cn.elonzh.hanppie.robot.remote.GunCoolingState()
+        gunCoolingObserver = scope.launch {
+            candidate.gunCooling.collect { value -> if (session.load() === candidate) {
+                gunCooling.value = value
+                if (value.ownsCooling) stopFiring()
+            } }
+        }
         challenge.value = cn.elonzh.hanppie.robot.challenge.ChallengeState()
         challengeObserver = scope.launch {
             candidate.challenge.collect { value -> if (session.load() === candidate) {
@@ -992,6 +1012,7 @@ internal class ConsoleModel(
     }
 
     private fun connectionLost(candidate: RobotSession, reason: String) {
+        if (session.load() === candidate) gunCooling.value = cn.elonzh.hanppie.robot.remote.GunCoolingState()
         if (session.load() === candidate) clearLabUiBinding()
         if (session.load() === candidate) vision.value = cn.elonzh.hanppie.robot.vision.VisionState()
         tracking.value = TrackingState()
@@ -1020,6 +1041,7 @@ internal class ConsoleModel(
         session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState()
         challenge.value = cn.elonzh.hanppie.robot.challenge.ChallengeState()
         robotFiles.clear(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.detach(); robotArm.detach(); robotExtensions.detach(); robotCalibration.detach(); robotAddressing.detach(); robotPower.detach(); robotMotion.clear(); robotDisplay.clear(); robotWifi.detach(preserveNetworkRecovery); robotSdr.detach(preserveNetworkRecovery)
+        gunCooling.value = cn.elonzh.hanppie.robot.remote.GunCoolingState()
         state.update {
             val uncertain = it.scriptRunPhase.mayBeExecuting
             it.copy(connected = false, connectedAddress = null, connecting = false,

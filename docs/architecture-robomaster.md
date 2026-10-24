@@ -1,7 +1,7 @@
 # RoboMaster S1 原生架构、协议与调查
 
 > 文档性质：RoboMaster S1 原生硬件、固件、协议与外部生态的长期技术事实源。<br>
-> 最后更新：2026-09-13<br>
+> 最后更新：2026-10-24<br>
 > 已验证固件：RoboMaster S1 `00.06.0521`
 
 本文只记录 RoboMaster S1 的当前固有架构、通信、协议调查和外部扩展边界。Hanppie 当前增加的主机能力、代码结构、安全策略和验证状态统一维护在 [Hanppie 技术架构](./architecture.md)。已被替代的方案、旧命令、迁移过程和开发取舍不进入正文，由日期化调研、联调记录与 Git 历史保存。
@@ -1105,6 +1105,14 @@ S1 的红外能力至少包含三层，不能把其中任意一层统称为“�
 | App/主机触发 | RoboMaster App 的 control channel 可触发一次红外发射；公开 SDK 还定义了 DUSS `0x3F/0x51` 发射请求，其中 `type=1` 表示红外 | 这是发给机器人控制系统的命令，不是枪口发出的光学波形 |
 | 机内命中事件 | 公开 SDK 定义了 DUSS `0x3F/0x02` 装甲命中事件和 `0x3F/0x10` 红外命中事件；后者解出 `skill_id`、`role_id`、接收设备和接收引脚 | 这是接收器和固件处理后的机内事件，不能据此反推空气中的位编码 |
 | 光学链路 | 官方只公开窄红外单元在室内约 `6 m` 有效、发射区域随距离约为 `10°～40°`，以及广角红外单元在室内约 `3 m`、覆盖 `360°` | 官方手册/编程指南/公开 SDK 未给载波频率、脉冲宽度、帧头、位序、重复规则或校验算法；**光学帧结构已由本项目的实机测量补齐，见下** |
+
+#### 单机枪管热量与冷却
+
+固定 macOS App 1.1.5/build 239 的 `resources.assets` 中，`FireOverHeat` 组件 55108（外部脚本 398）挂在全部激活的 `ViewSinglePlayer/OverheatPanel/Overheat`，属于公开单机 FPV。`UI/FireOverHeat.cs` 监听 `DJIRobomasterSystemGunCoolDown`，上限为 2000；零值隐藏，非零且未到上限可主动冷却，达到上限进入等待冷却状态。点击冷却调用 `SendRobomasterSystemBarrelCoolDown`；普通热量或主动冷却回到零值时进入待机，并调用 `RobomasterSystemResetBarrelOverheat`。状态机初始化也进入待机并复位；销毁组件只退订。该计数不是摄氏温度。**代码**
+
+原生 `unitybridge` 的 `ActionBarrelCoolDown@6a9af0` 和 `ActionResetBarrelOverheat@6aa030` 都构造至节点 `09` 的 `3f:5b` 请求，长度一字节，载荷分别 `00`（主动冷却）和 `01`（复位）。已有导出名 `CMD_RM_SYSTEM_STATUS_CONFIG` 保留以维持接口，它不是状态订阅命令；既有 FPV 初始化发送的 `01` 正是复位。`StartListening@690200` 经 `ObserverPushPackDJIRMPushGameStatusPack@690aa0` 注册内部 key `0x403f000e`，回调 `6ae900` 转到 `OnGameSystemStatusPush@693840`；后者要求至少 15 字节，从偏移 12 读取无符号小端 16 位值（`693d21`），更新 `RMSystemParamGunCoolDown`。内部 observer key 不是线上的 attr。**原生代码**
+
+[既有周期报告记录](./s1-ir-armor-hit-probe-2026-09-18.md)确认 `3f:0e` 随原有会话到达，无需以 `5b/01` 订阅；该旧记录没有验证热量字段含义、变化或冷却效果。当前离线证据执行了原始 x86 请求构造体至发送入口、以捕获桩记录 Buffer 载荷，并执行原始字段读取指令的六组无符号边界值；它不等于完整 SDK、Unity 回调、固件接受或物理冷却。报文来源/周期、单机/挑战中热量适用性、冷却与复位的应答/效果仍待实机；不据此恢复多机对战。阶段证据见[实施台账](./official-app-capability-implementation.md#g01-单机枪管热量与冷却阶段)。
 
 #### 光学帧编码（2026-09-18 实机实测，含重放验证）
 

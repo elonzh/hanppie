@@ -1,0 +1,12 @@
+<resources>
+    <string name="gun_heat">Gun heat: %1$s</string>
+    <string name="gun_heat_stale">Heat data expired</string>
+    <string name="gun_cooling_start">Cool barrel</string>
+    <string name="gun_cooling_requesting">Requesting cooling…</string>
+    <string name="gun_cooling_active">Cooling…</string>
+    <string name="gun_cooling_resetting">Finishing cooling…</string>
+    <string name="gun_cooling_unconfirmed">Cooling unconfirmed</string>
+    <string name="gun_cooling_rejected">Cooling request rejected</string>
+    <string name="gun_overheated">Overheated; wait for cooling</string>
+    <string name="gun_cooling_retry">Retry finishing cooling</string>
+</resources>

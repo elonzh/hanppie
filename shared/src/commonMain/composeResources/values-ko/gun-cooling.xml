@@ -1,0 +1,12 @@
+<resources>
+    <string name="gun_heat">총열 열량: %1$s</string>
+    <string name="gun_heat_stale">열량 데이터가 만료되었습니다</string>
+    <string name="gun_cooling_start">총열 냉각</string>
+    <string name="gun_cooling_requesting">냉각 요청 중…</string>
+    <string name="gun_cooling_active">냉각 중…</string>
+    <string name="gun_cooling_resetting">냉각 종료 중…</string>
+    <string name="gun_cooling_unconfirmed">냉각 상태를 확인하지 못했습니다</string>
+    <string name="gun_cooling_rejected">냉각 요청이 거부되었습니다</string>
+    <string name="gun_overheated">열량 한도입니다. 냉각을 기다리세요</string>
+    <string name="gun_cooling_retry">냉각 종료 재시도</string>
+</resources>
