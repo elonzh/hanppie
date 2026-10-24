@@ -436,7 +436,8 @@ internal fun ScriptPage(
         title = tr(Res.string.script_monitor),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            ScriptMonitorPanel(model, robotState, modifier = Modifier.fillMaxWidth())
+            ScriptMonitorPanel(model, robotState, modifier = Modifier.fillMaxWidth()
+                .weight(1f, fill = false).verticalScroll(rememberScrollState()).testTag("script-monitor-body"))
             Button({ monitorOpen = false }, Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                 Text(tr(Res.string.close))
             }

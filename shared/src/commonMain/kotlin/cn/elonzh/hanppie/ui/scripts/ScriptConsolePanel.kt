@@ -1,6 +1,8 @@
 package cn.elonzh.hanppie.ui.scripts
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -62,7 +65,7 @@ internal fun ScriptConsolePanel(state: ConsoleState, modifier: Modifier = Modifi
         if (lines.isNotEmpty()) listState.animateScrollToItem(lines.lastIndex)
     }
     BoxWithConstraints(modifier) {
-        // Short landscape windows have to keep the log readable, so the panel drops to one status line.
+        // Short landscape windows keep compact spacing around the status and log.
         val tight = maxHeight < 220.dp
         Card(Modifier.fillMaxSize().testTag("script-console"),
             colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer)) {
@@ -89,11 +92,11 @@ private fun ScriptRunStatusRow(state: ConsoleState, tight: Boolean) {
             SelectionContainer(Modifier.weight(1f)) {
                 Text(
                     state.scriptStatus,
+                    modifier = Modifier.heightIn(max = 80.dp).verticalScroll(rememberScrollState())
+                        .testTag("script-run-status"),
                     fontSize = if (tight) 13.sp else 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = color,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
             elapsedText?.let {

@@ -89,6 +89,7 @@ class RobotSdrLayoutTest {
     @Test fun compactLandscape() = layout(844, 390)
     @Test fun tabletLandscape() = layout(1024, 600)
     @Test fun desktopLandscape() = layout(1280, 720)
+    @Test fun chineseLargeText() = layout(844, 390, "zh", 1.4f)
     @Test fun englishLargeText() = layout(844, 390, "en", 1.4f)
     private fun layout(width: Int, height: Int, language: String = "zh", scale: Float = 1f) =
         runDesktopComposeUiTest(width = width, height = height) {
@@ -106,10 +107,10 @@ class RobotSdrLayoutTest {
                 waitUntil(timeoutMillis = 3_000) { model.robotSdr.state.value.settings != null }
                 onNodeWithTag("sdr-point-apply").performScrollTo().assertIsDisplayed()
                 assertTrue(onNodeWithTag("sdr-point-apply").fetchSemanticsNode().boundsInRoot.height >= 48)
-                saveImage("sdr-$width-$height-$language", onNodeWithTag("sdr-layout"))
+                saveImage("sdr-$width-$height-$language-$scale", onNodeWithTag("sdr-layout"))
                 onNodeWithTag("sdr-width-1").performScrollTo().performClick()
-                onNodeWithTag("sdr-confirm").assertIsDisplayed()
-                saveImage("sdr-confirm-$width-$height-$language", onNodeWithTag("sdr-confirm").onParent().onParent())
+                onNodeWithTag("sdr-confirm").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                saveImage("sdr-confirm-$width-$height-$language-$scale", onNodeWithTag("sdr-confirm").onParent().onParent())
                 onNodeWithText(if (language == "zh") "取消" else "Cancel").performClick()
                 runOnIdle {
                     model.robotSdr.state.value = model.robotSdr.state.value.copy(phase = SdrPhase.NETWORK_REQUIRED,
@@ -118,7 +119,7 @@ class RobotSdrLayoutTest {
                     model.state.value = model.state.value.copy(connected = false)
                 }
                 onNodeWithTag("sdr-reconnect").performScrollTo().assertIsEnabled()
-                saveImage("sdr-recovery-$width-$height-$language", onNodeWithTag("sdr-layout"))
+                saveImage("sdr-recovery-$width-$height-$language-$scale", onNodeWithTag("sdr-layout"))
                 onNodeWithTag("sdr-finish").performScrollTo().performClick()
                 onNodeWithTag("sdr-confirm").performClick()
                 waitUntil(timeoutMillis = 3_000) { !model.robotSdr.state.value.visible }

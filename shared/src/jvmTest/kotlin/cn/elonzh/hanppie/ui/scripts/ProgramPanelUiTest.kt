@@ -23,7 +23,9 @@ import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.i18n.uiText
 import cn.elonzh.hanppie.resources.Res
 import cn.elonzh.hanppie.resources.script_running
+import cn.elonzh.hanppie.resources.run_log
 import cn.elonzh.hanppie.resources.program_panel_value
+import cn.elonzh.hanppie.resources.stop_command_sent_robot_stop_is_unconfirmed
 import cn.elonzh.hanppie.ui.settings.AppearanceController
 import cn.elonzh.hanppie.ui.settings.AppearanceSettings
 import cn.elonzh.hanppie.ui.settings.NightMode
@@ -71,13 +73,15 @@ class ProgramPanelUiTest {
             model.connect("127.0.0.1", "12345678")
             withTimeout(5_000) { while (!model.state.value.connected || model.state.value.busy) delay(5) }
             model.state.value = model.state.value.copy(scriptRunPhase = ScriptRunPhase.RUNNING,
-                scriptMessage = uiText(Res.string.script_running))
+                scriptMessage = uiText(Res.string.script_running),
+                scriptStartedAtEpochMillis = kotlin.time.Clock.System.now().toEpochMilliseconds() - 61_000)
         } }
     }
 
     @Test fun shortLandscape() = scenario(844, 390, "zh", 1f, false)
     @Test fun mediumDarkLandscape() = scenario(1024, 600, "zh", 1f, true)
     @Test fun desktopLandscape() = scenario(1280, 720, "zh", 1f, false)
+    @Test fun largeChineseLandscape() = scenario(844, 390, "zh", 1.4f, true)
     @Test fun largeEnglishLandscape() = scenario(844, 390, "en", 1.4f, false)
 
     private fun scenario(width: Int, height: Int, language: String, scale: Float, dark: Boolean) =
@@ -88,10 +92,11 @@ class ProgramPanelUiTest {
             val sample = controls(language == "en")
             val document = mutableStateOf(EditorDocument(source = "def start():\n    pass\n", title = if (language == "en") "Inspection" else "巡检面板"))
             val appearance = AppearanceController(AppearanceSettings(if (dark) NightMode.DARK else NightMode.LIGHT))
-            val prefix = "program-panel-$width-$height-$language-${if (dark) "dark" else "light"}"
+            val prefix = "program-panel-$width-$height-$language-$scale-${if (dark) "dark" else "light"}"
             fun capture(suffix: String) {
                 waitForIdle()
-                val image = onRoot().captureToImage()
+                val image = if (suffix == "monitor") onNode(isRoot() and hasAnyDescendant(hasText(if (language == "en") "Close" else "关闭"))).captureToImage()
+                    else onRoot().captureToImage()
                 val pixels = IntArray(image.width * image.height); image.readPixels(pixels)
                 val output = BufferedImage(image.width, image.height, BufferedImage.TYPE_INT_ARGB)
                 output.setRGB(0, 0, image.width, image.height, pixels, 0, image.width)
@@ -117,8 +122,9 @@ class ProgramPanelUiTest {
                 onNodeWithTag("program-panel-open").assertIsDisplayed()
                 capture("entry")
                 onNodeWithTag("program-panel-open").performClick()
-                onNodeWithTag("program-panel-stop").assertIsDisplayed()
-                onNodeWithTag("program-panel-back").assertIsDisplayed()
+                onNodeWithTag("program-panel-stop").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                onNodeWithTag("program-panel-back").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                onNodeWithTag("program-panel-canvas").assertHeightIsAtLeast(48.dp)
                 onNodeWithTag("program-input-0").assertIsDisplayed()
                 capture("controls")
                 onNodeWithTag("program-slider-0").requestFocus()
@@ -135,8 +141,9 @@ class ProgramPanelUiTest {
                 assertEquals(LabUiValue.Integer(1), session.labUiEvents.last().value)
                 onNodeWithTag("program-panel-monitor").performClick()
                 waitUntil(timeoutMillis = 5_000) { session.labUiVisibility.lastOrNull() == (owner to false) }
-                onNodeWithTag("script-status-strip").assertIsDisplayed()
-                onNodeWithText(if (language == "en") "Close" else "关闭").performClick()
+                onNodeWithTag("script-status-strip").performScrollTo().assertIsDisplayed()
+                capture("monitor")
+                onNodeWithText(if (language == "en") "Close" else "关闭").assertIsDisplayed().assertHeightIsAtLeast(48.dp).performClick()
                 runOnIdle { session.labUiState.value = sample.copy(inputEnabled = false, issue = LabUiIssue.SEND_FAILED) }
                 waitUntil(timeoutMillis = 5_000) { model.labUi.value.issue == LabUiIssue.SEND_FAILED && !model.labUi.value.inputEnabled }
                 onNodeWithTag("program-input-0").assertIsNotEnabled()
@@ -157,6 +164,21 @@ class ProgramPanelUiTest {
                 onNodeWithTag("program-panel-stop").performClick()
                 waitUntil(timeoutMillis = 5_000) { session.labStopCount.get() == 1 && model.labUi.value.runId == null }
                 onNodeWithTag("script-editor").assertIsDisplayed()
+                for (choice in AppLanguage.entries) {
+                    runOnIdle { Localization.select(choice.preference) }
+                    val status = tr(Res.string.stop_command_sent_robot_stop_is_unconfirmed)
+                    onNodeWithText(status).assertIsDisplayed()
+                    val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+                    onNodeWithText(status).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+                    assertTrue(layouts.isNotEmpty())
+                    assertTrue(layouts.all { layout ->
+                        !layout.didOverflowWidth && layout.getLineEnd(layout.lineCount - 1) == status.length &&
+                            (0 until layout.lineCount).none(layout::isLineEllipsized)
+                    }, "The complete stop result must be readable")
+                    onNodeWithTag("script-run-log").assertIsDisplayed()
+                    onNodeWithText(tr(Res.string.run_log)).assertIsDisplayed()
+                    capture("${choice.preference}-stop-unconfirmed")
+                }
             } finally { model.close(); Localization.initialize("zh", null) }
         }
 

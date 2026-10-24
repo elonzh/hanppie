@@ -162,6 +162,7 @@ class RobotWifiLayoutTest {
     @Test fun compactLandscape() = layout(844, 390)
     @Test fun tabletLandscape() = layout(1024, 600)
     @Test fun desktopLandscape() = layout(1280, 720)
+    @Test fun chineseLargeText() = layout(844, 390, "zh", 1.4f)
     @Test fun englishLargeText() = layout(844, 390, "en", 1.4f)
 
     private fun layout(width: Int, height: Int, language: String = "zh", fontScale: Float = 1f) =
@@ -180,7 +181,7 @@ class RobotWifiLayoutTest {
                     }
                 } }
                 waitUntil(timeoutMillis = 3_000) { model.robotWifi.state.value.profile != null }
-                snapshot("wifi-edit-$width-$height-$language", onNodeWithTag("robot-wifi-page"))
+                snapshot("wifi-edit-$width-$height-$language-$fontScale", onNodeWithTag("robot-wifi-page"))
                 onNodeWithTag("wifi-apply").performScrollTo().assertIsDisplayed().assertIsEnabled()
                 assertTrue(onNodeWithTag("wifi-apply").fetchSemanticsNode().boundsInRoot.height >= 48)
                 runOnIdle {
@@ -194,7 +195,7 @@ class RobotWifiLayoutTest {
                 waitUntil(timeoutMillis = 3_000) { model.robotWifi.state.value.signals.channels != null }
                 onNodeWithTag("wifi-body").performScrollToNode(hasTestTag("wifi-channel-149"))
                 onNodeWithTag("wifi-channel-149").assertIsDisplayed().assertIsEnabled()
-                snapshot("wifi-channels-$width-$height-$language", onNodeWithTag("robot-wifi-page"))
+                snapshot("wifi-channels-$width-$height-$language-$fontScale", onNodeWithTag("robot-wifi-page"))
                 runOnIdle {
                     model.robotWifi.state.value = RobotWifiState(phase = WifiPhase.NETWORK_REQUIRED,
                         confirmed = setOf(WifiConfirmedField.SSID), recovery = WifiRecovery(origin, service.profile,
@@ -203,7 +204,7 @@ class RobotWifiLayoutTest {
                     model.robotWifi.detach()
                 }
                 onNodeWithTag("wifi-body").performScrollToIndex(0)
-                snapshot("wifi-recovery-$width-$height-$language", onNodeWithTag("robot-wifi-page"))
+                snapshot("wifi-recovery-$width-$height-$language-$fontScale", onNodeWithTag("robot-wifi-page"))
                 onNodeWithText("secret_password").assertDoesNotExist()
                 onNodeWithTag("wifi-body").performScrollToNode(hasTestTag("wifi-reconnect"))
                 onNodeWithTag("wifi-reconnect").assertIsDisplayed().assertIsEnabled()
@@ -234,7 +235,7 @@ class RobotWifiLayoutTest {
                     if (code == 1) onNodeWithTag("wifi-mode").assertTextContains("SDR", substring = true)
                     if (code == 4) onNodeWithTag("wifi-mode").assertTextContains(uiText(Res.string.wifi_no_active_link).resolve(), substring = true)
                     onNodeWithTag("wifi-query").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
-                    snapshot("wifi-mode-$code-$width-$height-$language", onNodeWithTag("robot-wifi-page"))
+                    snapshot("wifi-mode-$code-$width-$height-$language-$fontScale", onNodeWithTag("robot-wifi-page"))
                     if (width == 844 && fontScale == 1.4f && code in listOf(1, 4)) {
                         for (locale in AppLanguage.entries) {
                             runOnIdle { Localization.select(locale.preference) }
@@ -253,13 +254,13 @@ class RobotWifiLayoutTest {
                 onNodeWithTag("wifi-error").assertIsDisplayed()
                 mainClock.advanceTimeBy(500); waitForIdle()
                 assertEquals(beforeFailure + 1, service.reads, "A failed mode query must wait for the user's retry")
-                snapshot("wifi-mode-error-$width-$height-$language", onNodeWithTag("robot-wifi-page"))
+                snapshot("wifi-mode-error-$width-$height-$language-$fontScale", onNodeWithTag("robot-wifi-page"))
                 runOnIdle { service.readError = null; service.profile = RobotWifiProfile(1, null, null) }
                 onNodeWithTag("wifi-query").performClick()
                 waitUntil(timeoutMillis = 3_000) { model.robotWifi.state.value.profile?.modeCode == 1 }
                 onNodeWithTag("wifi-mode").assertTextContains("SDR", substring = true)
                 onNodeWithTag("wifi-error").assertDoesNotExist()
-                snapshot("wifi-mode-retry-$width-$height-$language", onNodeWithTag("robot-wifi-page"))
+                snapshot("wifi-mode-retry-$width-$height-$language-$fontScale", onNodeWithTag("robot-wifi-page"))
             } finally { model.close(); Localization.initialize("zh", null) }
         }
 

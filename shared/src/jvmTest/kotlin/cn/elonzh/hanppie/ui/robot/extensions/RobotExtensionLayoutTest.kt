@@ -22,13 +22,14 @@ class RobotExtensionLayoutTest {
     @Test fun compactLandscape() = layout(844, 390)
     @Test fun tabletLandscape() = layout(1024, 600)
     @Test fun desktopLandscape() = layout(1280, 720)
+    @Test fun chineseLargeText() = layout(844, 390, "zh", 1.4f)
     @Test fun englishLargeTextDark() = layout(844, 390, "en", 1.4f)
 
     private fun layout(width: Int, height: Int, language: String = "zh", scale: Float = 1f) = runDesktopComposeUiTest(width = width, height = height) {
         Localization.initialize(language, null)
         val service = ExtensionServiceFixture(); val model = testConsoleModel(robotRuntime = AddressingRuntime(listOf(extensionSession(service))))
-        val appearance = AppearanceController(AppearanceSettings(if (language == "en") NightMode.DARK else NightMode.LIGHT))
-        val prefix = "extensions-$width-$height-$language"
+        val appearance = AppearanceController(AppearanceSettings(if (width == 1024 || scale > 1f) NightMode.DARK else NightMode.LIGHT))
+        val prefix = "extensions-$width-$height-$language-$scale"
         try {
             setContent { TestWorkbenchTheme(appearance) { CompositionLocalProvider(LocalDensity provides Density(1f, scale)) {
                 RobotExtensionPage(model, onBack = {}, onAddressing = {})
@@ -37,7 +38,7 @@ class RobotExtensionLayoutTest {
             saveExtension("$prefix-offline", onNodeWithTag("extensions-page"))
             model.connect("127.0.0.1", "12345678"); waitUntil(timeoutMillis = 5000) { model.state.value.connected && extensionIdle(model) }
             model.robotExtensions.setActive(true)
-            onNodeWithTag("extensions-module-SERVO_4").assertIsDisplayed()
+            onNodeWithTag("extensions-module-SERVO_4").performScrollTo().assertIsDisplayed()
             assertTrue(service.calls.none { it.startsWith("identify:") || it.startsWith("observe:SERVO") })
             saveExtension("$prefix-list", onNodeWithTag("extensions-page"))
             onNodeWithTag("extensions-module-SERVO_4").performClick()
@@ -84,7 +85,7 @@ class RobotExtensionLayoutTest {
             onNodeWithTag("extensions-empty").performScrollTo().assertIsDisplayed()
             saveExtension("$prefix-empty", onNodeWithTag("extensions-page"))
             assertEquals(backY, onNodeWithTag("extensions-back").fetchSemanticsNode().boundsInRoot.top)
-        } finally { model.close() }
+        } finally { model.close(); Localization.initialize("zh", null) }
     }
 }
 

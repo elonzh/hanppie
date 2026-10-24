@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import cn.elonzh.hanppie.robot.extensions.arm.*
 import cn.elonzh.hanppie.ui.app.*
 import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme
@@ -28,15 +29,16 @@ class RobotArmLayoutTest {
     @Test fun compactLandscape() = layout(844, 390)
     @Test fun tabletLandscape() = layout(1024, 600)
     @Test fun desktopLandscape() = layout(1280, 720)
+    @Test fun chineseLargeText() = layout(844, 390, "zh", 1.4f)
     @Test fun englishLargeTextDark() = layout(844, 390, "en", 1.4f)
 
     private fun layout(width: Int, height: Int, language: String = "zh", scale: Float = 1f) = runDesktopComposeUiTest(width = width, height = height) {
         Localization.initialize(language, null)
         val service = ArmServiceFixture(); val model = testConsoleModel(robotRuntime = AddressingRuntime(listOf(armSession(service))))
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        val appearance = AppearanceController(AppearanceSettings(if (language == "en") NightMode.DARK else NightMode.LIGHT))
+        val appearance = AppearanceController(AppearanceSettings(if (width == 1024 || scale > 1f) NightMode.DARK else NightMode.LIGHT))
         var remote by mutableStateOf(false)
-        val prefix = "arm-$width-$height-$language"
+        val prefix = "arm-$width-$height-$language-$scale"
         try {
             setContent { TestWorkbenchTheme(appearance) { CompositionLocalProvider(LocalDensity provides Density(1f, scale)) {
                 if (remote) RemotePage(model, videoContent = { Box(Modifier.fillMaxSize().background(Color(0xff27313a))) }, manageSession = false)
@@ -53,7 +55,7 @@ class RobotArmLayoutTest {
             saveArm("$prefix-guide", onNodeWithTag("arm-page"))
             onNodeWithTag("arm-load-on").performScrollTo().assertIsDisplayed().assertIsEnabled()
             saveArm("$prefix-load", onNodeWithTag("arm-page"))
-            onNodeWithTag("arm-load-on").performClick(); onNodeWithTag("arm-confirm").assertIsDisplayed()
+            onNodeWithTag("arm-load-on").performClick(); onNodeWithTag("arm-confirm").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
             saveArm("$prefix-confirm", onNode(isRoot() and hasAnyDescendant(hasTestTag("arm-confirm"))))
             onNodeWithTag("arm-confirm-cancel").performClick()
             waitUntil(timeoutMillis = 3000) { onAllNodesWithTag("arm-confirm").fetchSemanticsNodes().isEmpty() }
@@ -88,7 +90,7 @@ class RobotArmLayoutTest {
                 onNodeWithTag("arm-retry-status").assertIsDisplayed().assertIsEnabled()
                 saveArm("$prefix-remote-retry", onNodeWithTag("remote-surface"))
             }
-        } finally { scope.cancel(); model.close() }
+        } finally { scope.cancel(); model.close(); Localization.initialize("zh", null) }
     }
 }
 
