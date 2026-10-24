@@ -42,4 +42,5 @@
     <string name="challenge_local_scores">今回のセッション · 上位 5 件</string>
     <string name="challenge_replay">もう一度挑戦</string>
     <string name="challenge_back_to_driving">操縦に戻る</string>
+    <string name="challenge_default_player">プレイヤー1</string>
 </resources>

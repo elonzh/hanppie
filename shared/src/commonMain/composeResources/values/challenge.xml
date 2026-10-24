@@ -41,4 +41,5 @@
     <string name="challenge_local_scores">This session · top five</string>
     <string name="challenge_replay">Try again</string>
     <string name="challenge_back_to_driving">Return to driving</string>
+    <string name="challenge_default_player">Player 1</string>
 </resources>

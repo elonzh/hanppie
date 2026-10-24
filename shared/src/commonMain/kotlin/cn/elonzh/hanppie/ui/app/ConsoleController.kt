@@ -82,7 +82,7 @@ internal interface ConsoleController : AutoCloseable {
     val challenge: StateFlow<cn.elonzh.hanppie.robot.challenge.ChallengeState>
     val gunCooling: StateFlow<cn.elonzh.hanppie.robot.remote.GunCoolingState>
     fun coolGun()
-    fun startChallenge(configuration: cn.elonzh.hanppie.robot.challenge.ChallengeConfiguration): String?
+    fun startChallenge(configuration: cn.elonzh.hanppie.robot.challenge.ChallengeConfiguration): UiText?
     fun stopChallenge()
     fun dismissChallenge()
     val remoteEnabled: MutableStateFlow<Boolean>

@@ -42,4 +42,5 @@
     <string name="challenge_local_scores">Diese Sitzung · beste fünf</string>
     <string name="challenge_replay">Erneut versuchen</string>
     <string name="challenge_back_to_driving">Zur Fahrsteuerung</string>
+    <string name="challenge_default_player">Spieler 1</string>
 </resources>

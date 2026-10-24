@@ -42,4 +42,5 @@
     <string name="challenge_local_scores">Cette session · cinq meilleurs</string>
     <string name="challenge_replay">Réessayer</string>
     <string name="challenge_back_to_driving">Revenir au pilotage</string>
+    <string name="challenge_default_player">Joueur 1</string>
 </resources>

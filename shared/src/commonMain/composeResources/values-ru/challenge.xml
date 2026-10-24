@@ -42,4 +42,5 @@
     <string name="challenge_local_scores">Этот сеанс · пять лучших</string>
     <string name="challenge_replay">Попробовать снова</string>
     <string name="challenge_back_to_driving">Вернуться к управлению</string>
+    <string name="challenge_default_player">Игрок 1</string>
 </resources>

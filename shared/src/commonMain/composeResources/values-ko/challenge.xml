@@ -42,4 +42,5 @@
     <string name="challenge_local_scores">이번 세션 · 상위 5명</string>
     <string name="challenge_replay">다시 도전</string>
     <string name="challenge_back_to_driving">주행으로 돌아가기</string>
+    <string name="challenge_default_player">플레이어 1</string>
 </resources>

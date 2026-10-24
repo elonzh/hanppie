@@ -18,6 +18,7 @@ import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.challenge.*
 import cn.elonzh.hanppie.ui.design.HanppieDesignTokens
 import cn.elonzh.hanppie.ui.design.WorkbenchDialog
+import cn.elonzh.hanppie.ui.i18n.UiText
 import cn.elonzh.hanppie.ui.i18n.tr
 import top.yukonga.miuix.kmp.basic.*
 
@@ -55,19 +56,19 @@ internal fun ChallengeHud(state: ChallengeState, modifier: Modifier, onStop: () 
     }
 }
 
-private data class Score(val configuration: ChallengeConfiguration, val name: String, val points: Int, val millis: Long)
+private data class Score(val configuration: ChallengeConfiguration, val name: String?, val points: Int, val millis: Long)
 
 /** Scores live with this cockpit, matching the fixed component's local list rather than inventing cloud persistence. */
 @Composable
 internal fun ChallengeDialogs(choosing: Boolean, state: ChallengeState, enabled: Boolean, sounds: Boolean, onSoundsChange: (Boolean) -> Unit, maxContentHeight: Dp,
-    onChooseClose: () -> Unit, onStart: (ChallengeConfiguration) -> String?, onStop: () -> Unit, onDismiss: () -> Unit) {
+    onChooseClose: () -> Unit, onStart: (ChallengeConfiguration) -> UiText?, onStop: () -> Unit, onDismiss: () -> Unit) {
     var mode by remember { mutableStateOf(ChallengeMode.TARGET_PRACTICE) }
     var firing by remember { mutableStateOf(ChallengeFiring.INFRARED) }
     var markerCount by remember { mutableIntStateOf(5) }
     var name by remember { mutableStateOf("") }
     var scores by remember { mutableStateOf(emptyList<Score>()) }
     var savedRound by remember { mutableStateOf<Long?>(null) }
-    var startError by remember { mutableStateOf<String?>(null) }
+    var startError by remember { mutableStateOf<UiText?>(null) }
     LaunchedEffect(choosing) { if (choosing) startError = null }
     LaunchedEffect(state.phase) { if (state.phase == ChallengePhase.PREPARING) savedRound = null }
     val result = state.phase == ChallengePhase.RESULT
@@ -114,7 +115,7 @@ internal fun ChallengeDialogs(choosing: Boolean, state: ChallengeState, enabled:
                 Switch(checked = sounds, onCheckedChange = null, modifier = Modifier.clearAndSetSemantics {})
             }
             }
-            startError?.let { Text(it, Modifier.testTag("challenge-start-error"), fontSize = 14.sp) }
+            startError?.let { Text(it.resolve(), Modifier.testTag("challenge-start-error"), fontSize = 14.sp) }
             Button({
                 startError = onStart(ChallengeConfiguration(mode, firing, if (mode == ChallengeMode.TARGET_PRACTICE) 5 else markerCount))
                 if (startError == null) onChooseClose()
@@ -145,7 +146,7 @@ internal fun ChallengeDialogs(choosing: Boolean, state: ChallengeState, enabled:
                             TextField(name, { name = it.take(32) }, Modifier.fillMaxWidth().testTag("challenge-player-name"),
                                 label = tr(Res.string.challenge_name), singleLine = true)
                             Button({
-                                scores = scores + Score(configuration, name.trim().ifEmpty { "Player 1" }, state.score, state.elapsedMillis)
+                                scores = scores + Score(configuration, name.trim().ifEmpty { null }, state.score, state.elapsedMillis)
                                 savedRound = state.roundId
                             }, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("challenge-save-score")) { Text(tr(Res.string.challenge_save_score)) }
                         }
@@ -154,7 +155,7 @@ internal fun ChallengeDialogs(choosing: Boolean, state: ChallengeState, enabled:
                         }.take(5)
                         if (ranking.isNotEmpty()) {
                             Text(tr(Res.string.challenge_local_scores), fontSize = 15.sp)
-                            ranking.forEachIndexed { index, score -> Text("${index + 1}. ${score.name} · " +
+                            ranking.forEachIndexed { index, score -> Text("${index + 1}. ${score.name ?: tr(Res.string.challenge_default_player)} · " +
                                 if (configuration.mode == ChallengeMode.TARGET_PRACTICE) tr(Res.string.challenge_score, score.points.toString()) else challengeTime(score.millis),
                                 Modifier.testTag("challenge-ranking-$index"), fontSize = 14.sp) }
                         }
@@ -164,7 +165,7 @@ internal fun ChallengeDialogs(choosing: Boolean, state: ChallengeState, enabled:
             if (!state.stopConfirmed) {
                 Button(onStop, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("challenge-retry-stop")) { Text(tr(Res.string.vision_retry_stop)) }
             } else if (configuration != null) {
-                startError?.let { Text(it, Modifier.testTag("challenge-replay-error"), fontSize = 14.sp) }
+                startError?.let { Text(it.resolve(), Modifier.testTag("challenge-replay-error"), fontSize = 14.sp) }
                 Button({ startError = onStart(configuration) }, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("challenge-replay"),
                     enabled = enabled, colors = ButtonDefaults.buttonColorsPrimary()) { Text(tr(Res.string.challenge_replay)) }
                 Button(onDismiss, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("challenge-dismiss")) { Text(tr(Res.string.challenge_back_to_driving)) }

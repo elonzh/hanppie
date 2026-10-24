@@ -349,16 +349,16 @@ internal class ConsoleModel(
         runCatching { current.coolGun() }.onFailure { log(it.message.orEmpty()) }
     }
     private var challengeObserver: Job? = null
-    override fun startChallenge(configuration: cn.elonzh.hanppie.robot.challenge.ChallengeConfiguration): String? {
-        val current = session.load() ?: return tr(cn.elonzh.hanppie.resources.Res.string.robot_is_not_connected)
+    override fun startChallenge(configuration: cn.elonzh.hanppie.robot.challenge.ChallengeConfiguration): UiText? {
+        val current = session.load() ?: return uiText(cn.elonzh.hanppie.resources.Res.string.robot_is_not_connected)
         val round = current.challenge.value
         if (round.ownsRound && !(round.phase == cn.elonzh.hanppie.robot.challenge.ChallengePhase.RESULT && round.stopConfirmed))
-            return tr(Res.string.challenge_not_ready)
+            return uiText(Res.string.challenge_not_ready)
         if (!remoteEnabled.value || !isForeground || !acceptingWork.load() || state.value.busy || chat.state.value.running ||
-            tracking.value.blocksManualControl || !videoFrames.isFresh(state.value.connectedAddress)) return tr(cn.elonzh.hanppie.resources.Res.string.challenge_not_ready)
+            tracking.value.blocksManualControl || !videoFrames.isFresh(state.value.connectedAddress)) return uiText(cn.elonzh.hanppie.resources.Res.string.challenge_not_ready)
         clearRemoteInputs()
         return runCatching { current.startChallenge(configuration) }.fold(onSuccess = { null },
-            onFailure = { error -> log(error.message.orEmpty()); tr(Res.string.challenge_not_ready) })
+            onFailure = { error -> log(error.message.orEmpty()); uiText(Res.string.challenge_not_ready) })
     }
     override fun stopChallenge() { stopFiring(); runCatching { session.load()?.stopChallenge() } }
     override fun dismissChallenge() { runCatching { session.load()?.dismissChallenge() } }

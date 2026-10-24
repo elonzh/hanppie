@@ -41,4 +41,5 @@
     <string name="challenge_local_scores">本次成績 · 前五名</string>
     <string name="challenge_replay">再試一次</string>
     <string name="challenge_back_to_driving">返回操控</string>
+    <string name="challenge_default_player">玩家 1</string>
 </resources>
