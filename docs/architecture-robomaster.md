@@ -952,7 +952,9 @@ S1 会在 UDP `10607` 数据会话中输出 H.264 视频和 Opus 音频。本机
 
 倍率来自原生相机简化状态 `02:e4`，并非一个已确认的独立 GetZoom 请求。`ObserverPushPack`（`0x72a650`，注册点 `0x72a756`）绑定该命令；`OnCameraSimpleStatusPush`（`0x72a930`）要求 payload 至少 26 字节，在 `0x72b398` 读取偏移 8 的 little-endian uint16，写入 `RMCameraParamDigitalZoomFactor`。Hanppie 当前解释该推送中的倍率、下述时钟同步与存储卡字段，过滤来源相机节点、目的 App 节点和非响应属性。**代码 / 待实机确认**
 
-官方 `ViewSinglePlayer.StateZoom` 在进入/退出时分别请求 400/100，变焦状态关闭跟随入口，跟随状态隐藏变焦入口；`SystemSinglePlayer` 进入和退出单人操控时均恢复 100。官方 `RealController.LerpCameraDigitalZoom` 通过连续设置值实现过渡；Hanppie 当前直接请求端点，不复现这段逐帧插值。**代码**
+官方 `ViewSinglePlayer.StateZoom` 在进入/退出时分别请求 400/100，变焦状态关闭跟随入口，跟随状态隐藏变焦入口；`SystemSinglePlayer` 进入和退出单人操控时均以 `isSmooth=false` 恢复 100，并将单人场景目标帧率设为 60。`IControl.SendCameraDigitalZoom` 的平滑参数默认开启，`RealController` 的当前值/目标值初始均为 100；平滑分支逐帧计算 `current = (long)Mathf.Lerp(current, target, Time.deltaTime * 10)`，绝对差严格小于 6 时吸附目标，每步沿同一 DigitalZoomFactor setter 写入。非平滑分支只写目标一次。整数截断使高于名义帧率的某些输入可能停在目标之外；不能改称匀速或固定时长动画。`Mathf.Lerp` 的夹取定义可对照 [Unity 官方参考源码](https://github.com/Unity-Technologies/UnityCsReference/blob/master/Runtime/Export/Math/Mathf.cs)，该在线参考不代表运行了同包 Unity。**固定版代码 / API 参考**
+
+Hanppie 的平滑模式复用同一指令和当前状态生产者，按单调时钟的实际间隔执行上述整数递推，17 毫秒下限限制写入频率；应答串行、报告新鲜度和最终回读是现有客户端的确认约束。真实帧调度、请求时延和设备解码可能改变过渡节奏，不能据算法和 UDP 合成应答宣称逐帧或画面等价。直接端点模式、原有 FPV 初始化/退出报文及准星映射不因平滑模式而替换；连接/任务归属、取消及校准页准入见[当前实现](./architecture.md#134-遥控操纵镜头坐标系与安全联动)。**当前实现 / 待验边界**
 
 本轮未连接设备：`02:e4` 实际发送频率、推送属性、倍率接受范围、录像/识别模式限制、返回时延与图像倍率均待实机确认。局部反汇编保留在 `.hanppie/validation/2026-10-22-official-gap/native-Camera-SetDigitalZoomFactor.txt`、`native-Camera-ObserverCameraStatus.txt` 与 `native-Camera-OnCameraSimpleStatusPush.txt`；原生包编码器对请求字段的映射见同目录 `native-EncodeRequest.txt`。不能把模拟状态推送当成相机已变焦的证据。
 

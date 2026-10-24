@@ -1655,4 +1655,6 @@
     <string name="pressure_fire_on">On</string>
     <string name="pressure_fire_sensitivity">Pressure sensitivity</string>
     <string name="pressure_fire_help">Press firmly anywhere on the cockpit to fire; release to stop. The on-screen fire button is hidden while enabled. Higher sensitivity needs less pressure.</string>
+    <string name="camera_zoom_error_title">Zoom not confirmed</string>
+    <string name="camera_zoom_error_details">View zoom problem</string>
 </resources>

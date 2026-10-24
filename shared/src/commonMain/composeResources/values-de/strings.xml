@@ -1655,4 +1655,6 @@
     <string name="pressure_fire_on">Ein</string>
     <string name="pressure_fire_sensitivity">Druckempfindlichkeit</string>
     <string name="pressure_fire_help">Zum Feuern fest auf eine beliebige Stelle im Cockpit drücken, zum Stoppen loslassen. Die Feuertaste auf dem Bildschirm wird dabei ausgeblendet. Höhere Empfindlichkeit erfordert weniger Druck.</string>
+    <string name="camera_zoom_error_title">Zoom nicht bestätigt</string>
+    <string name="camera_zoom_error_details">Zoomproblem anzeigen</string>
 </resources>

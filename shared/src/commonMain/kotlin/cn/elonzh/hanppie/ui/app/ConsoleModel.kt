@@ -467,6 +467,7 @@ internal class ConsoleModel(
         cameraYaw.value = null
     }
     override fun haltRemote() {
+        cameraZoom.cancelTransition()
         clearRemoteInputs()
         remoteEnabled.value = false
     }

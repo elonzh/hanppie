@@ -43,7 +43,7 @@ internal class ImagingCameraFixture : RobotCameraService {
     override suspend fun setAntiFlicker(mode: AntiFlicker) = mode.wireValue
     override suspend fun getDate() = CameraDate(2026, 10, 23, 1, 2, 3)
     override suspend fun syncClock() = getDate()
-    override suspend fun setZoom(hundredths: Int) = error("unused")
+    override suspend fun setZoom(hundredths: Int, smooth: Boolean) = error("unused")
 }
 
 class CameraImagingControllerTest {

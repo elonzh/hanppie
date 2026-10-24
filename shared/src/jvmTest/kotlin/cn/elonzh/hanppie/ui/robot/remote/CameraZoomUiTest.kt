@@ -21,6 +21,8 @@ import cn.elonzh.hanppie.ui.app.testConsoleModel
 import cn.elonzh.hanppie.ui.design.HanppieDesignTokens
 import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
+import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.ui.robot.display.displayFixtureVideo
 import cn.elonzh.hanppie.ui.settings.AppearanceController
 import cn.elonzh.hanppie.ui.settings.AppearanceSettings
@@ -48,7 +50,7 @@ private class CameraFixture : RobotCameraService {
     override suspend fun setTransmissionRate(rate: cn.elonzh.hanppie.robot.media.VideoTransmissionRate) = error("unused")
     override suspend fun switchCamera(index: Int) = error("unused")
     override suspend fun requestKeyFrame() = error("unused")
-    override suspend fun setZoom(hundredths: Int) {
+    override suspend fun setZoom(hundredths: Int, smooth: Boolean) {
         if (fail) throw RobotRequestException(RequestProblem.REJECTED)
         state.value = CameraState(hundredths, state.value.revision + 1)
     }
@@ -88,7 +90,9 @@ class CameraZoomUiTest {
             camera.fail = true
             rule.onNodeWithTag("camera-zoom").performClick()
             rule.waitUntil(3_000) { model.cameraZoom.state.value.error != null }
+            rule.onNodeWithContentDescription(tr(Res.string.camera_zoom_error_details)).performClick()
             rule.onNodeWithTag("camera-zoom-error").assertIsDisplayed()
+            rule.onNodeWithTag("camera-zoom-error-close").performClick()
             assertEquals(100, model.cameraZoom.state.value.hundredths)
             camera.fail = false
             rule.onNodeWithTag("camera-zoom").performClick()
@@ -98,7 +102,7 @@ class CameraZoomUiTest {
             rule.waitUntil(3_000) { model.cameraZoom.state.value.hundredths == null }
             rule.onNodeWithTag("camera-zoom").assertIsNotEnabled()
             model.cameraZoom.clear()
-            assertEquals(CameraZoomState(), model.cameraZoom.state.value)
+            assertEquals(CameraZoomState(), model.cameraZoom.state.value.copy(connection = 0))
         } finally { model.close() }
     }
 }

@@ -16,6 +16,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.display.*
 import cn.elonzh.hanppie.ui.app.ConsoleController
@@ -59,8 +62,18 @@ internal fun ReticleCalibrationPage(model: ConsoleController, modifier: Modifier
     }
     val leave = { model.robotDisplay.cancelRead(); onBack() }
     PlatformBackHandler(true, leave)
-    DisposableEffect(model) { onDispose { model.robotDisplay.cancelRead() } }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(model, lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event in listOf(Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP)) model.cameraZoom.cancelTransition()
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer); model.robotDisplay.cancelRead(); model.cameraZoom.cancelTransition() }
+    }
     LaunchedEffect(connection.connected) { if (!connection.connected) leave() }
+    LaunchedEffect(foreground, connection.connected, fresh, zoom.busy) {
+        if (zoom.busy && (!foreground || !connection.connected || !fresh)) model.cameraZoom.cancelTransition()
+    }
 
     BoxWithConstraints(modifier.fillMaxSize().background(Color.Black).clipToBounds().testTag("display-calibration-page")
         .focusRequester(focus).onPreviewKeyEvent { event ->

@@ -33,6 +33,7 @@ import kotlin.concurrent.Volatile
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -219,6 +220,7 @@ class AppSession(private val target: RobotTarget,
     private val albumCommands = cn.elonzh.hanppie.robot.media.album.NativeAlbum(storageAccess, cameraCommands::canReadStorage, ::request)
     val album: cn.elonzh.hanppie.robot.media.album.RobotAlbumService get() = albumCommands
     @Volatile private var cameraViewChanging = false
+    private var cameraViewRevision = 0L
     @Volatile private var cameraZoomMayBeActive = false
     val camera: cn.elonzh.hanppie.robot.media.RobotCameraService = object : cn.elonzh.hanppie.robot.media.RobotCameraService by cameraCommands {
         override suspend fun formatStorage() { check(!addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl) { "请先结束编址、校准或固件任务" }; cameraCommands.formatStorage() }
@@ -239,16 +241,23 @@ class AppSession(private val target: RobotTarget,
                 }
             }
         }
-        override suspend fun setZoom(hundredths: Int) {
+        override suspend fun setZoom(hundredths: Int, smooth: Boolean) {
             require(hundredths in 100..400)
-            txLock.withLock {
-                check(remote && connected && !labRunning && !cameraViewChanging && !tracking.value.blocksManualControl && !vision.value.ownsPipeline && !challenge.value.ownsRound) { "请先退出跟随或挑战并启用遥控" }
+            val revision = txLock.withLock {
+                check(connected && !powerTransition && !labRunning && !cameraViewChanging && !tracking.value.blocksManualControl &&
+                    !vision.value.ownsPipeline && !challenge.value.ownsRound && !addressing.state.value.blocksControl &&
+                    !calibration.state.value.blocksControl && !firmware.state.value.blocksControl) { "请先结束跟随、挑战、脚本、电源或维护任务" }
                 cameraViewChanging = true
                 if (hundredths > 100) cameraZoomMayBeActive = true
+                ++cameraViewRevision
             }
             try {
-                cameraCommands.setZoom(hundredths)
-                if (hundredths == 100) txLock.withLock { cameraZoomMayBeActive = false }
+                cameraCommands.setZoomChecked(hundredths, smooth) { payload ->
+                    requestChecked(Protocol.HOST_CAMERA, Protocol.CMDSET_CAMERA, Protocol.CMD_SET_ZOOM_PARAM, payload) {
+                        if (!connected || cameraViewRevision != revision) throw CancellationException("Camera zoom was retired")
+                    }
+                }
+                if (hundredths == 100) txLock.withLock { if (cameraViewRevision == revision) cameraZoomMayBeActive = false }
             } finally { txLock.withLock { cameraViewChanging = false } }
         }
     }
@@ -419,7 +428,7 @@ class AppSession(private val target: RobotTarget,
         modeMutex.withLock {
         check(!labRunning && !powerTransition && !addressing.state.value.blocksControl && !calibration.state.value.blocksControl && !firmware.state.value.blocksControl) { "请先结束脚本、电源、编址、校准或固件任务" }
         if (!remote) {
-            txLock.withLock { gunCoolingControl.retire() }
+            txLock.withLock { cameraViewRevision++; gunCoolingControl.retire() }
             mode = Protocol.MODE_REMOTE
             for (c in remoteSetup + remoteEffects) {
                 if (c.control) sendNeutral() else send(c.receiver, c.attr, c.set, c.id, c.payload.hexBytes(), flags = c.flags.hexBytes())
@@ -463,6 +472,7 @@ class AppSession(private val target: RobotTarget,
         inputDeadline = robotNanoTime() + 250_000_000
     }
     fun halt() = txLock.withLock {
+        cameraViewRevision++
         addressingCommands.stopWheel()
         objectTracking.stop()
         clearMotionInput()
@@ -471,7 +481,7 @@ class AppSession(private val target: RobotTarget,
     /** Best-effort stop for explicit disconnect, link loss, and a newly restored session. */
     fun safetyStop(repetitions: Int = 3) {
         require(repetitions in 1..10)
-        txLock.withLock { objectTracking.stop(); clearMotionInput() }
+        txLock.withLock { cameraViewRevision++; objectTracking.stop(); clearMotionInput() }
         repeat(repetitions) { index ->
             txLock.withLock { if (active.load()) { addressingCommands.stopWheel(); sendNeutral(forceActuatorStop = true) } }
             if (index + 1 < repetitions) robotSleep(20)
@@ -538,7 +548,7 @@ class AppSession(private val target: RobotTarget,
     }
     suspend fun exitRemote() = withContext(Dispatchers.IO) {
         modeMutex.withLock {
-        txLock.withLock { challengeRound.leave() }
+        txLock.withLock { cameraViewRevision++; challengeRound.leave() }
         if (!remote) return@withLock
         halt()
         if (remote && connected) for (c in remoteExit) {

@@ -1655,4 +1655,6 @@
     <string name="pressure_fire_on">켜기</string>
     <string name="pressure_fire_sensitivity">압력 감도</string>
     <string name="pressure_fire_help">조종 화면의 아무 곳이나 세게 누르면 발사하고 손을 떼면 멈춥니다. 켜면 화면의 발사 버튼이 숨겨집니다. 감도가 높을수록 필요한 압력이 작아집니다.</string>
+    <string name="camera_zoom_error_title">줌 확인 안 됨</string>
+    <string name="camera_zoom_error_details">줌 문제 보기</string>
 </resources>

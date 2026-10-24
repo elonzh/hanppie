@@ -1655,4 +1655,6 @@
     <string name="pressure_fire_on">Activado</string>
     <string name="pressure_fire_sensitivity">Sensibilidad a la presión</string>
     <string name="pressure_fire_help">Presiona con fuerza en cualquier punto de la cabina para disparar; suelta para parar. Al activarlo se oculta el botón de disparo en pantalla. Una sensibilidad mayor requiere menos presión.</string>
+    <string name="camera_zoom_error_title">Zoom sin confirmar</string>
+    <string name="camera_zoom_error_details">Ver problema del zoom</string>
 </resources>

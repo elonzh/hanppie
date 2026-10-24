@@ -1655,4 +1655,6 @@
     <string name="pressure_fire_on">Activé</string>
     <string name="pressure_fire_sensitivity">Sensibilité à la pression</string>
     <string name="pressure_fire_help">Appuyez fermement sur un point de la vue de pilotage pour tirer ; relâchez pour arrêter. Le bouton de tir à l’écran est masqué lorsque cette option est activée. Une sensibilité plus élevée demande moins de pression.</string>
+    <string name="camera_zoom_error_title">Zoom non confirmé</string>
+    <string name="camera_zoom_error_details">Voir le problème de zoom</string>
 </resources>

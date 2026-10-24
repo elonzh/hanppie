@@ -45,7 +45,7 @@ private class OnboardCameraFixture : RobotCameraService {
     override suspend fun setTransmissionRate(rate: cn.elonzh.hanppie.robot.media.VideoTransmissionRate) = error("unused")
     override suspend fun switchCamera(index: Int) = error("unused")
     override suspend fun requestKeyFrame() = error("unused")
-    override suspend fun setZoom(hundredths: Int) = error("unused")
+    override suspend fun setZoom(hundredths: Int, smooth: Boolean) = error("unused")
     override suspend fun getAntiFlicker(): Int = error("unused")
     override suspend fun setAntiFlicker(mode: AntiFlicker): Int = error("unused")
     override suspend fun getDate(): CameraDate? = error("unused")

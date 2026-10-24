@@ -141,7 +141,7 @@ internal class RobotSessionFixture : RobotSession {
         override suspend fun setTransmissionRate(rate: cn.elonzh.hanppie.robot.media.VideoTransmissionRate) = error("unused")
         override suspend fun switchCamera(index: Int) = error("unused")
         override suspend fun requestKeyFrame() = error("unused")
-        override suspend fun setZoom(hundredths: Int) { zoomRequest(hundredths) }
+        override suspend fun setZoom(hundredths: Int, smooth: Boolean) { zoomRequest(hundredths) }
     }
     override var sdr: cn.elonzh.hanppie.robot.network.RobotSdrService = object : cn.elonzh.hanppie.robot.network.RobotSdrService {
         override suspend fun read(): cn.elonzh.hanppie.robot.network.SdrSettings? = null

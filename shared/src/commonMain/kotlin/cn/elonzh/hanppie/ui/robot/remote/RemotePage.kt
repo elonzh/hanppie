@@ -223,6 +223,7 @@ internal fun RemotePage(
         if (connected.connected) model.setRemoteLed(control.remoteLeds.color(ledState))
     }
     DisposableEffect(model) { onDispose {
+        model.cameraZoom.cancelTransition()
         aimInput.stop()
         model.robotArm.stopControl()
         model.stopFiring()
@@ -234,6 +235,7 @@ internal fun RemotePage(
     DisposableEffect(pressureInput) { onDispose { pressureInput.retire() } }
     DisposableEffect(aimInput, inputLifecycle, pressureInput, pressureMode) {
         val observer = LifecycleEventObserver { _, event ->
+            if (event in listOf(Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP)) model.cameraZoom.cancelTransition()
             if (event in listOf(Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP) && (pressureMode || aimInput.state.value.mode != AimInputMode.OFF || model.challenge.value.ownsRound)) {
                 aimInput.stop()
                 suppressedKeys = suppressedKeys + physicalKeys
@@ -311,6 +313,9 @@ internal fun RemotePage(
         }
     }
     LaunchedEffect(enabled) { if (!enabled) challengeChoosing = false }
+    LaunchedEffect(enabled, videoFresh, zoom.busy) {
+        if (zoom.busy && (!enabled || !videoFresh)) model.cameraZoom.cancelTransition()
+    }
     LaunchedEffect(enabled, challengeChoosing, challenge.phase) {
         if (enabled && !challengeChoosing && challenge.phase != ChallengePhase.RESULT) {
             androidx.compose.runtime.withFrameNanos { }

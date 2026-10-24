@@ -8,6 +8,10 @@ import cn.elonzh.hanppie.robot.protocol.u8
 import cn.elonzh.hanppie.robot.session.RequestProblem
 import cn.elonzh.hanppie.robot.session.RobotRequestException
 import kotlin.concurrent.Volatile
+import kotlin.coroutines.coroutineContext
+import kotlin.math.abs
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,7 +24,8 @@ data class CameraState(val zoomHundredths: Int? = null, val revision: Long = 0, 
 
 interface RobotCameraService {
     val state: StateFlow<CameraState>
-    suspend fun setZoom(hundredths: Int)
+    /** Optional host interpolation; completion still requires the final ACK and a new target report. */
+    suspend fun setZoom(hundredths: Int, smooth: Boolean = false)
     suspend fun getAntiFlicker(): Int
     suspend fun setAntiFlicker(mode: AntiFlicker): Int
     suspend fun getDate(): CameraDate?
@@ -37,6 +42,13 @@ interface RobotCameraService {
     suspend fun takePhoto()
     /** Waits for the command reply and a new matching recording status. */
     suspend fun setRecording(active: Boolean)
+}
+
+/** Fixed official Lerp, integer truncation and final snap; input values are hundredths of magnification. */
+internal fun nextCameraZoom(current: Int, target: Int, elapsedSeconds: Float): Int {
+    require(current in 100..400 && target in 100..400 && elapsedSeconds.isFinite() && elapsedSeconds >= 0f)
+    val next = (current + (target - current) * (elapsedSeconds * 10f).coerceIn(0f, 1f)).toInt()
+    return if (abs(target - next) < 6) target else next
 }
 
 /** Native camera status and configuration requests, owned by the App connection. */
@@ -68,15 +80,37 @@ internal class CameraCommands(
             mutableState.value = CameraState(revision = state.value.revision + 1)
     }
 
-    override suspend fun setZoom(hundredths: Int) {
-        require(hundredths in 100..400)
-        if (closed) throw RobotRequestException(RequestProblem.DISCONNECTED)
-        if (state.value.zoomHundredths == null || nowMillis() - lastReceived >= 1_500)
-            throw RobotRequestException(RequestProblem.INVALID_RESPONSE)
-        val before = state.value.revision
-        val payload = byteArrayOf(9, 0, 0, 0, 0).apply { put16(3, hundredths) }
+    override suspend fun setZoom(hundredths: Int, smooth: Boolean) = setZoomChecked(hundredths, smooth) { payload ->
         request(Protocol.HOST_CAMERA, Protocol.CMDSET_CAMERA, Protocol.CMD_SET_ZOOM_PARAM, payload)
-        awaitStatus(before) { it.zoomHundredths == hundredths }
+    }
+
+    /** AppSession supplies an atomic admission check on every write, including after an ACK suspension. */
+    suspend fun setZoomChecked(hundredths: Int, smooth: Boolean, write: suspend (ByteArray) -> Unit) {
+        require(hundredths in 100..400)
+        fun requireFreshZoom(): Int {
+            if (closed) throw RobotRequestException(RequestProblem.DISCONNECTED)
+            return state.value.zoomHundredths?.takeIf { nowMillis() - lastReceived < 1_500 }
+                ?: throw RobotRequestException(RequestProblem.INVALID_RESPONSE)
+        }
+        var value = requireFreshZoom()
+        var previous = nowMillis()
+        do {
+            if (smooth && value != hundredths) {
+                // At most about 60 writes/s, with one request in flight; missed frames are never queued.
+                delay(17)
+                val now = nowMillis()
+                value = nextCameraZoom(value, hundredths, (now - previous).coerceAtLeast(0) / 1000f)
+                previous = now
+            } else value = hundredths
+            coroutineContext.ensureActive()
+            requireFreshZoom()
+            val before = state.value.revision
+            write(byteArrayOf(9, 0, 0, 0, 0).apply { put16(3, value) })
+            if (value == hundredths) {
+                awaitStatus(before) { it.zoomHundredths == hundredths }
+                return
+            }
+        } while (true)
     }
 
     private suspend fun awaitStatus(after: Long, matches: (CameraState) -> Boolean) {

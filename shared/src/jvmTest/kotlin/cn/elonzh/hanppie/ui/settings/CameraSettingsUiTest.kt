@@ -32,7 +32,7 @@ private class CameraConfigurationFixture : RobotCameraService {
     override suspend fun setTransmissionRate(rate: cn.elonzh.hanppie.robot.media.VideoTransmissionRate) = error("unused")
     override suspend fun switchCamera(index: Int) = error("unused")
     override suspend fun requestKeyFrame() = error("unused")
-    override suspend fun setZoom(hundredths: Int) = error("unused")
+    override suspend fun setZoom(hundredths: Int, smooth: Boolean) = error("unused")
     override suspend fun takePhoto() { error("unused") }
     override suspend fun setRecording(active: Boolean) { error("unused") }
     override suspend fun formatStorage() { error("unused") }
