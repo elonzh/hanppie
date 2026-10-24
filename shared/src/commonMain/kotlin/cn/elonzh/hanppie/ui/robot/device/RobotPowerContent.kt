@@ -1,6 +1,8 @@
 package cn.elonzh.hanppie.ui.robot.device
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -67,10 +69,19 @@ internal fun RobotPowerContent(model: ConsoleController) {
     Text(tr(Res.string.robot_power_title), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
     Column(Modifier.fillMaxWidth().testTag("robot-power"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         state.result?.takeIf { state.phase != PowerPhase.ACTION }?.let { result ->
-            Text(powerActionName(result.action), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            Text(tr(if (result.outcome == PowerOutcome.UNCONFIRMED) Res.string.robot_power_action_uncertain
-                else if (result.action == RobotPowerAction.EXIT_STANDBY) Res.string.robot_power_wake_ack
-                else Res.string.robot_power_action_ack), Modifier.testTag("power-result"), fontSize = 15.sp)
+            val resultIntoView = remember { BringIntoViewRequester() }
+            LaunchedEffect(result) {
+                // Place the shortened maintenance content before revealing the result.
+                withFrameNanos { }
+                resultIntoView.bringIntoView()
+            }
+            Column(Modifier.fillMaxWidth().bringIntoViewRequester(resultIntoView),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(powerActionName(result.action), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(tr(if (result.outcome == PowerOutcome.UNCONFIRMED) Res.string.robot_power_action_uncertain
+                    else if (result.action == RobotPowerAction.EXIT_STANDBY) Res.string.robot_power_wake_ack
+                    else Res.string.robot_power_action_ack), Modifier.testTag("power-result"), fontSize = 15.sp)
+            }
         }
         state.error?.let { Text(it.resolve(), Modifier.testTag("power-error"), fontSize = 14.sp, color = MiuixTheme.colorScheme.error) }
         if (!console.connected || !state.connected) Text(tr(Res.string.robot_power_connect), Modifier.testTag("power-connect"), fontSize = 15.sp)

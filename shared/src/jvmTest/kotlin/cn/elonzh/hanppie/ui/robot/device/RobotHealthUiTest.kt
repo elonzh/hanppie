@@ -120,6 +120,7 @@ class RobotHealthLayoutTest {
     @Test fun compactLandscape() = layout(844, 390)
     @Test fun tabletLandscape() = layout(1024, 600)
     @Test fun desktopLandscape() = layout(1280, 720)
+    @Test fun chineseLargeText() = layout(844, 390, "zh", 1.4f)
     @Test fun englishLargeText() = layout(844, 390, "en", 1.4f)
     private fun layout(width: Int, height: Int, language: String = "zh", scale: Float = 1f) =
         runDesktopComposeUiTest(width = width, height = height) {
@@ -138,16 +139,16 @@ class RobotHealthLayoutTest {
                 } } }
                 onNodeWithTag("settings-category-robot").performScrollTo().performClick()
                 onNodeWithTag("health-status").performScrollTo().assertIsDisplayed()
-                save("health-$width-$height-$language", onNodeWithTag("health-layout"))
+                save("health-$width-$height-$language-$scale", onNodeWithTag("health-layout"))
                 onNodeWithTag("health-issue-0x04008007").performScrollTo().assertIsDisplayed()
-                save("health-alerts-$width-$height-$language", onNodeWithTag("health-layout"))
+                save("health-alerts-$width-$height-$language-$scale", onNodeWithTag("health-layout"))
                 onNodeWithTag("health-modules-toggle").performScrollTo().performClick()
                 assertTrue(onNodeWithTag("health-modules-toggle").fetchSemanticsNode().boundsInRoot.height >= 48)
                 onNodeWithTag("health-module-4660").performScrollTo().assertIsDisplayed()
-                save("health-modules-$width-$height-$language", onNodeWithTag("health-layout"))
+                save("health-modules-$width-$height-$language-$scale", onNodeWithTag("health-layout"))
                 runOnIdle { cockpit = true }
                 onNodeWithTag("health-alert-open").assertIsDisplayed()
-                save("health-cockpit-$width-$height-$language", onNodeWithTag("health-layout"))
+                save("health-cockpit-$width-$height-$language-$scale", onNodeWithTag("health-layout"))
             } finally { model.close(); Localization.initialize("zh", null) }
         }
     private fun save(name: String, node: SemanticsNodeInteraction) {

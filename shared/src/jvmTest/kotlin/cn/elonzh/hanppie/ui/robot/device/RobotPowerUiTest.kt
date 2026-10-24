@@ -16,6 +16,7 @@ import cn.elonzh.hanppie.ui.app.*
 import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
 import cn.elonzh.hanppie.ui.settings.SettingsPage
+import cn.elonzh.hanppie.ui.scripts.EditorDocument
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Rule
@@ -57,7 +58,7 @@ class RobotPowerUiTest {
             rule.onNodeWithTag("power-cancel-read").assertDoesNotExist()
             rule.runOnIdle { gate.complete(Unit) }
             rule.waitUntil(3000) { !model.state.value.connected && !model.robotPower.state.value.busy }
-            rule.onNodeWithTag("power-result").performScrollTo().assertTextContains("设备已应答电源请求", substring = true)
+            rule.onNodeWithTag("power-result").assertIsDisplayed().assertTextContains("设备已应答电源请求", substring = true)
             rule.onNodeWithTag("power-query").assertDoesNotExist()
             assertTrue(session.closed); assertEquals(1, service.actions)
         } finally { model.close() }
@@ -69,6 +70,7 @@ class RobotPowerLayoutTest {
     @Test fun compactLandscape() = layout(844, 390)
     @Test fun tabletLandscape() = layout(1024, 600)
     @Test fun desktopLandscape() = layout(1280, 720)
+    @Test fun chineseLargeText() = layout(844, 390, "zh", 1.4f)
     @Test fun englishLargeText() = layout(844, 390, "en", 1.4f)
     private fun layout(width: Int, height: Int, language: String = "zh", scale: Float = 1f) =
         runDesktopComposeUiTest(width = width, height = height) {
@@ -79,25 +81,35 @@ class RobotPowerLayoutTest {
             val information = InformationFixture().apply { systemStatus.value = RobotSystemStatus(123, 456, true, 123) }
             model.robotInformation.attach(information, MutableStateFlow(cn.elonzh.hanppie.robot.telemetry.RobotHealth()))
             model.robotPower.attach(service, information.systemStatus)
+            model.robotHealth.state.value = healthFixture()
             model.robotPower.refresh()
             try {
                 setContent { TestWorkbenchTheme { CompositionLocalProvider(LocalDensity provides Density(1f, scale)) {
-                    Box(Modifier.fillMaxSize().padding(16.dp).testTag("power-layout")) { SettingsPage(model, showRobotMaintenance = true) }
+                    Box(Modifier.fillMaxSize().testTag("power-layout")) { Console(model, remember { mutableStateOf(EditorDocument()) }) }
                 } } }
+                onNodeWithTag("health-alert-open").performClick()
                 onNodeWithTag("power-delay-300").performScrollTo().assertIsDisplayed()
                 assertTrue(onNodeWithTag("power-delay-300").fetchSemanticsNode().boundsInRoot.height >= 48)
-                save("power-policy-$width-$height-$language", onNodeWithTag("power-layout"))
-                onNodeWithTag("power-action-SHUTDOWN").performScrollTo().performClick()
-                onNodeWithTag("power-confirm").assertIsDisplayed()
-                save("power-confirm-$width-$height-$language", onNode(isRoot() and hasAnyDescendant(hasTestTag("power-confirm"))))
-                onNodeWithTag("power-confirm-cancel").performClick()
+                save("power-policy-$width-$height-$language-$scale", onNodeWithTag("power-layout"))
+                onNodeWithTag("power-delay-30").performScrollTo().performClick()
+                onNodeWithTag("power-confirm").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                save("power-policy-confirm-$width-$height-$language-$scale", onNode(isRoot() and hasAnyDescendant(hasTestTag("power-confirm"))))
+                onNodeWithTag("power-confirm-cancel").assertIsDisplayed().assertHeightIsAtLeast(48.dp).performClick()
+                for (action in RobotPowerAction.entries) {
+                    onNodeWithTag("power-action-${action.name}").performScrollTo().assertHeightIsAtLeast(48.dp).performClick()
+                    onNodeWithTag("power-confirm").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                    save("power-confirm-${action.name}-$width-$height-$language-$scale", onNode(isRoot() and hasAnyDescendant(hasTestTag("power-confirm"))))
+                    onNodeWithTag("power-confirm-cancel").assertIsDisplayed().assertHeightIsAtLeast(48.dp).performClick()
+                }
+                assertEquals(0, service.writes)
+                assertEquals(0, service.actions)
                 runOnIdle {
                     model.robotPower.state.value = model.robotPower.state.value.copy(connected = false, policy = null, report = null,
                         result = PowerResult(RobotPowerAction.SHUTDOWN, PowerOutcome.UNCONFIRMED))
                     model.state.value = model.state.value.copy(connected = false)
                 }
-                onNodeWithTag("power-result").performScrollTo().assertIsDisplayed()
-                save("power-unconfirmed-$width-$height-$language", onNodeWithTag("power-layout"))
+                onNodeWithTag("power-result").assertIsDisplayed()
+                save("power-unconfirmed-$width-$height-$language-$scale", onNodeWithTag("power-layout"))
             } finally { model.close(); Localization.initialize("zh", null) }
         }
     private fun save(name: String, node: SemanticsNodeInteraction) {
