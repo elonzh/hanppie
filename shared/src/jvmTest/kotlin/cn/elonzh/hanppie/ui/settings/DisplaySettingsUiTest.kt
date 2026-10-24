@@ -18,8 +18,10 @@ import cn.elonzh.hanppie.resources.display_connect
 import cn.elonzh.hanppie.resources.display_headlights
 import cn.elonzh.hanppie.resources.display_confirmed
 import cn.elonzh.hanppie.resources.display_sight_help
+import cn.elonzh.hanppie.resources.display_sight_exit
 import cn.elonzh.hanppie.ui.app.*
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
 import cn.elonzh.hanppie.ui.i18n.Localization
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.robot.display.*
@@ -112,13 +114,23 @@ class DisplaySettingsUiTest {
                 onNodeWithTag("display-sight-step-0-1").performClick()
                 val before=peer.writes
                 assertEquals(SightCalibration(),peer.sight)
-                val reticle=onNodeWithTag("display-calibration-reticle").fetchSemanticsNode().boundsInRoot
-                val header=onNodeWithTag("display-calibration-header").fetchSemanticsNode().boundsInRoot
-                val adjustments=onNodeWithTag("display-calibration-adjustments").fetchSemanticsNode().boundsInRoot
-                assertTrue(reticle.top>=header.bottom && reticle.bottom<=adjustments.top,
-                    "Calibration controls must leave the aiming reference visible, including large text")
-                capture("calibration-normal")
-                onNodeWithTag("display-sight-apply").performClick()
+                val languages=if(scale>1f)AppLanguage.entries else listOf(AppLanguage.entries.single{it.preference==language})
+                for(selected in languages){
+                    runOnIdle{Localization.select(selected.preference)}
+                    onNodeWithTag("display-sight-apply").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                    onNodeWithTag("display-calibration-zoom-selector").performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                    val reticle=onNodeWithTag("display-calibration-reticle").fetchSemanticsNode().boundsInRoot
+                    val header=onNodeWithTag("display-calibration-header").fetchSemanticsNode().boundsInRoot
+                    val adjustments=onNodeWithTag("display-calibration-adjustments").fetchSemanticsNode().boundsInRoot
+                    capture("calibration-normal-${selected.preference}")
+                    assertTrue(reticle.top>=header.bottom && reticle.bottom<=adjustments.top,
+                        "Calibration controls must leave the aiming reference visible in ${selected.preference}, including large text")
+                    onNodeWithTag("display-calibration-status").performScrollTo().assertIsDisplayed()
+                    capture("calibration-status-${selected.preference}")
+                    onNodeWithContentDescription(tr(Res.string.display_sight_exit)).performScrollTo().assertIsDisplayed()
+                }
+                runOnIdle{Localization.select(language)}
+                onNodeWithTag("display-sight-apply").performScrollTo().performClick()
                 waitUntil(timeoutMillis=5000){model.robotDisplay.state.value.confirmed==DisplayTarget.SIGHT && !model.state.value.busy}
                 assertEquals(SightCalibration(SightPoint(5025,5025),SightPoint(5025,5025)),peer.sight)
                 assertEquals(before+1,peer.writes)
@@ -128,17 +140,17 @@ class DisplaySettingsUiTest {
                 assertEquals(before+1,peer.writes,"Moving the draft does not confirm or write it")
                 onNodeWithTag("display-sight-step--1-0").performClick()
                 onNodeWithTag("display-calibration-status").assertTextEquals(tr(Res.string.display_confirmed))
-                onNodeWithTag("display-calibration-zoom-selector").performClick();onNodeWithTag("display-calibration-zoom-400").performClick()
+                onNodeWithTag("display-calibration-zoom-selector").performScrollTo().performClick();onNodeWithTag("display-calibration-zoom-400").performClick()
                 waitUntil(timeoutMillis=5000){model.cameraZoom.state.value.hundredths==400 && !model.cameraZoom.state.value.busy}
-                onNodeWithTag("display-sight-zero").performClick()
+                onNodeWithTag("display-sight-zero").performScrollTo().performClick()
                 assertEquals(before+1,peer.writes,"Zero changes only the draft")
                 onNodeWithTag("display-calibration-status").assertTextEquals(tr(Res.string.display_sight_help))
                 capture("calibration-zoom")
-                onNodeWithTag("display-sight-apply").performClick()
+                onNodeWithTag("display-sight-apply").performScrollTo().performClick()
                 waitUntil(timeoutMillis=5000){peer.sight==SightCalibration() && !model.state.value.busy}
                 assertFalse(model.remoteEnabled.value);assertTrue(model.remoteInput.value.all{it==0.0})
                 peer.write={sent->sent();throw RobotRequestException(RequestProblem.TIMED_OUT)}
-                onNodeWithTag("display-sight-step-1-0").performClick();onNodeWithTag("display-sight-apply").performClick()
+                onNodeWithTag("display-sight-step-1-0").performScrollTo().performClick();onNodeWithTag("display-sight-apply").performScrollTo().performClick()
                 waitUntil(timeoutMillis=5000){model.robotDisplay.state.value.uncertain==DisplayTarget.SIGHT && !model.state.value.busy}
                 onNodeWithTag("display-sight-apply").assertDoesNotExist();capture("calibration-error")
                 onNodeWithTag("display-calibration-page").performKeyInput{pressKey(Key.Escape)}

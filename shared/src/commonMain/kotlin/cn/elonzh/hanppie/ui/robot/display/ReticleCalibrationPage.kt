@@ -2,6 +2,8 @@ package cn.elonzh.hanppie.ui.robot.display
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -93,8 +95,11 @@ internal fun ReticleCalibrationPage(model: ConsoleController, modifier: Modifier
         StaticReticle(display.reticle, Modifier.align(Alignment.Center).offset { IntOffset(offset.x.toInt(), offset.y.toInt()) }
             .testTag("display-calibration-reticle"))
 
-        Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().testTag("display-calibration-header").background(HanppieDesignTokens.RemoteHudSurface.copy(alpha = .86f))
-            .padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Keep space around the central reference; expanded controls scroll inside their own HUD.
+        val overlayMaxHeight = (maxHeight / 2 - HanppieDesignTokens.TouchTarget).coerceAtLeast(HanppieDesignTokens.TouchTarget)
+        Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().heightIn(max = overlayMaxHeight)
+            .testTag("display-calibration-header").background(HanppieDesignTokens.RemoteHudSurface.copy(alpha = .86f))
+            .verticalScroll(rememberScrollState()).padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
                 itemVerticalAlignment = Alignment.CenterVertically) {
                 HudIconButton(tr(Res.string.display_sight_exit), WorkbenchGlyph.BACK, action = leave)
@@ -121,8 +126,9 @@ internal fun ReticleCalibrationPage(model: ConsoleController, modifier: Modifier
             }
             Text(message, Modifier.testTag("display-calibration-status"), color = HanppieDesignTokens.RemoteHudContent, fontSize = 13.sp)
         }
-        FlowRow(Modifier.align(Alignment.BottomCenter).fillMaxWidth().testTag("display-calibration-adjustments")
-            .background(HanppieDesignTokens.RemoteHudSurface.copy(alpha = .86f)).padding(8.dp),
+        FlowRow(Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = overlayMaxHeight)
+            .testTag("display-calibration-adjustments").background(HanppieDesignTokens.RemoteHudSurface.copy(alpha = .86f))
+            .verticalScroll(rememberScrollState()).padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
             if (adjustment != null) {
                 listOf(Triple(Res.string.display_sight_left, -1, 0), Triple(Res.string.display_sight_right, 1, 0),
@@ -139,7 +145,7 @@ internal fun ReticleCalibrationPage(model: ConsoleController, modifier: Modifier
                 }
                 Text(tr(Res.string.display_sight_offset, adjustment.xSteps, adjustment.ySteps), color = HanppieDesignTokens.RemoteHudContent, fontSize = 13.sp)
             }
-            Box(Modifier.widthIn(max = 260.dp)) {
+            Box(Modifier.widthIn(max = 260.dp * density.fontScale)) {
                 SettingsDropdown(tr(Res.string.display_picture_zoom), "display-calibration-zoom", (zoomValue ?: -1).toString(),
                     (if (zoomValue == null) listOf("-1" to tr(Res.string.display_zoom_unknown)) else emptyList()) +
                         listOf("100" to tr(Res.string.display_sight_normal), "400" to tr(Res.string.display_sight_zoom)), enabled) {
