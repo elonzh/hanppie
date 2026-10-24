@@ -2,9 +2,12 @@ package cn.elonzh.hanppie.ui.robot.remote.input
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
@@ -21,7 +24,7 @@ import top.yukonga.miuix.kmp.basic.Text
 internal fun AimInputControls(input: GimbalAimInput, state: AimInputState, enabled: Boolean,
     modifier: Modifier = Modifier, start: (AimInputMode) -> Unit) {
     if (!input.mouseAvailable && !input.gyroAvailable) return
-    Column(modifier.widthIn(max = 330.dp), horizontalAlignment = Alignment.CenterHorizontally,
+    Column(modifier.widthIn(max = 330.dp * LocalDensity.current.fontScale), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (state.mode == AimInputMode.MOUSE) {
             Text(tr(Res.string.aim_mouse_active), Modifier.background(HanppieDesignTokens.RemoteHudSurface)
@@ -44,6 +47,7 @@ internal fun AimInputControls(input: GimbalAimInput, state: AimInputState, enabl
         val label = when {
             state.problem != null -> when (state.problem) {
                 AimInputProblem.POINTER_UNAVAILABLE -> Res.string.aim_pointer_failed
+                AimInputProblem.POINTER_ACCESS_DENIED -> Res.string.aim_pointer_access_denied
                 AimInputProblem.SENSOR_UNAVAILABLE -> Res.string.aim_sensor_failed
                 AimInputProblem.SENSOR_STALE -> Res.string.aim_sensor_stale
                 AimInputProblem.ORIENTATION_CHANGED -> Res.string.aim_orientation_changed
@@ -53,7 +57,8 @@ internal fun AimInputControls(input: GimbalAimInput, state: AimInputState, enabl
             state.mode == AimInputMode.GYROSCOPE -> Res.string.aim_gyro_hint
             else -> null
         }
-        label?.let { Text(tr(it), Modifier.background(HanppieDesignTokens.RemoteHudSurface)
+        label?.let { Text(tr(it), Modifier.heightIn(max = 80.dp).verticalScroll(rememberScrollState())
+            .background(HanppieDesignTokens.RemoteHudSurface)
             .padding(horizontal = 8.dp, vertical = 4.dp).testTag("aim-input-status"), fontSize = 12.sp,
             color = HanppieDesignTokens.RemoteHudContent) }
     }

@@ -7,7 +7,7 @@ import kotlin.math.abs
 import kotlin.math.sign
 
 internal enum class AimInputMode { OFF, MOUSE, GYROSCOPE }
-internal enum class AimInputProblem { POINTER_UNAVAILABLE, SENSOR_UNAVAILABLE, SENSOR_STALE, ORIENTATION_CHANGED }
+internal enum class AimInputProblem { POINTER_UNAVAILABLE, POINTER_ACCESS_DENIED, SENSOR_UNAVAILABLE, SENSOR_STALE, ORIENTATION_CHANGED }
 internal data class AimInputState(val mode: AimInputMode = AimInputMode.OFF, val ready: Boolean = false,
     val primaryHeld: Boolean = false, val repeatPrimary: Boolean = false, val problem: AimInputProblem? = null)
 internal data class AimVelocity(val pitch: Double = 0.0, val yaw: Double = 0.0)
@@ -69,6 +69,8 @@ internal class GimbalAimInput(private val pointer: RelativePointer?, private val
                 onLost = { if (generation == epoch) fail(AimInputProblem.POINTER_UNAVAILABLE) },
             )
             if (generation == epoch) capture = handle else handle.close()
+        } catch (_: PointerAccessDenied) {
+            if (generation == epoch) fail(AimInputProblem.POINTER_ACCESS_DENIED)
         } catch (_: Exception) { if (generation == epoch) fail(AimInputProblem.POINTER_UNAVAILABLE) }
     }
 

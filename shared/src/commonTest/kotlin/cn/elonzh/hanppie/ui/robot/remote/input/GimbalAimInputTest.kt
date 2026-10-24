@@ -11,8 +11,12 @@ class GimbalAimInputTest {
         lateinit var button: (Boolean, Boolean) -> Unit
         lateinit var lost: () -> Unit
         var closed = 0
+        var failure: Exception? = null
+        var attempts = 0
         override fun capture(onReady: () -> Unit, onMotion: (Double, Double) -> Unit,
             onButton: (Boolean, Boolean) -> Unit, onLost: () -> Unit): AutoCloseable {
+            attempts++
+            failure?.let { throw it }
             ready = onReady; motion = onMotion; button = onButton; lost = onLost
             return AutoCloseable { closed++ }
         }
@@ -71,6 +75,29 @@ class GimbalAimInputTest {
         assertEquals(1, pointer.closed)
         input.startMouse(); pointer.ready(); pointer.lost()
         assertEquals(2, pointer.closed); assertEquals(AimInputMode.OFF, input.state.value.mode)
+    }
+
+    @Test fun permissionDenialRetiresHeldInputAndWaitsForAnExplicitRetry() {
+        var now = 0L; var fired = 0; val pointer = Pointer()
+        val input = GimbalAimInput(pointer, NoAimGyroscope, { now }, { 0 }, { fired++ })
+        input.startMouse(); pointer.ready(); pointer.button(true, true)
+        val oldMotion = pointer.motion; val oldReady = pointer.ready; val oldButton = pointer.button
+        pointer.failure = PointerAccessDenied()
+        input.startMouse()
+        assertEquals(AimInputProblem.POINTER_ACCESS_DENIED, input.state.value.problem)
+        assertEquals(AimInputMode.OFF, input.state.value.mode)
+        assertFalse(input.state.value.ready); assertFalse(input.state.value.primaryHeld)
+        assertEquals(1, pointer.closed)
+        oldReady(); oldMotion(100.0, 100.0); oldButton(true, true)
+        now = 50; assertEquals(AimVelocity(), input.frame(AimInputSettings(), 90))
+        assertEquals(1, fired)
+        pointer.failure = null
+        now = 100; assertEquals(AimVelocity(), input.frame(AimInputSettings(), 90))
+        assertEquals(2, pointer.attempts, "Permission changes alone must not restart acquisition")
+        input.startMouse(); pointer.ready(); pointer.motion(5.0, -5.0)
+        now = 150; assertEquals(AimVelocity(20.0, 20.0), input.frame(AimInputSettings(), 90))
+        assertNull(input.state.value.problem)
+        input.close(); assertEquals(2, pointer.closed)
     }
 
     @Test fun gyroscopeUsesScreenAxesQuantizationSensitivityAndLimits() {

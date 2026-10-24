@@ -1656,6 +1656,7 @@
     <string name="aim_gyro_hint">Gira el dispositivo para apuntar · Toca otra vez para parar</string>
     <string name="aim_preparing">Preparando entrada…</string>
     <string name="aim_pointer_failed">Captura del ratón terminada. Elige Gimbal con ratón para reintentar.</string>
+    <string name="aim_pointer_access_denied">Permite esta app en macOS: Ajustes del Sistema → Privacidad y seguridad → Accesibilidad. Después vuelve a iniciar Gimbal con ratón.</string>
     <string name="aim_sensor_failed">Giroscopio no disponible. Comprueba el permiso de movimiento y reintenta.</string>
     <string name="aim_sensor_stale">El giroscopio dejó de actualizar. Toca para reiniciar.</string>
     <string name="aim_orientation_changed">Cambió la orientación de pantalla. Toca para reiniciar.</string>

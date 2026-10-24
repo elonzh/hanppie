@@ -1656,6 +1656,7 @@
     <string name="aim_gyro_hint">Вращайте устройство для прицеливания · нажмите снова для остановки</string>
     <string name="aim_preparing">Подготовка ввода…</string>
     <string name="aim_pointer_failed">Захват мыши завершён. Выберите «Подвес мышью» для повтора.</string>
+    <string name="aim_pointer_access_denied">Разрешите это приложение в macOS: Системные настройки → Конфиденциальность и безопасность → Универсальный доступ. Затем снова выберите «Подвес мышью».</string>
     <string name="aim_sensor_failed">Гироскоп недоступен. Проверьте доступ к движению и повторите.</string>
     <string name="aim_sensor_stale">Гироскоп перестал обновляться. Нажмите для перезапуска.</string>
     <string name="aim_orientation_changed">Направление экрана изменилось. Нажмите для перезапуска.</string>

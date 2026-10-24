@@ -1656,6 +1656,7 @@
     <string name="aim_gyro_hint">Rotate the device to aim · Tap again to stop</string>
     <string name="aim_preparing">Preparing input…</string>
     <string name="aim_pointer_failed">Mouse capture ended. Select Mouse gimbal to retry.</string>
+    <string name="aim_pointer_access_denied">Allow this app in macOS System Settings → Privacy &amp; Security → Accessibility, then retry Mouse gimbal.</string>
     <string name="aim_sensor_failed">Gyroscope unavailable. Check motion access and try again.</string>
     <string name="aim_sensor_stale">Gyroscope stopped updating. Tap to restart.</string>
     <string name="aim_orientation_changed">Screen direction changed. Tap to restart.</string>

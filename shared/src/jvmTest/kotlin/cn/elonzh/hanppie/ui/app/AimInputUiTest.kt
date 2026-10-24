@@ -17,6 +17,10 @@ import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
+import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.resources.Res
+import cn.elonzh.hanppie.resources.aim_pointer_access_denied
 import cn.elonzh.hanppie.ui.robot.display.displayFixtureVideo
 import cn.elonzh.hanppie.ui.robot.remote.RemotePage
 import cn.elonzh.hanppie.ui.robot.remote.input.*
@@ -36,11 +40,13 @@ class AimInputUiTest {
 
     private class Pointer : RelativePointer {
         var closes = 0
+        var failure: Exception? = null
         lateinit var motion: (Double, Double) -> Unit
         lateinit var button: (Boolean, Boolean) -> Unit
         lateinit var lost: () -> Unit
         override fun capture(onReady: () -> Unit, onMotion: (Double, Double) -> Unit,
             onButton: (Boolean, Boolean) -> Unit, onLost: () -> Unit): AutoCloseable {
+            failure?.let { throw it }
             motion = onMotion; button = onButton; lost = onLost; onReady()
             return AutoCloseable { closes++ }
         }
@@ -102,6 +108,29 @@ class AimInputUiTest {
                 onNodeWithTag("aim-mouse-toggle").assertIsEnabled().assertIsDisplayed()
                 onNodeWithTag("aim-gyro-toggle").assertIsEnabled().assertIsDisplayed()
                 capture("idle")
+                runOnIdle { pointer.failure = PointerAccessDenied() }
+                onNodeWithTag("aim-mouse-toggle").performClick()
+                val languages = if (scale > 1f) AppLanguage.entries else listOf(AppLanguage.entries.single { it.preference == language })
+                for (selected in languages) {
+                    runOnIdle { Localization.select(selected.preference) }
+                    onNodeWithTag("aim-input-status").assertIsDisplayed()
+                        .assertTextEquals(tr(Res.string.aim_pointer_access_denied))
+                    val statusBounds = onNodeWithTag("aim-input-status").getBoundsInRoot()
+                    assertTrue(statusBounds.bottom - statusBounds.top <= 80.dp)
+                    onNodeWithTag("aim-mouse-toggle").assertIsEnabled().assertHeightIsAtLeast(48.dp)
+                    capture("permission-${selected.preference}")
+                    if (selected == AppLanguage.GERMAN) {
+                        onNodeWithTag("aim-input-status").performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 500f) }
+                        capture("permission-de-scrolled")
+                    }
+                }
+                runOnIdle {
+                    assertEquals(0, pointer.closes)
+                    assertEquals(0, session.infraredCount.get())
+                    assertTrue(model.remoteInput.value.all { it == 0.0 })
+                    pointer.failure = null
+                    Localization.select(language)
+                }
                 onNodeWithTag("aim-mouse-toggle").performClick()
                 runOnIdle { assertEquals(0, pointer.closes) }
                 onNodeWithTag("aim-input-status").assertIsDisplayed()

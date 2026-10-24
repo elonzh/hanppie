@@ -1656,6 +1656,7 @@
     <string name="aim_gyro_hint">转动终端瞄准 · 再次点击停止</string>
     <string name="aim_preparing">正在准备输入…</string>
     <string name="aim_pointer_failed">鼠标捕获已结束，可点击鼠标云台重试。</string>
+    <string name="aim_pointer_access_denied">请在 macOS「系统设置 → 隐私与安全性 → 辅助功能」中允许此应用，再重试鼠标云台。</string>
     <string name="aim_sensor_failed">陀螺仪不可用，请检查运动访问权限后重试。</string>
     <string name="aim_sensor_stale">陀螺仪读数已过期，请点击重新开启。</string>
     <string name="aim_orientation_changed">屏幕方向已改变，请点击重新开启。</string>

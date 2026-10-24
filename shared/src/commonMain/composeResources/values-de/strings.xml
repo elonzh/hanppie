@@ -1656,6 +1656,7 @@
     <string name="aim_gyro_hint">Gerät zum Zielen drehen · erneut tippen zum Stoppen</string>
     <string name="aim_preparing">Eingabe wird vorbereitet…</string>
     <string name="aim_pointer_failed">Mauserfassung beendet. Zum Wiederholen Maus-Gimbal wählen.</string>
+    <string name="aim_pointer_access_denied">Erlaube diese App unter macOS in Systemeinstellungen → Datenschutz &amp; Sicherheit → Bedienungshilfen. Starte dann Maus-Gimbal erneut.</string>
     <string name="aim_sensor_failed">Gyroskop nicht verfügbar. Bewegungszugriff prüfen und erneut versuchen.</string>
     <string name="aim_sensor_stale">Gyroskopdaten bleiben aus. Zum Neustart tippen.</string>
     <string name="aim_orientation_changed">Bildschirmausrichtung geändert. Zum Neustart tippen.</string>

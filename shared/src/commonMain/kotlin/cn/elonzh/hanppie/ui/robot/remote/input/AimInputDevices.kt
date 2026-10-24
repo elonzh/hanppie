@@ -8,6 +8,9 @@ internal interface RelativePointer {
         onButton: (primary: Boolean, pressed: Boolean) -> Unit, onLost: () -> Unit): AutoCloseable
 }
 
+/** Native event access is denied; callers can explain the required system setting. */
+internal class PointerAccessDenied : IllegalStateException("Pointer event access is not authorized")
+
 /** Calibrated device angular rate in rad/s, with current screen rotation in quarter turns. */
 internal data class GyroscopeReading(val x: Double, val y: Double, val z: Double,
     val stamp: Long, val ageMillis: Long, val rotation: Int)

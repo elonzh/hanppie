@@ -1656,6 +1656,7 @@
     <string name="aim_gyro_hint">端末を回転して照準を操作 · もう一度タップで停止</string>
     <string name="aim_preparing">入力を準備中…</string>
     <string name="aim_pointer_failed">マウスのキャプチャーが終了しました。「マウスでジンバル操作」を選んで再試行してください。</string>
+    <string name="aim_pointer_access_denied">macOS の「システム設定 → プライバシーとセキュリティ → アクセシビリティ」でこのアプリを許可してから、マウスでジンバル操作を再試行してください。</string>
     <string name="aim_sensor_failed">ジャイロを利用できません。モーションへのアクセスを確認して再試行してください。</string>
     <string name="aim_sensor_stale">ジャイロの更新が止まりました。タップして再開してください。</string>
     <string name="aim_orientation_changed">画面の向きが変わりました。タップして再開してください。</string>

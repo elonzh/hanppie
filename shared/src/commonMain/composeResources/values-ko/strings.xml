@@ -1656,6 +1656,7 @@
     <string name="aim_gyro_hint">기기를 돌려 조준 · 다시 눌러 정지</string>
     <string name="aim_preparing">입력 준비 중…</string>
     <string name="aim_pointer_failed">마우스 캡처가 종료되었습니다. 마우스 짐벌을 선택해 다시 시도하세요.</string>
+    <string name="aim_pointer_access_denied">macOS 시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용에서 이 앱을 허용한 뒤 마우스 짐벌을 다시 시작하세요.</string>
     <string name="aim_sensor_failed">자이로를 사용할 수 없습니다. 동작 접근 권한을 확인하고 다시 시도하세요.</string>
     <string name="aim_sensor_stale">자이로 갱신이 멈췄습니다. 눌러 다시 시작하세요.</string>
     <string name="aim_orientation_changed">화면 방향이 바뀌었습니다. 눌러 다시 시작하세요.</string>

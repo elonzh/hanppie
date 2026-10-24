@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.robot.remote.input
 
+import com.sun.jna.NativeLibrary
 import java.awt.AWTEvent
 import java.awt.Component
 import java.awt.MouseInfo
@@ -22,6 +23,7 @@ internal class DesktopRelativePointer(private val window: Window) : RelativePoin
     override fun capture(onReady: () -> Unit, onMotion: (Double, Double) -> Unit,
         onButton: (Boolean, Boolean) -> Unit, onLost: () -> Unit): AutoCloseable {
         check(SwingUtilities.isEventDispatchThread())
+        requirePointerEventAccess()
         check(window.isShowing && window.isFocused)
         val robot = Robot(window.graphicsConfiguration.device)
         val toolkit = Toolkit.getDefaultToolkit()
@@ -101,4 +103,16 @@ internal class DesktopRelativePointer(private val window: Window) : RelativePoin
         } catch (error: Exception) { close(false); throw error }
         return AutoCloseable { close(false) }
     }
+}
+
+/** CoreGraphics' preflight only queries access; it never asks for or changes permission. */
+private fun requirePointerEventAccess() {
+    if (!System.getProperty("os.name").startsWith("Mac", ignoreCase = true)) return
+    val allowed = try {
+        NativeLibrary.getInstance("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
+            .getFunction("CGPreflightPostEventAccess").invoke(Byte::class.javaObjectType, emptyArray<Any>()) as Byte
+    } catch (error: LinkageError) {
+        throw IllegalStateException("Could not query pointer event access", error)
+    }
+    if (allowed.toInt() == 0) throw PointerAccessDenied()
 }

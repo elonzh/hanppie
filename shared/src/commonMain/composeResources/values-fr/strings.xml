@@ -1656,6 +1656,7 @@
     <string name="aim_gyro_hint">Tournez l’appareil pour viser · Touchez à nouveau pour arrêter</string>
     <string name="aim_preparing">Préparation de l’entrée…</string>
     <string name="aim_pointer_failed">Capture de la souris terminée. Sélectionnez Nacelle à la souris pour réessayer.</string>
+    <string name="aim_pointer_access_denied">Autorisez cette app dans macOS : Réglages Système → Confidentialité et sécurité → Accessibilité, puis relancez Nacelle à la souris.</string>
     <string name="aim_sensor_failed">Gyroscope indisponible. Vérifiez l’accès aux mouvements et réessayez.</string>
     <string name="aim_sensor_stale">Le gyroscope ne s’actualise plus. Touchez pour redémarrer.</string>
     <string name="aim_orientation_changed">L’orientation de l’écran a changé. Touchez pour redémarrer.</string>
