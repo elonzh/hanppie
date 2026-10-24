@@ -17,6 +17,7 @@
     <string name="challenge_not_ready">Vor dem Start Fahren aktivieren und Livevideo prüfen.</string>
     <string name="challenge_preparing">Ziel, Regeln und Erkennung werden vorbereitet…</string>
     <string name="challenge_countdown">Start in %1$s</string>
+    <string name="challenge_go">Los!</string>
     <string name="challenge_wave_clear">Gruppe abgeschlossen</string>
     <string name="challenge_level_change">Stufe %1$s wird vorbereitet</string>
     <string name="challenge_stopping">Steuerung wird wiederhergestellt…</string>

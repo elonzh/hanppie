@@ -17,6 +17,7 @@
     <string name="challenge_not_ready">Activez le pilotage et vérifiez la vidéo en direct avant de commencer.</string>
     <string name="challenge_preparing">Préparation de la visée, des règles et de la reconnaissance…</string>
     <string name="challenge_countdown">Départ dans %1$s</string>
+    <string name="challenge_go">Partez !</string>
     <string name="challenge_wave_clear">Groupe terminé</string>
     <string name="challenge_level_change">Préparation du niveau %1$s</string>
     <string name="challenge_stopping">Rétablissement des commandes…</string>

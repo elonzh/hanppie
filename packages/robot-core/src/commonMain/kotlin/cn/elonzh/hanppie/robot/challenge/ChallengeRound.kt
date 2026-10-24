@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 enum class ChallengeMode { TARGET_PRACTICE, TARGET_RACE }
 enum class ChallengeFiring { INFRARED, GEL }
 enum class ChallengePhase { IDLE, PREPARING, COUNTDOWN, PLAYING, WAVE_CLEAR, LEVEL_CHANGE, STOPPING, RESULT, CLOSED }
+enum class ChallengeCountdownStep(val number: Int? = null) { THREE(3), TWO(2), ONE(1), START }
 enum class ChallengeEnd { TIME_EXPIRED, COMPLETED, CANCELLED, INPUT_LOST, VISION_FAILED, PREPARATION_FAILED }
 enum class ChallengeProblem { CALIBRATION_UNAVAILABLE, RULES_REJECTED, RULES_TIMED_OUT, RESTORE_UNCONFIRMED }
 data class ChallengeConfiguration(val mode: ChallengeMode, val firing: ChallengeFiring = ChallengeFiring.INFRARED,
@@ -31,7 +32,19 @@ data class ChallengeState(val phase: ChallengePhase = ChallengePhase.IDLE, val c
     val ownsRound: Boolean get() = phase !in listOf(ChallengePhase.IDLE, ChallengePhase.CLOSED)
     val firing: ChallengeFiring? get() = configuration?.firing.takeIf { ownsRound }
     val blocksControl: Boolean get() = ownsRound && phase !in listOf(ChallengePhase.PLAYING, ChallengePhase.WAVE_CLEAR, ChallengePhase.LEVEL_CHANGE)
+    /** Fixed ReadyCountDownAC: 5 init frames, then 3/2/1 at 0/60/120 and Start at 180 (60 fps).
+     * The end event is at frame 230; boundaries round up to the host's millisecond clock.
+     */
+    val countdownStep: ChallengeCountdownStep? get() = when {
+        phase != ChallengePhase.COUNTDOWN || remainingMillis > 3_833 -> null
+        remainingMillis > 2_833 -> ChallengeCountdownStep.THREE
+        remainingMillis > 1_833 -> ChallengeCountdownStep.TWO
+        remainingMillis > 833 -> ChallengeCountdownStep.ONE
+        else -> ChallengeCountdownStep.START
+    }
 }
+
+internal const val challengeReadyMillis = 3_917L
 
 internal data class PracticeStage(val id: Int, val timeMillis: Long, val count: Int)
 internal val practiceStages = listOf(
@@ -100,8 +113,8 @@ internal class ChallengeRound(private val nowMillis: () -> Long, private val sto
             vision.reportAgeMillis?.let { it in 0..749 } == true
         if (current.phase == ChallengePhase.PREPARING) {
             if (fresh) {
-                deadline = now + 3_000
-                mutable.value = state.value.copy(phase = ChallengePhase.COUNTDOWN, remainingMillis = 3_000)
+                deadline = now + challengeReadyMillis
+                mutable.value = state.value.copy(phase = ChallengePhase.COUNTDOWN, remainingMillis = challengeReadyMillis)
             }
             return
         }

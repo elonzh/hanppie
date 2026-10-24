@@ -17,6 +17,7 @@
     <string name="challenge_not_ready">開始前に操縦を有効にし、ライブ映像を確認してください。</string>
     <string name="challenge_preparing">照準、ルール、認識を準備中…</string>
     <string name="challenge_countdown">開始まで %1$s</string>
+    <string name="challenge_go">スタート！</string>
     <string name="challenge_wave_clear">グループ完了</string>
     <string name="challenge_level_change">ステージ %1$s を準備中</string>
     <string name="challenge_stopping">操縦状態を復元中…</string>

@@ -19,7 +19,7 @@ class ChallengeRoundTest {
         fun play(mode: ChallengeMode = ChallengeMode.TARGET_PRACTICE, firing: ChallengeFiring = ChallengeFiring.INFRARED, count: Int = 5) {
             round.prepare(ChallengeConfiguration(mode, firing, count)); round.tick(true, vision, environment)
             assertEquals(ChallengePhase.COUNTDOWN, state.phase)
-            advance(3_000); assertEquals(ChallengePhase.PLAYING, state.phase)
+            advance(3_917); assertEquals(ChallengePhase.PLAYING, state.phase)
         }
         fun rects(vararg values: VisionRect) { vision = vision.copy(rectangles = values.toList()) }
         fun fire(sight: SightPoint = SightPoint()) { round.fireStatus(vision, sight) }
@@ -47,9 +47,47 @@ class ChallengeRoundTest {
         assertEquals(ChallengePhase.PREPARING, r.state.phase); assertTrue(r.state.blocksControl)
         r.vision = r.vision.copy(phase = VisionPhase.ACTIVE, report = VisionReport(5,0,0,emptyList()), reportAgeMillis = 0)
         r.advance(0); r.rects(marker(11)); r.fire()
-        r.advance(2_999); assertEquals(0, r.state.score); assertEquals(1L, r.state.remainingMillis)
+        r.advance(3_916); assertEquals(0, r.state.score); assertEquals(1L, r.state.remainingMillis)
         r.advance(1); assertEquals(10_000L, r.state.remainingMillis); assertFalse(r.state.blocksControl)
         r.fire(); assertEquals(100, r.state.score)
+    }
+
+    @Test fun readyTimelineKeepsControlLockedThroughTheOfficialStartCardInBothModes() {
+        for (mode in ChallengeMode.entries) {
+            val r = Rig(); r.round.prepare(ChallengeConfiguration(mode)); r.advance(0)
+            r.rects(marker(11))
+            val boundaries = listOf(0L to null, 83L to null, 84L to ChallengeCountdownStep.THREE,
+                1_083L to ChallengeCountdownStep.THREE, 1_084L to ChallengeCountdownStep.TWO,
+                2_083L to ChallengeCountdownStep.TWO, 2_084L to ChallengeCountdownStep.ONE,
+                3_083L to ChallengeCountdownStep.ONE, 3_084L to ChallengeCountdownStep.START,
+                3_916L to ChallengeCountdownStep.START)
+            var elapsed = 0L
+            for ((at, step) in boundaries) {
+                r.advance(at - elapsed); elapsed = at
+                assertEquals(step, r.state.countdownStep, "$mode at $at ms")
+                assertTrue(r.state.blocksControl); r.fire()
+                assertEquals(0, r.state.score); assertTrue(r.state.checkpoints.isEmpty())
+                assertEquals(0L, r.state.elapsedMillis)
+            }
+            r.advance(1)
+            assertEquals(ChallengePhase.PLAYING, r.state.phase); assertNull(r.state.countdownStep)
+            assertFalse(r.state.blocksControl); assertEquals(0L, r.state.elapsedMillis)
+            r.advance(100); r.fire()
+            if (mode == ChallengeMode.TARGET_RACE) assertEquals(100L, r.state.checkpoints.single().elapsedMillis)
+            else assertEquals(100, r.state.score)
+        }
+    }
+
+    @Test fun readyTimelineCannotContinueAfterInputLossOrAnExpiredVisionReport() {
+        for (inputLost in listOf(true, false)) {
+            val r = Rig(); r.round.prepare(ChallengeConfiguration(ChallengeMode.TARGET_RACE)); r.advance(0)
+            r.advance(3_084); assertEquals(ChallengeCountdownStep.START, r.state.countdownStep)
+            if (!inputLost) r.vision = r.vision.copy(reportAgeMillis = 750)
+            r.round.tick(!inputLost, r.vision, r.environment)
+            assertEquals(if (inputLost) ChallengeEnd.INPUT_LOST else ChallengeEnd.VISION_FAILED, r.state.end)
+            assertEquals(1, r.stops); assertTrue(r.state.blocksControl); assertNull(r.state.countdownStep)
+            r.advance(5_000); assertEquals(ChallengePhase.STOPPING, r.state.phase)
+        }
     }
 
     @Test fun practiceScoresOncePerTargetAndHasThreeWavesBeforeAStageChange() {

@@ -17,6 +17,7 @@
     <string name="challenge_not_ready">Включите движение и проверьте живое видео перед началом.</string>
     <string name="challenge_preparing">Подготовка прицела, правил и распознавания…</string>
     <string name="challenge_countdown">Старт через %1$s</string>
+    <string name="challenge_go">Старт!</string>
     <string name="challenge_wave_clear">Группа завершена</string>
     <string name="challenge_level_change">Подготовка этапа %1$s</string>
     <string name="challenge_stopping">Восстановление управления…</string>

@@ -16,6 +16,7 @@
     <string name="challenge_not_ready">請啟用操控，並確認即時畫面正常後再開始。</string>
     <string name="challenge_preparing">正在準備準星、規則與辨識…</string>
     <string name="challenge_countdown">%1$s 秒後開始</string>
+    <string name="challenge_go">開始！</string>
     <string name="challenge_wave_clear">本組完成</string>
     <string name="challenge_level_change">準備階段 %1$s</string>
     <string name="challenge_stopping">正在恢復操控…</string>

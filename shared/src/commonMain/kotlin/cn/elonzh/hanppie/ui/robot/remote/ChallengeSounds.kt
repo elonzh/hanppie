@@ -25,9 +25,10 @@ internal class ChallengeCueTracker(initial: ChallengeState) {
             state.end != old.end && state.end in listOf(ChallengeEnd.COMPLETED, ChallengeEnd.TIME_EXPIRED) -> ChallengeCue.FINISH
             state.phase == ChallengePhase.WAVE_CLEAR && old.phase != state.phase -> ChallengeCue.CLEAR
             hit != null && hit.sequence != old.hit?.sequence && state.hitAgeMillis?.let { it in 0..150 } == true -> ChallengeCue.HIT
-            old.phase == ChallengePhase.COUNTDOWN && state.phase == ChallengePhase.PLAYING -> ChallengeCue.START
-            state.phase == ChallengePhase.COUNTDOWN && (old.phase != state.phase ||
-                (state.remainingMillis + 999) / 1000 != (old.remainingMillis + 999) / 1000) -> ChallengeCue.COUNTDOWN
+            old.phase == ChallengePhase.COUNTDOWN && state.phase == ChallengePhase.PLAYING &&
+                old.countdownStep != ChallengeCountdownStep.START -> ChallengeCue.START
+            state.countdownStep != null && state.countdownStep != old.countdownStep ->
+                if (state.countdownStep == ChallengeCountdownStep.START) ChallengeCue.START else ChallengeCue.COUNTDOWN
             state.phase == ChallengePhase.PLAYING && state.aimedMarkerId != null && state.aimedMarkerId != old.aimedMarkerId -> ChallengeCue.AIM
             else -> null
         }

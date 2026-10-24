@@ -17,6 +17,7 @@
     <string name="challenge_not_ready">Activa la conducción y comprueba el vídeo en directo antes de empezar.</string>
     <string name="challenge_preparing">Preparando mira, reglas y reconocimiento…</string>
     <string name="challenge_countdown">Inicio en %1$s</string>
+    <string name="challenge_go">¡Ya!</string>
     <string name="challenge_wave_clear">Grupo completado</string>
     <string name="challenge_level_change">Preparando etapa %1$s</string>
     <string name="challenge_stopping">Restaurando controles…</string>

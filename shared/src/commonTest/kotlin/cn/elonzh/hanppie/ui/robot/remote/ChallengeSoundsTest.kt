@@ -9,17 +9,36 @@ class ChallengeSoundsTest {
 
     @Test fun countdownAndOutcomeCuesFollowTransitionsRatherThanTickerRecomposition() {
         val tracker = ChallengeCueTracker(preparing)
-        val countdown = preparing.copy(phase = ChallengePhase.COUNTDOWN, remainingMillis = 3000)
-        assertEquals(ChallengeCue.COUNTDOWN, tracker.update(countdown))
-        assertNull(tracker.update(countdown.copy(remainingMillis = 2990)))
-        assertEquals(ChallengeCue.COUNTDOWN, tracker.update(countdown.copy(remainingMillis = 2000)))
+        val countdown = preparing.copy(phase = ChallengePhase.COUNTDOWN, remainingMillis = 3917)
+        assertNull(tracker.update(countdown))
+        assertNull(tracker.update(countdown.copy(remainingMillis = 3834)))
+        assertEquals(ChallengeCue.COUNTDOWN, tracker.update(countdown.copy(remainingMillis = 3833)))
+        assertNull(tracker.update(countdown.copy(remainingMillis = 3000)))
+        assertEquals(ChallengeCue.COUNTDOWN, tracker.update(countdown.copy(remainingMillis = 2833)))
+        assertEquals(ChallengeCue.COUNTDOWN, tracker.update(countdown.copy(remainingMillis = 1833)))
+        assertEquals(ChallengeCue.START, tracker.update(countdown.copy(remainingMillis = 833)))
+        assertNull(tracker.update(countdown.copy(remainingMillis = 1)))
         val playing = preparing.copy(phase = ChallengePhase.PLAYING)
-        assertEquals(ChallengeCue.START, tracker.update(playing))
+        assertNull(tracker.update(playing))
         assertEquals(ChallengeCue.CLEAR, tracker.update(playing.copy(phase = ChallengePhase.WAVE_CLEAR)))
         val end = playing.copy(phase = ChallengePhase.STOPPING, end = ChallengeEnd.TIME_EXPIRED)
         assertEquals(ChallengeCue.FINISH, tracker.update(end))
         assertNull(tracker.update(end.copy(phase = ChallengePhase.RESULT)))
         assertNull(tracker.update(end.copy(phase = ChallengePhase.STOPPING)))
+    }
+
+    @Test fun skippedReadyFramesEmitOnlyTheCurrentCueAndRemountDoesNotReplayStart() {
+        val tracker = ChallengeCueTracker(preparing)
+        val countdown = preparing.copy(phase = ChallengePhase.COUNTDOWN, remainingMillis = 3917)
+        assertNull(tracker.update(countdown))
+        assertEquals(ChallengeCue.COUNTDOWN, tracker.update(countdown.copy(remainingMillis = 1000)))
+        val playing = preparing.copy(phase = ChallengePhase.PLAYING)
+        assertEquals(ChallengeCue.START, tracker.update(playing))
+        assertNull(tracker.update(playing))
+        val start = countdown.copy(remainingMillis = 833)
+        val resumed = ChallengeCueTracker(start)
+        assertNull(resumed.update(start.copy(remainingMillis = 500)))
+        assertNull(resumed.update(playing))
     }
 
     @Test fun aimChangesAndImpactIdentityAreIndependentOfScoreAndIgnoreOldCues() {

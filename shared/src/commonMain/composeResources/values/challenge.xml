@@ -16,6 +16,7 @@
     <string name="challenge_not_ready">Enable driving and check the live video before starting.</string>
     <string name="challenge_preparing">Preparing sights, rules and recognition…</string>
     <string name="challenge_countdown">Starting in %1$s</string>
+    <string name="challenge_go">Go!</string>
     <string name="challenge_wave_clear">Group complete</string>
     <string name="challenge_level_change">Preparing stage %1$s</string>
     <string name="challenge_stopping">Restoring controls…</string>

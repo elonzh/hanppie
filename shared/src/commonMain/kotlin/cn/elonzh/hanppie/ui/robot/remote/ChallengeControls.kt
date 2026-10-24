@@ -32,7 +32,11 @@ internal fun ChallengeHud(state: ChallengeState, modifier: Modifier, onStop: () 
         Column(Modifier.weight(1f, fill = false)) {
         Text(when (state.phase) {
             ChallengePhase.PREPARING -> tr(Res.string.challenge_preparing)
-            ChallengePhase.COUNTDOWN -> tr(Res.string.challenge_countdown, ((state.remainingMillis + 999) / 1000).toString())
+            ChallengePhase.COUNTDOWN -> when (val step = state.countdownStep) {
+                null -> tr(Res.string.challenge_preparing)
+                ChallengeCountdownStep.START -> tr(Res.string.challenge_go)
+                else -> tr(Res.string.challenge_countdown, checkNotNull(step.number).toString())
+            }
             ChallengePhase.WAVE_CLEAR -> tr(Res.string.challenge_wave_clear)
             ChallengePhase.LEVEL_CHANGE -> tr(Res.string.challenge_level_change, challengeStage(state.stage))
             ChallengePhase.STOPPING -> tr(Res.string.challenge_stopping)

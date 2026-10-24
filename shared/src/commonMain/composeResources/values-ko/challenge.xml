@@ -17,6 +17,7 @@
     <string name="challenge_not_ready">시작 전에 주행을 켜고 실시간 영상을 확인하세요.</string>
     <string name="challenge_preparing">조준, 규칙 및 인식 준비 중…</string>
     <string name="challenge_countdown">%1$s 후 시작</string>
+    <string name="challenge_go">시작!</string>
     <string name="challenge_wave_clear">그룹 완료</string>
     <string name="challenge_level_change">스테이지 %1$s 준비 중</string>
     <string name="challenge_stopping">조작 복원 중…</string>

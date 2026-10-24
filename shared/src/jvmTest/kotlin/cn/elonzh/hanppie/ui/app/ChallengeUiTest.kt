@@ -9,12 +9,15 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.*
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.challenge.*
 import cn.elonzh.hanppie.robot.display.SightPoint
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
+import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.robot.display.displayFixtureVideo
 import cn.elonzh.hanppie.ui.robot.remote.RemotePage
 import cn.elonzh.hanppie.ui.robot.remote.ChallengeCue
@@ -114,8 +117,19 @@ class ChallengeUiTest {
                 val driveCount = robot.driveCount.get()
                 waitUntil(timeoutMillis = 3_000) { robot.driveCount.get() > driveCount + 2 }
                 assertTrue(model.remoteInput.value.all { it == 0.0 })
-                state { copy(phase = ChallengePhase.COUNTDOWN, remainingMillis = 2000, sight = SightPoint(6000, 5500)) }
-                onNodeWithTag("remote-surface").performKeyInput { keyDown(Key.W) }; capture("countdown")
+                state { copy(phase = ChallengePhase.COUNTDOWN, remainingMillis = 3917, sight = SightPoint(6000, 5500)) }
+                onNodeWithTag("remote-surface").performKeyInput { keyDown(Key.W) }
+                onNodeWithTag("challenge-status").assertTextEquals(tr(Res.string.challenge_preparing)); capture("ready-init")
+                for ((remaining, number) in listOf(3833L to 3, 2833L to 2, 1833L to 1, 833L to 0)) {
+                    state { copy(remainingMillis = remaining) }
+                    onNodeWithTag("challenge-status").assertTextEquals(if (number == 0) tr(Res.string.challenge_go)
+                        else tr(Res.string.challenge_countdown, number.toString()))
+                    onNodeWithTag("challenge-stop").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                    assertTrue(model.remoteInput.value.all { it == 0.0 })
+                    val before = robot.gelCount.get(); model.fireSelected(); waitForIdle()
+                    assertEquals(before, robot.gelCount.get(), "Countdown, including Start, must keep firing locked")
+                    capture("ready-$number")
+                }
                 assertFalse(onNodeWithTag("challenge-hud").fetchSemanticsNode().boundsInRoot.overlaps(
                     onNodeWithTag("remote-crosshair").fetchSemanticsNode().boundsInRoot))
                 state { copy(phase = ChallengePhase.PLAYING, remainingMillis = 0, elapsedMillis = 2340,
