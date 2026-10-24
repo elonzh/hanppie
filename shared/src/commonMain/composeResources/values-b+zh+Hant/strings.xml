@@ -566,7 +566,11 @@
     <string name="script_audio_slot_playing_value">編號 %1$s · %2$s / %3$s · %4$s KB</string>
     <string name="script_audio_play">播放試聽</string>
     <string name="script_audio_pause">暫停播放</string>
-    <string name="script_audio_hint">可拖曳左側手柄調整順序，在腳本中透過 media_ctrl.play_sound(rm_define.media_custom_audio_X) 播放對應槽位。</string>
+    <string name="script_audio_reorder_title">音訊順序</string>
+    <string name="script_audio_reorder">調整「%1$s」的順序</string>
+    <string name="script_audio_move_up">前移一個位置</string>
+    <string name="script_audio_move_down">後移一個位置</string>
+    <string name="script_audio_hint">拖曳左側把手，或開啟把手選單將音訊前移、後移。排序會改變播放槽位編號。可用 media_ctrl.play_sound(rm_define.media_custom_audio_X) 播放。</string>
     <string name="script_status_battery_value">電量 %1$s</string>
     <string name="script_status_signal_value">信號 %1$s</string>
     <string name="script_status_packets_value">報文 %1$s</string>

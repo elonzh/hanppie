@@ -566,7 +566,11 @@
     <string name="script_audio_slot_playing_value">Emplacement %1$s · %2$s / %3$s · %4$s Ko</string>
     <string name="script_audio_play">Lire le son</string>
     <string name="script_audio_pause">Mettre le son en pause</string>
-    <string name="script_audio_hint">Faites glisser la poignée de gauche pour réordonner. Dans le script, utilisez media_ctrl.play_sound(rm_define.media_custom_audio_X).</string>
+    <string name="script_audio_reorder_title">Ordre des sons</string>
+    <string name="script_audio_reorder">Réordonner %1$s</string>
+    <string name="script_audio_move_up">Monter d’une place</string>
+    <string name="script_audio_move_down">Descendre d’une place</string>
+    <string name="script_audio_hint">Faites glisser la poignée gauche ou ouvrez son menu pour déplacer un son. Le réordonnancement change les numéros des emplacements. Lancez un emplacement avec media_ctrl.play_sound(rm_define.media_custom_audio_X).</string>
     <string name="script_status_battery_value">Batterie %1$s</string>
     <string name="script_status_signal_value">Signal %1$s</string>
     <string name="script_status_packets_value">Images %1$s</string>

@@ -566,7 +566,11 @@
     <string name="script_audio_slot_playing_value">Слот %1$s · %2$s / %3$s · %4$s КБ</string>
     <string name="script_audio_play">Воспроизвести аудио</string>
     <string name="script_audio_pause">Приостановить аудио</string>
-    <string name="script_audio_hint">Перетащите левый маркер для смены порядка. В скрипте используйте media_ctrl.play_sound(rm_define.media_custom_audio_X).</string>
+    <string name="script_audio_reorder_title">Порядок аудиозаписей</string>
+    <string name="script_audio_reorder">Изменить порядок: %1$s</string>
+    <string name="script_audio_move_up">На одну позицию выше</string>
+    <string name="script_audio_move_down">На одну позицию ниже</string>
+    <string name="script_audio_hint">Перетаскивайте левый маркер или откройте его меню для перемещения звука. При изменении порядка меняются номера слотов. Для воспроизведения используйте media_ctrl.play_sound(rm_define.media_custom_audio_X).</string>
     <string name="script_status_battery_value">Батарея: %1$s</string>
     <string name="script_status_signal_value">Сигнал: %1$s</string>
     <string name="script_status_packets_value">Кадры: %1$s</string>

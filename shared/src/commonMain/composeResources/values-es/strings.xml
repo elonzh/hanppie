@@ -566,7 +566,11 @@
     <string name="script_audio_slot_playing_value">Espacio %1$s · %2$s / %3$s · %4$s KB</string>
     <string name="script_audio_play">Reproducir audio</string>
     <string name="script_audio_pause">Pausar audio</string>
-    <string name="script_audio_hint">Arrastra el asa izquierda para reordenar. Reproduce en el script con media_ctrl.play_sound(rm_define.media_custom_audio_X).</string>
+    <string name="script_audio_reorder_title">Orden de audio</string>
+    <string name="script_audio_reorder">Reordenar %1$s</string>
+    <string name="script_audio_move_up">Subir una posición</string>
+    <string name="script_audio_move_down">Bajar una posición</string>
+    <string name="script_audio_hint">Arrastra el asa izquierda o abre su menú para mover un sonido. Al reordenar cambian los números de ranura. Reproduce una ranura con media_ctrl.play_sound(rm_define.media_custom_audio_X).</string>
     <string name="script_status_battery_value">Batería %1$s</string>
     <string name="script_status_signal_value">Señal %1$s</string>
     <string name="script_status_packets_value">Fotogramas %1$s</string>

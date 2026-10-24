@@ -11,11 +11,79 @@ import cn.elonzh.hanppie.ui.robot.audio.LabAudioImporter
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 
 class ScriptAudioLibraryTest {
+    @Test fun queuedMovesKeepTheirOriginalListAndScript() = runBlocking {
+        Localization.initialize("zh", "zh")
+        val base = MemoryScriptRepository()
+        for (id in listOf("a", "b")) {
+            base.insert(StoredScript(id, id, "print('keep')", 1, 1))
+            repeat(2) { index -> base.insertAudio(id, LabAudioClip(index, "Same name", 1_000,
+                ByteArray(600) { ((if (id == "a") 1 else 7) + index).toByte() })) }
+        }
+        val entered = CompletableDeferred<Unit>(); val release = CompletableDeferred<Unit>()
+        var writes = 0
+        val repository = object : ScriptRepository by base {
+            override suspend fun replaceAllAudio(scriptId: String, clips: List<LabAudioClip>) {
+                writes++; entered.complete(Unit); release.await(); base.replaceAllAudio(scriptId, clips)
+            }
+        }
+        val library = ScriptAudioLibrary(repository, StubImporter())
+        library.open("a")
+        val original = library.state.value
+        try {
+            val first = async { library.move(0, 1, original) }
+            entered.await()
+            val queued = async { library.move(0, 1, original) }
+            yield()
+            release.complete(Unit)
+            assertTrue(first.await()); assertFalse(queued.await()); assertEquals(1, writes)
+            assertEquals(listOf(2, 1), library.state.value.clips.map { it.packets.first().toInt() })
+            val reordered = library.state.value
+            assertFalse(library.move(0, 99, reordered)); assertSame(reordered, library.state.value)
+            assertFalse(library.move(0, 0, reordered)); assertSame(reordered, library.state.value)
+            library.open("b")
+            val other = library.state.value
+            assertFalse(library.move(0, 1, original)); assertSame(other, library.state.value)
+            assertEquals(listOf(7, 8), base.audio("b").map { it.packets.first().toInt() })
+            assertEquals(1, writes)
+        } finally { release.complete(Unit) }
+    }
+
+    @Test fun failedMoveRetainsSlotsAndStaleActionsCannotClearItsFeedback() = runBlocking {
+        Localization.initialize("zh", "zh")
+        val (base, script) = repository()
+        repeat(2) { index -> base.insertAudio(script.id, LabAudioClip(index + 4, "Same name", 1_000, ByteArray(600) { (index + 1).toByte() })) }
+        var fail = true; var writes = 0
+        val repository = object : ScriptRepository by base {
+            override suspend fun replaceAllAudio(scriptId: String, clips: List<LabAudioClip>) {
+                writes++
+                if (fail) error("synthetic audio store EIO")
+                base.replaceAllAudio(scriptId, clips)
+            }
+        }
+        val library = ScriptAudioLibrary(repository, StubImporter()); library.open(script.id)
+        val original = library.state.value
+        assertFailsWith<IllegalStateException> { library.move(0, 1, original) }
+        val failed = library.state.value
+        assertNotNull(failed.error); assertSame(original.clips, failed.clips)
+        assertEquals(listOf(4, 5), base.audio(script.id).map { it.id })
+        assertFalse(library.move(0, 1, original)); assertSame(failed, library.state.value)
+        fail = false
+        assertTrue(library.move(0, 1, failed)); assertEquals(2, writes)
+        assertEquals(listOf(0, 1), base.audio(script.id).map { it.id })
+        assertEquals(listOf(2, 1), base.audio(script.id).map { it.packets.first().toInt() })
+    }
+
     private class StubImporter(
         private val bytesPerClip: Int = 600,
         private val durationMillis: Long = 1_000,
@@ -155,7 +223,7 @@ class ScriptAudioLibraryTest {
         assertEquals(listOf("first", "second", "third"), library.state.value.clips.map { it.name })
 
         // Move item 0 down to index 1 -> ["second", "first", "third"]
-        library.move(0, 1)
+        library.move(0, 1, library.state.value)
         assertEquals(listOf("second", "first", "third"), library.state.value.clips.map { it.name })
         assertEquals(listOf(0, 1, 2), library.state.value.clips.map { it.id })
         assertEquals(listOf("second", "first", "third"), repository.audio(script.id).map { it.name })

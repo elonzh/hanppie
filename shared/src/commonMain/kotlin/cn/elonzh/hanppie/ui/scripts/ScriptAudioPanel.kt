@@ -1,8 +1,9 @@
 package cn.elonzh.hanppie.ui.scripts
 
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,13 +15,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
@@ -33,16 +39,20 @@ import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.robot.lab.LabProgram
 import cn.elonzh.hanppie.ui.design.WorkbenchGlyph
-import cn.elonzh.hanppie.ui.design.WorkbenchIcon
+import cn.elonzh.hanppie.ui.design.WorkbenchDialog
 import cn.elonzh.hanppie.ui.design.WorkbenchIconButton
 import cn.elonzh.hanppie.ui.design.WorkbenchSmallIconButton
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.robot.audio.AudioPlaybackState
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+
+private data class AudioMove(val snapshot: ScriptAudioState, val from: Int, val to: Int, val focus: Boolean)
+private data class AudioReorderMenu(val snapshot: ScriptAudioState, val index: Int, val open: Boolean = true)
 
 /**
  * Custom audio management, shown in a dialog: importing, previewing, reordering,
@@ -57,7 +67,7 @@ internal fun ScriptAudioPanel(
     onPlay: (LabAudioClip) -> Unit = {},
     onPause: () -> Unit = {},
     onResume: () -> Unit = {},
-    onMove: (fromIndex: Int, toIndex: Int) -> Unit = { _, _ -> },
+    onMove: (fromIndex: Int, toIndex: Int, expected: ScriptAudioState) -> Unit,
     onImport: () -> Unit,
     onRename: (LabAudioClip) -> Unit,
     onDelete: (LabAudioClip) -> Unit,
@@ -65,8 +75,69 @@ internal fun ScriptAudioPanel(
 ) {
     val encoded = LabAudioClip.totalEncodedBytes(audio.clips)
     val overBudget = encoded + sourceLength > LabProgram.MAX_DSP_BYTES
-    var draggingIndex by remember { mutableStateOf<Int?>(null) }
-    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    var draggingIndex by remember(scriptId) { mutableStateOf<Int?>(null) }
+    var dragOffsetY by remember(scriptId) { mutableFloatStateOf(0f) }
+    var pendingMove by remember(scriptId) { mutableStateOf<AudioMove?>(null) }
+    var reorder by remember(scriptId) { mutableStateOf<AudioReorderMenu?>(null) }
+    var menuDismissed by remember(scriptId) { mutableStateOf(true) }
+    var focusTarget by remember(scriptId) { mutableStateOf<Int?>(null) }
+    val handles = remember(scriptId) { List(LabAudioClip.MAX_CLIPS) { FocusRequester() } }
+    val latestAudio by rememberUpdatedState(audio)
+    val latestScriptId by rememberUpdatedState(scriptId)
+    val editable = scriptId != null && audio.scriptId == scriptId && !audio.busy && !audio.loading && pendingMove == null
+    fun move(expected: ScriptAudioState, from: Int, to: Int, focus: Boolean): Boolean {
+        if (expected !== latestAudio || expected.scriptId == null || expected.scriptId != latestScriptId ||
+            expected.busy || expected.loading || pendingMove != null ||
+            from !in expected.clips.indices || to !in expected.clips.indices || from == to) return false
+        pendingMove = AudioMove(expected, from, to, focus)
+        onMove(from, to, expected)
+        return true
+    }
+    LaunchedEffect(audio, pendingMove) {
+        val request = pendingMove ?: return@LaunchedEffect
+        if (audio === request.snapshot || audio.busy) return@LaunchedEffect
+        pendingMove = null
+        val moved = audio.scriptId == request.snapshot.scriptId && audio.error == null &&
+            audio.clips !== request.snapshot.clips &&
+            audio.clips.getOrNull(request.to)?.packets === request.snapshot.clips[request.from].packets
+        if (moved) {
+            if (request.focus) focusTarget = request.to
+            else if (draggingIndex != null) draggingIndex = request.to
+        }
+    }
+    LaunchedEffect(focusTarget, menuDismissed, editable) {
+        val target = focusTarget ?: return@LaunchedEffect
+        if (menuDismissed && editable && target in audio.clips.indices) {
+            handles[target].requestFocus()
+            focusTarget = null
+        }
+    }
+    val menu = reorder
+    val menuEnabled = menu?.open == true && menu.snapshot === audio && editable
+    WorkbenchDialog(menuEnabled, { reorder = reorder?.copy(open = false) },
+        tr(Res.string.script_audio_reorder_title),
+        onDismissFinished = { reorder = null; menuDismissed = true }) {
+        if (menu != null) Column(
+            Modifier.verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            val clip = menu.snapshot.clips[menu.index]
+            Text(clip.name, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(tr(Res.string.script_audio_slot_value, clip.id.toString(), clip.durationSeconds.toString(), kiloBytes(clip.encodedBytes)),
+                fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            Button({ reorder = menu.copy(open = false); move(menu.snapshot, menu.index, menu.index - 1, true) },
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("script-audio-move-up"), enabled = menuEnabled && menu.index > 0) {
+                Text(tr(Res.string.script_audio_move_up))
+            }
+            Button({ reorder = menu.copy(open = false); move(menu.snapshot, menu.index, menu.index + 1, true) },
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("script-audio-move-down"), enabled = menuEnabled && menu.index < menu.snapshot.clips.lastIndex) {
+                Text(tr(Res.string.script_audio_move_down))
+            }
+            Button({ reorder = menu.copy(open = false) }, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("script-audio-reorder-close")) {
+                Text(tr(Res.string.close))
+            }
+        }
+    }
 
     Column(
         modifier.fillMaxWidth().heightIn(max = 450.dp).verticalScroll(rememberScrollState())
@@ -92,7 +163,7 @@ internal fun ScriptAudioPanel(
                 label = tr(Res.string.script_audio_import),
                 glyph = WorkbenchGlyph.ADD,
                 onClick = onImport,
-                enabled = scriptId != null && !audio.busy,
+                enabled = editable,
                 primary = true,
                 tag = "script-audio-import",
             )
@@ -100,7 +171,8 @@ internal fun ScriptAudioPanel(
         if (overBudget) {
             Text(tr(Res.string.script_audio_over_budget), Modifier.padding(horizontal = 8.dp), color = MiuixTheme.colorScheme.error, fontSize = 12.sp)
         }
-        if (audio.loading || audio.busy) LinearProgressIndicator(Modifier.fillMaxWidth().heightIn(min = 2.dp))
+        if (audio.loading || audio.busy || pendingMove != null || scriptId != null && audio.scriptId != scriptId)
+            LinearProgressIndicator(Modifier.fillMaxWidth().heightIn(min = 2.dp))
         when {
             scriptId == null -> Text(
                 tr(Res.string.script_audio_needs_script),
@@ -108,6 +180,7 @@ internal fun ScriptAudioPanel(
                 fontSize = 12.sp,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
+            audio.scriptId != scriptId || audio.loading -> Unit
             audio.clips.isEmpty() -> Text(
                 tr(Res.string.script_audio_empty),
                 Modifier.padding(horizontal = 8.dp),
@@ -120,7 +193,10 @@ internal fun ScriptAudioPanel(
                     ScriptAudioRow(
                         clip = clip,
                         index = index,
-                        busy = audio.busy,
+                        busy = !editable,
+                        scriptId = scriptId,
+                        focus = handles[index],
+                        onReorder = { menuDismissed = false; reorder = AudioReorderMenu(audio, index) },
                         playbackState = playbackState,
                         isDragging = isDragging,
                         dragOffsetY = dragOffsetY,
@@ -129,15 +205,12 @@ internal fun ScriptAudioPanel(
                         onResume = onResume,
                         onDragDelta = { delta ->
                             dragOffsetY += delta
+                            val from = draggingIndex ?: return@ScriptAudioRow
                             val threshold = 70f
-                            if (dragOffsetY > threshold && index < audio.clips.size - 1) {
-                                onMove(index, index + 1)
+                            if (dragOffsetY > threshold && move(latestAudio, from, from + 1, false)) {
                                 dragOffsetY -= threshold
-                                draggingIndex = index + 1
-                            } else if (dragOffsetY < -threshold && index > 0) {
-                                onMove(index, index - 1)
+                            } else if (dragOffsetY < -threshold && move(latestAudio, from, from - 1, false)) {
                                 dragOffsetY += threshold
-                                draggingIndex = index - 1
                             }
                         },
                         onDragStart = {
@@ -169,6 +242,9 @@ private fun ScriptAudioRow(
     clip: LabAudioClip,
     index: Int,
     busy: Boolean,
+    scriptId: String?,
+    focus: FocusRequester,
+    onReorder: () -> Unit,
     playbackState: AudioPlaybackState,
     isDragging: Boolean,
     dragOffsetY: Float,
@@ -184,6 +260,11 @@ private fun ScriptAudioRow(
     val isCurrent = playbackState.playingClipId == clip.id
     val isPlaying = isCurrent && playbackState.isPlaying
     val isPaused = isCurrent && !playbackState.isPlaying
+    var focused by remember(scriptId, index) { mutableStateOf(false) }
+    val currentDragStart by rememberUpdatedState(onDragStart)
+    val currentDragDelta by rememberUpdatedState(onDragDelta)
+    val currentDragEnd by rememberUpdatedState(onDragEnd)
+    val currentBusy by rememberUpdatedState(busy)
 
     Card(
         Modifier.fillMaxWidth()
@@ -196,23 +277,25 @@ private fun ScriptAudioRow(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Drag handle for pointer vertical dragging
-            Box(
-                Modifier.pointerInput(clip.id) {
+            WorkbenchIconButton(
+                label = tr(Res.string.script_audio_reorder, clip.name) + " · " +
+                    tr(Res.string.script_audio_slot_value, clip.id.toString(), clip.durationSeconds.toString(), kiloBytes(clip.encodedBytes)),
+                glyph = WorkbenchGlyph.GRIP_VERTICAL,
+                onClick = onReorder, enabled = !busy, tag = "script-audio-reorder-${clip.id}",
+                modifier = Modifier.focusRequester(focus).onFocusChanged { focused = it.isFocused }
+                    .then(if (focused) Modifier.border(2.dp, MiuixTheme.colorScheme.primary, RoundedCornerShape(14.dp)) else Modifier)
+                    .pointerInput(scriptId, index) {
                     detectDragGestures(
-                        onDragStart = { onDragStart() },
-                        onDragEnd = { onDragEnd() },
-                        onDragCancel = { onDragEnd() },
+                        onDragStart = { if (!currentBusy) currentDragStart() },
+                        onDragEnd = { currentDragEnd() },
+                        onDragCancel = { currentDragEnd() },
                         onDrag = { change, dragAmount ->
                             change.consume()
-                            onDragDelta(dragAmount.y)
+                            currentDragDelta(dragAmount.y)
                         },
                     )
-                }.padding(horizontal = 4.dp, vertical = 6.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                WorkbenchIcon(WorkbenchGlyph.GRIP_VERTICAL, MiuixTheme.colorScheme.disabledOnSurface)
-            }
+                },
+            )
 
             Spacer(Modifier.width(4.dp))
 
@@ -239,6 +322,7 @@ private fun ScriptAudioRow(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         clip.name,
+                        Modifier.weight(1f, fill = false),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,

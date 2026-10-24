@@ -566,7 +566,11 @@
     <string name="script_audio_slot_playing_value">スロット %1$s · %2$s / %3$s · %4$s KB</string>
     <string name="script_audio_play">音声を再生</string>
     <string name="script_audio_pause">音声を一時停止</string>
-    <string name="script_audio_hint">左のハンドルをドラッグすると並べ替えられます。スクリプトでは media_ctrl.play_sound(rm_define.media_custom_audio_X) で再生します。</string>
+    <string name="script_audio_reorder_title">音声の順序</string>
+    <string name="script_audio_reorder">「%1$s」の並べ替え</string>
+    <string name="script_audio_move_up">1つ上へ移動</string>
+    <string name="script_audio_move_down">1つ下へ移動</string>
+    <string name="script_audio_hint">左のハンドルをドラッグするか、ハンドルのメニューで音声を上下に移動できます。並べ替えると再生スロット番号が変わります。media_ctrl.play_sound(rm_define.media_custom_audio_X) で再生します。</string>
     <string name="script_status_battery_value">バッテリー %1$s</string>
     <string name="script_status_signal_value">信号 %1$s</string>
     <string name="script_status_packets_value">フレーム %1$s</string>

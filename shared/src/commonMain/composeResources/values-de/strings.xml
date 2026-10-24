@@ -566,7 +566,11 @@
     <string name="script_audio_slot_playing_value">Platz %1$s · %2$s / %3$s · %4$s KB</string>
     <string name="script_audio_play">Audio abspielen</string>
     <string name="script_audio_pause">Audio pausieren</string>
-    <string name="script_audio_hint">Zum Umsortieren am linken Griff ziehen. Im Skript mit media_ctrl.play_sound(rm_define.media_custom_audio_X) abspielen.</string>
+    <string name="script_audio_reorder_title">Audioreihenfolge</string>
+    <string name="script_audio_reorder">Reihenfolge von %1$s ändern</string>
+    <string name="script_audio_move_up">Eine Position nach oben</string>
+    <string name="script_audio_move_down">Eine Position nach unten</string>
+    <string name="script_audio_hint">Am linken Griff ziehen oder sein Menü zum Verschieben öffnen. Beim Umsortieren ändern sich die Wiedergabeplatznummern. Einen Platz mit media_ctrl.play_sound(rm_define.media_custom_audio_X) abspielen.</string>
     <string name="script_status_battery_value">Akku %1$s</string>
     <string name="script_status_signal_value">Signal %1$s</string>
     <string name="script_status_packets_value">Bilder %1$s</string>

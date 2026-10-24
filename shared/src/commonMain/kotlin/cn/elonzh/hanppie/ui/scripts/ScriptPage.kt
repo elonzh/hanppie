@@ -460,10 +460,15 @@ internal fun ScriptPage(
                 onPlay = model.scriptAudio::play,
                 onPause = model.scriptAudio::pause,
                 onResume = model.scriptAudio::resume,
-                onMove = { from, to -> scope.launch { model.scriptAudio.move(from, to) } },
+                onMove = { from, to, expected -> scope.launch {
+                    try { model.scriptAudio.move(from, to, expected) }
+                    catch (error: CancellationException) { throw error }
+                    catch (_: Exception) { /* The library owns reorder feedback; this is not a host file operation. */ }
+                } },
                 onImport = onImportAudio,
                 onRename = { clip -> audioNameDraft = clip.name; audioRename = clip },
                 onDelete = { audioDelete = it },
+                modifier = Modifier.weight(1f, fill = false),
             )
             Button({
                 audioOpen = false

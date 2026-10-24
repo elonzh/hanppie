@@ -136,18 +136,21 @@ internal class ScriptAudioLibrary(
         state.value = state.value.copy(clips = reordered, error = null)
     }
 
-    suspend fun move(fromIndex: Int, toIndex: Int) = busy {
-        val scriptId = state.value.scriptId ?: rejectAudio(uiText(Res.string.script_audio_needs_script))
-        val current = state.value.clips.toMutableList()
-        if (fromIndex !in current.indices || toIndex !in current.indices || fromIndex == toIndex) return@busy
-        player.stop()
-        val moved = current.removeAt(fromIndex)
-        current.add(toIndex, moved)
-        val reordered = current.mapIndexed { index, clip ->
-            LabAudioClip(index, clip.name, clip.durationMillis, clip.packets)
+    /** A queued UI move belongs to the exact bound list that offered the action. */
+    suspend fun move(fromIndex: Int, toIndex: Int, expected: ScriptAudioState): Boolean = mutex.withLock {
+        if (state.value !== expected || expected.busy || expected.loading || expected.scriptId == null ||
+            fromIndex !in expected.clips.indices || toIndex !in expected.clips.indices || fromIndex == toIndex) return@withLock false
+        runBusy {
+            player.stop()
+            val current = expected.clips.toMutableList()
+            current.add(toIndex, current.removeAt(fromIndex))
+            val reordered = current.mapIndexed { index, clip ->
+                LabAudioClip(index, clip.name, clip.durationMillis, clip.packets)
+            }
+            repository.replaceAllAudio(expected.scriptId, reordered)
+            state.value = state.value.copy(clips = reordered, error = null)
+            true
         }
-        repository.replaceAllAudio(scriptId, reordered)
-        state.value = state.value.copy(clips = reordered, error = null)
     }
 
     private fun current(nativeId: Int): LabAudioClip =
@@ -158,10 +161,13 @@ internal class ScriptAudioLibrary(
         state.value = state.value.copy(clips = clips, error = null)
     }
 
-    private suspend fun <T> busy(block: suspend () -> T): T = mutex.withLock {
+    private suspend fun <T> busy(block: suspend () -> T): T = mutex.withLock { runBusy(block) }
+
+    /** Caller holds the library mutex, including admission checks for list-bound moves. */
+    private suspend fun <T> runBusy(block: suspend () -> T): T {
         state.value = state.value.copy(busy = true, error = null)
         try {
-            block()
+            return block()
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
