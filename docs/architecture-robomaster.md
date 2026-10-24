@@ -1170,6 +1170,8 @@ S1 的红外能力至少包含三层，不能把其中任意一层统称为“�
 
 #### 本地多人房间与裁判同步
 
+本节保留固定版上游调查，未提供 Hanppie 多人产品入口。当前交付范围与暂缓状态统一见[实施台账](./official-app-capability-implementation.md#g02-用户暂缓与范围调整)。
+
 固定 macOS 1.1.5/build 239 的 `SystemBattle`、`AutoNetworkManager`、`NatDiscovery`、`AutoLobbyPlayer`、`BattleJudge*` 与 `BattlePlayer*` 构成独立于机器人 DUSS 会话的本地多人链路，含 Arena、Race、Team 消费者。房主运行 Unity `NetworkLobbyManager`，其他终端同步房间、准备、角色、规则、裁判阶段和结果；每个参赛终端仍连接自己的机器人。`ViewBattleAccounts*` 是对局结算视图，不是 DJI 账号服务。**固定版托管消费者；未完成房间互通验证**
 
 `NatDiscovery.RoomInfo.GetBaseInfo` 的文本字段依次为房间名、模式、时间、人数、人数上限、是否进行中、最大血量、各玩家的名字/头像 ID、房间 Guid 和 BattleVersion，以 `@@@` 分隔并以 NUL 结束。接收端另附来源地址；`ViewBattleLobby` 按人数解析玩家项，约 2 秒未更新就移除房间。`SystemBattle.OnEnterRoom` 对 BattleVersion 做相等检查，固定版值为 1。广播发现、版本匹配不等于入房或开始对局。
@@ -1489,7 +1491,7 @@ packed 整数使用原始 writer/reader 的分段格式，不能套 protobuf/LEB
 
 六条代表性生成消息/对象消息另经过上一阶段实际原生 LLAPI 的双端连接、发送、DataEvent 和 ACK 回收，保持完整 HLAPI 字节，覆盖 Command 客户端到服务端与 RPC/生成服务端到客户端。该桥接直接提交已编码正文，没有执行 ChannelBuffer 的缓存/Fragment=17 分片；不能据字符串最大长度推断单个 LLAPI 数据报可承载任意长消息。完整 host/Unity 场景对象与缓存、姿态运行效果、所有权分配、就绪/切场景、分片与窗口、真实运行互通均仍待验；实际资源、应用派生状态与姿态编码见后续小节。
 
-原始 CIL、注册/参数目录、有界解释器、标准库/Unity/发送桩、逐项输入/输出和 native 桥接在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02-hlapi/`。没有新增产品代码、网络依赖或房间入口，没有执行 Unity、真实 socket/机器人或平台构建；G02 仍实施中，交付边界见[台账 HLAPI 阶段](./official-app-capability-implementation.md#g02-hlapi-封装生成调用与状态流阶段)。
+原始 CIL、注册/参数目录、有界解释器、标准库/Unity/发送桩、逐项输入/输出和 native 桥接在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02-hlapi/`。没有新增产品代码、网络依赖或房间入口，没有执行 Unity、真实 socket/机器人或平台构建；该阶段的交付边界见[台账 HLAPI 阶段](./official-app-capability-implementation.md#g02-hlapi-封装生成调用与状态流阶段)。
 
 ##### 网络预制体与应用状态布局
 
@@ -1614,7 +1616,7 @@ BattleJudge 基类与 NetHeartbetTest 没有这些应用 SyncVar，其生成序�
 
 `NetworkIdentity.GetBehavioursOfSameChannel` 另有缓存分支：初始且组件缓存为空时，调用 GetComponents 并直接返回整组；缓存已存在时，即使 initialState=true 也按通道过滤。四组定向用例核对已解析虚拟组件组合的首次初始、缓存初始、通道 0/1 增量选择。运行时 GetComponents 的返回由序列化表构造的显式桩提供，这不证明真实 Unity 缓存何时建立、是否包含未解析脚本或场景生成顺序。
 
-证据在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02-prefab/`，含五份来源身份、资源/PPtr/脚本原始记录、118 段定向 CIL、76 项属性/位号、170 组状态、十组对象消息/状态应用、四组通道/缓存输入及未解析声明。分配/数组/数值/编码、Unity 对象与 GetComponents、业务钩子等为显式依赖；没有执行真实 Unity Resources.Load/Instantiate、场景/所有权/网络或物理动作。本轮没有新增产品代码或房间入口，G02 仍实施中，交付与待验见[台账预制体阶段](./official-app-capability-implementation.md#g02-实际预制体身份与应用状态布局阶段)。
+证据在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02-prefab/`，含五份来源身份、资源/PPtr/脚本原始记录、118 段定向 CIL、76 项属性/位号、170 组状态、十组对象消息/状态应用、四组通道/缓存输入及未解析声明。分配/数组/数值/编码、Unity 对象与 GetComponents、业务钩子等为显式依赖；没有执行真实 Unity Resources.Load/Instantiate、场景/所有权/网络或物理动作。该阶段没有新增产品代码或房间入口，交付与待验见[台账预制体阶段](./official-app-capability-implementation.md#g02-实际预制体身份与应用状态布局阶段)。
 
 ##### NetworkTransform 姿态流与上行权限
 
@@ -1635,7 +1637,7 @@ SyncRigidbody3D 序列化在服务器且已有客户端同步时间时转发目�
 
 `.hanppie/validation/2026-10-22-official-gap/G02-transform/` 固定 77 段 NetworkTransform 原始 CIL，**124 组定向用例**覆盖 21 组角度、48 组选轴/压缩、三组速度、18 组实际配置状态（各含两种 authority 接收）、六组接收分支、四组客户端发送、12 组拥有关系和 12 组 Update 门槛。实际进入 59 个方法，其中 25 个为 NetworkTransform；另用扩展后的解释器复核前阶段 170 组应用状态，字节/字段/钩子结果相同。
 
-解释器补入 switch 和有符号整数到浮点转换，原始编解码与拒绝分支不作桩替换。Unity 的 Euler/Quaternion 转换、组件/对象查找、属性/刚体赋值、时间、连接与集合为显式依赖；没有完整 CLR/Unity、物理/插值运行或该消息的真实网络互通。虚拟机体两条未解析脚本声明继续原样保留，两个复合预制体不据这些组件用例计为完整通过。没有新增产品代码或房间入口，G02 继续实施中，见[台账姿态阶段](./official-app-capability-implementation.md#g02-姿态编码与上行权限阶段)。
+解释器补入 switch 和有符号整数到浮点转换，原始编解码与拒绝分支不作桩替换。Unity 的 Euler/Quaternion 转换、组件/对象查找、属性/刚体赋值、时间、连接与集合为显式依赖；没有完整 CLR/Unity、物理/插值运行或该消息的真实网络互通。虚拟机体两条未解析脚本声明继续原样保留，两个复合预制体不据这些组件用例计为完整通过。该阶段没有新增产品代码或房间入口，见[台账姿态阶段](./official-app-capability-implementation.md#g02-姿态编码与上行权限阶段)。
 
 ##### 房间准备、规则与裁判同步
 
@@ -1695,7 +1697,7 @@ sequenceDiagram
 
 `BattleJudge.JudgeReady` 对玩家、配置和技能信息有有界等待，其中配置/技能阶段最多按秒循环四次，超时后仍可推进；`BattlePlayer.OnJudgeStateChange` 在 Playing 解开控制锁。这与当前 Hanppie 挑战必须取得配置确认和新鲜报告的准备条件不同，见[台账 C22](./official-app-capability-implementation.md#冲突记录保持现状留待决策)，不能照搬超时放行。房间心跳每秒发送、客户端计数约 4 秒，机器人断连消费者另有 10 秒返回大厅路径；网络存活、机器人新鲜度和操控输入租约必须分开，这些官方计时不替代当前输入失效后的归零。
 
-**未验证边界：** 连接参数、发现包、配置 CRC、普通请求/确认/连接事件、两条有效信道的数据/ACK/排序/重传，以及普通关闭/槽回收/同槽重连已有固定版静态/原生指令仿真依据；HLAPI、生成调用、应用状态、对象消息、两种实际姿态模式与上行权限分支另有有界 CIL 依据。真实局域网发现/连接、host 移除/连接中取消、多 peer/窗口/分片、真实 Unity 预制体/组件缓存、姿态/插值与未解析脚本、所有权授予/回收、就绪/场景及对象/RPC/SyncVar 运行互通仍待验。固定 App 是 x86-64；当前环境未创建官方房间或采集运行报文，执行环境与系统组件授权记录见台账对应阶段。原调查的来源、预制体、规则/裁判表在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02/`，实际 DLL、广播和连接/数据/关闭/状态仿真在相邻 `G02-transport/`、`G02-wire/`、`G02-handshake/`、`G02-connect/`、`G02-data/`、`G02-close/`、`G02-hlapi/`、`G02-prefab/`、`G02-transform/`。这些不是 G02 产品实现、官方房间互通或多机物理验收；当前进度见[独立台账](./official-app-capability-implementation.md#g02-本地多人契约调查与互通边界)。
+**未验证边界：** 连接参数、发现包、配置 CRC、普通请求/确认/连接事件、两条有效信道的数据/ACK/排序/重传，以及普通关闭/槽回收/同槽重连已有固定版静态/原生指令仿真依据；HLAPI、生成调用、应用状态、对象消息、两种实际姿态模式与上行权限分支另有有界 CIL 依据。真实局域网发现/连接、host 移除/连接中取消、多 peer/窗口/分片、真实 Unity 预制体/组件缓存、姿态/插值与未解析脚本、所有权授予/回收、就绪/场景及对象/RPC/SyncVar 运行互通仍待验。固定 App 是 x86-64；本机现已验证 Rosetta 可执行并观察到官方首页，仍未创建房间或采集房间运行报文，执行环境与本轮范围调整见台账对应记录。原调查的来源、预制体、规则/裁判表在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02/`，实际 DLL、广播和连接/数据/关闭/状态仿真在相邻 `G02-transport/`、`G02-wire/`、`G02-handshake/`、`G02-connect/`、`G02-data/`、`G02-close/`、`G02-hlapi/`、`G02-prefab/`、`G02-transform/`。这些不是 G02 产品实现、官方房间互通或多机物理验收；当前进度见[独立台账](./official-app-capability-implementation.md#g02-本地多人契约调查与互通边界)。
 
 #### 自主程序与自定义技能安装
 
