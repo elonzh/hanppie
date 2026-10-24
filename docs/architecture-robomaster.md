@@ -604,6 +604,8 @@ Hanppie 采用显式单页启用、Escape 释放和原有速度控制，保留�
 
 #### 官方 GamePad 的独立链路与输入
 
+本节保留上游协议与历史调查。用户已排除官方 GamePad 连接支持，当前产品不再接入这条专用链路；移除范围统一见[实施台账](./official-app-capability-implementation.md#i02-用户排除与专用链路移除)。
+
 [官方手册](https://dl.djicdn.com/downloads/robomaster-s1/20220429UM/RoboMaster_S1_User_Manual_v1.8_EN.pdf)第 27、37–39 页把 GamePad 定义为连接移动终端的配件，可以再挂鼠标和键盘；接入后手柄拥有底盘输入，触屏仍可执行其他操作。这与电脑直接使用键鼠是不同的连接路径。手册还描述手柄固件更新，不能拿普通机器人升级流程抵扣。**官方用户流程**
 
 2026-10-24 从[官方 App 下载页](https://www.dji.com/downloads/djiapp/robomaster)内嵌数据确认：Android 列为 v1.2.0，iOS 为 v1.1.6，桌面软件条目为 v1.1.5。官方下载端点提供 `RoboMaster_V1.2.0_382_Signed.apk`；本机按 HTTP Range 读取 ZIP 目录并提取原始条目，Manifest 为 `com.dji.robomaster`、1.2.0/build 382。提取时核对 ZIP 条目 CRC，未下载或验证整个 APK 签名，不能把文件名中的 Signed 当作独立签名验证结果。**官方下载元数据 / 静态提取**

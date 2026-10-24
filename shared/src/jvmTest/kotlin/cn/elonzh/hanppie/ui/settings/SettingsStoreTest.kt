@@ -43,6 +43,16 @@ class SettingsStoreTest {
         assertEquals(80, restored.media.speakerVolume)
     }
 
+    @Test fun retiredAccessoryPreferencesDoNotDiscardOtherSavedSettings() {
+        val restored = settingsJson.decodeFromString<SavedSettings>("""{
+            "control":{"gimbalSpeed":45,"gamepadInput":{"lateralGain":1.5,"yaw":{"gain":0.5}}},
+            "media":{"speakerVolume":80}
+        }""")
+        assertEquals(ControlSettings(gimbalSpeed = 45), restored.control)
+        assertEquals(80, restored.media.speakerVolume)
+        assertFalse(settingsJson.encodeToString(restored).contains("gamepadInput"))
+    }
+
     @Test fun customMotionAndShortcutSettingsRoundTrip() {
         val control = ControlSettings(
             translationSpeeds = listOf(.1, .2, .3, .4, .5),

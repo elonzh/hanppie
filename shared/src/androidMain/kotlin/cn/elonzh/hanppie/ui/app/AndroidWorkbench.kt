@@ -92,7 +92,6 @@ private fun createAndroidWorkbenchViewModel(
             createAgentHttpClient = ::createAgentHttpClient,
             prepareNetwork = network::prepare,
             autoConnectOnStart = autoConnectOnStart,
-            gamepadConnector = cn.elonzh.hanppie.ui.platform.AndroidGamepadConnector(app),
         )
         WorkbenchViewModel(
             model = model,

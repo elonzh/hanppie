@@ -17,7 +17,6 @@
     <string name="guide_open_calibration">Open device calibration</string>
     <string name="guide_open_firmware">Open local firmware update</string>
     <string name="guide_open_arm">Open robotic arm management</string>
-    <string name="guide_open_gamepad">Open Gamepad information</string>
     <string name="guide_first_connection_title">First connection</string>
     <string name="guide_first_connection_summary">Join the network, check the picture, then drive.</string>
     <string name="guide_first_connection_0_title">Choose a connection</string>
@@ -66,12 +65,8 @@
     <string name="guide_python_1_body">Run prepares and uploads the program, then waits for onboard state. Upload completion is not proof that execution started. Observe status, logs and the program panel. Stop the current program before another control task.</string>
     <string name="guide_python_2_title">Check the stop result</string>
     <string name="guide_python_2_body">Select Stop and wait for confirmation. If the link or stop result is unknown, leaving the page does not prove the onboard program ended. Reconnect to the same robot, check its state, then prepare the next run.</string>
-    <string name="guide_accessories_title">Gamepad and robotic arm</string>
-    <string name="guide_accessories_summary">Connecting an accessory does not take control.</string>
-    <string name="guide_accessories_0_title">Check accessory information</string>
-    <string name="guide_accessories_0_body">On Android devices supporting USB accessories, use Settings → Control → Gamepad information to find and connect the official Gamepad. Review version, battery and attached mouse/keyboard there. Connection alone does not take control.</string>
-    <string name="guide_accessories_1_title">Take control in the cockpit</string>
-    <string name="guide_accessories_1_body">After connecting, enter the cockpit, center the sticks and release buttons before enabling Gamepad driving. Escape or Release Gamepad driving releases it. Stale input, unplugging or focus loss never automatically restores control.</string>
+    <string name="guide_accessories_title">Robotic arm</string>
+    <string name="guide_accessories_summary">Wiring, module identity, binding and calibration.</string>
     <string name="guide_accessories_2_title">Install the arm by module identity</string>
     <string name="guide_accessories_2_body">Power off before wiring. Address modules if needed, then use Identify in arm management to check and bind the main and secondary servos. Follow device calibration poses. After verifying configuration, use the cockpit for a low-speed check.</string>
     <string name="guide_maintenance_title">Checks and maintenance</string>

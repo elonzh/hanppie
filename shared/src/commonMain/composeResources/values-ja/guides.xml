@@ -17,7 +17,6 @@
     <string name="guide_open_calibration">デバイスの校正を開く</string>
     <string name="guide_open_firmware">ローカルファームウェア更新を開く</string>
     <string name="guide_open_arm">ロボットアームの管理を開く</string>
-    <string name="guide_open_gamepad">Gamepad 情報を開く</string>
     <string name="guide_first_connection_title">初めての接続</string>
     <string name="guide_first_connection_summary">ネットワークに接続し、映像を確認してから操縦します。</string>
     <string name="guide_first_connection_0_title">接続方法を選ぶ</string>
@@ -66,12 +65,8 @@
     <string name="guide_python_1_body">実行操作でプログラムを準備・アップロードし、本体の状態を待ちます。アップロード完了だけでは実行開始を確認できません。状態、ログ、プログラムパネルを確認してください。ほかの操縦タスクの前に、現在のプログラムを停止します。</string>
     <string name="guide_python_2_title">停止結果を確認</string>
     <string name="guide_python_2_body">「停止」を選び、確認を待ちます。通信や停止結果が不明な場合、画面を離れても本体のプログラムが終了したとは判断できません。同じロボットに再接続して状態を確認し、次の実行を準備してください。</string>
-    <string name="guide_accessories_title">Gamepad とロボットアーム</string>
-    <string name="guide_accessories_summary">アクセサリーを接続しただけでは操縦を開始しません。</string>
-    <string name="guide_accessories_0_title">アクセサリー情報を確認</string>
-    <string name="guide_accessories_0_body">USB アクセサリー対応の Android 端末では、「設定 → 操縦 → Gamepad 情報」で公式 Gamepad を検索して接続します。バージョン、バッテリー、接続中のマウスとキーボードを確認できます。接続しただけでは操縦を開始しません。</string>
-    <string name="guide_accessories_1_title">操縦画面で制御を開始</string>
-    <string name="guide_accessories_1_body">接続後、操縦画面でスティックを中央に戻し、ボタンを離してから Gamepad を有効にします。Escape または「Gamepad を解放」で制御を解放します。入力の失効、取り外し、フォーカス喪失の後に操縦を自動で再開することはありません。</string>
+    <string name="guide_accessories_title">ロボットアーム</string>
+    <string name="guide_accessories_summary">配線、モジュールの識別、関連付けとキャリブレーション。</string>
     <string name="guide_accessories_2_title">モジュールの識別情報でアームを取り付け</string>
     <string name="guide_accessories_2_body">配線前に電源を切ります。必要に応じてモジュールに ID を割り当て、アーム管理の識別機能で主・副サーボを確認して割り当ててください。校正姿勢の案内に従い、設定確認後は操縦画面で低速の動作を確かめます。</string>
     <string name="guide_maintenance_title">点検と保守</string>

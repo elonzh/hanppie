@@ -17,7 +17,6 @@
     <string name="guide_open_calibration">打开设备校准</string>
     <string name="guide_open_firmware">打开本地固件升级</string>
     <string name="guide_open_arm">打开机械臂管理</string>
-    <string name="guide_open_gamepad">打开手柄信息</string>
     <string name="guide_first_connection_title">第一次连接</string>
     <string name="guide_first_connection_summary">接入网络、检查画面，再开始操控。</string>
     <string name="guide_first_connection_0_title">选择连接方式</string>
@@ -66,12 +65,8 @@
     <string name="guide_python_1_body">运行会先准备并上传程序，再等待机内状态。上传完成不等于程序已经开始。通过运行状态、日志和程序面板观察；需要其他操控前先停止当前程序。</string>
     <string name="guide_python_2_title">停止后核对结果</string>
     <string name="guide_python_2_body">点击停止并等待确认。失联或停止未确认时，不把页面退出当成机内程序已经结束；重新连接原机器人后核对状态，再处理下一次运行。</string>
-    <string name="guide_accessories_title">手柄与机械臂</string>
-    <string name="guide_accessories_summary">连接配件与取得驾驶权是不同操作。</string>
-    <string name="guide_accessories_0_title">先检查配件信息</string>
-    <string name="guide_accessories_0_body">在支持 USB 配件的 Android 终端，从“设置 → 控制 → 手柄信息”刷新并连接官方手柄。该页查看版本、电量和鼠标/键盘挂载；连接本身不会接管机器人。</string>
-    <string name="guide_accessories_1_title">在驾驶舱明确接管</string>
-    <string name="guide_accessories_1_body">连接后进入驾驶舱，回中摇杆并松开按键，再启用手柄驾驶。Escape 或“释放手柄驾驶”可释放；输入过期、拔出或失焦后不会自动恢复驾驶权。</string>
+    <string name="guide_accessories_title">机械臂</string>
+    <string name="guide_accessories_summary">接线、编号、绑定与校准。</string>
     <string name="guide_accessories_2_title">按接线与编号安装机械臂</string>
     <string name="guide_accessories_2_body">接线前关闭机器人电源。需要编号时先完成部件编址，再在机械臂管理中用识别灯核对主、副舵机并绑定，按设备校准引导摆放。确认配置后再进入操控页低速测试。</string>
     <string name="guide_maintenance_title">检查与维护</string>

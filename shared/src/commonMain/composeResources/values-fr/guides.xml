@@ -17,7 +17,6 @@
     <string name="guide_open_calibration">Ouvrir l’étalonnage de l’appareil</string>
     <string name="guide_open_firmware">Ouvrir la mise à jour locale du firmware</string>
     <string name="guide_open_arm">Ouvrir la gestion du bras robotique</string>
-    <string name="guide_open_gamepad">Ouvrir les informations de la manette</string>
     <string name="guide_first_connection_title">Première connexion</string>
     <string name="guide_first_connection_summary">Rejoignez le réseau, vérifiez l’image, puis pilotez.</string>
     <string name="guide_first_connection_0_title">Choisir une connexion</string>
@@ -66,12 +65,8 @@
     <string name="guide_python_1_body">Exécuter prépare et transfère le programme, puis attend l’état du robot. La fin du transfert ne prouve pas le démarrage de l’exécution. Observez l’état, les journaux et le panneau du programme. Arrêtez le programme actuel avant une autre tâche de commande.</string>
     <string name="guide_python_2_title">Vérifier le résultat de l’arrêt</string>
     <string name="guide_python_2_body">Sélectionnez Arrêter et attendez la confirmation. Si la liaison ou le résultat de l’arrêt est inconnu, quitter la page ne prouve pas la fin du programme à bord. Reconnectez-vous au même robot, vérifiez son état, puis préparez l’exécution suivante.</string>
-    <string name="guide_accessories_title">Manette et bras robotique</string>
-    <string name="guide_accessories_summary">Connecter un accessoire ne lui donne pas le contrôle.</string>
-    <string name="guide_accessories_0_title">Vérifier les informations de l’accessoire</string>
-    <string name="guide_accessories_0_body">Sur les appareils Android compatibles avec les accessoires USB, utilisez Paramètres → Commandes → Informations de la manette pour trouver et connecter la manette officielle. Consultez sa version, sa batterie et la souris ou le clavier connecté. La connexion seule ne prend pas le contrôle.</string>
-    <string name="guide_accessories_1_title">Prendre le contrôle dans le cockpit</string>
-    <string name="guide_accessories_1_body">Après la connexion, entrez dans le cockpit, centrez les joysticks et relâchez les boutons avant d’activer le pilotage à la manette. Échap ou Libérer la manette rend le contrôle. Une entrée périmée, un débranchement ou une perte de focus ne rétablit jamais automatiquement le contrôle.</string>
+    <string name="guide_accessories_title">Bras robotisé</string>
+    <string name="guide_accessories_summary">Câblage, identification des modules, association et étalonnage.</string>
     <string name="guide_accessories_2_title">Installer le bras selon les ID des modules</string>
     <string name="guide_accessories_2_body">Éteignez avant le câblage. Attribuez les ID si nécessaire, puis utilisez Identifier dans la gestion du bras pour vérifier et associer les servos principal et secondaire. Suivez les positions d’étalonnage de l’appareil. Après vérification de la configuration, faites un test à faible vitesse dans le cockpit.</string>
     <string name="guide_maintenance_title">Contrôles et maintenance</string>

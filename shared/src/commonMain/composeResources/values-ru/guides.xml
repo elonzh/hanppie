@@ -17,7 +17,6 @@
     <string name="guide_open_calibration">Открыть калибровку устройства</string>
     <string name="guide_open_firmware">Открыть локальное обновление прошивки</string>
     <string name="guide_open_arm">Открыть управление рукой</string>
-    <string name="guide_open_gamepad">Открыть сведения о геймпаде</string>
     <string name="guide_first_connection_title">Первое подключение</string>
     <string name="guide_first_connection_summary">Подключитесь к сети, проверьте изображение, затем управляйте.</string>
     <string name="guide_first_connection_0_title">Выбрать соединение</string>
@@ -66,12 +65,8 @@
     <string name="guide_python_1_body">Запуск готовит и загружает программу, затем ждёт состояния робота. Завершение загрузки не доказывает начало выполнения. Наблюдайте состояние, журнал и панель программы. Остановите текущую программу перед другой задачей управления.</string>
     <string name="guide_python_2_title">Проверить результат остановки</string>
     <string name="guide_python_2_body">Выберите «Остановить» и дождитесь подтверждения. Если связь или результат неизвестны, выход со страницы не доказывает завершение программы на роботе. Подключитесь к тому же роботу, проверьте состояние и подготовьте следующий запуск.</string>
-    <string name="guide_accessories_title">Геймпад и рука</string>
-    <string name="guide_accessories_summary">Подключение аксессуара не передаёт ему управление.</string>
-    <string name="guide_accessories_0_title">Проверить данные аксессуара</string>
-    <string name="guide_accessories_0_body">На Android с поддержкой USB-аксессуаров откройте «Настройки → Управление → Сведения о геймпаде», найдите и подключите официальный геймпад. Там можно проверить версию, батарею, мышь и клавиатуру. Одного подключения недостаточно для управления.</string>
-    <string name="guide_accessories_1_title">Взять управление в кабине</string>
-    <string name="guide_accessories_1_body">После подключения войдите в кабину, центрируйте стики и отпустите кнопки перед включением геймпада. Escape или «Освободить геймпад» освобождают управление. Устаревший ввод, отсоединение или потеря фокуса никогда не восстанавливают управление автоматически.</string>
+    <string name="guide_accessories_title">Роботизированная рука</string>
+    <string name="guide_accessories_summary">Подключение, идентификация модулей, привязка и калибровка.</string>
     <string name="guide_accessories_2_title">Установить руку по ID модулей</string>
     <string name="guide_accessories_2_body">Выключите питание перед проводкой. При необходимости назначьте ID, затем через «Определить» в управлении рукой проверьте и привяжите основной и вспомогательный сервоприводы. Следуйте положениям калибровки. После проверки конфигурации выполните медленный тест в кабине.</string>
     <string name="guide_maintenance_title">Проверки и обслуживание</string>

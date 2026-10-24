@@ -190,13 +190,6 @@ internal fun RemotePage(
                 model.cameraZoom.setZoom(if ((current.hundredths ?: 100) > 100) 100 else 400)
         }) }
     val aimState by aimInput.state.collectAsState()
-    val gamepadInput = remember(model) { GamepadDriveInput(model.gamepad::snapshot, model.gamepad::accepts,
-        { aimClock.elapsedNow().inWholeMilliseconds }, { model.remoteInputRevision }, model::fireSelected, {
-            val current = model.cameraZoom.state.value
-            if (model.remoteEnabled.value && model.isForeground && !model.state.value.busy && !current.busy)
-                model.cameraZoom.setZoom(if ((current.hundredths ?: 100) > 100) 100 else 400)
-        }) }
-    val gamepadDrive by gamepadInput.state.collectAsState()
     val inputLifecycle = LocalLifecycleOwner.current.lifecycle
     val inputLifecycleState by inputLifecycle.currentStateAsState()
     val talking by model.talking.collectAsState()
@@ -218,17 +211,12 @@ internal fun RemotePage(
     val currentGear by rememberUpdatedState(gear)
     val currentControl by rememberUpdatedState(control)
     val currentChallengeBlocked by rememberUpdatedState(challenge.blocksControl || challengeChoosing)
-    val gamepadAllowed = enabled && manualActionsEnabled && !vision.ownsGimbal && !connected.busy && inputLifecycleState.isAtLeast(Lifecycle.State.RESUMED)
-    val currentGamepadAllowed by rememberUpdatedState(gamepadAllowed)
-    LaunchedEffect(model, gamepadInput) {
-        model.gamepad.buttonEvents.collect { event -> gamepadInput.event(event, currentControl.gamepadInput, currentGamepadAllowed) }
-    }
     val ledState = remoteLedState(enabled, mediaState.recording, talking || talkBusy)
     LaunchedEffect(connected.connected, ledState, control.remoteLeds) {
         if (connected.connected) model.setRemoteLed(control.remoteLeds.color(ledState))
     }
     DisposableEffect(model) { onDispose {
-        aimInput.stop(); gamepadInput.stop()
+        aimInput.stop()
         model.robotArm.stopControl()
         model.stopFiring()
         (onPushToTalkStop ?: model::endPushToTalk)()
@@ -238,8 +226,8 @@ internal fun RemotePage(
     DisposableEffect(aimInput) { onDispose { aimInput.close() } }
     DisposableEffect(aimInput, inputLifecycle) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event in listOf(Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP) && (aimInput.state.value.mode != AimInputMode.OFF || gamepadInput.state.value.active || model.challenge.value.ownsRound)) {
-                aimInput.stop(); gamepadInput.stop()
+            if (event in listOf(Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP) && (aimInput.state.value.mode != AimInputMode.OFF || model.challenge.value.ownsRound)) {
+                aimInput.stop()
                 suppressedKeys = suppressedKeys + physicalKeys
                 keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
                 model.clearRemoteInputs()
@@ -255,12 +243,6 @@ internal fun RemotePage(
         suppressedKeys = suppressedKeys + physicalKeys
         keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
         model.clearRemoteInputs()
-    }
-    LaunchedEffect(control.gamepadInput) {
-        if (gamepadInput.state.value.active) {
-            gamepadInput.stop(); keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
-            suppressedKeys = suppressedKeys + physicalKeys; model.clearRemoteInputs()
-        }
     }
     LaunchedEffect(control.aimInput) { aimInput.stop(); right = Offset.Zero; model.stopFiring() }
     LaunchedEffect(hasArmControls) {
@@ -300,7 +282,7 @@ internal fun RemotePage(
     }
     LaunchedEffect(challenge.blocksControl, challengeChoosing) {
         if (challenge.blocksControl || challengeChoosing) {
-            aimInput.stop(); gamepadInput.stop()
+            aimInput.stop()
             suppressedKeys = suppressedKeys + physicalKeys
             keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; keyboardHints = false
             model.stopFiring(); model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
@@ -321,42 +303,35 @@ internal fun RemotePage(
     }
     LaunchedEffect(enabled) {
         if (enabled) focus.requestFocus()
-        else { gamepadInput.stop(); if (armMode) suppressedKeys = suppressedKeys + physicalKeys; keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; model.robotArm.stopControl(); model.stopFiring() }
+        else { if (armMode) suppressedKeys = suppressedKeys + physicalKeys; keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; model.robotArm.stopControl(); model.stopFiring() }
     }
     LaunchedEffect(enabled) {
         while (enabled) {
             if (currentChallengeBlocked) { model.drive(0.0, 0.0, 0.0, 0.0, 0.0); delay(50); continue }
             if (currentArmMode) { model.drive(0.0, 0.0, 0.0, 0.0, 0.0); delay(50); continue }
-            val ownedGamepad = gamepadInput.state.value.active
-            val pad = gamepadInput.frame(currentControl.gamepadInput, currentGamepadAllowed)
-            if (ownedGamepad && !gamepadInput.state.value.active) {
-                suppressedKeys = suppressedKeys + physicalKeys
-                keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
-                model.stopFiring(); model.drive(0.0, 0.0, 0.0, 0.0, 0.0); delay(50); continue
-            }
             val shortcuts = currentControl.shortcuts
             val shiftHeld = Key.ShiftLeft in currentKeys || Key.ShiftRight in currentKeys
             fun axis(positive: ControlAction, negative: ControlAction) =
                 (if (shortcuts.isHeld(positive, currentKeys, shiftHeld)) 1 else 0) -
                     (if (shortcuts.isHeld(negative, currentKeys, shiftHeld)) 1 else 0)
             val sensitivity = currentControl.inputSensitivities
-            val translation = if (gamepadInput.state.value.active) DriveSpeed.translation(pad.forward, pad.right, currentGear, currentControl) else DriveSpeed.translation(
+            val translation = DriveSpeed.translation(
                 sensitivity.combine(cn.elonzh.hanppie.ui.settings.InputAxis.FORWARD, -currentLeft.y.toDouble(), axis(ControlAction.Forward, ControlAction.Backward).toDouble()),
                 sensitivity.combine(cn.elonzh.hanppie.ui.settings.InputAxis.LATERAL, currentLeft.x.toDouble(), axis(ControlAction.StrafeRight, ControlAction.StrafeLeft).toDouble()),
                 currentGear, currentControl)
-            val rotation = if (gamepadInput.state.value.active) 0.0 else axis(ControlAction.RotateClockwise, ControlAction.RotateCounterclockwise) *
+            val rotation = axis(ControlAction.RotateClockwise, ControlAction.RotateCounterclockwise) *
                 DriveSpeed.rotation(currentGear, currentControl)
             val aim = aimInput.frame(currentControl.aimInput, currentControl.gimbalSpeed)
             val limit = currentControl.gimbalSpeed.toDouble()
             model.drive(translation.first, translation.second, rotation,
-                if (gamepadInput.state.value.active && pad.gimbalActive) pad.pitch * limit else (sensitivity.combine(cn.elonzh.hanppie.ui.settings.InputAxis.PITCH, -currentRight.y.toDouble(), axis(ControlAction.GimbalUp, ControlAction.GimbalDown).toDouble()) * limit + aim.pitch).coerceIn(-limit, limit),
-                if (gamepadInput.state.value.active && pad.gimbalActive) pad.yaw * limit else (sensitivity.combine(cn.elonzh.hanppie.ui.settings.InputAxis.YAW, currentRight.x.toDouble(), axis(ControlAction.GimbalRight, ControlAction.GimbalLeft).toDouble()) * limit + aim.yaw).coerceIn(-limit, limit))
+                (sensitivity.combine(cn.elonzh.hanppie.ui.settings.InputAxis.PITCH, -currentRight.y.toDouble(), axis(ControlAction.GimbalUp, ControlAction.GimbalDown).toDouble()) * limit + aim.pitch).coerceIn(-limit, limit),
+                (sensitivity.combine(cn.elonzh.hanppie.ui.settings.InputAxis.YAW, currentRight.x.toDouble(), axis(ControlAction.GimbalRight, ControlAction.GimbalLeft).toDouble()) * limit + aim.yaw).coerceIn(-limit, limit))
             delay(50)
         }
     }
     val currentShiftHeld = Key.ShiftLeft in currentKeys || Key.ShiftRight in currentKeys
     val fireKeyHeld = currentControl.shortcuts.isHeld(ControlAction.Fire, currentKeys, currentShiftHeld)
-    val shouldFire = enabled && manualActionsEnabled && (fireKeyHeld || firePointerHeld || aimState.repeatPrimary || gamepadDrive.repeatPrimary)
+    val shouldFire = enabled && manualActionsEnabled && (fireKeyHeld || firePointerHeld || aimState.repeatPrimary)
     LaunchedEffect(shouldFire) {
         if (shouldFire) model.startFiring() else model.stopFiring()
     }
@@ -373,7 +348,7 @@ internal fun RemotePage(
     }.focusRequester(focus).onFocusChanged {
         pageFocused = it.hasFocus
         if (!it.hasFocus) {
-            aimInput.stop(); gamepadInput.stop()
+            aimInput.stop()
             if (armMode) suppressedKeys = suppressedKeys + physicalKeys
             keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
             model.robotArm.stopControl()
@@ -386,14 +361,6 @@ internal fun RemotePage(
         else if (it.type == KeyEventType.KeyDown) physicalKeys = physicalKeys + it.key
         if (awaitingRelease) return@onPreviewKeyEvent true
         if (!inputEnabled || !foreground) return@onPreviewKeyEvent false
-        if (it.key == Key.Escape && gamepadInput.state.value.active) {
-            if (it.type == KeyEventType.KeyDown) {
-                gamepadInput.stop(); suppressedKeys = suppressedKeys + physicalKeys
-                keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
-                model.clearRemoteInputs(); focus.requestFocus()
-            }
-            return@onPreviewKeyEvent true
-        }
         if (it.key == Key.Escape && aimState.mode != AimInputMode.OFF) {
             if (it.type == KeyEventType.KeyDown) {
                 aimInput.stop(); suppressedKeys = suppressedKeys + physicalKeys
@@ -418,7 +385,6 @@ internal fun RemotePage(
             return@onPreviewKeyEvent true
         }
         if (supported && enabled && it.type == KeyEventType.KeyDown) {
-            if (gamepadInput.state.value.active) { gamepadInput.stop(); model.clearRemoteInputs() }
             keyboardHints = true
             left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
         }
@@ -495,7 +461,7 @@ internal fun RemotePage(
             if (connected.connected && onHealth != null && navigationEnabled && foreground)
                 cn.elonzh.hanppie.ui.robot.device.RobotHealthAlertButton(model, onHealth)
             if (hasArmControls) Button({
-                aimInput.stop(); gamepadInput.stop()
+                aimInput.stop()
                 keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; keyboardHints = false
                 suppressedKeys = suppressedKeys + physicalKeys
                 model.clearRemoteInputs(); armMode = !armMode; focus.requestFocus()
@@ -550,7 +516,6 @@ internal fun RemotePage(
             OnboardCaptureControls(model.robotCamera, connected.connected, inputEnabled && foreground,
                 captureMaxHeight,
                 Modifier.widthIn(max = HanppieDesignTokens.RemoteTaskSideMaxWidth).then(reserveVisionSpace("capture")), onAlbum = onAlbum) {
-                gamepadInput.stop()
                 keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
                 model.robotArm.stopControl(); model.stopFiring(); model.drive(0.0, 0.0, 0.0, 0.0, 0.0)
                 (onPushToTalkStop ?: model::endPushToTalk)()
@@ -563,19 +528,19 @@ internal fun RemotePage(
                 else if (!armMode) VisionModeControls(vision, tracking, enabled && videoFrame != null && videoFresh && !zoom.busy && (zoom.hundredths == null || zoom.hundredths == 100),
                     Modifier.then(reserveVisionSpace("vision")),
                     onStart = { mode, color ->
-                        aimInput.stop(); gamepadInput.stop()
+                        aimInput.stop()
                         keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
                         model.startVision(mode, color); focus.requestFocus()
                     }, onStop = { model.stopVision(); focus.requestFocus() },
                     onStartTracking = {
-                        aimInput.stop(); gamepadInput.stop()
+                        aimInput.stop()
                         keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
                         model.startObjectTracking(); focus.requestFocus()
                     }, onConfirmTracking = { model.confirmObjectTracking(); focus.requestFocus() },
                     onStopTracking = { model.stopObjectTracking(); focus.requestFocus() },
                     unavailableReason = if ((zoom.hundredths ?: 100) > 100) Res.string.camera_zoom_tracking_unavailable else null,
                     onChallenge = {
-                        aimInput.stop(); gamepadInput.stop(); model.clearRemoteInputs()
+                        aimInput.stop(); model.clearRemoteInputs()
                         challengeChoosing = true
                     })
             }
@@ -616,7 +581,7 @@ internal fun RemotePage(
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     key(control.inputSensitivities) {
                         Stick(tr(Res.string.chassis),
-                            foreground && enabled && !challenge.blocksControl && !challengeChoosing && !gamepadDrive.active, { keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
+                            foreground && enabled && !challenge.blocksControl && !challengeChoosing, { keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
                             tr(Res.string.chassis)) { left = it }
                     }
 
@@ -641,7 +606,7 @@ internal fun RemotePage(
 
                 }
                 key(control.inputSensitivities) {
-                    Stick("${tr(Res.string.gimbal)} · ${control.gimbalSpeed}°/s", foreground && enabled && !challenge.blocksControl && !challengeChoosing && !(gamepadDrive.active && gamepadDrive.gimbalActive),
+                    Stick("${tr(Res.string.gimbal)} · ${control.gimbalSpeed}°/s", foreground && enabled && !challenge.blocksControl && !challengeChoosing,
                         { aimInput.stop(); keyboardHints = false; focus.requestFocus() }, control.joystickDeadZone,
                         tr(Res.string.gimbal)) { right = it }
                 }
@@ -667,20 +632,11 @@ internal fun RemotePage(
         if (!armMode) Column(Modifier.align(Alignment.BottomCenter).padding(bottom = if (keyboardHints) 76.dp else 28.dp)
             .then(reserveVisionSpace("aim-input")), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (model.gamepad.available && aimState.mode != AimInputMode.MOUSE) GamepadDriveControls(gamepadDrive,
-                gamepadAllowed) {
-                val wasActive = gamepadInput.state.value.active
-                gamepadInput.stop(); aimInput.stop()
-                keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
-                suppressedKeys = suppressedKeys + physicalKeys
-                model.clearRemoteInputs(); focus.requestFocus()
-                if (!wasActive) gamepadInput.start(control.gamepadInput)
-            }
-            if (!gamepadDrive.active) AimInputControls(aimInput, aimState,
+            AimInputControls(aimInput, aimState,
                 enabled && manualActionsEnabled && !vision.ownsGimbal && !connected.busy && inputLifecycleState.isAtLeast(Lifecycle.State.RESUMED),
                 Modifier) inputStart@ { mode ->
                 if (!inputLifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@inputStart
-                gamepadInput.stop(); model.clearRemoteInputs(); keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
+                model.clearRemoteInputs(); keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false
                 suppressedKeys = suppressedKeys + physicalKeys
                 // Transfer focus before acquisition: the button-to-cockpit transition retires old input.
                 focus.requestFocus()

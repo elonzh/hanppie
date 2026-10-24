@@ -17,7 +17,6 @@
     <string name="guide_open_calibration">開啟裝置校準</string>
     <string name="guide_open_firmware">開啟本地韌體升級</string>
     <string name="guide_open_arm">開啟機械臂管理</string>
-    <string name="guide_open_gamepad">開啟手把資訊</string>
     <string name="guide_first_connection_title">第一次連線</string>
     <string name="guide_first_connection_summary">接入網路、檢查畫面，再開始操控。</string>
     <string name="guide_first_connection_0_title">選擇連線方式</string>
@@ -66,12 +65,8 @@
     <string name="guide_python_1_body">執行會先準備並上傳程式，再等待機內狀態。上傳完成不等於程式已經開始。透過執行狀態、日誌與程式面板觀察；需要其他操控前先停止目前程式。</string>
     <string name="guide_python_2_title">停止後核對結果</string>
     <string name="guide_python_2_body">點擊停止並等待確認。失聯或停止未確認時，不把頁面退出當成機內程式已經結束；重新連線原機器人後核對狀態，再處理下一次執行。</string>
-    <string name="guide_accessories_title">手把與機械臂</string>
-    <string name="guide_accessories_summary">連接配件與取得駕駛權是不同操作。</string>
-    <string name="guide_accessories_0_title">先檢查配件資訊</string>
-    <string name="guide_accessories_0_body">在支援 USB 配件的 Android 裝置，從「設定 → 控制 → 手把資訊」重新整理並連接官方手把。該頁查看版本、電量與滑鼠／鍵盤掛載；連接本身不會接管機器人。</string>
-    <string name="guide_accessories_1_title">在駕駛艙明確接管</string>
-    <string name="guide_accessories_1_body">連接後進入駕駛艙，搖桿回中並鬆開按鍵，再啟用手把駕駛。Escape 或「釋放手把駕駛」可釋放；輸入過期、拔出或失焦後不會自動恢復駕駛權。</string>
+    <string name="guide_accessories_title">機械臂</string>
+    <string name="guide_accessories_summary">接線、編號、綁定與校準。</string>
     <string name="guide_accessories_2_title">按接線與編號安裝機械臂</string>
     <string name="guide_accessories_2_body">接線前關閉機器人電源。需要編號時先完成部件編址，再在機械臂管理中用辨識燈核對主、副舵機並綁定，按裝置校準引導擺放。確認設定後再進入操控頁低速測試。</string>
     <string name="guide_maintenance_title">檢查與維護</string>

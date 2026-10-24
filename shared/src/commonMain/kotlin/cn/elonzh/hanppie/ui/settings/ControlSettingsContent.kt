@@ -18,7 +18,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
 
 @Composable
-internal fun ControlSettingsContent(model: ConsoleController, onGamepad: (() -> Unit)? = null) {
+internal fun ControlSettingsContent(model: ConsoleController) {
     val control by model.controlSettings.collectAsState()
     val busy by model.settingsBusy.collectAsState()
     var keyboard by remember { mutableStateOf(false) }
@@ -51,13 +51,6 @@ internal fun ControlSettingsContent(model: ConsoleController, onGamepad: (() -> 
     AimInputPreferences(control.aimInput, !busy) { value ->
         model.settingsMessage.value = null
         model.controlSettings.value = control.copy(aimInput = value)
-    }
-    if (model.gamepad.available && onGamepad != null) Button(onGamepad, Modifier.heightIn(min = 48.dp).testTag("settings-gamepad-open")) {
-        Text(tr(Res.string.gamepad_information))
-    }
-    if (model.gamepad.available) GamepadInputPreferences(control.gamepadInput, !busy) { value ->
-        model.settingsMessage.value = null
-        model.controlSettings.value = control.copy(gamepadInput = value)
     }
     Text(tr(Res.string.input_host_limits), fontSize = 15.sp)
     SettingsDropdown(tr(Res.string.gimbal_sensitivity), "gimbal-sensitivity", control.gimbalSpeed.toString(),

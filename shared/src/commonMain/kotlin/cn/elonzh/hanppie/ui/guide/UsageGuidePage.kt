@@ -31,7 +31,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable
 internal fun UsageGuidePage(
     topic: GuideTopic?, stepIndex: Int, modifier: Modifier = Modifier,
-    gamepadAvailable: Boolean = false,
     onBack: () -> Unit, onSelect: (GuideTopic?) -> Unit,
     onStep: (Int) -> Unit, onOpen: (GuideDestination) -> Unit,
 ) {
@@ -82,7 +81,7 @@ internal fun UsageGuidePage(
                                     fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                                 Text(tr(step.title), Modifier.testTag("usage-guide-step-title"), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                                 Text(tr(step.body), Modifier.testTag("usage-guide-step-text"), fontSize = 16.sp, lineHeight = 26.sp)
-                                step.destination?.takeIf { it != GuideDestination.GAMEPAD || gamepadAvailable }?.let { target ->
+                                step.destination?.let { target ->
                                     Button({ onOpen(target) }, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("usage-guide-open-${target.name}")) {
                                         Text(tr(target.label))
                                     }

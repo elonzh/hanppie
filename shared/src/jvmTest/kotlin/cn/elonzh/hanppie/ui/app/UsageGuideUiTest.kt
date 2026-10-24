@@ -34,13 +34,7 @@ class UsageGuideUiTest {
 
     @Test fun destinationActionsUseExistingRoutesWithoutStartingControl() = runDesktopComposeUiTest(width = 1024, height = 768) {
         Localization.initialize("zh", "zh")
-        var opens = 0
-        val connector = object : cn.elonzh.hanppie.robot.gamepad.GamepadConnector {
-            override val available = true
-            override fun accessories() = emptyList<cn.elonzh.hanppie.robot.gamepad.GamepadAccessory>()
-            override suspend fun open(id: String): cn.elonzh.hanppie.robot.gamepad.GamepadTransport { opens++; error("Guide must not connect an accessory") }
-        }
-        val model = testConsoleModel(gamepadConnector = connector)
+        val model = testConsoleModel()
         data class DestinationCase(val topic: GuideTopic, val step: Int, val target: String, val page: String, val back: String?)
         val destinations = listOf(
             DestinationCase(GuideTopic.FIRST_CONNECTION, 0, "CONNECTION", "connection-guide-page", "connection-guide-back"),
@@ -48,8 +42,7 @@ class UsageGuideUiTest {
             DestinationCase(GuideTopic.DRIVING, 2, "ROBOT", "device-page", null),
             DestinationCase(GuideTopic.MEDIA, 1, "ALBUM", "robot-album-page", "album-back"),
             DestinationCase(GuideTopic.PYTHON, 2, "SCRIPTS", "script-library", null),
-            DestinationCase(GuideTopic.ACCESSORIES, 0, "GAMEPAD", "gamepad-page", "gamepad-back"),
-            DestinationCase(GuideTopic.ACCESSORIES, 2, "ARM", "arm-page", "arm-back"),
+            DestinationCase(GuideTopic.ACCESSORIES, 0, "ARM", "arm-page", "arm-back"),
             DestinationCase(GuideTopic.MAINTENANCE, 2, "ADDRESSING", "robot-addressing-page", "addressing-back"),
             DestinationCase(GuideTopic.MAINTENANCE, 3, "CALIBRATION", "robot-calibration-page", "calibration-back"),
             DestinationCase(GuideTopic.MAINTENANCE, 4, "FIRMWARE", "robot-firmware-page", "firmware-back"),
@@ -73,7 +66,6 @@ class UsageGuideUiTest {
                 } else if (destination.target != "ROBOT") onNodeWithTag("navigate-0").performClick()
                 onNodeWithTag("home-user-guide").assertIsDisplayed()
             }
-            assertEquals(0, opens)
         } finally { model.close(); Localization.initialize("zh", null) }
     }
 
@@ -131,15 +123,20 @@ class UsageGuideUiTest {
                             onNodeWithTag("connection-guide-page").assertIsDisplayed(); capture("connection-handoff")
                             onNodeWithTag("connection-guide-back").performClick(); step(topic, index)
                         }
-                        if (topic == GuideTopic.ACCESSORIES && index == 0) onNodeWithTag("usage-guide-open-GAMEPAD").assertDoesNotExist()
+                        if (topic == GuideTopic.ACCESSORIES) {
+                            capture("arm")
+                            inspectDestination(GuideDestination.ARM, "arm")
+                        }
                         if ((topic == GuideTopic.DRIVING || topic == GuideTopic.TRACKING || topic == GuideTopic.MAINTENANCE) && index == topic.steps.lastIndex) {
                             capture(topic.name.lowercase())
                             inspectDestination(topic.steps[index].destination!!, topic.name.lowercase())
                         }
                     }
-                    onNodeWithTag("usage-guide-restart").assertIsDisplayed().performClick(); step(topic, 0)
-                    onNodeWithTag("usage-guide-next").performClick(); step(topic, 1)
-                    onNodeWithTag("usage-guide-previous").performClick(); step(topic, 0)
+                    if (topic.steps.size > 1) {
+                        onNodeWithTag("usage-guide-restart").assertIsDisplayed().performClick(); step(topic, 0)
+                        onNodeWithTag("usage-guide-next").performClick(); step(topic, 1)
+                        onNodeWithTag("usage-guide-previous").performClick(); step(topic, 0)
+                    } else onNodeWithTag("usage-guide-restart").assertDoesNotExist()
                     onNodeWithTag("usage-guide-back").performClick()
                     onNodeWithTag("usage-guide-progress").assertDoesNotExist()
                 }

@@ -194,7 +194,6 @@ internal class ConsoleModel(
     private val prepareNetwork: () -> Unit = {},
     private val clock: Clock = Clock.System,
     private val autoConnectOnStart: Boolean = true,
-    gamepadConnector: cn.elonzh.hanppie.robot.gamepad.GamepadConnector = cn.elonzh.hanppie.robot.gamepad.NoGamepadConnector,
     private val scriptStartConfirmationTimeoutMillis: Long = 10_000,
     private val albumDirectory: () -> io.github.vinceglb.filekit.PlatformFile = {
         io.github.vinceglb.filekit.PlatformFile(io.github.vinceglb.filekit.FileKit.filesDir, "robot-media")
@@ -209,7 +208,6 @@ internal class ConsoleModel(
         applyEnvironmentOverrides = applyModelOverrides,
     )
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    override val gamepad = cn.elonzh.hanppie.robot.gamepad.GamepadSession(gamepadConnector, scope)
     override val modelSettings = settings.model
     private val modelTester = ModelConfigurationTester(scope = scope,
         createHttpClient = createAgentHttpClient, clock = clock)
@@ -710,7 +708,6 @@ internal class ConsoleModel(
         acceptingWork.store(foreground)
         foregroundState.value = foreground
         session.load()?.setMobileSensorsActive(foreground)
-        gamepad.setForeground(foreground)
         if (!foreground) { robotMotion.cancelRead(); robotDisplay.cancelRead() }
         if (!foreground) labUiVisibleRun?.let { session.load()?.labUi?.setVisible(it, false) }
         if (!foreground) { robotCalibration.stopAutomaticContinuation(); robotAddressing.holdWheel(null); haltRemote(); voiceInput.cancel() }
@@ -1386,5 +1383,5 @@ internal class ConsoleModel(
                 scriptMessage = if (uncertain) uiText(Res.string.connection_closed_robot_state_unknown) else it.scriptMessage)
         }
     }
-    override fun close() { gamepad.close(); connectionRevision.addAndFetch(1); clearLabUiBinding(); robotFiles.close(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.clear(); robotArm.clear(); robotExtensions.clear(); robotCalibration.clear(); robotAddressing.clear(); robotPower.clear(); robotMotion.clear(); robotDisplay.clear(); robotWifi.close(); robotSdr.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
+    override fun close() { connectionRevision.addAndFetch(1); clearLabUiBinding(); robotFiles.close(); robotAudio.clear(); cameraZoom.clear(); robotCamera.clear(); robotAlbum.clear(); robotHealth.clear(); robotInformation.clear(); robotFirmware.clear(); robotArm.clear(); robotExtensions.clear(); robotCalibration.clear(); robotAddressing.clear(); robotPower.clear(); robotMotion.clear(); robotDisplay.clear(); robotWifi.close(); robotSdr.close(); cancelPushToTalk(); speakerInput.close(); voiceInput.close(); audioImporter.close(); modelTester.close(); chat.close(); session.exchange(null)?.close(); lab.store(null); tracking.value = TrackingState(); vision.value = cn.elonzh.hanppie.robot.vision.VisionState(); mediaRequests.close(); ledRequests.close(); mediaScope.cancel(); connectionPreferencesScope.cancel(); settings.close(); scope.cancel() }
 }

@@ -85,7 +85,6 @@ internal interface ConsoleController : AutoCloseable {
     fun dismissChallenge()
     val remoteEnabled: MutableStateFlow<Boolean>
     val remoteInputRevision: Long
-    val gamepad: cn.elonzh.hanppie.robot.gamepad.GamepadSession
     val remoteInput: MutableStateFlow<List<Double>>
     val cameraYaw: MutableStateFlow<Double?>
     val gelSelected: MutableStateFlow<Boolean>

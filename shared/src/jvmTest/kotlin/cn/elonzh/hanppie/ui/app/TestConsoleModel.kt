@@ -123,7 +123,6 @@ internal fun testConsoleModel(
     },
     scriptStartConfirmationTimeoutMillis: Long = 10_000,
     albumDirectory: () -> io.github.vinceglb.filekit.PlatformFile = { error("No album directory in this test") },
-    gamepadConnector: cn.elonzh.hanppie.robot.gamepad.GamepadConnector = cn.elonzh.hanppie.robot.gamepad.NoGamepadConnector,
 ): ConsoleModel = ConsoleModel(
     voiceInput = voiceInput,
     speakerInput = speakerInput,
@@ -138,5 +137,4 @@ internal fun testConsoleModel(
     autoConnectOnStart = false,
     scriptStartConfirmationTimeoutMillis = scriptStartConfirmationTimeoutMillis,
     albumDirectory = albumDirectory,
-    gamepadConnector = gamepadConnector,
 )

@@ -111,6 +111,8 @@ class SettingsNavigationUiTest {
             setContent { WorkbenchTheme { Box(Modifier.width(width.value).fillMaxHeight()) { SettingsPage(model, Modifier.fillMaxSize().padding(horizontal = 20.dp)) } } }
             onNodeWithTag("settings-detail-general").assertIsDisplayed()
             onNodeWithTag("settings-category-control").performClick()
+            onNodeWithTag("settings-gamepad-open").assertDoesNotExist()
+            onNodeWithTag("gamepad-response-defaults").assertDoesNotExist()
             onNodeWithContentDescription("gimbal-sensitivity-selector").assertIsDisplayed()
             onNodeWithContentDescription("remote-led-standby").assertDoesNotExist()
             snapshot("settings-desktop-control", onRoot())

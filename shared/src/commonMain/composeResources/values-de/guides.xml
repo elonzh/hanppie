@@ -17,7 +17,6 @@
     <string name="guide_open_calibration">Gerätekalibrierung öffnen</string>
     <string name="guide_open_firmware">Lokales Firmwareupdate öffnen</string>
     <string name="guide_open_arm">Roboterarmverwaltung öffnen</string>
-    <string name="guide_open_gamepad">Gamepad-Informationen öffnen</string>
     <string name="guide_first_connection_title">Erste Verbindung</string>
     <string name="guide_first_connection_summary">Netzwerk beitreten, Bild prüfen, dann fahren.</string>
     <string name="guide_first_connection_0_title">Verbindung wählen</string>
@@ -66,12 +65,8 @@
     <string name="guide_python_1_body">Ausführen bereitet das Programm vor, lädt es hoch und wartet auf den Roboterzustand. Uploadabschluss beweist keinen Ausführungsstart. Status, Protokolle und Programmbedienfeld beobachten. Vor einer anderen Steuerungsaufgabe das aktuelle Programm stoppen.</string>
     <string name="guide_python_2_title">Stoppergebnis prüfen</string>
     <string name="guide_python_2_body">Stoppen wählen und Bestätigung abwarten. Bei unbekannter Verbindung oder unbekanntem Stoppergebnis beweist Verlassen der Seite kein Programmende im Roboter. Mit demselben Roboter erneut verbinden, Zustand prüfen und dann die nächste Ausführung vorbereiten.</string>
-    <string name="guide_accessories_title">Gamepad und Roboterarm</string>
-    <string name="guide_accessories_summary">Zubehöranschluss übernimmt nicht die Steuerung.</string>
-    <string name="guide_accessories_0_title">Zubehörinformationen prüfen</string>
-    <string name="guide_accessories_0_body">Auf Android-Geräten mit USB-Zubehörunterstützung unter Einstellungen → Steuerung → Gamepad-Informationen das offizielle Gamepad suchen und verbinden. Dort Version, Akku und angeschlossene Maus/Tastatur prüfen. Verbindung allein übernimmt keine Steuerung.</string>
-    <string name="guide_accessories_1_title">Im Cockpit übernehmen</string>
-    <string name="guide_accessories_1_body">Nach dem Verbinden Cockpit öffnen, Joysticks zentrieren und Tasten loslassen, bevor Sie Gamepad-Fahren aktivieren. Escape oder „Gamepad freigeben“ gibt die Steuerung frei. Veraltete Eingaben, Abziehen oder Fokusverlust stellen die Steuerung nie automatisch wieder her.</string>
+    <string name="guide_accessories_title">Roboterarm</string>
+    <string name="guide_accessories_summary">Verkabelung, Modulzuordnung, Bindung und Kalibrierung.</string>
     <string name="guide_accessories_2_title">Arm anhand der Modulidentität installieren</string>
     <string name="guide_accessories_2_body">Vor dem Verkabeln ausschalten. Bei Bedarf Modul-IDs zuordnen, dann in der Armverwaltung Haupt- und Nebenservo identifizieren, prüfen und binden. Den Gerätekalibrierlagen folgen. Nach Konfigurationsprüfung im Cockpit mit niedriger Geschwindigkeit prüfen.</string>
     <string name="guide_maintenance_title">Prüfung und Wartung</string>

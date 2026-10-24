@@ -10,7 +10,7 @@ internal enum class GuideDestination(val label: StringResource) {
     ALBUM(Res.string.guide_open_album), SCRIPTS(Res.string.guide_open_scripts),
     HEALTH(Res.string.guide_open_health), ADDRESSING(Res.string.guide_open_addressing),
     CALIBRATION(Res.string.guide_open_calibration), FIRMWARE(Res.string.guide_open_firmware),
-    ARM(Res.string.guide_open_arm), GAMEPAD(Res.string.guide_open_gamepad),
+    ARM(Res.string.guide_open_arm),
 }
 
 internal data class GuideStep(val title: StringResource, val body: StringResource, val destination: GuideDestination? = null)
@@ -48,8 +48,6 @@ internal enum class GuideTopic(val title: StringResource, val summary: StringRes
         GuideStep(Res.string.guide_python_2_title, Res.string.guide_python_2_body, GuideDestination.SCRIPTS),
     )),
     ACCESSORIES(Res.string.guide_accessories_title, Res.string.guide_accessories_summary, listOf(
-        GuideStep(Res.string.guide_accessories_0_title, Res.string.guide_accessories_0_body, GuideDestination.GAMEPAD),
-        GuideStep(Res.string.guide_accessories_1_title, Res.string.guide_accessories_1_body, GuideDestination.ROBOT),
         GuideStep(Res.string.guide_accessories_2_title, Res.string.guide_accessories_2_body, GuideDestination.ARM),
     )),
     MAINTENANCE(Res.string.guide_maintenance_title, Res.string.guide_maintenance_summary, listOf(
