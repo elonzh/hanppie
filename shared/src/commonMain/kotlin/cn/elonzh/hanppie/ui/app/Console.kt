@@ -275,7 +275,8 @@ internal fun Console(
 
 
     WorkbenchDialog(show = connectionDetails, onDismissRequest = { connectionDetails = false }, title = tr(Res.string.connection_details)) {
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag("connection-details-body"),
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Image(painterResource(HanppieBrandAssets.avatar), null, Modifier.size(64.dp))
                 Column(Modifier.weight(1f)) {
@@ -305,16 +306,17 @@ internal fun Console(
     }
 
     WorkbenchDialog(show = manual, onDismissRequest = { manual = false; manualAttempted = false }, title = tr(Res.string.manual_connection)) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextField(ip, { ip = it }, label = tr(Res.string.robot_ipv4), singleLine = true)
-            TextField(appId, { appId = it }, label = tr(Res.string.appid_8_hex_characters), singleLine = true)
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag("manual-connection-body"),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            TextField(ip, { ip = it }, modifier = Modifier.testTag("manual-ip"), label = tr(Res.string.robot_ipv4), singleLine = true)
+            TextField(appId, { appId = it }, modifier = Modifier.testTag("manual-app-id"), label = tr(Res.string.appid_8_hex_characters), singleLine = true)
             if (manualAttempted) state.error?.let { error ->
                 Text(error, color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                Button({ manual = false; manualAttempted = false }, Modifier.weight(1f).heightIn(min = 48.dp)) { Text(tr(Res.string.cancel)) }
+                Button({ manual = false; manualAttempted = false }, Modifier.weight(1f).heightIn(min = 48.dp).testTag("manual-connect-cancel")) { Text(tr(Res.string.cancel)) }
                 Spacer(Modifier.width(8.dp))
-                Button({ manualAttempted = true; model.connect(ip, appId) }, Modifier.weight(1f).heightIn(min = 48.dp), enabled = !state.busy && !state.connected,
+                Button({ manualAttempted = true; model.connect(ip, appId) }, Modifier.weight(1f).heightIn(min = 48.dp).testTag("manual-connect-submit"), enabled = !state.busy && !state.connected,
                     colors = ButtonDefaults.buttonColorsPrimary()) { Text(tr(Res.string.connect)) }
             }
         }
