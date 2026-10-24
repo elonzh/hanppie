@@ -616,11 +616,12 @@ Hanppie 采用显式单页启用、Escape 释放和原有速度控制，保留�
 
 | 输入体位置 | 已建立的用途 |
 | --- | --- |
-| byte 1 bit 4 / bit 3 | 挂载鼠标 / 键盘；bit 7 / bit 6 控制两组输入分支 |
+| byte 1 bit 4 / bit 3 | 挂载鼠标 / 键盘；bit 7 / bit 6 控制两组输入分支；bit 5 尚未解释 |
 | uint16LE @2 / @4 | 底盘两轴，原生中心值 1024 |
 | int16LE @6 / @8 | 鼠标/云台两轴；原生按中心 1024 的输入处理，不能直接称为屏幕像素增量 |
 | uint16LE @12 | bit 7/6 为鼠标左/右；bit 13/14/15/12 为 C1/C2/Fire/Fn |
 | uint8 @18 | 电量读数 |
+| byte 0、@10–11、@14–17 | 本轮报告/定时器消费者中未建立输入语义，不能据字段位置命名为键盘扫描码、滚轮或其他控制量 |
 
 沿 macOS `SetGamePadNoCalibrate 15cb0`、`SetGamePadMidError 15c30`、`SetGamePadBatteryWarning 15d30` 与 Android 对应具名函数 `4cf2cc/4cf21c/4cf378` 逐分支核对，`OnGamePadDataPush` 的 byte 1 bit 2/1/0 分别进入与未校准/未回中/低电量 setter 对应的数据流。该对应依据具名函数体和内联分支，不仅依赖 key 名称；它仍是固定客户端的解码语义，真实固件位含义、极性和触发条件未验。**具名 setter / 双架构解码，设备未验**
 
@@ -641,6 +642,18 @@ Hanppie 采用显式单页启用、Escape 释放和原有速度控制，保留�
 Android 平台边界依据 [USB accessory 官方指南](https://developer.android.com/develop/connectivity/usb/accessory)、[UsbManager](https://developer.android.com/reference/android/hardware/usb/UsbManager) 与 [AOSP UsbAccessory 源码](https://github.com/aosp-mirror/platform_frameworks_base/blob/main/core/java/android/hardware/usb/UsbAccessory.java)：枚举可以替代自动启动过滤；权限在拔出后失效，读取缓冲可采用 16384 字节。`UsbAccessory.equals` 会调用权限保护的 `getSerial`，因此不能在授权前用它做发现匹配。Hanppie 使用公开描述字段保留临时句柄，打开仍校验原始配件的系统权限；没有将描述匹配当作设备认证或持久身份。没有新增自动启动 Activity/Intent 转发，现有 AndroidX Core 提供非导出动态接收器和安全 Parcelable 提取，无新增依赖。**平台官方依据 / 未运行边界**
 
 证据位于忽略目录 `.hanppie/validation/2026-10-22-official-gap/I02-native-*.txt`、`I02-android-*.txt`，Android 原始条目在 `.hanppie/app-analysis/2026-10-24-android-1.2.0/`；初始文件指纹在 `2026-10-24-27a7293-audit.json`，后续原生补证在 `I02-link-native-contracts.json`。共享会话、信息页与驾驶输入的实施状态由台账维护；没有构建或运行 Hanppie Android，也未连接真实手柄。全部输入接入、升级与平台完成状态见[实施台账](./official-app-capability-implementation.md)，不以源码或合成字节流计作原生运行通过。
+
+#### 官方手柄键盘与未解释字段
+
+固定 macOS 的 `SetKeyboardKeyPressed(unsigned char, unsigned char, unsigned char, unsigned char)`（`0x17ee0`）只有栈帧建立/恢复和 `ret`；Android 1.2.0/build 382 的同名函数（`0x4d1570`）只有一条 `ret`。因此这个具名入口是两份已检查客户端中的空实现，不能作为四字节键盘解码或发送协议。macOS 的 `OnGamePadDataPush` 在复制 19 字节后调用虚表槽 `0x38`；本轮读取固定 Mach-O 段映射及虚表 `0x985f78`，确认该槽实际指向 `OnTimerTicked`（`0x17880`）。沿这两个消费者仍未得到上表未解释字节的键盘语义。**固定二进制 / 有界数据流**
+
+托管 `SystemGamePadStatus.OnGamePadKeyboardConnect` 只保存挂载布尔值并显示接入/拔出提示；`HasKeyboard` 不是按键报告。通用 `LeftJoystick/RightJoystick` 的 KeyboardMouse 分支另行读取 Unity `Input.GetKey`/`GetAxis`，而 LeftJoystick 的 GamePad 状态不包含这段键盘更新。上述事实不能合并成“挂载键盘必走系统事件”或“键盘已经不可用”，也不能由空函数反推所有固件、平台的能力。**固定版消费者 / 不同输入分支**
+
+[AOSP AOA 2.0](https://source.android.com/docs/core/interaction/accessories/aoa2)允许配件通过 endpoint zero 的控制请求向 Android 系统输入层提供 HID 事件；配件在该机制中是 USB host，手机是外设。这与应用读取的 accessory bulk 字节流分开。如果真实手柄采用该机制，应用应消费系统事件，而不是在 `3f:90` 中猜测 HID 数据或从手机反向实现配件请求。[Compose 键盘说明](https://developer.android.com/develop/ui/compose/touch-input/keyboard-input/commands)描述了有焦点组件的按下/释放处理；Hanppie 当前共享 `RemotePage.onPreviewKeyEvent` 已有普通键盘路径与显式接管规则。**平台官方契约 / 尚未证明 RoboMaster 采用的路由**
+
+已转储的 Android `classes.dex` 有 4,406 个类定义，未包含 `com.unity3d.player` 或 `com.dji` 类定义；其中 Firebase 的 unity 资源类不是 UnityPlayer 输入实现。APK ZIP 清单另有三个 `assets/baiduprotect*.dex` 相关条目。此范围不足以恢复完整官方 App 的键事件分发，不能由裸 DEX 的搜索结果证明它不存在，也不将保护相关文件名当作具体解密机制的证据。**提取范围 / 负面结果边界**
+
+挂载键盘的完整使用仍需将实际按下、释放及拔出与配件报告、系统输入关联：若形成已知轴变化，复用现有四轴；若形成系统按键，复用共享键盘路径；其他编码须先建立真实契约。保留输入所有权、停止与不自动恢复规则，不凭挂载位触发控制。两份空函数、虚表解析、16 项本地来源、两份官方资料与当前源码身份位于忽略目录 `I02-keyboard/`，实施边界见[台账](./official-app-capability-implementation.md#i02-挂载键盘与未解释字段来源调查)。当前没有新增键盘解码、发送或平台运行结论。
 
 #### iOS 官方手柄链路的来源与接入前提
 
