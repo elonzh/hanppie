@@ -26,6 +26,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
@@ -56,6 +57,7 @@ import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.width
 import cn.elonzh.hanppie.agent.runtime.MessageEvent
 import cn.elonzh.hanppie.agent.runtime.TestSessionHistory
 import cn.elonzh.hanppie.agent.tools.DeleteLabScriptTool
@@ -96,6 +98,7 @@ import cn.elonzh.hanppie.ui.settings.SettingsPage
 import cn.elonzh.hanppie.ui.speech.SpeechInput
 import cn.elonzh.hanppie.ui.speech.SpeechInputState
 import kotlinx.serialization.json.Json
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import java.awt.image.BufferedImage
@@ -107,6 +110,10 @@ import kotlin.test.assertTrue
 
 class ConsoleUiTest {
     @get:Rule val rule = createComposeRule()
+
+    @Before fun initializeLanguage() {
+        Localization.initialize("zh", null)
+    }
 
     @Test fun connectedDeviceUsesTheProtocolReportedProductName() {
         val model = testConsoleModel()
@@ -1147,8 +1154,8 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
                     lines = listOf(ChatLine(ChatRole.USER, "你好")),
                 )
             }
-            val shortWidth = rule.onNodeWithTag("user-message").fetchSemanticsNode().boundsInRoot.width
-            assertTrue(shortWidth < 160f)
+            val shortWidth = rule.onNodeWithTag("user-message").getUnclippedBoundsInRoot().width
+            assertTrue(shortWidth < 160.dp, "Short message width: $shortWidth")
 
             rule.runOnIdle {
                 width.value = 1040.dp
@@ -1157,9 +1164,9 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
                 )
             }
             rule.waitForIdle()
-            val longWidth = rule.onNodeWithTag("user-message").fetchSemanticsNode().boundsInRoot.width
+            val longWidth = rule.onNodeWithTag("user-message").getUnclippedBoundsInRoot().width
             assertTrue(longWidth > shortWidth)
-            assertTrue(longWidth <= 600.5f)
+            assertTrue(longWidth <= 600.5.dp, "Long message width: $longWidth")
         } finally { model.close() }
     }
 

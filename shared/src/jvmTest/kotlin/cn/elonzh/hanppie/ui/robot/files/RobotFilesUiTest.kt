@@ -83,6 +83,11 @@ class RobotFilesUiTest {
             WorkbenchGlyph.GRIP_VERTICAL to "grip-vertical",
             WorkbenchGlyph.INFO to "info",
             WorkbenchGlyph.COPY to "copy",
+            WorkbenchGlyph.ARROW_LEFT to "arrow-left",
+            WorkbenchGlyph.ARROW_RIGHT to "arrow-right",
+            WorkbenchGlyph.ARROW_UP to "arrow-up",
+            WorkbenchGlyph.ARROW_DOWN to "arrow-down",
+            WorkbenchGlyph.GUIDE to "book-open",
         )
 
         assertEquals(WorkbenchGlyph.entries.toSet(), expected.keys)
