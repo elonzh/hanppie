@@ -1537,6 +1537,7 @@
     <string name="program_panel_send_failed">Impossible d’envoyer l’action. Vérifiez la connexion.</string>
     <string name="program_panel_update_failed">Certaines commandes n’ont pas pu être actualisées. Arrêtez et relancez le programme.</string>
     <string name="program_panel_waiting">En attente d’une mise à jour de la connexion ou de l’état du programme.</string>
+    <string name="program_panel_value">Valeur du programme</string>
     <string name="program_panel_empty">Le programme n’a aucune commande visible.</string>
     <string name="input_profile">Entrée à configurer</string>
     <string name="input_screen">Joysticks à l’écran</string>

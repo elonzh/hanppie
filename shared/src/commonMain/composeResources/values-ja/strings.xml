@@ -1537,6 +1537,7 @@
     <string name="program_panel_send_failed">操作を送信できませんでした。接続を確認してください。</string>
     <string name="program_panel_update_failed">一部のコントロールを更新できませんでした。プログラムを停止し、再実行してください。</string>
     <string name="program_panel_waiting">接続またはプログラム状態の更新を待っています。</string>
+    <string name="program_panel_value">プログラムの値</string>
     <string name="program_panel_empty">このプログラムには表示するコントロールがありません。</string>
     <string name="input_profile">設定する入力</string>
     <string name="input_screen">画面スティック</string>

@@ -1537,6 +1537,7 @@
     <string name="program_panel_send_failed">Aktion konnte nicht gesendet werden. Verbindung prüfen.</string>
     <string name="program_panel_update_failed">Einige Bedienelemente konnten nicht aktualisiert werden. Programm stoppen und erneut ausführen.</string>
     <string name="program_panel_waiting">Wartet auf Aktualisierung der Verbindung oder des Programmstatus.</string>
+    <string name="program_panel_value">Programmwert</string>
     <string name="program_panel_empty">Das Programm hat keine sichtbaren Bedienelemente.</string>
     <string name="input_profile">Eingabequelle</string>
     <string name="input_screen">Bildschirmjoysticks</string>

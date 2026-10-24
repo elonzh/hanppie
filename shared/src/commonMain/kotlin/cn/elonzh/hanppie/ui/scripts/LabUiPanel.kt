@@ -44,6 +44,7 @@ import cn.elonzh.hanppie.ui.app.ConsoleController
 import cn.elonzh.hanppie.ui.design.WorkbenchGlyph
 import cn.elonzh.hanppie.ui.design.WorkbenchIcon
 import cn.elonzh.hanppie.ui.design.WorkbenchIconButton
+import cn.elonzh.hanppie.ui.design.adjustableValue
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.robot.device.ConnectionStatusChip
 import kotlinx.coroutines.delay
@@ -185,15 +186,22 @@ private fun LabWidgetContent(widget: LabWidget, enabled: Boolean,
             LaunchedEffect(widget.value) { value = widget.value }
             val span = widget.maximum.toDouble() - widget.minimum.toDouble()
             val fraction = if (span == 0.0) 0f else ((value.toDouble() - widget.minimum) / span).toFloat()
+            // Compose ranges are Float: adjacent large Int endpoints can collapse to one value.
+            val fractionalRange = span > 0 && widget.minimum.toFloat() == widget.maximum.toFloat()
+            val semanticRange = if (fractionalRange) 0f..1f else widget.minimum.toFloat()..widget.maximum.toFloat()
             Slider(fraction, {
                 if (enabled && span > 0) {
                     value = (widget.minimum.toDouble() + it.toDouble() * span).toInt().coerceIn(widget.minimum, widget.maximum)
                     event(0, LabUiValue.Integer(value))
                 }
-            }, Modifier.fillMaxSize().testTag("program-slider-${widget.key.index}").semantics {
-                stateDescription = value.toString()
-                if (!enabled || span == 0.0) disabled()
-            },
+            }, Modifier.fillMaxSize().testTag("program-slider-${widget.key.index}")
+                .adjustableValue(widget.text.takeIf { it.isNotBlank() } ?: tr(Res.string.program_panel_value),
+                    if (fractionalRange) fraction else value.toFloat(), semanticRange, value.toString(), enabled && span > 0,
+                    onChange = {
+                        value = (if (fractionalRange) (widget.minimum.toDouble() + it.toDouble() * span).toInt() else it.toInt())
+                            .coerceIn(widget.minimum, widget.maximum)
+                        event(0, LabUiValue.Integer(value))
+                    }, onFinished = { event(0, LabUiValue.Integer(value), final = true) }),
                 enabled && span > 0,
                 onValueChangeFinished = { if (enabled && span > 0) event(0, LabUiValue.Integer(value), final = true) },
                 colors = SliderDefaults.sliderColors(foregroundColor = widget.fill.colorOr(colors.primary),

@@ -1537,6 +1537,7 @@
     <string name="program_panel_send_failed">No se pudo enviar la acción. Comprueba la conexión.</string>
     <string name="program_panel_update_failed">No se pudieron actualizar algunos controles. Detén y vuelve a ejecutar el programa.</string>
     <string name="program_panel_waiting">Esperando actualización de conexión o estado del programa.</string>
+    <string name="program_panel_value">Valor del programa</string>
     <string name="program_panel_empty">El programa no tiene controles visibles.</string>
     <string name="input_profile">Fuente de entrada</string>
     <string name="input_screen">Joysticks en pantalla</string>

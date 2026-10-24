@@ -3,6 +3,7 @@ package cn.elonzh.hanppie.ui.settings
 import ai.koog.prompt.llm.LLModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import cn.elonzh.hanppie.ui.design.adjustableValue
 import cn.elonzh.hanppie.resources.Res
 import cn.elonzh.hanppie.resources.action_backward
 import cn.elonzh.hanppie.resources.action_fire
@@ -257,6 +259,10 @@ internal fun MediaSettingsContent(model: ConsoleController) {
     val chat by model.chat.state.collectAsState()
     val settingsBusy by model.settingsBusy.collectAsState()
     val enabled = !chat.running && !settingsBusy
+    fun changeVolume(value: Float) {
+        model.settingsMessage.value = null
+        model.mediaSettings.value = media.copy(speakerVolume = value.roundToInt().coerceIn(0, 100))
+    }
 
     SettingsDropdown(
         label = tr(Res.string.video_resolution),
@@ -292,13 +298,12 @@ internal fun MediaSettingsContent(model: ConsoleController) {
             }
             Slider(
                 value = media.speakerVolume.toFloat(),
-                onValueChange = {
-                    model.settingsMessage.value = null
-                    model.mediaSettings.value = media.copy(speakerVolume = it.roundToInt().coerceIn(0, 100))
-                },
+                onValueChange = ::changeVolume,
                 valueRange = 0f..100f,
                 enabled = enabled,
-                modifier = Modifier.fillMaxWidth().testTag("speaker-volume-slider"),
+                modifier = Modifier.fillMaxWidth().testTag("speaker-volume-slider")
+                    .adjustableValue(tr(Res.string.speaker_volume), media.speakerVolume.toFloat(), 0f..100f,
+                        "${media.speakerVolume}%", enabled, steps = 99, onChange = ::changeVolume),
             )
         }
     }
@@ -381,15 +386,18 @@ internal fun RemoteLedColorPicker(label: String, tag: String, value: RobotLedCol
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(Modifier.fillMaxWidth().height(48.dp).background(selected, RoundedCornerShape(12.dp)))
-                Column(Modifier.testTag("led-hue")) {
+                Column(Modifier.heightIn(min = 48.dp).testTag("led-hue").adjustableValue(tr(Res.string.color_hue), hue, 0f..360f,
+                    "${hue.roundToInt()}°", onChange = { hue = it }).focusable()) {
                     Text(tr(Res.string.color_hue), fontSize = 13.sp)
                     HsvHueSlider(hue, { hue = it * 360f })
                 }
-                Column(Modifier.testTag("led-saturation")) {
+                Column(Modifier.heightIn(min = 48.dp).testTag("led-saturation").adjustableValue(tr(Res.string.color_saturation), saturation * 100f, 0f..100f,
+                    "${(saturation * 100f).roundToInt()}%", onChange = { saturation = it / 100f }).focusable()) {
                     Text(tr(Res.string.color_saturation), fontSize = 13.sp)
                     HsvSaturationSlider(hue, saturation, { saturation = it })
                 }
-                Column(Modifier.testTag("led-brightness")) {
+                Column(Modifier.heightIn(min = 48.dp).testTag("led-brightness").adjustableValue(tr(Res.string.color_brightness), brightness * 100f, 0f..100f,
+                    "${(brightness * 100f).roundToInt()}%", onChange = { brightness = it / 100f }).focusable()) {
                     Text(tr(Res.string.color_brightness), fontSize = 13.sp)
                     HsvValueSlider(hue, saturation, brightness, { brightness = it })
                 }

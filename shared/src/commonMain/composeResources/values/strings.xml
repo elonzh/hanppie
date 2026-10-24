@@ -1537,6 +1537,7 @@
     <string name="program_panel_send_failed">Could not send the action. Check the connection.</string>
     <string name="program_panel_update_failed">Some controls could not update. Stop and rerun the program.</string>
     <string name="program_panel_waiting">Waiting for the connection or program status to update.</string>
+    <string name="program_panel_value">Program value</string>
     <string name="program_panel_empty">The program has no visible controls.</string>
     <string name="input_profile">Input to configure</string>
     <string name="input_screen">Screen sticks</string>

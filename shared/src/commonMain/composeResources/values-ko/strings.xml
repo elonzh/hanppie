@@ -1537,6 +1537,7 @@
     <string name="program_panel_send_failed">작업을 보낼 수 없습니다. 연결을 확인하세요.</string>
     <string name="program_panel_update_failed">일부 컨트롤을 갱신할 수 없습니다. 프로그램을 정지하고 다시 실행하세요.</string>
     <string name="program_panel_waiting">연결 또는 프로그램 상태 갱신 대기 중입니다.</string>
+    <string name="program_panel_value">프로그램 값</string>
     <string name="program_panel_empty">프로그램에 표시할 컨트롤이 없습니다.</string>
     <string name="input_profile">설정할 입력</string>
     <string name="input_screen">화면 조이스틱</string>

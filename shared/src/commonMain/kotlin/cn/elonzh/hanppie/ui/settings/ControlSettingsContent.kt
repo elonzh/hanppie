@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.sp
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.robot.remote.ChassisParameter
 import cn.elonzh.hanppie.ui.app.ConsoleController
+import cn.elonzh.hanppie.ui.design.adjustableValue
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.robot.remote.MotionSettingsPhase
 import cn.elonzh.hanppie.ui.robot.remote.RobotMotionController
@@ -36,13 +37,17 @@ internal fun ControlSettingsContent(model: ConsoleController) {
     Text(tr(Res.string.input_response_scope), fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
     if (profile.preset == SensitivityPreset.CUSTOM) {
         InputAxis.entries.forEach { axis ->
+            fun changeAxis(value: Float) = change(profile.copy(custom = profile.custom.with(axis, value.roundToInt())))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(inputAxisLabel(axis), Modifier.weight(1f), fontSize = 14.sp)
                 Text(profile.custom[axis].toString(), fontSize = 14.sp)
             }
-            Slider(profile.custom[axis].toFloat(), { change(profile.copy(custom = profile.custom.with(axis, it.roundToInt()))) },
-                valueRange = 0f..100f, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("input-axis-${axis.name}"))
+            Slider(profile.custom[axis].toFloat(), ::changeAxis,
+                valueRange = 0f..100f, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("input-axis-${axis.name}")
+                    .adjustableValue(inputAxisLabel(axis), profile.custom[axis].toFloat(), 0f..100f,
+                        profile.custom[axis].toString(), !busy, steps = 99,
+                        onChange = ::changeAxis))
         }
         Button({ change(profile.copy(custom = AxisSensitivity())) }, Modifier.heightIn(min = 48.dp).testTag("input-custom-default"), !busy) {
             Text(tr(Res.string.input_custom_default))
@@ -119,11 +124,14 @@ private fun AimInputPreferences(value: AimInputSettings, enabled: Boolean, chang
 
 @Composable
 private fun AimSensitivity(label: String, tag: String, current: Int, enabled: Boolean, onChange: (Int) -> Unit) {
+    fun change(value: Float) = onChange(value.roundToInt())
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f), fontSize = 14.sp); Text(current.toString(), fontSize = 14.sp)
     }
-    Slider(current.toFloat(), { onChange(it.roundToInt()) }, valueRange = 0f..100f, enabled = enabled,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag(tag))
+    Slider(current.toFloat(), ::change, valueRange = 0f..100f, enabled = enabled,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag(tag)
+            .adjustableValue(label, current.toFloat(), 0f..100f, current.toString(), enabled, steps = 99,
+                onChange = ::change))
 }
 
 @Composable

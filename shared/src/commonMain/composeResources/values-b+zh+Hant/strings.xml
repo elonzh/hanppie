@@ -1537,6 +1537,7 @@
     <string name="program_panel_send_failed">操作發送失敗，請檢查連線。</string>
     <string name="program_panel_update_failed">部分程序控件更新失敗，可停止後重新執行。</string>
     <string name="program_panel_waiting">等待連線或程序狀態更新。</string>
+    <string name="program_panel_value">程式數值</string>
     <string name="program_panel_empty">程序暫無可見控件。</string>
     <string name="input_profile">要配置的輸入</string>
     <string name="input_screen">螢幕搖桿</string>

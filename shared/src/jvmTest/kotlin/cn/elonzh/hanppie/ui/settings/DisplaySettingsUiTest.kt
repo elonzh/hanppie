@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Density
@@ -14,6 +15,7 @@ import cn.elonzh.hanppie.robot.display.*
 import cn.elonzh.hanppie.robot.session.*
 import cn.elonzh.hanppie.resources.Res
 import cn.elonzh.hanppie.resources.display_connect
+import cn.elonzh.hanppie.resources.display_headlights
 import cn.elonzh.hanppie.resources.display_confirmed
 import cn.elonzh.hanppie.resources.display_sight_help
 import cn.elonzh.hanppie.ui.app.*
@@ -78,7 +80,11 @@ class DisplaySettingsUiTest {
                 onNodeWithTag("display-quality-selector").performScrollTo();capture("host-options")
                 onNodeWithTag("display-lights-read").performScrollTo().performClick()
                 waitUntil(timeoutMillis=5000){model.robotDisplay.state.value.headlights!=null}
+                val light = onNodeWithTag("display-lights-slider").performScrollTo().fetchSemanticsNode().config
+                assertEquals(listOf(tr(Res.string.display_headlights)), light[SemanticsProperties.ContentDescription])
+                assertEquals(0f..100f, light[SemanticsProperties.ProgressBarRangeInfo].range)
                 onNodeWithTag("display-lights-slider").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress){it(70f)}
+                assertEquals(0,peer.writes)
                 onNodeWithTag("display-lights-apply").performScrollTo().performClick()
                 waitUntil(timeoutMillis=5000){model.robotDisplay.state.value.confirmed==DisplayTarget.HEADLIGHTS && !model.state.value.busy}
                 assertEquals(HeadlightBrightness(70,70),peer.lights)

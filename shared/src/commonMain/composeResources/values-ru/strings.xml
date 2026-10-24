@@ -1537,6 +1537,7 @@
     <string name="program_panel_send_failed">Не удалось отправить действие. Проверьте соединение.</string>
     <string name="program_panel_update_failed">Не удалось обновить часть элементов управления. Остановите и запустите программу заново.</string>
     <string name="program_panel_waiting">Ожидание обновления соединения или состояния программы.</string>
+    <string name="program_panel_value">Значение программы</string>
     <string name="program_panel_empty">У программы нет видимых элементов управления.</string>
     <string name="input_profile">Настраиваемый ввод</string>
     <string name="input_screen">Экранные стики</string>

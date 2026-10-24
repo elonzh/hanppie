@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Density
@@ -17,9 +18,12 @@ import cn.elonzh.hanppie.robot.session.*
 import cn.elonzh.hanppie.ui.app.*
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
+import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.i18n.uiText
 import cn.elonzh.hanppie.resources.Res
 import cn.elonzh.hanppie.resources.script_running
+import cn.elonzh.hanppie.resources.program_panel_value
 import cn.elonzh.hanppie.ui.settings.AppearanceController
 import cn.elonzh.hanppie.ui.settings.AppearanceSettings
 import cn.elonzh.hanppie.ui.settings.NightMode
@@ -133,6 +137,10 @@ class ProgramPanelUiTest {
                 runOnIdle { session.labUiState.value = sample.copy(inputEnabled = false, issue = LabUiIssue.SEND_FAILED) }
                 waitUntil(timeoutMillis = 5_000) { model.labUi.value.issue == LabUiIssue.SEND_FAILED && !model.labUi.value.inputEnabled }
                 onNodeWithTag("program-input-0").assertIsNotEnabled()
+                val beforeDisabled = session.labUiEvents.size
+                onNodeWithTag("program-slider-0").assertIsNotEnabled()
+                    .performSemanticsAction(SemanticsActions.SetProgress) { assertFalse(it(80f)) }
+                assertEquals(beforeDisabled, session.labUiEvents.size)
                 capture("error")
                 onNodeWithTag("program-panel-back").performClick()
                 onNodeWithTag("script-editor").assertIsDisplayed()
@@ -163,9 +171,33 @@ class ProgramPanelUiTest {
                 } }
                 waitUntil(timeoutMillis = 5_000) { model.labUi.value.runId == owner }
                 onNodeWithTag("program-panel-open").performClick()
+                for (language in AppLanguage.entries) {
+                    runOnIdle { Localization.select(language.preference) }
+                    val slider = onNodeWithTag("program-slider-0").fetchSemanticsNode().config
+                    assertEquals(listOf(tr(Res.string.program_panel_value)), slider[SemanticsProperties.ContentDescription])
+                    assertEquals(0f..100f, slider[SemanticsProperties.ProgressBarRangeInfo].range)
+                }
+                runOnIdle { Localization.select("zh") }
+                onNodeWithTag("program-slider-0").performSemanticsAction(SemanticsActions.SetProgress) { assertTrue(it(75f)) }
+                waitUntil(timeoutMillis = 5_000) { session.labUiEvents.size == 2 }
+                assertEquals(listOf(false, true), session.labUiEvents.map { it.final })
+                assertTrue(session.labUiEvents.all { it.value == LabUiValue.Integer(75) })
+                session.labUiEvents.clear()
                 onNodeWithTag("program-slider-0").performTouchInput { down(centerLeft); moveTo(centerRight); up() }
                 waitUntil(timeoutMillis = 5_000) { session.labUiEvents.any { it.key.type == LabWidgetType.SLIDER && it.final } }
                 assertEquals(LabUiValue.Integer(100), session.labUiEvents.last().value)
+                session.labUiEvents.clear()
+                val ranged = sample.widgets.getValue(key(LabWidgetType.SLIDER)).copy(
+                    minimum = -30, maximum = 70, value = -20, text = "Inspection level")
+                runOnIdle { session.labUiState.value = sample.copy(widgets = sample.widgets + (ranged.key to ranged)) }
+                waitUntil(timeoutMillis = 5_000) { model.labUi.value.widgets[ranged.key]?.minimum == -30 }
+                val range = onNodeWithTag("program-slider-0").fetchSemanticsNode().config
+                assertEquals(listOf("Inspection level"), range[SemanticsProperties.ContentDescription])
+                assertEquals(-30f..70f, range[SemanticsProperties.ProgressBarRangeInfo].range)
+                assertEquals("-20", range[SemanticsProperties.StateDescription])
+                onNodeWithTag("program-slider-0").performSemanticsAction(SemanticsActions.SetProgress) { assertTrue(it(100f)) }
+                waitUntil(timeoutMillis = 5_000) { session.labUiEvents.size == 2 }
+                assertTrue(session.labUiEvents.all { it.value == LabUiValue.Integer(70) })
                 session.labUiEvents.clear()
                 val button = onNodeWithTag("program-widget-1-0")
                 button.performTouchInput { down(center) }
@@ -195,11 +227,25 @@ class ProgramPanelUiTest {
                 onNodeWithTag("program-input-0").performTextInput("你")
                 onNodeWithTag("program-panel-message").assertTextEquals("输入内容过长，请缩短后重试。")
                 assertEquals(LabUiValue.Text("你".repeat(85)), session.labUiEvents.last().value)
-                val fixed = sample.widgets.getValue(key(LabWidgetType.SLIDER)).copy(
+                val adjacent = sample.widgets.getValue(key(LabWidgetType.SLIDER)).copy(
+                    minimum = Int.MAX_VALUE - 1, maximum = Int.MAX_VALUE, value = Int.MAX_VALUE - 1)
+                runOnIdle { session.labUiState.value = sample.copy(widgets = sample.widgets + (adjacent.key to adjacent)) }
+                waitUntil(timeoutMillis = 5_000) { model.labUi.value.widgets[adjacent.key]?.minimum == Int.MAX_VALUE - 1 }
+                val beforeAdjacent = session.labUiEvents.size
+                val adjacentConfig = onNodeWithTag("program-slider-0").fetchSemanticsNode().config
+                assertEquals((Int.MAX_VALUE - 1).toString(), adjacentConfig[SemanticsProperties.StateDescription])
+                assertEquals(0f..1f, adjacentConfig[SemanticsProperties.ProgressBarRangeInfo].range)
+                onNodeWithTag("program-slider-0").performSemanticsAction(SemanticsActions.SetProgress) { assertTrue(it(1f)) }
+                waitUntil(timeoutMillis = 5_000) { session.labUiEvents.size == beforeAdjacent + 2 }
+                assertTrue(session.labUiEvents.takeLast(2).all { it.value == LabUiValue.Integer(Int.MAX_VALUE) })
+                val fixed = adjacent.copy(
                     minimum = Int.MAX_VALUE, maximum = Int.MAX_VALUE, value = Int.MAX_VALUE)
                 runOnIdle { session.labUiState.value = sample.copy(widgets = sample.widgets + (fixed.key to fixed)) }
                 waitUntil(timeoutMillis = 5_000) { model.labUi.value.widgets[fixed.key]?.minimum == Int.MAX_VALUE }
                 onNodeWithTag("program-slider-0").assertIsNotEnabled()
+                val beforeFixed = session.labUiEvents.size
+                onNodeWithTag("program-slider-0").performSemanticsAction(SemanticsActions.SetProgress) { assertFalse(it(0f)) }
+                assertEquals(beforeFixed, session.labUiEvents.size)
             } finally { model.close(); Localization.initialize("zh", null) }
         }
 }
