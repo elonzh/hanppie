@@ -1154,6 +1154,8 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
     @Test fun userMessageBubbleWrapsShortContentAndCapsLongMessages() {
         val model = testConsoleModel()
         val width = mutableStateOf(393.dp)
+        val shortMessage = "你好"
+        val longMessage = "请检查当前机器人连接与脚本运行状态，并说明下一步应该如何处理。".repeat(8)
         try {
             rule.setContent { WorkbenchTheme {
                 Box(Modifier.requiredSize(width.value, 740.dp)) { ChatPage(model) }
@@ -1161,21 +1163,23 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.waitUntil(5_000) { model.chat.state.value.ready }
             rule.runOnIdle {
                 model.chat.state.value = model.chat.state.value.copy(
-                    lines = listOf(ChatLine(ChatRole.USER, "你好")),
+                    lines = listOf(ChatLine(ChatRole.USER, shortMessage)),
                 )
             }
+            rule.waitUntil(5_000) { rule.onAllNodesWithText(shortMessage).fetchSemanticsNodes().isNotEmpty() }
             val shortWidth = rule.onNodeWithTag("user-message").getUnclippedBoundsInRoot().width
             assertTrue(shortWidth < 160.dp, "Short message width: $shortWidth")
 
             rule.runOnIdle {
                 width.value = 1040.dp
                 model.chat.state.value = model.chat.state.value.copy(
-                    lines = listOf(ChatLine(ChatRole.USER, "请检查当前机器人连接与脚本运行状态，并说明下一步应该如何处理。".repeat(8))),
+                    lines = listOf(ChatLine(ChatRole.USER, longMessage)),
                 )
             }
-            rule.waitForIdle()
+            // The Markdown parser runs outside Compose's idle tracking; measure rendered content.
+            rule.waitUntil(5_000) { rule.onAllNodesWithText(longMessage).fetchSemanticsNodes().isNotEmpty() }
             val longWidth = rule.onNodeWithTag("user-message").getUnclippedBoundsInRoot().width
-            assertTrue(longWidth > shortWidth)
+            assertTrue(longWidth > shortWidth, "Long message width $longWidth must exceed short message width $shortWidth")
             assertTrue(longWidth <= 600.5.dp, "Long message width: $longWidth")
         } finally { model.close() }
     }
