@@ -120,12 +120,31 @@ class AccessibilityLabelsUiTest {
                     category("general")
                 }
                 runOnIdle { Localization.select("en") }
+                category("model")
+                onNodeWithTag("model-picker").performScrollTo().performClick()
+                val originalModel = model.modelSettings.value.model
+                onNodeWithTag("model-option-$originalModel")
+                    .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)).assertIsSelected()
+                val alternative = onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
+                    and SemanticsMatcher.expectValue(SemanticsProperties.Selected, false)).onFirst()
+                val alternativeId = alternative.fetchSemanticsNode().config[SemanticsProperties.Text].first().text
+                alternative.performScrollTo().assertHeightIsAtLeast(48.dp).performClick()
+                assertEquals(alternativeId, model.modelSettings.value.model)
+                onNodeWithTag("model-picker").performScrollTo().performClick()
+                onNodeWithTag("model-option-$originalModel").assertIsNotSelected()
+                onNodeWithTag("model-option-$alternativeId").assertIsSelected()
+                picture("models", "model-filter")
+                onNodeWithTag("model-option-$originalModel").performScrollTo().performClick()
                 category("lights")
                 onNodeWithTag("remote-led-standby").performScrollTo().assertTextContains(tr(Res.string.remote_led_standby))
                     .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, model.controlSettings.value.remoteLeds.standby.hex))
                 cleanDescriptions(); picture("lights", "settings-page")
                 category("about")
                 onNodeWithContentDescription("Hanppie Icon").assertDoesNotExist(); cleanDescriptions()
+                val repositoryLink = onNode(hasText(tr(Res.string.about_repository)) and hasClickAction())
+                repositoryLink.performScrollTo().assertHeightIsAtLeast(48.dp)
+                    .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+                picture("about", "about-settings-content")
                 if (onAllNodesWithTag("settings-back").fetchSemanticsNodes().isNotEmpty()) onNodeWithTag("settings-back").performClick()
                 onNodeWithTag("restore-default-settings").assertIsDisplayed().assertTextContains(tr(Res.string.restore_defaults))
                     .performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
@@ -143,6 +162,18 @@ class AccessibilityLabelsUiTest {
                 assertEquals(tr(Res.string.more_actions), onNodeWithTag("script-card-${saved.id}").fetchSemanticsNode()
                     .config[SemanticsActions.OnLongClick].label)
                 onNodeWithTag("script-card-${saved.id}").performSemanticsAction(SemanticsActions.OnLongClick) { assertTrue(it()) }
+                for (tag in listOf("script-rename-${saved.id}", "script-delete-${saved.id}")) {
+                    onNodeWithTag(tag).assertHeightIsAtLeast(48.dp)
+                        .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button)).assertHasClickAction()
+                }
+                picture("script-actions", "script-rename-${saved.id}")
+                if (scale > 1f) for (language in AppLanguage.entries) {
+                    runOnIdle { Localization.select(language.preference) }
+                    onNodeWithTag("script-rename-${saved.id}").assertTextContains(tr(Res.string.rename_script))
+                    onNodeWithTag("script-delete-${saved.id}").assertTextContains(tr(Res.string.delete_script))
+                    picture("script-actions-${language.preference}", "script-rename-${saved.id}")
+                }
+                runOnIdle { Localization.select("en") }
                 onNodeWithTag("script-rename-${saved.id}").performClick()
                 field("script-name", tr(Res.string.script_name)); picture("script-name", "script-name")
                 if (scale > 1f) for (language in AppLanguage.entries) {
@@ -153,6 +184,13 @@ class AccessibilityLabelsUiTest {
                 onNodeWithTag("script-name").performTextReplacement("Draft name")
                 onNodeWithText(tr(Res.string.cancel)).performClick()
                 assertEquals(saved.name, model.scriptLibrary.state.value.scripts.single().name)
+                onNodeWithTag("script-more").performClick()
+                for (tag in listOf("script-import", "script-export", "script-delete")) {
+                    onNodeWithTag(tag).assertHeightIsAtLeast(48.dp)
+                        .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button)).assertHasClickAction()
+                }
+                picture("script-files", "script-import")
+                onNodeWithText(tr(Res.string.close)).performClick()
                 onNodeWithTag("script-audio-manage").performClick()
                 onNodeWithTag("script-audio-rename-0").performScrollTo().performClick()
                 field("script-audio-name", tr(Res.string.script_audio_rename)); picture("audio-name", "script-audio-name")

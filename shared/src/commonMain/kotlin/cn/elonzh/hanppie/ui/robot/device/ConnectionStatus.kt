@@ -13,6 +13,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -37,15 +40,18 @@ internal fun ConnectionStatusChip(state: ConsoleState, contentColor: Color = Miu
         state.connecting -> colors.primary
         else -> Color(0xffaab1bb)
     }
+    val status = if (state.connected) listOfNotNull(tr(Res.string.connected),
+        state.battery?.let { "${tr(Res.string.battery)} $it%" }).joinToString(" · ") else label
+    val description = "${tr(Res.string.connection_details)} · $status"
     Row(Modifier.widthIn(max = 200.dp).heightIn(min = 48.dp).testTag("connection-status")
-        .clickable(onClick = onClick).padding(horizontal = 8.dp),
+        .clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = description }.padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         if (sceneStyle && state.connected) {
             Image(painterResource(when (connectionMode) {
                 ConnectionMode.ROUTER -> Res.drawable.official_connection_router
                 ConnectionMode.DIRECT -> Res.drawable.official_connection_direct
                 ConnectionMode.UNKNOWN -> Res.drawable.official_connection_generic
-            }), tr(Res.string.connected), Modifier.size(22.dp), colorFilter = ColorFilter.tint(contentColor))
+            }), null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(contentColor))
             state.battery?.let { battery ->
                 BatteryIcon(battery, contentColor)
             }

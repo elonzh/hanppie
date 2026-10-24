@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
@@ -433,7 +434,8 @@ private fun ConversationRow(
 ) {
     Row(Modifier.fillMaxWidth().background(
         if (selected) MiuixTheme.colorScheme.primary.copy(alpha = .14f) else Color.Transparent,
-        RoundedCornerShape(14.dp)).clickable(enabled = enabled, onClick = onClick)
+        RoundedCornerShape(14.dp)).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+        .semantics { this.selected = selected }
         .padding(start = 12.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         // One line per conversation: the title is the whole row and long titles are ellipsized.
         Text(item.title, Modifier.weight(1f).padding(end = 4.dp), maxLines = 1,

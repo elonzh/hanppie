@@ -17,6 +17,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
@@ -66,6 +67,10 @@ import cn.elonzh.hanppie.agent.tools.ReadSkillTool
 import cn.elonzh.hanppie.agent.tools.SaveLabScriptTool
 import cn.elonzh.hanppie.agent.tools.StopLabTool
 import cn.elonzh.hanppie.resources.Res
+import cn.elonzh.hanppie.resources.battery
+import cn.elonzh.hanppie.resources.connected
+import cn.elonzh.hanppie.resources.connection_details
+import cn.elonzh.hanppie.resources.disconnected
 import cn.elonzh.hanppie.resources.automatically_finding_robot
 import cn.elonzh.hanppie.resources.stop_command_sent_robot_stop_is_unconfirmed
 import cn.elonzh.hanppie.resources.waiting_for_script_start
@@ -82,6 +87,8 @@ import cn.elonzh.hanppie.ui.chat.ChatRole
 import cn.elonzh.hanppie.ui.chat.ToolApproval
 import cn.elonzh.hanppie.ui.design.TestWorkbenchTheme as WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
+import cn.elonzh.hanppie.ui.i18n.AppLanguage
+import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.i18n.uiText
 import cn.elonzh.hanppie.ui.robot.remote.RemotePage
 import cn.elonzh.hanppie.ui.scripts.EditorDocument
@@ -500,6 +507,7 @@ class ConsoleUiTest {
             rule.onNodeWithContentDescription("对话记录").performClick()
             rule.onNodeWithTag("conversation-list").assertIsDisplayed()
             rule.onNodeWithText("机器人巡检").assertIsDisplayed()
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
             rule.onNodeWithTag("new-conversation").assertIsDisplayed()
             assertTrue(rule.onNodeWithTag("conversation-list").fetchSemanticsNode().boundsInRoot.height < 400f)
             rule.onAllNodesWithContentDescription("对话操作").assertCountEquals(2)
@@ -516,6 +524,8 @@ class ConsoleUiTest {
             rule.waitForIdle()
             rule.onNodeWithTag("conversation-list").assertIsDisplayed()
             rule.onNodeWithText("机器人巡检").assertIsDisplayed()
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.Selected, true))
+            rule.onNodeWithText("灯光方案").assert(SemanticsMatcher.expectValue(SemanticsProperties.Selected, false))
             val sidebarBounds = rule.onNodeWithTag("conversation-list").fetchSemanticsNode().boundsInRoot
             val chatBounds = rule.onNodeWithTag("chat-surface").fetchSemanticsNode().boundsInRoot
             val newConversationBounds = rule.onNodeWithTag("new-conversation").fetchSemanticsNode().boundsInRoot
@@ -1278,10 +1288,19 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             } } }
             fun checkHomeActions() {
                 rule.onNodeWithTag("auto-connect").assertIsDisplayed()
+                rule.onNodeWithTag("connection-status")
+                    .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+                    .assertContentDescriptionEquals("连接状态 · 未连接")
                 rule.onNodeWithTag("connection-guide").assertDoesNotExist()
                 rule.onNodeWithTag("connection-diagnostics").assertDoesNotExist()
             }
             checkHomeActions()
+            for (language in AppLanguage.entries) {
+                rule.runOnIdle { Localization.select(language.preference) }
+                rule.onNodeWithTag("connection-status").assertContentDescriptionEquals(
+                    "${tr(Res.string.connection_details)} · ${tr(Res.string.disconnected)}")
+            }
+            rule.runOnIdle { Localization.select("zh") }
             rule.onNodeWithTag("manual-connect").assertDoesNotExist()
             rule.onNodeWithText("192.0.2.10", substring = true).assertDoesNotExist()
             rule.onNodeWithText("192.0.2.20", substring = true).assertDoesNotExist()
@@ -1293,13 +1312,19 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.onNodeWithTag("connection-diagnostics").performClick()
             rule.onNodeWithTag("manual-connect").assertIsDisplayed()
             rule.onNodeWithContentDescription("设备").performClick()
-            rule.runOnIdle { model.state.value = model.state.value.copy(connected = true, connectedAddress = "192.0.2.1") }
+            rule.runOnIdle { model.state.value = model.state.value.copy(connected = true, connectedAddress = "192.0.2.1", battery = 67) }
             rule.waitUntil(3_000) { rule.onAllNodesWithTag("enter-remote").fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithTag("auto-connect").assertDoesNotExist()
             rule.onNodeWithTag("connection-guide").assertDoesNotExist()
             rule.onNodeWithText("192.0.2.1", substring = true).assertDoesNotExist()
             rule.onNodeWithText("机器人已准备好").assertDoesNotExist()
             rule.onNodeWithTag("enter-remote").assertIsDisplayed()
+            for (language in AppLanguage.entries) {
+                rule.runOnIdle { Localization.select(language.preference) }
+                rule.onNodeWithTag("connection-status").assertContentDescriptionEquals(
+                    "${tr(Res.string.connection_details)} · ${tr(Res.string.connected)} · ${tr(Res.string.battery)} 67%")
+            }
+            rule.runOnIdle { Localization.select("zh") }
             snapshot("home-connected-desktop")
             rule.runOnIdle { width.value = 740.dp }
             rule.waitForIdle()
@@ -1592,6 +1617,7 @@ log_ctrl.print_msg("Beck: Because it's Friday night!")"""
             rule.onNodeWithTag("script-run-banner").assertDoesNotExist()
             rule.onNodeWithContentDescription("对话").performClick()
             rule.onNodeWithTag("script-run-banner").assertIsDisplayed()
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
             rule.onNode(
                 hasText("停止命令已发送；未获得机内停止确认。") and
                     hasAnyAncestor(hasTestTag("script-run-banner")),

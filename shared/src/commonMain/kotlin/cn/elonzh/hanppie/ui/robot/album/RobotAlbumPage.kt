@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -147,11 +148,12 @@ internal fun RobotAlbumPage(model: ConsoleController, modifier: Modifier = Modif
 @Composable
 private fun AlbumRow(title: String, subtitle: String, thumbnail: ImageBitmap?, video: Boolean,
     selected: Boolean, enabled: Boolean, tag: String, onClick: () -> Unit) {
-    Card(Modifier.fillMaxWidth().testTag(tag).semantics { this.selected = selected }.clickable(enabled = enabled, onClick = onClick),
+    Card(Modifier.fillMaxWidth().testTag(tag).semantics { this.selected = selected }
+        .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         colors = CardDefaults.defaultColors(color = if (selected) MiuixTheme.colorScheme.secondaryContainer else MiuixTheme.colorScheme.surfaceContainer)) {
         Row(Modifier.padding(12.dp).heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (thumbnail != null) Image(thumbnail, title, Modifier.size(56.dp), contentScale = ContentScale.Crop)
+            if (thumbnail != null) Image(thumbnail, null, Modifier.size(56.dp), contentScale = ContentScale.Crop)
             else WorkbenchIcon(if (video) WorkbenchGlyph.VIDEO else WorkbenchGlyph.FILE, MiuixTheme.colorScheme.onSurfaceVariantSummary, Modifier.size(32.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(title, fontSize = 15.sp)

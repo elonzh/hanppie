@@ -8,6 +8,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Density
@@ -57,7 +59,8 @@ class RemoteDisplayUiTest {
                     }
                 }
             }
-            onNodeWithTag("recenter-gimbal").assertExists()
+            onNodeWithTag("recenter-gimbal").assertExists().assertHasClickAction()
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
             val fit=VideoViewport.forImage(width.toFloat(),height.toFloat(),1280,720)
             val first=onNodeWithTag("remote-crosshair").fetchSemanticsNode().boundsInRoot.center
             assertTrue(abs(first.x-width/2f-fit.width*.025f)<2f)

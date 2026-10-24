@@ -545,7 +545,8 @@ internal fun RemotePage(
                     SignalIndicator(connected.signalQuality)
                     if (display.showGimbalAngle) HeadingIndicator(connected.gimbal?.yawDegrees, Modifier.heightIn(min = 48.dp)
                         .testTag("recenter-gimbal")
-                        .clickable(enabled = enabled && manualActionsEnabled && !vision.ownsGimbal && connected.gimbal != null, onClickLabel = tr(Res.string.recenter_gimbal)) {
+                        .clickable(enabled = enabled && manualActionsEnabled && !vision.ownsGimbal && connected.gimbal != null,
+                            role = Role.Button, onClickLabel = tr(Res.string.recenter_gimbal)) {
                             model.recenterGimbal(); focus.requestFocus()
                         })
                     else HudIconButton(tr(Res.string.recenter_gimbal), WorkbenchGlyph.CROSSHAIR,

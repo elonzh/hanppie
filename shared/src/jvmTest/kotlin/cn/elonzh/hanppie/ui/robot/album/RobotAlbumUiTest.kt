@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
@@ -71,7 +73,8 @@ class RobotAlbumUiTest {
             rule.runOnIdle { model.robotAlbum.clear() }
             rule.onNodeWithText("已下载", useUnmergedTree = true).performClick()
             rule.waitUntil(3_000) { rule.onAllNodes(hasText("照片 #1")).fetchSemanticsNodes().isNotEmpty() }
-            rule.onNodeWithText("照片 #1").performClick()
+            rule.onNode(hasText("照片 #1") and hasClickAction()).assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button)).performClick()
+            rule.onNode(hasText("照片 #1") and hasClickAction()).assertIsSelected()
             rule.onNodeWithTag("album-open").assertIsEnabled()
             rule.onNodeWithTag("album-remove").performScrollTo().performClick()
             rule.onNodeWithText("此操作不会删除机器人 SD 卡上的原文件。").assertIsDisplayed()
@@ -120,7 +123,16 @@ class RobotAlbumLayoutTest {
                     }
                 } }
                 waitUntil(timeoutMillis = 3_000) { onAllNodes(hasTestTag("album-entry-1")).fetchSemanticsNodes().isNotEmpty() }
-                onNodeWithTag("album-entry-1").performClick()
+                onNodeWithTag("album-entry-1").assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+                    .assertHasClickAction().assertIsNotSelected().performClick()
+                assertEquals(1, model.robotAlbum.state.value.selected?.index)
+                if (onAllNodesWithTag("album-entry-1").fetchSemanticsNodes().isNotEmpty()) {
+                    onNodeWithTag("album-entry-1").assertIsSelected()
+                } else {
+                    onNodeWithTag("album-list").assertDoesNotExist()
+                    onNodeWithTag("album-list-back").assertIsDisplayed().performClick()
+                    onNodeWithTag("album-entry-1").assertIsNotSelected().performClick()
+                }
                 waitUntil(timeoutMillis = 3_000) { onAllNodes(hasTestTag("album-thumbnail")).fetchSemanticsNodes().isNotEmpty() }
                 onNodeWithTag("album-download").assertIsDisplayed().assertIsEnabled()
                 assertTrue(onNodeWithTag("album-download").fetchSemanticsNode().boundsInRoot.height >= 48)

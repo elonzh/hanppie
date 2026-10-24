@@ -2,7 +2,8 @@ package cn.elonzh.hanppie.ui.settings
 
 import ai.koog.prompt.llm.LLModel
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -215,7 +217,7 @@ internal fun ModelSettingsContent(model: ConsoleController) {
                 Text(tr(Res.string.no_matching_models), fontSize = 12.sp,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             } else {
-                Column(Modifier.fillMaxWidth().heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                Column(Modifier.fillMaxWidth().heightIn(max = 320.dp).verticalScroll(rememberScrollState()).selectableGroup()) {
                     matching.forEach { id ->
                         ModelOption(id, selected = id == config.model) {
                             model.settingsMessage.value = null
@@ -481,15 +483,15 @@ private fun actionLabel(action: ControlAction): String = tr(when (action) {
 @Composable
 private fun ModelOption(id: String, selected: Boolean, onSelect: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().testTag("model-option-$id")
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("model-option-$id")
             .background(if (selected) MiuixTheme.colorScheme.primary.copy(alpha = .12f) else Color.Transparent,
                 RoundedCornerShape(12.dp))
-            .clickable(onClick = onSelect).padding(horizontal = 12.dp, vertical = 10.dp),
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect).padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(id, Modifier.weight(1f), fontSize = 14.sp, maxLines = 1,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-        if (selected) Text("✓", fontSize = 14.sp, color = MiuixTheme.colorScheme.primary)
+        if (selected) Text("✓", Modifier.clearAndSetSemantics {}, fontSize = 14.sp, color = MiuixTheme.colorScheme.primary)
     }
 }
 

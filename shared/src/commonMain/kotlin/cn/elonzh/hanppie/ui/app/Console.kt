@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -516,7 +517,7 @@ private fun ScriptRunBanner(state: ConsoleState, onOpen: () -> Unit, onStop: () 
     val elapsed = state.scriptStartedAtEpochMillis?.let { ((now - it).coerceAtLeast(0) / 1_000) }
     val elapsedText = elapsed?.let { "${it / 60}:${(it % 60).toString().padStart(2, '0')}" }
     Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
-        .testTag("script-run-banner").clickable(onClick = onOpen),
+        .testTag("script-run-banner").clickable(role = Role.Button, onClick = onOpen),
         colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainerHigh),
         insideMargin = PaddingValues(0.dp)) {
         Column {
