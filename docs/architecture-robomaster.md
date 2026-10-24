@@ -1174,7 +1174,26 @@ S1 的红外能力至少包含三层，不能把其中任意一层统称为“�
 
 `NatDiscovery.RoomInfo.GetBaseInfo` 的文本字段依次为房间名、模式、时间、人数、人数上限、是否进行中、最大血量、各玩家的名字/头像 ID、房间 Guid 和 BattleVersion，以 `@@@` 分隔并以 NUL 结束。接收端另附来源地址；`ViewBattleLobby` 按人数解析玩家项，约 2 秒未更新就移除房间。`SystemBattle.OnEnterRoom` 对 BattleVersion 做相等检查，固定版值为 1。广播发现、版本匹配不等于入房或开始对局。
 
-网络预制体的两个 MonoBehaviour 原始载荷已提取：发现组件字段与官方 HLAPI 序列化字段顺序交叉核对，得到广播端口 47777、key 2222、version/subversion 1/1、间隔 500 ms、`UseNetworkManager=false`；派生 `NatDiscovery.mPort` 也为 47777。管理器首个网络端口字段为 7777，其余字段未完整解码，不能据此前缀推断信道或握手配置。Unity 官方 HLAPI 1.0.2/1.0.4 源码包已按注册表 SHA-1 校验，`StringToBytes` 复制 16 位字符而非编码 UTF-8，然后调用传输层广播 API；尚未证明参考包与 App 内 DLL 完全相同。官方文档也明确发现使用传输层 UDP 广播、连接信道与 QoS 另行配置，故上述文本不能直接视为线上 UDP 封包或完整入房协议。[Unity 网络发现](https://docs.unity3d.com/2018.1/Documentation/Manual/UNetDiscovery.html)、[2019.2 传输层](https://docs.unity3d.com/2019.2/Documentation/Manual/UNetUsingTransport.html)。
+网络预制体的两个 MonoBehaviour 原始载荷已提取：发现组件广播端口 47777、key 2222、version/subversion 1/1、间隔 500 ms、`UseNetworkManager=false`；派生 `NatDiscovery.mPort` 也为 47777。实际 App 自带 `com.unity.multiplayer-hlapi.Runtime.dll` 的 `NetworkDiscovery.StringToBytes` CIL 使用 `ToCharArray` 与 `Buffer.BlockCopy`，输出字符数两倍的字节，属于 16 位字符内存复制；固定 x86-64 目标上为 little-endian，不是 UTF-8。`Initialize` 另建单连接、Unreliable 信道的发现拓扑。文本、发现拓扑和游戏连接拓扑是三个不同层面；仍不能将文本直接当作线上 UDP 封包。[Unity 网络发现](https://docs.unity3d.com/2018.1/Documentation/Manual/UNetDiscovery.html)、[2019.2 传输层](https://docs.unity3d.com/2019.2/Documentation/Manual/UNetUsingTransport.html)。
+
+管理器组件 path ID `46919` 的 **528 字节已完整消费为 85 项带偏移记录**，覆盖原生头后的基类、嵌套连接/全局配置、Lobby 字段与列表计数；原始资源及载荷哈希与此前提取一致。字段顺序和标量宽度来自实际 App DLL 元数据，不再只依赖参考包。公共 `isNetworkActive`、`matchMaker` 和 `lobbySlots` 也纳入解析；非序列化类型、委托和嵌套 `List<List<byte>>` 不凭 `SerializeField` 属性强行读取，依据 [Unity 2019.2 序列化规则](https://docs.unity3d.com/2019.2/Documentation/Manual/script-Serialization.html)并核对尾部两个场景名和最终长度。以下是**该预制体的静态值**，不代表所有平台、运行时覆盖或已经建立连接。
+
+| 配置面 | 固定预制体与实际 CIL |
+| --- | --- |
+| 游戏连接 | `m_NetworkPort=7777`，`m_CustomConfig=true`，`m_MaxConnections=15`；不绑定指定 IP，预制体地址为 `localhost` |
+| 游戏信道 | 管理器外层 `m_Channels=[5,0]`，实际枚举为信道 0 `ReliableSequenced`、信道 1 `Unreliable`；嵌套 ConnectionConfig 的初始信道列表为空 |
+| 信道生效路径 | `NetworkManager.StartServer` 和 `StartClient` 在使用自身自定义配置时，先清空嵌套信道，再按管理器列表添加并 Configure；不能因嵌套列表为空而认定无信道 |
+| 脚本一致性 | `m_ScriptCRCCheck=true`；`NetworkCRC.ValidateInternal` 比较脚本数量、具名脚本的信道与信道范围，`NetworkClient.OnCRC` 调用 Validate 后丢弃返回值；这不是 LLAPI 连接配置校验或报文 CRC 算法 |
+| 包与分片 | ConnectionConfig：`PacketSize=1440`、`FragmentSize=500`；GlobalConfig：`MaxPacketSize=2000` |
+| 连接超时原值 | `ResendTimeout=1200`、`DisconnectTimeout=4000`、`ConnectTimeout=4000`、`MinUpdateTimeout=10`、`PingTimeout=1000`、`ReducedPingTimeout=100`、`AllCostTimeout=20` |
+| 丢包与发送原值 | `NetworkDropThreshold=5`、`OverflowDropThreshold=5`、`MaxConnectionAttempt=10`、`AckDelay=33`、`SendDelay=10` |
+| 可靠消息合并 | `MaxCombinedReliableMessageSize=100`、`MaxCombinedReliableMessageCount=10`、`MaxSentMessageQueueSize=512`、`AcksType=1(Acks32)` |
+| 带宽及平台配置 | `UsePlatformSpecificProtocols=false`、`InitialBandwidth=0`、`BandwidthPeakFactor=2`；WebSocket/UDP 接收缓冲字段为 0，三个 SSL 路径为空；不据这些原值推断系统实际缓冲或安全链路 |
+| 全局调度原值 | `ThreadAwakeTimeout=1`、`ReactorModel=0(SelectReactor)`、接收/发送上限各 1024、`MaxHosts=16`、`ThreadPoolSize=1`；Timer 与 NetSimulator 的 Min/Max 均为 1/12000 |
+| 其他管理器值 | `UseWebSockets=false`、`UseSimulator=false`、`MaxBufferedPackets=16`、`AllowFragmentation=true`、`MaxDelay≈0.01`、`RunInBackground=false`；构造器默认不能覆盖预制体事实 |
+| 大厅 | `MaxPlayers=16`、`MaxPlayersPerConnection=1`、`MinPlayers=0`，场景 `RoomScene`/`BattleScene`，`lobbySlots` 初始为空；`AutoNetworkManager.OnStartHost` 会按 HostInfo 覆盖人数并按模式替换玩家预制体，不代表所有 UI 都允许 16 人 |
+
+两个实际 DLL 的 SHA-256 分别为 `46496a54c3b49bd2af55d220295575807424a9d10789de0e1c5b2f08c566c702`（HLAPI，AssemblyVersion 1.0.0.0）与 `fd9037e0241d00c1605da420dd3902c5e07352d51355529f5690c68c857bc474`（UNETModule，AssemblyVersion 0.0.0.0）；程序集版本不是 Unity 注册表包版本。此前按 SHA-1 核对的 HLAPI 1.0.2/1.0.4 源码仍只是参考，不宣称整个参考包与实际 DLL 相同。连接配置一致性和传输服务属于 LLAPI，已恢复参数不提供原生握手、封包、重传或配置校验算法，详见上述 Unity 传输层文档。
 
 `AutoNetworkManager.ConfigurationPlayerID` 按队伍和队内序号分配 16 槽角色 ID，`IControl.GetTeamID` 由角色 ID 和队伍数反解队伍，`-1` 单独处理；这不是 IP、序列号或机型编号。实际允许的人数/队伍组合仍须沿房间 UI 和线上状态验证。同步与开始的消费者链路如下：
 
@@ -1232,7 +1251,7 @@ sequenceDiagram
 
 `BattleJudge.JudgeReady` 对玩家、配置和技能信息有有界等待，其中配置/技能阶段最多按秒循环四次，超时后仍可推进；`BattlePlayer.OnJudgeStateChange` 在 Playing 解开控制锁。这与当前 Hanppie 挑战必须取得配置确认和新鲜报告的准备条件不同，见[台账 C22](./official-app-capability-implementation.md#冲突记录保持现状留待决策)，不能照搬超时放行。房间心跳每秒发送、客户端计数约 4 秒，机器人断连消费者另有 10 秒返回大厅路径；网络存活、机器人新鲜度和操控输入租约必须分开，这些官方计时不替代当前输入失效后的归零。
 
-**未验证边界：** LLAPI 线上广播封包、连接握手、信道/CRC 配置、对象生成与 RPC/SyncVar 完整互通尚无本轮报文证明。固定 App 是 x86-64；本机尝试打开失败，独立 x86 执行检查返回 `Bad CPU type`，未创建官方房间、未采集运行报文，也未安装系统运行组件。51 项消费者/现有准备路径/参考源码哈希、两份原始预制体载荷、19 项规则与单人/多人初始表核对保存在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02/`。这些是静态和本机环境证据，不是 G02 产品实现、官方房间互通或多机物理验收；当前进度见[独立台账](./official-app-capability-implementation.md#g02-本地多人契约调查与互通边界)。
+**未验证边界：** 游戏信道、自定义连接及全局参数已有固定 App 静态依据；LLAPI 线上广播封包、连接握手、配置校验算法、对象生成与 RPC/SyncVar 完整互通仍无报文证明。固定 App 是 x86-64；此前本机打开失败且独立 x86 检查返回 `Bad CPU type`，本轮没有重复启动、创建官方房间、采集运行报文或安装系统组件。原调查的 51 项来源哈希、两份预制体载荷、规则与裁判表在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02/`；实际 DLL 元数据、定向 CIL、逐偏移的完整管理器解析及断言在相邻 `G02-transport/`。这些是静态和本机环境证据，不是 G02 产品实现、官方房间互通或多机物理验收；当前进度见[独立台账](./official-app-capability-implementation.md#g02-本地多人契约调查与互通边界)。
 
 #### 自主程序与自定义技能安装
 
