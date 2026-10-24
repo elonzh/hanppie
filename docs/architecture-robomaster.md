@@ -1076,6 +1076,8 @@ Hanppie 当前将上述包接入 App 会话请求与接收通道，过滤相机�
 
 静态 C# `RecordAudio/RecordAudioComponent` 录音并生成 Opus 文件，`RecordAudioPanel.TransformSoundFile` 通过 PushFile 上传，`PlaySoundFile` 再调用 PlaySound；已恢复的该路径不足以证明另一条连续终端麦克风上行或全双工通话契约。既有 Hanppie 短片对讲不能因此写成连续通话；也不能把这类未证实模式当作已确认缺陷直接替换当前路径。**代码 / 证据边界**
 
+固定版的单机 `ViewSinglePlayer` 将 `RecordAudioPanel` 作为公开场景的一部分，跟随时隐藏、退出跟随时恢复。该面板 `mMaxRecordTime=60`，在启动时将 48 kHz、960 样本帧与录制时限传给组件；本地列表从 `RecordAudio/` 文件读取，file ID 来自文件名。`PlayRecordAudio` 先尝试按 ID 播放，失败后 PushFile，再次按同一 ID 播放；单次为 `Interrupt + PlayTimes=1 + PlayInterval=0`，循环为 `Interrupt + PlayTimes=0 + PlayInterval=1`，停止指定 sound ID。播放状态消费者核对 sound ID 并驱动面板；`OnDeleteAudioFile` 在这份恢复代码中为空，不能由空方法推导已完成的删除任务。以上是录音库与短片对讲不同的托管用户流程，不是连续上行证据，也不能绕过[播放任务归属 C13](./official-app-capability-implementation.md#冲突记录保持现状留待决策)直接新增同一扬声器的控制入口。**固定客户端代码，设备效果待验**
+
 局部证据保留在 `.hanppie/validation/2026-10-22-official-gap/native-System-SoundStreamEnabled.txt`、`native-System-SoundStreamReply.txt`、`native-Camera-AntiLarsen.txt`、`native-System-PlaySoundStatus.txt`、`native-System-PlaySoundObserver.txt` 与 `native-System-PlaySoundRequest.txt`。本轮没有设备，声音流开关真实含义/应答、防啸叫的声学效果、播放推送属性/频率/来源/任务关联、延迟和并发结果均待验证；清单见[实施台账 A08](./official-app-capability-implementation.md#a08-验证入口与设备待验)。
 
 #### 准星落点与校准
@@ -1165,6 +1167,7 @@ S1 的红外能力至少包含三层，不能把其中任意一层统称为“�
 | 红外判定 | `IrShootMarker.cs:67–167` 使用真实绘制准星与活动标签框的严格内部相交，取第一个可用框；刚命中的 ID 暂时排除，约 500 ms 后恢复。该选择不以当前 Judge 的计分目标过滤；非计分标签也产生瞄准/命中声音、命中标记和碎片，然后由 Judge 决定是否加分。设备发射事件才触发判定，通知参数未作为命中数量；这些是 App 反馈，不能称为装甲确认 |
 | 水弹判定 | `WgShootMarker.cs:31–113` 启用时读取机内准星，发射事件选取离准星最近的标签，不要求框内；100 ms 后开始最多 2.5 秒的观察，持续消失超过 300 ms 则产生主机命中事件，重新出现会重置消失计时。未调用的 `CheckSteadyDown` 不作为实际判定步骤 |
 | 发射通知消费者 | `SystemSinglePlayer.cs:131/174/378–380` 监听/取消 `DJIRobomasterWaterGunShootFrequency`，转为 `Event_RobotFire`；不能复用 Hanppie 的“命令已发送”反馈来计分 |
+| 普通准星反馈 | `SystemSinglePlayer.OnGunFire` 及 `LABFPVPanel.OnGunFire` 转发设备频率通知为 `Event_RobotFire`；`Element.S1/Reticle.Awake` 订阅，`OnRobotFire` 将准星变红并缩放到 1.5，随后插值回原状态。这是设备报告驱动的显示，仍不能推定物理发射或命中；与命令发送反馈的取舍见实施台账 C23 |
 | 原生发射报告 | `GunListening` 的 `0x7d06b6` 注册观察键 `0x403f0050`；`OnFireStatusPush`（`0x7d0890`）检查正文至少 6 字节，将偏移 0 的四字节位型写入 ShootSpeed、偏移 4 的 u8 写入 ShootFrequency。`CreateCharacteristics` 的 `0x7cc53b..0x7cc5d3` 为 ShootFrequency 的 key 1 设置 AccessType `0x10`；`GetAccessType`（`0x64b7c0`）读取 key 1，`UpdateParamValue` 的 `0x7d6aaf` 使此类通知绕过值相等过滤。因此不能只按相同频率值去重，也不能将原值乘入分数。观察键前缀不是 wire 属性；偏移 5 的语义、真实来源/属性/周期及物理对应关系仍待验 |
 | 规则配置与恢复 | `ViewChallenger.cs:74–114` 保存并关闭 Armor/BloodCalc，退出恢复，切换 OffControlFunction；`JudgeShoot.cs:350–376` 与 `JudgeRace.cs:191–244` 临时切换 Gun 和 OverheatIncrease，销毁时恢复 Gun 并将热量增长设回 0。必须追原生封包及现有初始化关系，不能照搬 C# 参数名猜报文 |
 | 结束与成绩 | 两个 Judge 的 `StateEnd` 锁控制并停止自定义技能；结果输入姓名，分别按分数降序/用时升序显示前五。记录存在当前组件的 `List<Record>`，未在这两类建立跨组件销毁或应用重启持久化；不能把内存榜单写成官方云榜或持久成绩契约 |
