@@ -83,7 +83,6 @@ internal fun RobotAlbumPage(model: ConsoleController, modifier: Modifier = Modif
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val wide = maxWidth >= 720.dp * LocalDensity.current.fontScale
-            val previewHeight = (maxHeight * .5f).coerceIn(80.dp, 240.dp)
             val local = selectedLocal?.takeIf { it in state.local }
             val selected = if (localTab) local != null else state.selected != null
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -111,26 +110,29 @@ internal fun RobotAlbumPage(model: ConsoleController, modifier: Modifier = Modif
                     .testTag("album-detail"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (!wide) Button({ if (localTab) selectedLocal = null else controller.deselect() },
                         Modifier.heightIn(min = 48.dp).testTag("album-list-back")) { Text(tr(Res.string.album_back_to_list)) }
-                    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (localTab && local != null) {
-                        LocalMediaDetail(local, previewHeight) { remove = local }
-                    } else if (!localTab && state.selected != null) {
-                        val entry = state.selected!!
-                        Text(remoteTitle(entry), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                        when (val thumbnail = state.thumbnails[entry.index]) {
-                            is MediaThumbnail.Ready -> Image(thumbnail.image, remoteTitle(entry), Modifier.fillMaxWidth().height(previewHeight)
-                                .testTag("album-thumbnail"), contentScale = ContentScale.Fit)
-                            MediaThumbnail.Failed -> Text(tr(Res.string.album_thumbnail_failed), Modifier.testTag("album-thumbnail-error"), fontSize = 14.sp)
-                            null -> Text(tr(Res.string.album_thumbnail_loading), fontSize = 14.sp)
+                    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                        val previewHeight = (maxHeight * .5f).coerceIn(80.dp, 240.dp)
+                        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            if (localTab && local != null) {
+                                LocalMediaDetail(local, previewHeight) { remove = local }
+                            } else if (!localTab && state.selected != null) {
+                                val entry = state.selected!!
+                                Text(remoteTitle(entry), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                                when (val thumbnail = state.thumbnails[entry.index]) {
+                                    is MediaThumbnail.Ready -> Image(thumbnail.image, remoteTitle(entry), Modifier.fillMaxWidth().height(previewHeight)
+                                        .testTag("album-thumbnail"), contentScale = ContentScale.Fit)
+                                    MediaThumbnail.Failed -> Text(tr(Res.string.album_thumbnail_failed), Modifier.testTag("album-thumbnail-error"), fontSize = 14.sp)
+                                    null -> Text(tr(Res.string.album_thumbnail_loading), fontSize = 14.sp)
+                                }
+                                Text(formatRobotFileSize(entry.size), fontSize = 14.sp)
+                                if (state.thumbnails[entry.index] is MediaThumbnail.Failed) Button({ controller.thumbnail(entry) },
+                                    Modifier.heightIn(min = 48.dp).testTag("album-thumbnail-retry"), enabled = !state.busy) { Text(tr(Res.string.album_retry)) }
+                                if (state.downloads[entry.index] != null) {
+                                    Text(tr(Res.string.album_saved_locally), Modifier.testTag("album-downloaded"), fontSize = 14.sp)
+                                }
+                            } else Text(tr(Res.string.album_select_media), fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                         }
-                        Text(formatRobotFileSize(entry.size), fontSize = 14.sp)
-                        if (state.thumbnails[entry.index] is MediaThumbnail.Failed) Button({ controller.thumbnail(entry) },
-                            Modifier.heightIn(min = 48.dp).testTag("album-thumbnail-retry"), enabled = !state.busy) { Text(tr(Res.string.album_retry)) }
-                        if (state.downloads[entry.index] != null) {
-                            Text(tr(Res.string.album_saved_locally), Modifier.testTag("album-downloaded"), fontSize = 14.sp)
-                        }
-                    } else Text(tr(Res.string.album_select_media), fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                     }
                     if (localTab && local != null) MediaFileActions(local, onOpen, onExport)
                     else if (!localTab) state.selected?.let { entry ->

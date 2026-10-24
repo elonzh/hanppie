@@ -112,6 +112,7 @@ class RobotAlbumLayoutTest {
     @Test fun compactLandscape() = layout(844, 390)
     @Test fun tabletLandscape() = layout(1024, 600)
     @Test fun desktopLandscape() = layout(1280, 720)
+    @Test fun chineseLargeText() = layout(844, 390, "zh", 1.4f)
     @Test fun englishLargeText() = layout(844, 390, "en", 1.4f)
 
     private fun layout(width: Int, height: Int, language: String = "zh", fontScale: Float = 1f) =
@@ -140,11 +141,11 @@ class RobotAlbumLayoutTest {
                 waitUntil(timeoutMillis = 3_000) { onAllNodes(hasTestTag("album-thumbnail")).fetchSemanticsNodes().isNotEmpty() }
                 onNodeWithTag("album-download").assertIsDisplayed().assertIsEnabled()
                 assertTrue(onNodeWithTag("album-download").fetchSemanticsNode().boundsInRoot.height >= 48)
-                snapshot("album-$width-$height-$language", onNodeWithTag("robot-album-page"))
+                snapshot("album-$width-$height-$language-$fontScale", onNodeWithTag("robot-album-page"))
                 onNodeWithTag("album-download").performClick()
                 waitUntil(timeoutMillis = 3_000) { onAllNodes(hasTestTag("album-downloaded")).fetchSemanticsNodes().isNotEmpty() }
                 onNodeWithTag("album-export").assertIsDisplayed().assertIsEnabled()
-                snapshot("album-downloaded-$width-$height-$language", onNodeWithTag("robot-album-page"))
+                snapshot("album-downloaded-$width-$height-$language-$fontScale", onNodeWithTag("robot-album-page"))
             } finally { model.close(); root.deleteRecursively(); Localization.initialize("zh", null) }
         }
 
@@ -156,6 +157,7 @@ class RobotAlbumLocalMediaTest {
     @Test fun compactLandscape() = localMedia(844, 390)
     @Test fun tabletLandscape() = localMedia(1024, 600, dark = true)
     @Test fun desktopLandscape() = localMedia(1280, 720)
+    @Test fun chineseLargeText() = localMedia(844, 390, "zh", 1.4f, dark = true)
     @Test fun englishLargeText() = localMedia(844, 390, "en", 1.4f, dark = true)
 
     private fun localMedia(width: Int, height: Int, language: String = "zh", fontScale: Float = 1f, dark: Boolean = false) =
@@ -189,6 +191,16 @@ class RobotAlbumLocalMediaTest {
                 val pixel = IntArray(1)
                 image.readPixels(pixel, image.width / 2, image.height / 2, 1, 1)
                 assertEquals(color.rgb, pixel.single())
+                val pixels = IntArray(image.width * image.height)
+                image.readPixels(pixels)
+                var left = image.width; var right = -1; var top = image.height; var bottom = -1
+                pixels.forEachIndexed { index, value -> if (value == color.rgb) {
+                    val x = index % image.width; val y = index / image.width
+                    left = minOf(left, x); right = maxOf(right, x); top = minOf(top, y); bottom = maxOf(bottom, y)
+                } }
+                val visibleWidth = right - left + 1; val visibleHeight = bottom - top + 1
+                assertTrue(kotlin.math.abs(visibleWidth - visibleHeight) <= 1,
+                    "The entire square photo must be visible without scrolling: $visibleWidth x $visibleHeight")
             }
             try {
                 setContent { TestWorkbenchTheme(AppearanceController(AppearanceSettings(if (dark) NightMode.DARK else NightMode.LIGHT))) {
@@ -199,17 +211,17 @@ class RobotAlbumLocalMediaTest {
                 waitUntil(timeoutMillis = 3_000) { model.robotAlbum.state.value.local.size == 5 }
                 select(tr(Res.string.album_photo_name, 1))
                 assertPhoto(colors[0])
-                snapshot("album-local-photo-$width-$height-$language", onNodeWithTag("robot-album-page"))
+                snapshot("album-local-photo-$width-$height-$language-$fontScale", onNodeWithTag("robot-album-page"))
                 select(tr(Res.string.album_video_name, 3))
                 onNodeWithTag("album-local-preview").assertDoesNotExist()
-                snapshot("album-local-video-$width-$height-$language", onNodeWithTag("robot-album-page"))
+                snapshot("album-local-video-$width-$height-$language-$fontScale", onNodeWithTag("robot-album-page"))
                 onNodeWithTag("album-open").assertIsDisplayed().performClick()
                 assertEquals(3L, opened?.sourceIndex)
                 select(tr(Res.string.album_photo_name, 2))
                 assertPhoto(colors[1])
                 select(tr(Res.string.album_media_name, 4))
                 onNodeWithTag("album-local-preview").assertDoesNotExist()
-                snapshot("album-local-unknown-$width-$height-$language", onNodeWithTag("robot-album-page"))
+                snapshot("album-local-unknown-$width-$height-$language-$fontScale", onNodeWithTag("robot-album-page"))
                 onNodeWithTag("album-export").assertIsDisplayed().performClick()
                 assertEquals(4L, exported?.sourceIndex)
                 select(tr(Res.string.album_photo_name, 1))
@@ -217,7 +229,7 @@ class RobotAlbumLocalMediaTest {
                 select(tr(Res.string.album_photo_name, 5))
                 waitUntil(timeoutMillis = 3_000) { onAllNodesWithText(tr(Res.string.album_preview_failed)).fetchSemanticsNodes().isNotEmpty() }
                 onNodeWithTag("album-local-preview").assertDoesNotExist()
-                snapshot("album-local-broken-$width-$height-$language", onNodeWithTag("robot-album-page"))
+                snapshot("album-local-broken-$width-$height-$language-$fontScale", onNodeWithTag("robot-album-page"))
                 select(tr(Res.string.album_photo_name, 2))
                 assertPhoto(colors[1])
             } finally { model.close(); root.deleteRecursively(); Localization.initialize("zh", null) }
