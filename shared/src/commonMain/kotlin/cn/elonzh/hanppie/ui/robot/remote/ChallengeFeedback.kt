@@ -2,6 +2,7 @@ package cn.elonzh.hanppie.ui.robot.remote
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -12,11 +13,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.elonzh.hanppie.resources.*
@@ -100,6 +103,51 @@ internal fun ChallengeFeedback(state: ChallengeState, vision: VisionState, video
                 .background(HanppieDesignTokens.RemoteHudSurface.copy(alpha = .92f), RoundedCornerShape(8.dp))
                 .padding(horizontal = 12.dp, vertical = 6.dp).testTag("challenge-hit")
                 .semantics { liveRegion = LiveRegionMode.Polite }, color = HanppieDesignTokens.RemoteHudContent, fontSize = 14.sp)
+        }
+        ChallengeCountdown(state, Modifier.align(Alignment.Center).widthIn(max = maxWidth * .7f))
+    }
+}
+
+internal data class CountdownGlyph(val step: ChallengeCountdownStep, val scale: Float = 1.5f, val alpha: Float = 1f)
+
+/** Fixed ReadyCountDown_Start curves: the previous digit fades as its successor appears.
+ * At t=0..0.25s the serialized scale is -64t^3+24t^2+1.5 and alpha is 128t^3-48t^2+1.
+ * Start is active at 3s and hidden at 3.75s; the round still owns the final 5 frames.
+ */
+internal fun countdownGlyphs(elapsedMillis: Long?, animatedExit: Float = 0f): List<CountdownGlyph> {
+    if (elapsedMillis == null || elapsedMillis !in 0..3_749) return emptyList()
+    val index = (elapsedMillis / 1_000).toInt()
+    val current = CountdownGlyph(ChallengeCountdownStep.entries[index])
+    val exit = maxOf((elapsedMillis % 1_000 / 250f).coerceIn(0f, 1f), animatedExit)
+    if (index == 0 || exit >= 1f) return listOf(current)
+    val smooth = exit * exit * (3 - 2 * exit)
+    return listOf(CountdownGlyph(ChallengeCountdownStep.entries[index - 1], 1.5f + .5f * smooth, 1f - smooth), current)
+}
+
+@Composable
+private fun ChallengeCountdown(state: ChallengeState, modifier: Modifier) {
+    val elapsed = state.countdownElapsedMillis?.takeIf { it < 3_750 } ?: return
+    val exit = remember(state.roundId, state.countdownStep) { Animatable(0f) }
+    LaunchedEffect(exit) {
+        val initial = (elapsed % 1_000 / 250f).coerceIn(0f, 1f)
+        exit.snapTo(initial)
+        // Only the outgoing glyph animates. This clock cannot select the next cue or unlock control.
+        // A zero MotionDurationScale removes spatial motion while retaining the current static cue.
+        if (state.countdownStep != ChallengeCountdownStep.THREE)
+            exit.animateTo(1f, tween(((1 - initial) * 250).toInt(), easing = LinearEasing))
+    }
+    val glyphs = countdownGlyphs(elapsed, exit.value)
+    if (glyphs.isEmpty()) return
+    Box(modifier.testTag("challenge-countdown")
+        .background(HanppieDesignTokens.RemoteHudSurface.copy(alpha = .92f), RoundedCornerShape(12.dp))
+        .padding(horizontal = 24.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
+        glyphs.forEach { glyph ->
+            key(glyph.step) {
+                Text(glyph.step.number?.toString() ?: tr(Res.string.challenge_go), Modifier.graphicsLayer {
+                    scaleX = glyph.scale / 1.5f; scaleY = scaleX; alpha = glyph.alpha
+                }.clearAndSetSemantics { testTag = "challenge-countdown-${glyph.step.name.lowercase()}" },
+                    color = HanppieDesignTokens.RemoteHudContent, fontSize = 48.sp, fontWeight = FontWeight.Medium)
+            }
         }
     }
 }

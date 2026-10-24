@@ -65,12 +65,14 @@ class ChallengeRoundTest {
             for ((at, step) in boundaries) {
                 r.advance(at - elapsed); elapsed = at
                 assertEquals(step, r.state.countdownStep, "$mode at $at ms")
+                assertEquals((at - 84).takeIf { it >= 0 }, r.state.countdownElapsedMillis)
                 assertTrue(r.state.blocksControl); r.fire()
                 assertEquals(0, r.state.score); assertTrue(r.state.checkpoints.isEmpty())
                 assertEquals(0L, r.state.elapsedMillis)
             }
             r.advance(1)
             assertEquals(ChallengePhase.PLAYING, r.state.phase); assertNull(r.state.countdownStep)
+            assertNull(r.state.countdownElapsedMillis)
             assertFalse(r.state.blocksControl); assertEquals(0L, r.state.elapsedMillis)
             r.advance(100); r.fire()
             if (mode == ChallengeMode.TARGET_RACE) assertEquals(100L, r.state.checkpoints.single().elapsedMillis)

@@ -4,7 +4,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Density
@@ -14,8 +16,10 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import cn.elonzh.hanppie.robot.challenge.*
 import cn.elonzh.hanppie.robot.display.SightPoint
 import cn.elonzh.hanppie.robot.vision.*
+import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
+import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.robot.display.displayFixtureVideo
 import cn.elonzh.hanppie.ui.robot.remote.*
 import cn.elonzh.hanppie.ui.settings.*
@@ -34,13 +38,16 @@ class ChallengeFeedbackUiTest {
     @Test fun tabletDark() = scenario(1024, 768, "zh", 1f, true)
     @Test fun desktop() = scenario(1280, 720, "zh", 1f, false)
     @Test fun largeEnglish() = scenario(844, 390, "en", 1.4f, false)
+    @Test fun reducedMotion() = scenario(844, 390, "en", 1f, true, motionScale = 0f)
 
     private class InputLifecycle : LifecycleOwner {
         override val lifecycle = LifecycleRegistry(this).apply { handleLifecycleEvent(Lifecycle.Event.ON_RESUME) }
     }
 
-    private fun scenario(width: Int, height: Int, language: String, scale: Float, dark: Boolean) =
-        runDesktopComposeUiTest(width = width, height = height) {
+    private fun scenario(width: Int, height: Int, language: String, scale: Float, dark: Boolean, motionScale: Float = 1f) =
+        runDesktopComposeUiTest(width = width, height = height, effectContext = object : MotionDurationScale {
+            override val scaleFactor = motionScale
+        }) {
             Localization.initialize(language, language)
             val robot = RobotSessionFixture()
             val model = testConsoleModel(robotRuntime = powerRuntime(listOf(robot)))
@@ -68,6 +75,7 @@ class ChallengeFeedbackUiTest {
             fun state(change: ChallengeState.() -> ChallengeState) {
                 runOnIdle { robot.challengeState.value = robot.challengeState.value.change() }
                 waitUntil(timeoutMillis = 5_000) { model.challenge.value == robot.challengeState.value }
+                if (!mainClock.autoAdvance) mainClock.advanceTimeByFrame()
                 waitForIdle()
             }
             fun capture(name: String) {
@@ -79,6 +87,13 @@ class ChallengeFeedbackUiTest {
                 bitmap.setRGB(0,0,image.width,image.height,pixels,0,image.width)
                 val file = File("build/reports/ui/challenge-feedback-$width-$height-$language-${if (dark) "dark" else "light"}-$name.png")
                 file.parentFile.mkdirs(); ImageIO.write(bitmap,"png",file)
+            }
+            fun countdownVisible() {
+                val cue = onNodeWithTag("challenge-countdown").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+                for (tag in listOf("challenge-stop", "remote-touch-left", "remote-touch-right")) {
+                    val control = onNodeWithTag(tag).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+                    assertFalse(cue.overlaps(control), "Countdown must keep $tag clear")
+                }
             }
             try {
                 model.connect("127.0.0.1", "12345678")
@@ -101,8 +116,40 @@ class ChallengeFeedbackUiTest {
                 vision(rectangle)
                 state { copy(phase = ChallengePhase.COUNTDOWN, remainingMillis = 3000, sight = SightPoint(6000,5500)) }
                 waitUntil(timeoutMillis = 5_000) { ChallengeCue.COUNTDOWN in cues }
+                onNodeWithTag("challenge-countdown-three").assertExists()
+                mainClock.autoAdvance = false
+                state { copy(remainingMillis = 2833) }
+                mainClock.advanceTimeByFrame()
+                onNodeWithTag("challenge-countdown-two").assertExists()
+                onNodeWithTag("challenge-stop").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                assertTrue(model.challenge.value.blocksControl); countdownVisible(); capture("countdown-two")
+                mainClock.advanceTimeBy(128)
+                if (motionScale == 0f) onNodeWithTag("challenge-countdown-three").assertDoesNotExist()
+                else onNodeWithTag("challenge-countdown-three").assertExists()
+                capture("countdown-overlap")
+                state { copy(remainingMillis = 2583) }
+                onNodeWithTag("challenge-countdown-three").assertDoesNotExist()
+                state { copy(remainingMillis = 1833) }; mainClock.advanceTimeByFrame()
+                onNodeWithTag("challenge-countdown-one").assertExists(); capture("countdown-one")
+                state { copy(remainingMillis = 833) }; mainClock.advanceTimeByFrame()
+                onNodeWithTag("challenge-countdown-start").assertExists(); capture("countdown-start")
+                assertFalse(onNodeWithTag("challenge-countdown-start").fetchSemanticsNode().config.contains(SemanticsProperties.Text),
+                    "The decorative cue must not duplicate the HUD's accessible countdown")
+                if (scale > 1f) for (choice in listOf("zh", "zh-Hant", "en", "ja", "de", "es", "fr", "ko", "ru")) {
+                    runOnIdle { Localization.select(choice) }; mainClock.advanceTimeByFrame()
+                    onNodeWithTag("challenge-status").assertTextEquals(tr(Res.string.challenge_go))
+                    onNodeWithTag("challenge-countdown-start").assertIsDisplayed()
+                    countdownVisible(); capture("countdown-start-$choice")
+                }
+                runOnIdle { Localization.select(language) }; mainClock.advanceTimeByFrame()
+                state { copy(remainingMillis = 83) }
+                onNodeWithTag("challenge-countdown").assertDoesNotExist()
+                assertEquals(ChallengeCountdownStep.START, model.challenge.value.countdownStep)
+                assertTrue(model.challenge.value.blocksControl); capture("countdown-hidden")
+                mainClock.autoAdvance = true
                 state { copy(phase = ChallengePhase.PLAYING, stage = 21, score = 900, aimedMarkerId = 11, remainingMillis = 4000,
                     targets = listOf(ChallengeTarget(11),ChallengeTarget(12))) }
+                onNodeWithTag("challenge-countdown").assertDoesNotExist()
                 onNodeWithTag("challenge-aimed").assertExists(); capture("aimed")
                 mainClock.autoAdvance = false
                 state { copy(aimedMarkerId = null, score = 1000, targets = listOf(ChallengeTarget(11,true),ChallengeTarget(12)),

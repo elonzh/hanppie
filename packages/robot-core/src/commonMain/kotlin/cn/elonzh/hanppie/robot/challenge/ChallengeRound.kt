@@ -35,13 +35,14 @@ data class ChallengeState(val phase: ChallengePhase = ChallengePhase.IDLE, val c
     /** Fixed ReadyCountDownAC: 5 init frames, then 3/2/1 at 0/60/120 and Start at 180 (60 fps).
      * The end event is at frame 230; boundaries round up to the host's millisecond clock.
      */
-    val countdownStep: ChallengeCountdownStep? get() = when {
-        phase != ChallengePhase.COUNTDOWN || remainingMillis > 3_833 -> null
-        remainingMillis > 2_833 -> ChallengeCountdownStep.THREE
-        remainingMillis > 1_833 -> ChallengeCountdownStep.TWO
-        remainingMillis > 833 -> ChallengeCountdownStep.ONE
+    val countdownElapsedMillis: Long? get() = if (phase == ChallengePhase.COUNTDOWN)
+        (3_833 - remainingMillis).takeIf { it >= 0 } else null
+    val countdownStep: ChallengeCountdownStep? get() = countdownElapsedMillis?.let { elapsed -> when {
+        elapsed < 1_000 -> ChallengeCountdownStep.THREE
+        elapsed < 2_000 -> ChallengeCountdownStep.TWO
+        elapsed < 3_000 -> ChallengeCountdownStep.ONE
         else -> ChallengeCountdownStep.START
-    }
+    } }
 }
 
 internal const val challengeReadyMillis = 3_917L
