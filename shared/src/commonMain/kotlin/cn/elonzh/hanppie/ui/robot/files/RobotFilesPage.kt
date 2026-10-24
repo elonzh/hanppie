@@ -1,5 +1,7 @@
 package cn.elonzh.hanppie.ui.robot.files
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -154,32 +156,42 @@ internal fun RobotFilesPage(
             }
         }
 
-        Text(tr(Res.string.ftp_data_boundary), color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp))
-        TextField(query, { query = it }, label = tr(Res.string.search_files), singleLine = true,
-            modifier = Modifier.fillMaxWidth().testTag("robot-files-search"))
-        TabRowWithContour(
-            tabs = listOf(tr(Res.string.all_files), tr(Res.string.audio_files), tr(Res.string.program_files)),
-            selectedTabIndex = filter.ordinal,
-            onTabSelected = { filter = RobotFileFilter.entries[it] },
-            modifier = Modifier.fillMaxWidth().testTag("robot-files-filter"),
-            minWidth = if (compact) 72.dp else 96.dp,
-            maxWidth = if (compact) 120.dp else 160.dp,
-            height = HanppieDesignTokens.TouchTarget,
-            itemSpacing = 4.dp,
-            colors = TabRowDefaults.tabRowColors(selectedBackgroundColor = MiuixTheme.colorScheme.primaryVariant,
-                selectedContentColor = MiuixTheme.colorScheme.onPrimaryVariant),
-        )
         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
-        state.operation?.let { Text(it.resolve(), fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary) }
-        state.error?.let { Text(it, fontSize = 13.sp, color = MiuixTheme.colorScheme.error, modifier = Modifier.testTag("robot-files-error")) }
-        state.message?.let { Text(it.resolve(), fontSize = 13.sp, color = MiuixTheme.colorScheme.primary,
-            modifier = Modifier.testTag("robot-files-message")) }
+        state.operation?.let { Text(it.resolve(), fontSize = 12.sp, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, color = MiuixTheme.colorScheme.onSurfaceVariantSummary) }
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-            LazyColumn(Modifier.fillMaxSize().padding(end = 12.dp), state = listState,
+            LaunchedEffect(state.error, state.message) {
+                if (state.error != null || state.message != null) listState.scrollToItem(0)
+            }
+            LazyColumn(Modifier.fillMaxSize().padding(end = 12.dp).testTag("robot-files-list"), state = listState,
                 verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 8.dp)) {
+                item(key = "file-controls") {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        state.error?.let { Text(it.resolve(), fontSize = 13.sp, color = MiuixTheme.colorScheme.error,
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 80.dp).verticalScroll(rememberScrollState()).testTag("robot-files-error")) }
+                        state.message?.let { Text(it.resolve(), fontSize = 13.sp, color = MiuixTheme.colorScheme.primary,
+                            modifier = Modifier.testTag("robot-files-message")) }
+                        Text(tr(Res.string.ftp_data_boundary), color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp))
+                        TextField(query, { query = it }, label = tr(Res.string.search_files), singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("robot-files-search"))
+                        TabRowWithContour(
+                            tabs = listOf(tr(Res.string.all_files), tr(Res.string.audio_files), tr(Res.string.program_files)),
+                            selectedTabIndex = filter.ordinal,
+                            onTabSelected = { filter = RobotFileFilter.entries[it] },
+                            modifier = Modifier.fillMaxWidth().testTag("robot-files-filter"),
+                            minWidth = if (compact) 72.dp else 96.dp,
+                            maxWidth = if (compact) 120.dp else 160.dp,
+                            height = HanppieDesignTokens.TouchTarget,
+                            itemSpacing = 4.dp,
+                            colors = TabRowDefaults.tabRowColors(selectedBackgroundColor = MiuixTheme.colorScheme.primaryVariant,
+                                selectedContentColor = MiuixTheme.colorScheme.onPrimaryVariant),
+                        )
+
+                    }
+                }
                 if (visible.isEmpty()) item {
                     Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {

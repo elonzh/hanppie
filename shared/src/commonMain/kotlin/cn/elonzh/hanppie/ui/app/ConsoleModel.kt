@@ -224,7 +224,7 @@ internal class ConsoleModel(
     override val scriptAudio = ScriptAudioLibrary(scriptRepository, audioImporter, audioPlayer)
     override val robotFiles: RobotFilesController = RobotFilesController(scope, blockedReason = {
         if (robotFirmware.state.value.blocksControl || session.load()?.firmware?.state?.value?.blocksControl == true)
-            tr(Res.string.firmware_finish_first) else null
+            uiText(Res.string.firmware_finish_first) else null
     }) { acceptingWork.load() && state.value.connected }
     override val robotAudio = cn.elonzh.hanppie.ui.robot.audio.RobotAudioController(scope)
     override val cameraZoom = cn.elonzh.hanppie.ui.robot.remote.CameraZoomController(scope)

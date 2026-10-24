@@ -16,6 +16,7 @@ import cn.elonzh.hanppie.resources.only_regular_files_can_be_downloaded
 import cn.elonzh.hanppie.resources.opening_file_value
 import cn.elonzh.hanppie.resources.refreshing_robot_files
 import cn.elonzh.hanppie.resources.renaming_file_value
+import cn.elonzh.hanppie.resources.robot_file_operation_failed_value
 import cn.elonzh.hanppie.resources.robot_file_service_unavailable
 import cn.elonzh.hanppie.resources.robot_is_not_connected
 import cn.elonzh.hanppie.resources.uploading_file_value
@@ -23,7 +24,6 @@ import cn.elonzh.hanppie.robot.files.RobotFileEntry
 import cn.elonzh.hanppie.robot.files.RobotFilePath
 import cn.elonzh.hanppie.robot.files.RobotFileService
 import cn.elonzh.hanppie.ui.i18n.UiText
-import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.i18n.uiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -34,9 +34,12 @@ import kotlinx.coroutines.launch
 import kotlinx.io.Sink
 import kotlinx.io.Source
 
+/** App validation keeps its resource identity; FTP and host details remain unchanged. */
+private class RobotFileFailure(val feedback: UiText) : IllegalStateException(feedback.resolve())
+
 internal class RobotFilesController(
     private val scope: CoroutineScope,
-    private val blockedReason: () -> String? = { null },
+    private val blockedReason: () -> UiText? = { null },
     private val available: () -> Boolean,
 ) : AutoCloseable {
     val state = MutableStateFlow(RobotFilesState())
@@ -91,7 +94,7 @@ internal class RobotFilesController(
 
     fun download(entry: RobotFileEntry, destination: () -> Sink) =
         work(uiText(Res.string.downloading_file_value, entry.name)) { service ->
-            check(entry.isRegularFile) { tr(Res.string.only_regular_files_can_be_downloaded) }
+            if (!entry.isRegularFile) throw RobotFileFailure(uiText(Res.string.only_regular_files_can_be_downloaded))
             destination().use { service.download(entry.path, it) }
             state.value.copy(
                 selectedPath = entry.path,
@@ -101,7 +104,7 @@ internal class RobotFilesController(
 
     fun open(entry: RobotFileEntry, destination: () -> Sink, onDownloaded: () -> Unit) =
         work(uiText(Res.string.opening_file_value, entry.name)) { service ->
-            check(entry.isRegularFile) { tr(Res.string.only_regular_files_can_be_downloaded) }
+            if (!entry.isRegularFile) throw RobotFileFailure(uiText(Res.string.only_regular_files_can_be_downloaded))
             destination().use { service.download(entry.path, it) }
             onDownloaded()
             state.value.copy(
@@ -147,11 +150,11 @@ internal class RobotFilesController(
             return
         }
         if (!available()) {
-            state.update { it.copy(error = tr(Res.string.robot_is_not_connected)) }
+            state.update { it.copy(error = uiText(Res.string.robot_is_not_connected)) }
             return
         }
         val service = files ?: run {
-            state.update { it.copy(error = tr(Res.string.robot_file_service_unavailable)) }
+            state.update { it.copy(error = uiText(Res.string.robot_file_service_unavailable)) }
             return
         }
         if (job?.isActive == true) return
@@ -170,7 +173,8 @@ internal class RobotFilesController(
                         it.copy(
                             busy = false,
                             operation = null,
-                            error = error.message ?: error::class.simpleName ?: "Unknown error",
+                            error = (error as? RobotFileFailure)?.feedback ?: uiText(Res.string.robot_file_operation_failed_value,
+                                error.message ?: error::class.simpleName.orEmpty()),
                         )
                     }
                 }

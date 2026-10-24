@@ -550,6 +550,7 @@
     <string name="file_renamed_value">%1$s に名前を変更しました</string>
     <string name="file_deleted_value">%1$s を削除しました</string>
     <string name="only_regular_files_can_be_downloaded">通常のファイルのみダウンロードできます</string>
+    <string name="robot_file_operation_failed_value">ロボットのファイル操作に失敗しました：%1$s</string>
     <string name="robot_file_service_unavailable">本体のファイルサービスの準備ができていません。ロボットを再接続してください。</string>
     <string name="robot_file_name_invalid">1～128 文字の ASCII で指定してください。/、\、制御文字、前後の空白は使えません</string>
     <string name="file_size_and_time_value">%1$s · %2$s</string>

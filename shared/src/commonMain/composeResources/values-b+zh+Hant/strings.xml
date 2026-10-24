@@ -550,6 +550,7 @@
     <string name="file_renamed_value">已重命名為 %1$s</string>
     <string name="file_deleted_value">已刪除 %1$s</string>
     <string name="only_regular_files_can_be_downloaded">只能下載普通檔案</string>
+    <string name="robot_file_operation_failed_value">機器人檔案操作失敗：%1$s</string>
     <string name="robot_file_service_unavailable">機內檔案服務尚未就緒，請重新連線</string>
     <string name="robot_file_name_invalid">請輸入 1–128 個 ASCII 字符，不含 /、\、控制字符或首尾空格</string>
     <string name="file_size_and_time_value">%1$s · %2$s</string>

@@ -550,6 +550,7 @@
     <string name="file_renamed_value">Переименовано в %1$s</string>
     <string name="file_deleted_value">Удалено: %1$s</string>
     <string name="only_regular_files_can_be_downloaded">Можно скачивать только обычные файлы</string>
+    <string name="robot_file_operation_failed_value">Ошибка операции с файлами робота: %1$s</string>
     <string name="robot_file_service_unavailable">Файловая служба робота не готова. Подключитесь заново.</string>
     <string name="robot_file_name_invalid">Используйте 1–128 знаков ASCII без /, \, управляющих знаков и пробелов по краям</string>
     <string name="file_size_and_time_value">%1$s · %2$s</string>

@@ -10,7 +10,7 @@ internal data class RobotFilesState(
     val busy: Boolean = false,
     val operation: UiText? = null,
     val message: UiText? = null,
-    val error: String? = null,
+    val error: UiText? = null,
 ) {
     val selected: RobotFileEntry? get() = entries.firstOrNull { it.path == selectedPath }
 }

@@ -550,6 +550,7 @@
     <string name="file_renamed_value">Renommé en %1$s</string>
     <string name="file_deleted_value">%1$s supprimé</string>
     <string name="only_regular_files_can_be_downloaded">Seuls les fichiers ordinaires peuvent être téléchargés</string>
+    <string name="robot_file_operation_failed_value">Échec de l’opération sur les fichiers du robot : %1$s</string>
     <string name="robot_file_service_unavailable">Service de fichiers du robot indisponible. Reconnectez le robot.</string>
     <string name="robot_file_name_invalid">Utilisez 1 à 128 caractères ASCII sans /, \, caractères de contrôle ni espaces au début ou à la fin</string>
     <string name="file_size_and_time_value">%1$s · %2$s</string>
