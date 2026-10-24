@@ -1,0 +1,10 @@
+<resources>
+    <string name="script_library_name_in_use">名为“%1$s”的脚本已存在，请使用其他名称。</string>
+    <string name="script_library_source_too_large">源代码超过 %1$s 个字符，请缩短后再保存。</string>
+    <string name="script_library_missing">此脚本已不存在，请重新加载脚本库。</string>
+    <string name="script_library_load_interrupted">加载已中断，请重新加载脚本库。</string>
+    <string name="script_library_load_failed_value">无法加载脚本库：%1$s</string>
+    <string name="script_library_operation_failed_value">无法更新脚本库：%1$s</string>
+    <string name="script_library_unavailable_value">脚本库暂不可用：%1$s</string>
+    <string name="script_library_reload">重新加载脚本库</string>
+</resources>

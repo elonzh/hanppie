@@ -1,0 +1,10 @@
+<resources>
+    <string name="script_library_name_in_use">Ya existe un script llamado «%1$s». Elige otro nombre.</string>
+    <string name="script_library_source_too_large">El código supera los %1$s caracteres. Acórtalo antes de guardar.</string>
+    <string name="script_library_missing">Este script ya no existe. Vuelve a cargar la biblioteca.</string>
+    <string name="script_library_load_interrupted">Se interrumpió la carga. Vuelve a cargar la biblioteca de scripts.</string>
+    <string name="script_library_load_failed_value">No se pudo cargar la biblioteca de scripts: %1$s</string>
+    <string name="script_library_operation_failed_value">No se pudo actualizar la biblioteca de scripts: %1$s</string>
+    <string name="script_library_unavailable_value">La biblioteca de scripts no está disponible: %1$s</string>
+    <string name="script_library_reload">Recargar biblioteca</string>
+</resources>

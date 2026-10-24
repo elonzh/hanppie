@@ -1,6 +1,8 @@
 package cn.elonzh.hanppie.ui.scripts
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +23,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -71,6 +74,7 @@ import cn.elonzh.hanppie.resources.script_audio_delete_question
 import cn.elonzh.hanppie.resources.script_audio_delete_summary
 import cn.elonzh.hanppie.resources.script_audio_manage
 import cn.elonzh.hanppie.resources.script_audio_rename
+import cn.elonzh.hanppie.resources.script_library_reload
 import cn.elonzh.hanppie.resources.script_monitor
 import cn.elonzh.hanppie.resources.script_name
 import cn.elonzh.hanppie.resources.script_name_unavailable
@@ -181,7 +185,9 @@ internal fun ScriptPage(
     }
 
     fun report(error: Throwable) {
-        onFileError(error.message ?: error::class.simpleName.orEmpty())
+        if (error is CancellationException) throw error
+        // Library failures have a live, localized owner; file/audio persistence failures may not.
+        onFileError(if (model.scriptLibrary.state.value.error != null) null else error.message ?: error::class.simpleName.orEmpty())
     }
 
     fun deleteScript(target: StoredScript) {
@@ -309,7 +315,7 @@ internal fun ScriptPage(
                             }
                         }
                     }
-                }, Modifier.weight(1f).heightIn(min = 48.dp), enabled = nameAvailable,
+                }, Modifier.weight(1f).heightIn(min = 48.dp), enabled = nameAvailable && libraryState.initialized && !libraryState.loading && !libraryState.busy,
                     colors = ButtonDefaults.buttonColorsPrimary()) {
                     Text(tr(Res.string.save))
                 }
@@ -476,7 +482,7 @@ internal fun ScriptPage(
                     title = if (editorOpen) document.value.displayName ?: tr(Res.string.new_script) else tr(Res.string.script),
                     dirty = editorOpen && document.value.dirty,
                     state = robotState,
-                    onRename = if (editorOpen) document.value.scriptId?.let {
+                    onRename = if (editorOpen && libraryState.initialized && !libraryState.loading && !libraryState.busy) document.value.scriptId?.let {
                         {
                             nameDraft = document.value.displayName.orEmpty()
                             nameOperation = NameOperation.RENAME
@@ -492,8 +498,21 @@ internal fun ScriptPage(
             fileError?.let {
                 Text(it, Modifier.padding(vertical = 8.dp), color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
             }
+            libraryState.error?.let { error ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(error.resolve(), Modifier.weight(1f).heightIn(max = 112.dp)
+                        .verticalScroll(rememberScrollState()).testTag("script-library-error"),
+                        color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
+                    Button({ scope.launch { model.scriptLibrary.load() } },
+                        Modifier.widthIn(max = 220.dp).heightIn(min = 48.dp).testTag("script-library-reload"),
+                        enabled = !libraryState.loading && !libraryState.busy) { Text(tr(Res.string.script_library_reload)) }
+                }
+            }
+            if (libraryState.loading) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("script-library-loading"))
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) panel@{
                 val availableHeight = maxHeight
+                val editorShort = shortWindow || availableHeight < 240.dp
                 if (programPanelOpen && programUi.runId != null) {
                     LabUiPanel(model, programUi,
                         title = robotState.scriptTitle ?: document.value.displayName ?: tr(Res.string.program_panel),
@@ -511,6 +530,7 @@ internal fun ScriptPage(
                             history = editorHistory,
                             robotState = robotState,
                             libraryBusy = libraryState.busy,
+                            libraryReady = libraryState.initialized && !libraryState.loading,
                             onSave = {
                                 if (document.value.scriptId == null) {
                                     nameDraft = model.scriptLibrary.uniqueName(document.value.displayName ?: tr(Res.string.new_script))
@@ -523,7 +543,7 @@ internal fun ScriptPage(
                                 audioOpen = true
                                 scope.launch { model.scriptAudio.open(if (editorOpen) document.value.scriptId else null, document.value.initialAudio) }
                             },
-                            shortWindow = shortWindow,
+                            shortWindow = editorShort,
                             onBack = navigateBack.takeIf { shortWindow },
                             backLabel = tr(if (onBackToOrigin != null) Res.string.back_to_chat else Res.string.back_to_script_library),
                             onRun = {
@@ -539,8 +559,8 @@ internal fun ScriptPage(
                 }
 
                 // Short editing windows keep the code and run/stop controls visible; the inline console
-                // returns when the keyboard closes. The library keeps its console while a run is active.
-                val monitoring = (editorOpen || robotState.scriptRunPhase.active) && (!shortWindow || !editorOpen)
+                // returns when workspace height permits. The library keeps its console while a run is active.
+                val monitoring = (editorOpen || robotState.scriptRunPhase.active) && (!editorShort || !editorOpen)
                 val library: @Composable (Modifier) -> Unit = { libraryModifier ->
                     ScriptLibraryView(
                         state = libraryState,
@@ -624,9 +644,7 @@ private fun ScriptLibraryView(
                 },
             )
         }
-        if (state.loading) {
-            item { LinearProgressIndicator(Modifier.fillMaxWidth().heightIn(min = 2.dp)) }
-        } else if (state.scripts.isEmpty()) {
+        if (state.initialized && state.scripts.isEmpty()) {
             item {
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer)) {
                     Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
@@ -648,9 +666,6 @@ private fun ScriptLibraryView(
                     }
                 }
             }
-        }
-        state.error?.let { error ->
-            item { Text(error, color = MiuixTheme.colorScheme.error, fontSize = 12.sp) }
         }
         if (state.presets.isNotEmpty()) {
             item { SectionHeader(tr(Res.string.preset_scripts)) }
@@ -781,6 +796,7 @@ private fun ScriptEditor(
     history: CodeHistory,
     robotState: ConsoleState,
     libraryBusy: Boolean,
+    libraryReady: Boolean,
     onSave: () -> Unit,
     onMore: () -> Unit,
     onMonitor: (() -> Unit)?,
@@ -793,6 +809,7 @@ private fun ScriptEditor(
     modifier: Modifier = Modifier,
 ) {
     val disabled = document.value.busy || libraryBusy
+    val save = { if (libraryReady && !disabled) onSave() }
     Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(if (shortWindow) 4.dp else 10.dp)) {
         // Actions sit on the left as icon buttons; running the script is the primary action and stays on
         // the right edge of this bar, next to the code it applies to.
@@ -805,8 +822,8 @@ private fun ScriptEditor(
                 WorkbenchIconButton(
                     label = tr(Res.string.save_to_library),
                     glyph = WorkbenchGlyph.SAVE,
-                    onClick = onSave,
-                    enabled = !disabled && (document.value.scriptId == null || document.value.dirty),
+                    onClick = save,
+                    enabled = libraryReady && !disabled && (document.value.scriptId == null || document.value.dirty),
                     primary = true,
                     tag = "script-save",
                 )
@@ -866,7 +883,7 @@ private fun ScriptEditor(
                     field.value = updated
                     document.value = document.value.copy(source = updated.text)
                 },
-                onSave = onSave,
+                onSave = save,
                 modifier = Modifier.fillMaxSize(),
             )
         }

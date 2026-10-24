@@ -1,0 +1,10 @@
+<resources>
+    <string name="script_library_name_in_use">“%1$s” 스크립트가 이미 있습니다. 다른 이름을 사용하세요.</string>
+    <string name="script_library_source_too_large">소스 코드가 %1$s자를 초과합니다. 코드를 줄인 후 저장하세요.</string>
+    <string name="script_library_missing">이 스크립트는 더 이상 존재하지 않습니다. 라이브러리를 다시 불러오세요.</string>
+    <string name="script_library_load_interrupted">불러오기가 중단되었습니다. 스크립트 라이브러리를 다시 불러오세요.</string>
+    <string name="script_library_load_failed_value">스크립트 라이브러리를 불러오지 못했습니다: %1$s</string>
+    <string name="script_library_operation_failed_value">스크립트 라이브러리를 업데이트하지 못했습니다: %1$s</string>
+    <string name="script_library_unavailable_value">스크립트 라이브러리를 사용할 수 없습니다: %1$s</string>
+    <string name="script_library_reload">라이브러리 다시 불러오기</string>
+</resources>

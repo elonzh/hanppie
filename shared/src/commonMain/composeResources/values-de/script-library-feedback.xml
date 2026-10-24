@@ -1,0 +1,10 @@
+<resources>
+    <string name="script_library_name_in_use">Ein Skript namens „%1$s“ ist bereits vorhanden. Wählen Sie einen anderen Namen.</string>
+    <string name="script_library_source_too_large">Der Quellcode überschreitet %1$s Zeichen. Kürzen Sie ihn vor dem Speichern.</string>
+    <string name="script_library_missing">Dieses Skript ist nicht mehr vorhanden. Laden Sie die Bibliothek neu.</string>
+    <string name="script_library_load_interrupted">Das Laden wurde unterbrochen. Laden Sie die Skriptbibliothek neu.</string>
+    <string name="script_library_load_failed_value">Die Skriptbibliothek konnte nicht geladen werden: %1$s</string>
+    <string name="script_library_operation_failed_value">Die Skriptbibliothek konnte nicht aktualisiert werden: %1$s</string>
+    <string name="script_library_unavailable_value">Die Skriptbibliothek ist nicht verfügbar: %1$s</string>
+    <string name="script_library_reload">Bibliothek neu laden</string>
+</resources>

@@ -1,0 +1,10 @@
+<resources>
+    <string name="script_library_name_in_use">A script named “%1$s” already exists. Choose another name.</string>
+    <string name="script_library_source_too_large">Source code exceeds %1$s characters. Shorten it before saving.</string>
+    <string name="script_library_missing">This script no longer exists. Reload the library.</string>
+    <string name="script_library_load_interrupted">Loading was interrupted. Reload the script library.</string>
+    <string name="script_library_load_failed_value">Could not load the script library: %1$s</string>
+    <string name="script_library_operation_failed_value">Could not update the script library: %1$s</string>
+    <string name="script_library_unavailable_value">The script library is unavailable: %1$s</string>
+    <string name="script_library_reload">Reload library</string>
+</resources>

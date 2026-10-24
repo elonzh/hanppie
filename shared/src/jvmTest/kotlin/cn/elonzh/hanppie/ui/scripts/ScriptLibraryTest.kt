@@ -2,6 +2,9 @@ package cn.elonzh.hanppie.ui.scripts
 
 import cn.elonzh.hanppie.agent.tools.ListLabScriptsTool
 import cn.elonzh.hanppie.agent.tools.NoToolArgs
+import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.ui.i18n.Localization
+import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import cn.elonzh.hanppie.robot.lab.LabProgram
 import cn.elonzh.hanppie.ui.app.MemoryScriptRepository
@@ -18,6 +21,7 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withTimeout
 
 class ScriptLibraryTest {
@@ -149,7 +153,7 @@ class ScriptLibraryTest {
         load.cancelAndJoin()
 
         assertFalse(library.state.value.loading)
-        assertEquals("Script library load was interrupted", library.state.value.error)
+        assertEquals(Res.string.script_library_load_interrupted, library.state.value.error?.resource)
         val failure = assertFailsWith<IllegalStateException> {
             withTimeout(1_000) {
                 ListLabScriptsTool {
@@ -159,7 +163,7 @@ class ScriptLibraryTest {
                 }.execute(NoToolArgs)
             }
         }
-        assertContains(failure.message.orEmpty(), "Script library load was interrupted")
+        assertContains(failure.message.orEmpty(), checkNotNull(library.state.value.error).resolve())
         assertFailsWith<IllegalStateException> { library.read("missing") }
     }
 
@@ -256,6 +260,72 @@ class ScriptLibraryTest {
         } finally {
             tempDir.toFile().deleteRecursively()
         }
+    }
+
+    @Test fun inputErrorsRetainTheirResourcesAcrossLanguagesWithoutChangingSavedData() = runBlocking {
+        val store = MemoryScriptRepository()
+        val library = ScriptLibrary(store)
+        library.load(); val original = library.create("kept", "pass")
+        assertFailsWith<IllegalArgumentException> { library.create(" kept ", "other") }
+        val duplicate = checkNotNull(library.state.value.error)
+        assertEquals(Res.string.script_library_name_in_use, duplicate.resource)
+        assertEquals(listOf("kept"), duplicate.arguments)
+        try {
+            for (language in listOf("zh", "zh-Hant", "en", "ja", "de", "es", "fr", "ko", "ru")) {
+                Localization.initialize(language,language)
+                assertEquals(tr(Res.string.script_library_name_in_use,"kept"),duplicate.resolve())
+                assertEquals(duplicate,library.state.value.error)
+            }
+        } finally { Localization.initialize("zh",null) }
+        assertFailsWith<IllegalArgumentException> { library.create("bad\nname", "pass") }
+        assertEquals(Res.string.script_name_unavailable,library.state.value.error?.resource)
+        assertFailsWith<IllegalArgumentException> { library.update(original.id,"x".repeat(MAX_SCRIPT_LENGTH+1)) }
+        assertEquals(Res.string.script_library_source_too_large,library.state.value.error?.resource)
+        assertFailsWith<IllegalStateException> { library.rename("missing","new") }
+        assertEquals(Res.string.script_library_missing,library.state.value.error?.resource)
+        assertEquals(listOf(original),store.all())
+        library.rename(original.id,"updated");assertEquals(null,library.state.value.error)
+    }
+
+    @Test fun failedLoadRejectsEveryMutationUntilAnExplicitReloadSucceeds() = runBlocking {
+        val store = MemoryScriptRepository();var fail = true
+        val repository = object : ScriptRepository by store {
+            override suspend fun all(): List<StoredScript> = if (fail) error("synthetic EACCES") else store.all()
+        }
+        val library=ScriptLibrary(repository);library.load()
+        val feedback=checkNotNull(library.state.value.error)
+        assertEquals(Res.string.script_library_load_failed_value,feedback.resource)
+        assertEquals(listOf("synthetic EACCES"),feedback.arguments)
+        assertFailsWith<IllegalStateException> { library.create("new","pass") }
+        assertFailsWith<IllegalStateException> { library.update("id","pass") }
+        assertFailsWith<IllegalStateException> { library.rename("id","new") }
+        assertFailsWith<IllegalStateException> { library.delete("id") }
+        assertFailsWith<IllegalStateException> { library.save(null,"new","pass") }
+        assertFailsWith<IllegalStateException> { library.executionSnapshot("id") }
+        assertEquals(feedback,library.state.value.error);assertTrue(store.all().isEmpty())
+        fail=false;library.load();assertTrue(library.state.value.initialized)
+        assertEquals(null,library.state.value.error);library.create("recovered","pass")
+        assertEquals("recovered",store.all().single().name)
+    }
+
+    @Test fun aQueuedReloadFailureCannotBeBypassedByAnAlreadyWaitingWriter() = runBlocking {
+        val store=MemoryScriptRepository();var fail=false
+        val entered=CompletableDeferred<Unit>();val release=CompletableDeferred<Unit>()
+        val repository=object : ScriptRepository by store {
+            override suspend fun all(): List<StoredScript> = if (fail) error("synthetic reload failure") else store.all()
+            override suspend fun update(script: StoredScript) {
+                entered.complete(Unit);release.await();store.update(script)
+            }
+        }
+        val library=ScriptLibrary(repository);library.load();val original=library.create("original","pass")
+        val rename=async(start=kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { library.rename(original.id,"renamed") }
+        entered.await();fail=true
+        val reload=launch(start=kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { library.load() }
+        val writer=async(start=kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { runCatching { library.create("late","pass") } }
+        release.complete(Unit);rename.await();reload.join()
+        assertTrue(writer.await().exceptionOrNull() is IllegalStateException)
+        assertEquals(listOf("renamed"),store.all().map { it.name })
+        assertEquals(Res.string.script_library_load_failed_value,library.state.value.error?.resource)
     }
 
     @Test fun suggestedExportNamesCannotIntroducePaths() {

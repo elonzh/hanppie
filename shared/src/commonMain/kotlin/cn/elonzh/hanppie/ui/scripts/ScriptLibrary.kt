@@ -1,5 +1,8 @@
 package cn.elonzh.hanppie.ui.scripts
 
+import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.ui.i18n.UiText
+import cn.elonzh.hanppie.ui.i18n.uiText
 import cn.elonzh.hanppie.robot.lab.LabAudioClip
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlin.time.Clock
@@ -13,15 +16,13 @@ import kotlinx.coroutines.sync.withLock
 
 private val scriptLibraryLogger = KotlinLogging.logger {}
 
-private const val LOAD_INTERRUPTED = "Script library load was interrupted"
-
 internal data class ScriptLibraryState(
     val scripts: List<StoredScript> = emptyList(),
     val presets: List<StoredScript> = emptyList(),
     val loading: Boolean = true,
     val initialized: Boolean = false,
     val busy: Boolean = false,
-    val error: String? = null,
+    val error: UiText? = null,
 )
 
 @OptIn(ExperimentalUuidApi::class)
@@ -44,11 +45,11 @@ internal class ScriptLibrary(
                 initialized = true,
             )
         } catch (error: CancellationException) {
-            state.value = state.value.copy(loading = false, error = LOAD_INTERRUPTED)
+            state.value = state.value.copy(loading = false, error = uiText(Res.string.script_library_load_interrupted))
             throw error
         } catch (error: Exception) {
             scriptLibraryLogger.error(error) { "Could not load the script library" }
-            state.value = state.value.copy(loading = false, error = error.message ?: error::class.simpleName.orEmpty())
+            state.value = state.value.copy(loading = false, error = uiText(Res.string.script_library_load_failed_value, error.message ?: error::class.simpleName.orEmpty()))
         }
     }
 
@@ -57,9 +58,9 @@ internal class ScriptLibrary(
         source: String,
         audioClips: List<LabAudioClip> = emptyList(),
     ): StoredScript = operation {
-        val normalized = normalizeScriptName(name)
+        val normalized = normalizedName(name)
         ensureUnique(normalized)
-        require(source.length <= MAX_SCRIPT_LENGTH) { "Script is too large" }
+        if (source.length > MAX_SCRIPT_LENGTH) inputFailure(uiText(Res.string.script_library_source_too_large, MAX_SCRIPT_LENGTH))
         val now = clock.now().toEpochMilliseconds()
         val sanitizedAudio = audioClips.distinctBy { it.id }.sortedBy { it.id }
         val script = StoredScript(Uuid.random().toString(), normalized, source, now, now, audioClips = sanitizedAudio)
@@ -69,8 +70,8 @@ internal class ScriptLibrary(
     }
 
     suspend fun update(id: String, source: String): StoredScript = operation {
-        require(source.length <= MAX_SCRIPT_LENGTH) { "Script is too large" }
-        val current = state.value.scripts.firstOrNull { it.id == id } ?: error("Script no longer exists")
+        if (source.length > MAX_SCRIPT_LENGTH) inputFailure(uiText(Res.string.script_library_source_too_large, MAX_SCRIPT_LENGTH))
+        val current = state.value.scripts.firstOrNull { it.id == id } ?: stateFailure(uiText(Res.string.script_library_missing))
         val updated = current.copy(source = source, updatedAtEpochMillis = clock.now().toEpochMilliseconds())
         repository.update(updated)
         refresh(updated)
@@ -78,9 +79,9 @@ internal class ScriptLibrary(
     }
 
     suspend fun rename(id: String, name: String): StoredScript = operation {
-        val normalized = normalizeScriptName(name)
+        val normalized = normalizedName(name)
         ensureUnique(normalized, exceptId = id)
-        val current = state.value.scripts.firstOrNull { it.id == id } ?: error("Script no longer exists")
+        val current = state.value.scripts.firstOrNull { it.id == id } ?: stateFailure(uiText(Res.string.script_library_missing))
         val updated = current.copy(name = normalized, updatedAtEpochMillis = clock.now().toEpochMilliseconds())
         repository.update(updated)
         refresh(updated)
@@ -88,9 +89,8 @@ internal class ScriptLibrary(
     }
 
     suspend fun delete(id: String): StoredScript {
-        awaitReady()
         return operation {
-            val current = state.value.scripts.firstOrNull { it.id == id } ?: error("Script no longer exists")
+            val current = state.value.scripts.firstOrNull { it.id == id } ?: stateFailure(uiText(Res.string.script_library_missing))
             repository.delete(current)
             state.value = state.value.copy(scripts = state.value.scripts.filterNot { it.id == id }, error = null)
             current
@@ -106,18 +106,18 @@ internal class ScriptLibrary(
     suspend fun executionSnapshot(id: String): StoredScript {
         awaitReady()
         return mutex.withLock {
+            requireInitialized(state.value)
             val script = state.value.scripts.firstOrNull { it.id == id }
-                ?: error("A saved script with ID '$id' does not exist")
+                ?: throw IllegalStateException(uiText(Res.string.script_library_missing).resolve())
             script.copy(audioClips = repository.audio(script.id))
         }
     }
 
     /** Creates or atomically replaces/renames a saved script by its stable ID. */
     suspend fun save(scriptId: String?, name: String, source: String): StoredScript {
-        awaitReady()
         return operation {
-            val normalized = normalizeScriptName(name)
-            require(source.length <= MAX_SCRIPT_LENGTH) { "Script is too large" }
+            val normalized = normalizedName(name)
+            if (source.length > MAX_SCRIPT_LENGTH) inputFailure(uiText(Res.string.script_library_source_too_large, MAX_SCRIPT_LENGTH))
             val now = clock.now().toEpochMilliseconds()
             if (scriptId == null) {
                 ensureUnique(normalized)
@@ -127,7 +127,7 @@ internal class ScriptLibrary(
                 }
             } else {
                 val current = state.value.scripts.firstOrNull { it.id == scriptId }
-                    ?: error("A saved script with ID '$scriptId' does not exist")
+                    ?: stateFailure(uiText(Res.string.script_library_missing))
                 ensureUnique(normalized, exceptId = current.id)
                 current.copy(name = normalized, source = source, updatedAtEpochMillis = now).also { script ->
                     repository.update(script)
@@ -152,27 +152,49 @@ internal class ScriptLibrary(
     }
 
     private fun ensureUnique(name: String, exceptId: String? = null) {
-        require(state.value.scripts.none { it.id != exceptId && it.name.equals(name, ignoreCase = true) }) {
-            "A script named '$name' already exists"
+        if (state.value.scripts.any { it.id != exceptId && it.name.equals(name, ignoreCase = true) })
+            inputFailure(uiText(Res.string.script_library_name_in_use, name))
+    }
+
+    private fun normalizedName(name: String): String = try { normalizeScriptName(name) }
+        catch (_: IllegalArgumentException) { inputFailure(uiText(Res.string.script_name_unavailable)) }
+
+    /** These failures run inside the serialized operation; catch retains their resource identity. */
+    private fun inputFailure(message: UiText): Nothing {
+        state.value = state.value.copy(error = message)
+        throw IllegalArgumentException(message.resolve())
+    }
+    private fun stateFailure(message: UiText): Nothing {
+        state.value = state.value.copy(error = message)
+        throw IllegalStateException(message.resolve())
+    }
+
+    private fun requireInitialized(snapshot: ScriptLibraryState): ScriptLibraryState {
+        check(snapshot.initialized) {
+            uiText(Res.string.script_library_unavailable_value, snapshot.error?.resolve().orEmpty()).resolve()
         }
+        return snapshot
     }
+    private suspend fun awaitReady(): ScriptLibraryState = requireInitialized(state.first { !it.loading })
 
-    private suspend fun awaitReady(): ScriptLibraryState = state.first { !it.loading }.also { ready ->
-        check(ready.initialized) { "Script library is unavailable: ${ready.error}" }
-    }
-
-    private suspend fun <T> operation(block: suspend () -> T): T = mutex.withLock {
-        state.value = state.value.copy(busy = true, error = null)
-        try {
-            block()
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Exception) {
-            scriptLibraryLogger.error(error) { "Script library operation failed" }
-            state.value = state.value.copy(error = error.message ?: error::class.simpleName.orEmpty())
-            throw error
-        } finally {
-            state.value = state.value.copy(busy = false)
+    private suspend fun <T> operation(block: suspend () -> T): T {
+        awaitReady()
+        return mutex.withLock {
+            // A queued reload may have failed after awaitReady returned but before this lock.
+            requireInitialized(state.value)
+            state.value = state.value.copy(busy = true, error = null)
+            try {
+                block()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                scriptLibraryLogger.error(error) { "Script library operation failed" }
+                if (state.value.error == null) state.value = state.value.copy(
+                    error = uiText(Res.string.script_library_operation_failed_value, error.message ?: error::class.simpleName.orEmpty()))
+                throw error
+            } finally {
+                state.value = state.value.copy(busy = false)
+            }
         }
     }
 }

@@ -1,0 +1,10 @@
+<resources>
+    <string name="script_library_name_in_use">「%1$s」という名前のスクリプトは既に存在します。別の名前を入力してください。</string>
+    <string name="script_library_source_too_large">ソースコードが %1$s 文字を超えています。短くしてから保存してください。</string>
+    <string name="script_library_missing">このスクリプトは既に削除されています。ライブラリを再読み込みしてください。</string>
+    <string name="script_library_load_interrupted">読み込みが中断されました。スクリプトライブラリを再読み込みしてください。</string>
+    <string name="script_library_load_failed_value">スクリプトライブラリを読み込めませんでした：%1$s</string>
+    <string name="script_library_operation_failed_value">スクリプトライブラリを更新できませんでした：%1$s</string>
+    <string name="script_library_unavailable_value">スクリプトライブラリを利用できません：%1$s</string>
+    <string name="script_library_reload">ライブラリを再読み込み</string>
+</resources>
