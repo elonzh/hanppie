@@ -1371,22 +1371,13 @@ packed 整数使用原始 writer/reader 的分段格式，不能套 protobuf/LEB
 
 例如合成 netId=241 的 `CmdSetReady(true)` 完整 HLAPI 消息为 `08 00 05 00 fb c9 44 bb 75 f1 01 01`：正文八字节，函数号 `75bb44c9`，网络对象 ID `f1 01`，末字节为 true。负函数号和负整型参数分别验证其原始位模式；这组值是合成用例，不是设备身份、实际玩家分配或合法配置的完整示例。
 
-`ObjectSpawnMessage` 正文实际写 netId、16 字节 NetworkHash128 assetId、Vector3 position、u16 长度的初始状态 payload、Quaternion rotation。`NetworkIdentity.UNetSerializeAllVars` 的静态调用链按缓存的 NetworkBehaviour 顺序写初始状态，各组件的 OnDeserialize 消费对应流；不能用网络对象 ID 代替预制体 assetId，或随意重排组件。实际房间/裁判预制体的 assetId、组件顺序及全部派生状态布局尚未核对完整，本轮生成用例使用合成 assetId，不构成官方对象生成成功。
+`ObjectSpawnMessage` 正文实际写 netId、16 字节 NetworkHash128 assetId、Vector3 position、u16 长度的初始状态 payload、Quaternion rotation。`NetworkIdentity.UNetSerializeAllVars` 的静态调用链按缓存的 NetworkBehaviour 顺序写初始状态，各组件的 OnDeserialize 消费对应流；不能用网络对象 ID 代替预制体 assetId，或随意重排组件。该阶段生成用例使用合成 assetId，不构成官方对象生成成功；实际资源身份、序列组件及应用状态的新证据见下节，Unity 实际组件缓存与 NetworkTransform 状态仍待验。
 
 `AutoLobbyPlayer` 已执行初始状态与增量状态的编解码。两者先消费 NetworkLobbyPlayer 基类的 `packed 1 + slot u8 + readyToBegin bool`；初始状态再依次写名字、是否房主、是否就绪、队伍 ID、队内人数、队伍数、角色 ID、头像 ID，字符串/布尔/整数按上述编码，**不带该派生类的 dirty mask**。增量状态在基类前缀后写独立 packed-u32 掩码，按位序写变更字段：
 
-| 位 | AutoLobbyPlayer 字段 | 声明类型 |
-| --- | --- | --- |
-| 1 | mName | string |
-| 2 | mIsHost | bool |
-| 4 | mIsReady | bool |
-| 8 | mTeamID | i4 |
-| 16 | mTeamNum | i4 |
-| 32 | mTeamCount | i4 |
-| 64 | mID | i4 |
-| 128 | mAvatarID | i4 |
+完整字段与位号只在[下节状态表](#网络预制体与应用状态布局)维护。
 
-掩码 0 仍须消费该类掩码和基类前缀；初始反序列化直接赋字段，增量路径分别调用 SetName 等钩子。本轮验证初始和 0/八个单比特/255 共十种增量掩码，不把它推广为所有玩家/裁判派生类的状态布局。完整场景、所有权、就绪/生成顺序和 RPC 权限仍须随实际对象生命周期核对，知道函数号不等于拥有调用权限。
+掩码 0 仍须消费该类掩码和基类前缀；初始反序列化直接赋字段，增量路径分别调用 SetName 等钩子。本轮验证初始和 0/八个单比特/255 共十种增量掩码，不把它推广为所有玩家/裁判派生类的状态布局；后续应用状态证据见下节。完整场景、所有权、就绪/生成顺序和 RPC 权限仍须随实际对象生命周期核对，知道函数号不等于拥有调用权限。
 
 下面注册表来自 14 个实际 G02 NetworkBehaviour 的类型初始化、生成发送/接收方法：**61 个 Command、40 个 RPC，均为信道 0**。14 次 NetworkCRC 注册不是整个 App 的完整脚本表；未证明所有加载脚本或 CRC 对端一致。参数保留实际声明名、类型和拼写，函数号列为无符号 32 位十六进制；对应 Call/Invoke、token、原始 CIL 哈希和逐条字节在本机阶段证据中固定。
 
@@ -1496,9 +1487,134 @@ packed 整数使用原始 writer/reader 的分段格式，不能套 protobuf/LEB
 
 本阶段提取两份实际 DLL 的 486 个定向方法体；有界解释器实际进入 288 个方法，遇到未支持的指令或外部调用即失败。已通过 15 组 packed-u32、18 组 packed-u64、6 组字符串、101 个生成 Command/RPC 的参数往返、上述 11 组大厅状态、Scene/LobbyReady/Owner/SpawnFinished 四种系统消息、ObjectSpawn 编解码和五条拼接消息的实际 HandleReader 分派；另核对长字符串及截断正文异常。生成消息的业务方法、状态钩子、对象/权限/连接快照、注册回调、Unity 值类型构造、BCL 编码/数组/数值/诊断原语与最终发送/处理回调均为显式依赖桩；真实序列化、长度回填、分帧、位掩码和生成参数读取没有替换为桩。不是完整 CLR 或 Unity 运行。
 
-六条代表性生成消息/对象消息另经过上一阶段实际原生 LLAPI 的双端连接、发送、DataEvent 和 ACK 回收，保持完整 HLAPI 字节，覆盖 Command 客户端到服务端与 RPC/生成服务端到客户端。该桥接直接提交已编码正文，没有执行 ChannelBuffer 的缓存/Fragment=17 分片；不能据字符串最大长度推断单个 LLAPI 数据报可承载任意长消息。完整 host/场景对象、实际预制体与派生状态、所有权/权限校验、就绪/切场景、分片与窗口、真实运行互通均仍待验。
+六条代表性生成消息/对象消息另经过上一阶段实际原生 LLAPI 的双端连接、发送、DataEvent 和 ACK 回收，保持完整 HLAPI 字节，覆盖 Command 客户端到服务端与 RPC/生成服务端到客户端。该桥接直接提交已编码正文，没有执行 ChannelBuffer 的缓存/Fragment=17 分片；不能据字符串最大长度推断单个 LLAPI 数据报可承载任意长消息。完整 host/Unity 场景对象与缓存、NetworkTransform 状态、所有权/权限校验、就绪/切场景、分片与窗口、真实运行互通均仍待验；实际资源和应用派生状态见下节。
 
 原始 CIL、注册/参数目录、有界解释器、标准库/Unity/发送桩、逐项输入/输出和 native 桥接在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02-hlapi/`。没有新增产品代码、网络依赖或房间入口，没有执行 Unity、真实 socket/机器人或平台构建；G02 仍实施中，交付边界见[台账 HLAPI 阶段](./official-app-capability-implementation.md#g02-hlapi-封装生成调用与状态流阶段)。
+
+##### 网络预制体与应用状态布局
+
+固定包的 ResourceManager 位于 `globalgamemanagers`，资源对象在 `resources.assets`，MonoScript 声明通过该文件的外部引用指向 `globalgamemanagers.assets`，再与实际 DLL 的命名空间/类/继承链对应。不能用 GameObject 名字猜脚本类型，也不能把包内 PathID 当成线上 assetId。静态扫描找到 21 个 NetworkIdentity；下表 12 个属于实际管理器 spawn 列表或三模式资源路径，其余资源不据此加入产品范围。
+
+`AutoNetworkManager.OnStartHost/OnStartClient` 按当前 mode 设置玩家与大厅预制体，`BattleJudge.GetPlayerPrefab/CreateJudge` 按 `BattleJudge/Battle{mode}/...` 路径加载玩家/裁判。管理器里静态序列化的 Race 引用不是唯一模式。固定 spawn 列表另有虚拟机体、弹丸、三种裁判及心跳，不能只实现同一大厅壳。
+
+NetworkIdentity 的实际 SerializeField 顺序为 SceneId、AssetId、ServerOnly、LocalPlayerAuthority。本批资源的 108 字节 MonoBehaviour 中，32 字节原生头后为 SceneId u32；AssetId 的 `i0..i15` **各占四字节对齐槽，首字节才是值**，随后两个布尔各占四字节。DLL 的 NetworkHash128 类型字段、全部对齐字节和完整载荷消费已核对。线上仍是按 i0 到 i15 的 16 字节，不应发送 64 字节对齐区或套用 UUID 的分组端序转换；原始 ToString CIL 也是逐字节两位十六进制。
+
+下表所有 SceneId 为 0、ServerOnly 为 false。LocalPlayerAuthority 是预制体标志，不等于某个客户端已经取得该对象控制权；所有权消息与服务器校验仍需另外完成。“序列”是序列化组件表中已解析的 NetworkBehaviour 顺序，没有执行真实 Unity GetComponents。
+
+| 资源键 | assetId 线上字节（hex） | LocalPlayerAuthority | 已解析 NetworkBehaviour 序列 | 未解析脚本声明 |
+| --- | --- | --- | --- | --- |
+| `battlejudge/battlearena/battlejudgearena` | `0b57ea725d83948378519468a96d1a33` | false | 0: `BattleJudgeArena` | 无 |
+| `battlejudge/battlearena/battleplayerarena` | `373880d2adee84d91ab4245125f3816c` | true | 0: `BattlePlayerArena` | 无 |
+| `battlejudge/battlearena/lobbyplayerarena` | `15c096c3f39d64e779a9a6a13af238bb` | false | 0: `BattleLobbyPlayerArena` | 无 |
+| `battlejudge/battlerace/battlejudgerace` | `2ecef0d83f313484693e2adbd6e636b1` | false | 0: `BattleJudgeRace` | 无 |
+| `battlejudge/battlerace/battleplayerrace` | `a21a65fa938184dc8ab8a9b4f529999c` | true | 0: `BattlePlayerRace` | 无 |
+| `battlejudge/battlerace/lobbyplayerrace` | `7a4465c0ac898419f9d6e2717e3321f0` | false | 0: `BattleLobbyPlayerRace` | 无 |
+| `battlejudge/battleteam/battlejudgeteam` | `5918f104e5e334a009a81a63f7d47c20` | false | 0: `BattleJudgeTeam` | 无 |
+| `battlejudge/battleteam/battleplayerteam` | `b3460a0c121674f5690bdfd6bfc95ff9` | true | 0: `BattlePlayerTeam` | 无 |
+| `battlejudge/battleteam/lobbyplayerteam` | `1517dbe76c2ee49f0ad368f2b73a5cdd` | false | 0: `BattleLobbyPlayerTeam` | 无 |
+| `heartbeat` | `103c45eeb5f7f41c6bd2aef4570b7697` | false | 0: `NetHeartbetTest` | 无 |
+| `simulitor/networkvirtualbullet` | `b62f80786f63549cb862cb8462832889` | true | 0: `NetworkTransform` | 无 |
+| `simulitor/networkvirtualrobot` | `14772991369484a708224c84c7b537a8` | true | 0: `NetworkVirtualRobot`，1: `NetworkTransform` | 两条全局 `NetworkTranformChild` |
+
+虚拟机体还有两条 MonoScript 声明：全局命名空间 `NetworkTranformChild`，程序集名为实际 HLAPI DLL。该 DLL 的 TypeDef/ExportedType 没有这个同名类型，存在的是不同全名 `UnityEngine.Networking.NetworkTransformChild`。本阶段保留原始声明/载荷，不纠正拼写、不补别名，不认定两条声明会运行或被忽略；实际 Unity 加载、组件返回结果及其状态影响仍待验。这两条未知声明也不能悄悄计入一个“已完整验证”的虚拟机体布局。
+
+已解析的 NetworkTransform 使用信道 1；应用生成的 Command/RPC 及状态通道仍为 0。其实际字段/枚举与两份 72 字节载荷已核对：
+
+| 资源 | TransformSyncMode | SendInterval（序列化值） | RotationAxis / Compression | SyncSpin | 插值 Rotation / Movement |
+| --- | --- | --- | --- | --- | --- |
+| NetworkVirtualRobot | 1=SyncTransform | float32 约 0.033333335 | 7=AxisXYZ / 2=High | true | 1 / 1 |
+| NetworkVirtualBullet | 3=SyncRigidbody3D | 0 | 0=None / 0=None | false | 0 / 0 |
+
+两者 MovementTheshold 约 0.001、VelocityThreshold 约 0.0001、SnapThreshold=5；名称拼写保留实际字段。标记 SerializeField 的两项 ClientMoveCallback 为 delegate，没有对应序列化正文。这里是固定资源配置，不是实测发送周期、运动阈值或物理速度。AxisSyncMode 是命名枚举，不能假设为轴位掩码。NetworkTransform 编解码、物理/姿态取值及这两个复合预制体的完整状态仍未执行。
+
+应用 DLL 内 14 类 G02 NetworkBehaviour 共声明 **76 个 SyncVar**；字段属性与实际生成 setter 的位号同时核对。位号沿继承链分配，派生类不重新从 1 开始。声明顺序与初始写入顺序对应；增量按实际 OnSerialize 的基类调用链分别消费各类掩码，**掩码值是该对象全局 dirty bits，不是各类截取后的局部值**。例如 BattlePlayerRace 的 mLapNum 位号为 0x400，其基类流与派生类流都带相同全局掩码，再各写自己的命中字段。
+
+| 声明类 | 字段 | 类型 | 全局位号（hex） | 增量钩子 |
+| --- | --- | --- | --- | --- |
+| `AutoLobbyPlayer` | `mName` | `string` | `00000001` | `SetName` |
+| `AutoLobbyPlayer` | `mIsHost` | `bool` | `00000002` | `SetIsHost` |
+| `AutoLobbyPlayer` | `mIsReady` | `bool` | `00000004` | `SetIsReady` |
+| `AutoLobbyPlayer` | `mTeamID` | `i4` | `00000008` | `SetTeamID` |
+| `AutoLobbyPlayer` | `mTeamNum` | `i4` | `00000010` | `SetTeamNum` |
+| `AutoLobbyPlayer` | `mTeamCount` | `i4` | `00000020` | `SetTeamCount` |
+| `AutoLobbyPlayer` | `mID` | `i4` | `00000040` | `SetID` |
+| `AutoLobbyPlayer` | `mAvatarID` | `i4` | `00000080` | `SetAvatarID` |
+| `BattleJudgeArena` | `mTime` | `i4` | `00000001` | `TimeChange` |
+| `BattleJudgeArena` | `mIsGameOver` | `bool` | `00000002` | `SetIsGameOVer` |
+| `BattleLobbyPlayerArena` | `mTime` | `i4` | `00000100` | `SetTime` |
+| `BattleLobbyPlayerArena` | `mArmor` | `i4` | `00000200` | `SetArmor` |
+| `BattleLobbyPlayerArena` | `mWaterGunType` | `i4` | `00000400` | `SetWaterGunType` |
+| `BattleLobbyPlayerArena` | `mSpeedLevel` | `i4` | `00000800` | `SetSpeedLevel` |
+| `BattleLobbyPlayerArena` | `mColorID` | `i4` | `00001000` | `SetColorID` |
+| `BattlePlayerArena` | `mDamageDone` | `r4` | `00000400` | 直接赋字段 |
+| `BattlePlayerArena` | `mKillCount` | `i4` | `00000800` | 直接赋字段 |
+| `BattlePlayerArena` | `mDeadCount` | `i4` | `00001000` | 直接赋字段 |
+| `BattlePlayerArena` | `mIsDeading` | `bool` | `00002000` | 直接赋字段 |
+| `BattlePlayerArena` | `mIsBadInjured` | `bool` | `00004000` | 直接赋字段 |
+| `BattlePlayerArena` | `mRank` | `i4` | `00008000` | `SetRank` |
+| `BattlePlayerArena` | `mColorID` | `i4` | `00010000` | `SetColorID` |
+| `BattlePlayerArena` | `mRandomSkillID` | `i4` | `00020000` | `SetRandomSkillID` |
+| `BattlePlayerArena` | `mWaterGunType` | `i4` | `00040000` | `SetWaterGunType` |
+| `BattlePlayer` | `mID` | `i4` | `00000001` | `SetID` |
+| `BattlePlayer` | `mTeamCount` | `i4` | `00000002` | 直接赋字段 |
+| `BattlePlayer` | `mTeamNum` | `i4` | `00000004` | 直接赋字段 |
+| `BattlePlayer` | `mSkillAID` | `i4` | `00000008` | 直接赋字段 |
+| `BattlePlayer` | `mSkillBID` | `i4` | `00000010` | 直接赋字段 |
+| `BattlePlayer` | `mHP` | `r4` | `00000020` | `SetHP` |
+| `BattlePlayer` | `mMaxHP` | `r4` | `00000040` | `SetMaxHP` |
+| `BattlePlayer` | `mName` | `string` | `00000080` | `SetName` |
+| `BattlePlayer` | `mAvatarID` | `i4` | `00000100` | `SetAvatarID` |
+| `BattlePlayer` | `mState` | `i4` | `00000200` | 直接赋字段 |
+| `BattleJudgeRace` | `mTime` | `i8` | `00000001` | `TimeChange` |
+| `BattleJudgeRace` | `mIsRaceOver` | `bool` | `00000002` | `SetIsRaceOVer` |
+| `BattleLobbyPlayerRace` | `mCheckPointNum` | `i4` | `00000100` | `SetCheckPointNum` |
+| `BattleLobbyPlayerRace` | `mLAPNum` | `i4` | `00000200` | `SetLAPNum` |
+| `BattleLobbyPlayerRace` | `mSpeedLevel` | `i4` | `00000400` | `SetSpeedLevel` |
+| `BattleLobbyPlayerRace` | `mColorID` | `i4` | `00000800` | `SetColorID` |
+| `BattlePlayerRace` | `mLapNum` | `i4` | `00000400` | `SetLapNum` |
+| `BattlePlayerRace` | `mCurrentLap` | `i4` | `00000800` | `SetCurrentLap` |
+| `BattlePlayerRace` | `mCheckPointNum` | `i4` | `00001000` | `SetCheckPointNum` |
+| `BattlePlayerRace` | `mCurrentCheckPointID` | `i4` | `00002000` | `SetCurrentCheckPointID` |
+| `BattlePlayerRace` | `mIsRaceOVer` | `bool` | `00004000` | `SetIsRaceOVer` |
+| `BattlePlayerRace` | `mCurrentCheckPointIDChange` | `bool` | `00008000` | `SetCurrentCheckPointIDChange` |
+| `BattlePlayerRace` | `mFinalRank` | `i4` | `00010000` | `SetFinalRank` |
+| `BattlePlayerRace` | `mRaceTime` | `i8` | `00020000` | `SetRaceTime` |
+| `BattlePlayerRace` | `mCurrentCheckPointTime` | `i8` | `00040000` | `SetCurrentCheckPointTime` |
+| `BattlePlayerRace` | `mColorID` | `i4` | `00080000` | `SetColorID` |
+| `BattlePlayerRace` | `mRandomSkillID` | `i4` | `00100000` | `SetRandomSkillID` |
+| `BattleJudgeTeam` | `mBlueStrongHoldCount` | `i4` | `00000001` | 直接赋字段 |
+| `BattleJudgeTeam` | `mRedStrongHoldCount` | `i4` | `00000002` | 直接赋字段 |
+| `BattleJudgeTeam` | `mTime` | `i4` | `00000004` | `TimeChange` |
+| `BattleJudgeTeam` | `mWinTeamID` | `i4` | `00000008` | `BattleEnd` |
+| `BattleJudgeTeam` | `mStrongHoldAState` | `i4` | `00000010` | 直接赋字段 |
+| `BattleJudgeTeam` | `mStrongHoldBState` | `i4` | `00000020` | 直接赋字段 |
+| `BattleJudgeTeam` | `mStrongHoldCState` | `i4` | `00000040` | 直接赋字段 |
+| `BattleJudgeTeam` | `mStrongHoldDState` | `i4` | `00000080` | 直接赋字段 |
+| `BattleLobbyPlayerTeam` | `mWaterGunType` | `i4` | `00000100` | 直接赋字段 |
+| `BattleLobbyPlayerTeam` | `mGameTime` | `i4` | `00000200` | 直接赋字段 |
+| `BattleLobbyPlayerTeam` | `mMaxHp` | `i4` | `00000400` | 直接赋字段 |
+| `BattleLobbyPlayerTeam` | `mReviveEnable` | `i4` | `00000800` | 直接赋字段 |
+| `BattleLobbyPlayerTeam` | `mStronghold` | `i4` | `00001000` | 直接赋字段 |
+| `BattleLobbyPlayerTeam` | `mSpeedLevel` | `i4` | `00002000` | 直接赋字段 |
+| `BattleLobbyPlayerTeam` | `mExitRoom` | `bool` | `00004000` | `SetExitRoom` |
+| `BattlePlayerTeam` | `mDamageDone` | `r4` | `00000400` | 直接赋字段 |
+| `BattlePlayerTeam` | `mKillCount` | `i4` | `00000800` | 直接赋字段 |
+| `BattlePlayerTeam` | `mHoldCount` | `r4` | `00001000` | 直接赋字段 |
+| `BattlePlayerTeam` | `mDeadCount` | `i4` | `00002000` | 直接赋字段 |
+| `BattlePlayerTeam` | `mIsDeading` | `bool` | `00004000` | 直接赋字段 |
+| `BattlePlayerTeam` | `mIsBadInjured` | `bool` | `00008000` | 直接赋字段 |
+| `BattlePlayerTeam` | `mScore` | `i4` | `00010000` | 直接赋字段 |
+| `BattlePlayerTeam` | `mRandomSkillID` | `i4` | `00020000` | `SetRandomSkillID` |
+| `NetworkVirtualRobot` | `mID` | `i4` | `00000001` | `SetID` |
+| `NetworkVirtualRobot` | `mTeamNum` | `i4` | `00000002` | `SetTeamNum` |
+
+BattleJudge 基类与 NetHeartbetTest 没有这些应用 SyncVar，其生成序列化返回 false 且不写字段流。三种 Lobby 派生类仍先消费 NetworkLobbyPlayer 的 slot/readyToBegin 前缀和 AutoLobbyPlayer 的流；BattlePlayer 的基类流和各玩法派生流也不能合并成一次局部掩码。初始路径直接赋字段，增量的钩子字段调用表中钩子，其他字段直接赋值。字段类型的编码沿用前节，不据字段名推断时间、血量或速度单位/合法范围，也不把测试值当作默认配置。
+
+本阶段有界执行 14 类的初始、零掩码、每个继承字段的单比特掩码及全掩码，共 **170 组**，独立编码与原始 CIL 字节一致，检查直接字段、钩子参数/顺序及 reader 完整消费。十个大厅/玩家/裁判/心跳资源使用实际 assetId 与合成初始状态，执行原始 UNetSerializeAllVars、ObjectSpawn 编解码和 OnUpdateVars，字段一致；虚拟机体/弹丸两项明确待验，没有只串入应用字段后称其完整。
+
+`NetworkIdentity.GetBehavioursOfSameChannel` 另有缓存分支：初始且组件缓存为空时，调用 GetComponents 并直接返回整组；缓存已存在时，即使 initialState=true 也按通道过滤。四组定向用例核对已解析虚拟组件组合的首次初始、缓存初始、通道 0/1 增量选择。运行时 GetComponents 的返回由序列化表构造的显式桩提供，这不证明真实 Unity 缓存何时建立、是否包含未解析脚本或场景生成顺序。
+
+证据在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02-prefab/`，含五份来源身份、资源/PPtr/脚本原始记录、118 段定向 CIL、76 项属性/位号、170 组状态、十组对象消息/状态应用、四组通道/缓存输入及未解析声明。分配/数组/数值/编码、Unity 对象与 GetComponents、业务钩子等为显式依赖；没有执行真实 Unity Resources.Load/Instantiate、场景/所有权/网络或物理动作。本轮没有新增产品代码或房间入口，G02 仍实施中，交付与待验见[台账预制体阶段](./official-app-capability-implementation.md#g02-实际预制体身份与应用状态布局阶段)。
 
 ##### 房间准备、规则与裁判同步
 
@@ -1558,7 +1674,7 @@ sequenceDiagram
 
 `BattleJudge.JudgeReady` 对玩家、配置和技能信息有有界等待，其中配置/技能阶段最多按秒循环四次，超时后仍可推进；`BattlePlayer.OnJudgeStateChange` 在 Playing 解开控制锁。这与当前 Hanppie 挑战必须取得配置确认和新鲜报告的准备条件不同，见[台账 C22](./official-app-capability-implementation.md#冲突记录保持现状留待决策)，不能照搬超时放行。房间心跳每秒发送、客户端计数约 4 秒，机器人断连消费者另有 10 秒返回大厅路径；网络存活、机器人新鲜度和操控输入租约必须分开，这些官方计时不替代当前输入失效后的归零。
 
-**未验证边界：** 连接参数、发现包、配置 CRC、普通请求/确认/连接事件、两条有效信道的数据/ACK/排序/重传，以及普通关闭/槽回收/同槽重连已有固定版静态/原生指令仿真依据；HLAPI 封装、101 项生成调用、大厅状态及对象消息另有有界 CIL 执行依据。真实局域网发现/连接、host 移除/连接中取消、多 peer/窗口/分片、实际预制体/派生状态、对象生成与 RPC/SyncVar 运行互通仍待验。固定 App 是 x86-64；当前环境未创建官方房间或采集运行报文，执行环境与系统组件授权记录见台账对应阶段。原调查的来源、预制体、规则/裁判表在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02/`，实际 DLL、广播和连接/数据/关闭仿真分别在相邻 `G02-transport/`、`G02-wire/`、`G02-handshake/`、`G02-connect/`、`G02-data/`、`G02-close/`、`G02-hlapi/`。这些不是 G02 产品实现、官方房间互通或多机物理验收；当前进度见[独立台账](./official-app-capability-implementation.md#g02-本地多人契约调查与互通边界)。
+**未验证边界：** 连接参数、发现包、配置 CRC、普通请求/确认/连接事件、两条有效信道的数据/ACK/排序/重传，以及普通关闭/槽回收/同槽重连已有固定版静态/原生指令仿真依据；HLAPI 封装、101 项生成调用、大厅状态及对象消息另有有界 CIL 执行依据。真实局域网发现/连接、host 移除/连接中取消、多 peer/窗口/分片、真实 Unity 预制体/组件缓存、NetworkTransform/未解析脚本、所有权/场景与对象/RPC/SyncVar 运行互通仍待验；固定资源身份与应用生成状态见前节。固定 App 是 x86-64；当前环境未创建官方房间或采集运行报文，执行环境与系统组件授权记录见台账对应阶段。原调查的来源、预制体、规则/裁判表在忽略目录 `.hanppie/validation/2026-10-22-official-gap/G02/`，实际 DLL、广播和连接/数据/关闭仿真分别在相邻 `G02-transport/`、`G02-wire/`、`G02-handshake/`、`G02-connect/`、`G02-data/`、`G02-close/`、`G02-hlapi/`、`G02-prefab/`。这些不是 G02 产品实现、官方房间互通或多机物理验收；当前进度见[独立台账](./official-app-capability-implementation.md#g02-本地多人契约调查与互通边界)。
 
 #### 自主程序与自定义技能安装
 
