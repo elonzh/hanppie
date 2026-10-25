@@ -65,7 +65,8 @@ internal class CameraCommands(
     private val storageOperation = Mutex()
 
     fun receive(frame: DussFrame) {
-        if (closed || !frame.valid || frame.sender != Protocol.HOST_CAMERA || frame.receiver != Protocol.HOST_MOBILE ||
+        // Camera notifications can arrive directly or be relayed by the video node.
+        if (closed || !frame.valid || frame.sender !in listOf(Protocol.HOST_CAMERA, Protocol.HOST_HDVT_UAV) || frame.receiver != Protocol.HOST_MOBILE ||
             frame.attr != Protocol.ATTR_NO_ACK || frame.set != Protocol.CMDSET_CAMERA || frame.id != 0xe4 || frame.payload.size < 26) return
         val zoom = frame.payload.u16(8)
         lastReceived = nowMillis()
@@ -143,10 +144,10 @@ internal class CameraCommands(
 
     override suspend fun getDate(): CameraDate? {
         val p = command(0x55)
-        if (p.size < 8 || p.u8(1) > 99 || p.u8(2) > 99) throw RobotRequestException(RequestProblem.INVALID_RESPONSE)
+        if (p.size < 8) throw RobotRequestException(RequestProblem.INVALID_RESPONSE)
         if ((1..7).all { p[it] == 0.toByte() }) return null
-        // Native getter uses two decimal components, unlike the uint16 year in SetCameraDate.
-        return try { CameraDate(p.u8(1) + p.u8(2) * 100, p.u8(3), p.u8(4), p.u8(5), p.u8(6), p.u8(7)) }
+        // Live readback carries the same little-endian uint16 year as SetCameraDate.
+        return try { CameraDate(p.u16(1), p.u8(3), p.u8(4), p.u8(5), p.u8(6), p.u8(7)) }
         catch (_: IllegalArgumentException) { throw RobotRequestException(RequestProblem.INVALID_RESPONSE) }
     }
 

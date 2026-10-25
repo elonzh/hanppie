@@ -262,8 +262,14 @@ class ChallengeRoundTest {
         val frame = DussFrame(0,0x17,2,701,0,0x3f,0x50,"000048410300".hexBytes(),true)
         assertEquals(ChallengeFireReport(0x41480000,3,0),challengeFireReport(frame))
         assertEquals(ChallengeFireReport(0x41480000,3,0),challengeFireReport(frame.copy(payload = frame.payload + byteArrayOf(99))))
-        for (bad in listOf(frame.copy(valid=false),frame.copy(sender=9),frame.copy(receiver=9),frame.copy(attr=0x80),
+        for (bad in listOf(frame.copy(valid=false),frame.copy(sender=0xc3),frame.copy(receiver=9),frame.copy(attr=0x80),
             frame.copy(set=0),frame.copy(id=0x51),frame.copy(payload=frame.payload.copyOf(5)))) assertNull(challengeFireReport(bad))
+    }
+
+    @Test fun capturedS1InfraredReportArrivesThroughTheHdvtRelay() {
+        val frame = Protocol.frames(Protocol.duss(sender = 9, receiver = 2, attr = 0,
+            set = 0x3f, id = 0x50, payload = "0000803f0100".hexBytes(), sequence = 38465)).single()
+        assertEquals(ChallengeFireReport(0x3f800000, 1, 0), challengeFireReport(frame))
     }
 
     @Test fun infraredAimAndImpactIncludeNonScoringOccludersWithoutAwardingPoints() {

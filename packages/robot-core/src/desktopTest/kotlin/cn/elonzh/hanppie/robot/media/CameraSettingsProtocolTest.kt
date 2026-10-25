@@ -28,17 +28,19 @@ class CameraSettingsProtocolTest {
             assertFailsWith<RobotRequestException> { camera.setAntiFlicker(AntiFlicker.HZ_50) }.problem)
     }
 
-    @Test fun decodesDecimalCenturyAndValidatesCalendarFields(): Unit = runBlocking {
-        var response = "001a140a17000102".hexBytes()
+    @Test fun decodesBinaryYearFromLiveReadbackAndValidatesCalendarFields(): Unit = runBlocking {
+        var response = "00ea070a17000102".hexBytes()
         val camera = CameraCommands({ receiver, set, id, payload ->
             assertEquals(1, receiver); assertEquals(2, set); assertEquals(0x55, id); assertTrue(payload.isEmpty())
             response
         }) { 1 }
         assertEquals(CameraDate(2026, 10, 23, 0, 1, 2), camera.getDate())
-        response = "001814021d173b3b0000".hexBytes()
+        response = "00e807021d173b3b0000".hexBytes()
         assertEquals(CameraDate(2024, 2, 29, 23, 59, 59), camera.getDate())
+        response = "00bc070101000b1d".hexBytes()
+        assertEquals(CameraDate(1980, 1, 1, 0, 11, 29), camera.getDate())
         response = ByteArray(8); assertNull(camera.getDate())
-        for (invalid in listOf("001914021d000000", "00ea070a17000000", "001a140a17200000", "00")) {
+        for (invalid in listOf("00e907021d000000", "00ffff0a17000000", "00ea070a17200000", "00")) {
             response = invalid.hexBytes()
             assertEquals(RequestProblem.INVALID_RESPONSE, assertFailsWith<RobotRequestException> { camera.getDate() }.problem)
         }
@@ -46,7 +48,7 @@ class CameraSettingsProtocolTest {
 
     @Test fun writesBinaryYearAndAcceptsElapsedTimeAcrossMidnight(): Unit = runBlocking {
         var clock = 1_000L
-        var response = "001b140101000001".hexBytes()
+        var response = "00eb070101000001".hexBytes()
         val payloads = mutableListOf<String>()
         val expected = CameraDate(2026, 12, 31, 23, 59, 59)
         val camera = CameraCommands(request = { receiver, set, id, payload ->
@@ -59,7 +61,7 @@ class CameraSettingsProtocolTest {
         }, localNow = { expected }, nowMillis = { clock })
         assertEquals(CameraDate(2027, 1, 1, 0, 0, 1), camera.syncClock())
         assertEquals("ea070c1f173b3b0000", payloads.single())
-        response = "001b140101010000".hexBytes()
+        response = "00eb070101010000".hexBytes()
         assertEquals(RequestProblem.NOT_APPLIED, assertFailsWith<RobotRequestException> { camera.syncClock() }.problem)
         response = ByteArray(8)
         assertEquals(RequestProblem.NOT_APPLIED, assertFailsWith<RobotRequestException> { camera.syncClock() }.problem)

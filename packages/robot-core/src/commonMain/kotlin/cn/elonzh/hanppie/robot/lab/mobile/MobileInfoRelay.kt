@@ -19,10 +19,12 @@ internal class MobileInfoRelay(
     private val lastData = mutableMapOf<MobileSensor, Long>()
     private val stamps = mutableMapOf<MobileSensor, Long>()
     private var closed = false
+    private var started = false
 
     fun reset(runId: String? = null) {
         stopSampling()
         owner = runId
+        started = false
     }
 
     fun close() { reset(); closed = true }
@@ -35,9 +37,13 @@ internal class MobileInfoRelay(
     fun receive(frame: DussFrame, allowed: Boolean) {
         if (closed || !frame.valid) return
         if (frame.receiver == Protocol.HOST_MOBILE && frame.attr == Protocol.ATTR_NO_ACK &&
-            frame.sender == Protocol.HOST_HDVT_UAV && frame.set == Protocol.CMDSET_RM && frame.id == Protocol.CMD_RM_SCRIPT_BLOCK_STATUS_PUSH) {
+            (frame.sender == Protocol.HOST_HDVT_UAV || frame.sender == Protocol.HOST_SCRATCH_SYS) &&
+            frame.set == Protocol.CMDSET_RM && frame.id == Protocol.CMD_RM_SCRIPT_BLOCK_STATUS_PUSH) {
             val status = Telemetry.labScriptStatus(frame) ?: return
-            if (owner != null && status.guid.equals(owner, ignoreCase = true) && (status.isIdle || status.isFailed)) reset()
+            if (owner != null && status.guid.equals(owner, ignoreCase = true)) {
+                if (status.isFailed || (status.isIdle && started)) reset()
+                else if (status.isRunning) started = true
+            }
             return
         }
         if (frame.sender != Protocol.HOST_SCRATCH_SCRIPT || frame.receiver != Protocol.HOST_MOBILE ||

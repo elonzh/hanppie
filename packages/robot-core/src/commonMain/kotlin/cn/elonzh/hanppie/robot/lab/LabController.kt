@@ -129,7 +129,7 @@ class LabController internal constructor(private val session: LabChannel,
         startRequested = true
         session.labMode(running = true)
         try {
-            LabResourceProtocol.accepted(session.requestLab(Protocol.CMD_RM_SCRIPT_DOWNLOAD_FINSH, byteArrayOf(1, 0) + hash))
+            LabResourceProtocol.registered(session.requestLab(Protocol.CMD_RM_SCRIPT_DOWNLOAD_FINSH, byteArrayOf(1, 0) + hash))
             checkCurrent(token)
             check(LabResourceProtocol.programMatches(session.requestLab(Protocol.CMD_RM_SCRIPT_CTRL,
                 LabResourceProtocol.programQuery(current)))) { "机内程序摘要不匹配，请停止后重新上传" }

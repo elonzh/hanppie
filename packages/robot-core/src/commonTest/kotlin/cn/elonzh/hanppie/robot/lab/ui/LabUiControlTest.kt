@@ -2,6 +2,7 @@ package cn.elonzh.hanppie.robot.lab.ui
 
 import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.protocol.hex
+import cn.elonzh.hanppie.robot.protocol.hexBytes
 import kotlin.test.*
 
 class LabUiControlTest {
@@ -26,7 +27,7 @@ class LabUiControlTest {
         }
         fun create(key: LabWidgetKey) = attr(key, 0)
         fun attach(key: LabWidgetKey, parent: LabWidgetKey = stage) = attr(parent, 128, int(key.type.raw), int(key.index))
-        fun status(run: String = owner, value: Int = 2) = control.receive(DussFrame(46, 9, 2, 10, 0,
+        fun status(run: String = owner, value: Int = 2, sender: Int = 9) = control.receive(DussFrame(46, sender, 2, 10, 0,
             0x3f, 0xa5, byteArrayOf(value.toByte()) + run.encodeToByteArray(), true))
         fun ready() {
             control.reset(owner); create(stage); create(button); attach(button)
@@ -34,6 +35,39 @@ class LabUiControlTest {
         }
         fun event(key: LabWidgetKey, event: Int, value: LabUiValue? = null, final: Boolean = false) =
             control.interact(owner, key, control.state.value.widgets.getValue(key).token, event, value, final)
+    }
+
+    @Test fun nativeIdleBeforeRunningDoesNotRetireThePendingPanel() {
+        val r = Rig(); r.control.reset(owner)
+        r.create(stage)
+        r.status(value = 0, sender = 0xa9)
+        assertEquals(owner, r.control.state.value.runId)
+        assertTrue(stage in r.control.state.value.widgets)
+        r.control.setVisible(owner, true); r.control.tick(true)
+        assertFalse(r.control.state.value.inputEnabled)
+        r.status(sender = 0xa9)
+        r.create(button); r.attach(button); r.event(button, 0)
+        assertEquals("01000000", r.sent.single().hex())
+        r.status(value = 0, sender = 0xa9)
+        assertNull(r.control.state.value.runId)
+        assertTrue(r.control.state.value.widgets.isEmpty())
+        r.control.reset(owner); r.status(value = 0, sender = 0xa9)
+        assertEquals(owner, r.control.state.value.runId, "New run does not inherit the old started state")
+        r.status(value = 5, sender = 0xa9)
+        assertNull(r.control.state.value.runId, "Failure before RUNNING still retires the run")
+    }
+
+    @Test fun nativeIntegerPivotStillRejectsBooleans() {
+        val r = Rig(); r.control.reset(owner)
+        val label = LabWidgetKey(LabWidgetType.TEXT, 0)
+        r.create(label)
+        r.control.receive(r.frame("05000702010400000000010400000000".hexBytes()))
+        assertEquals(0f, r.control.state.value.widgets.getValue(label).layout.pivotX)
+        assertEquals(0f, r.control.state.value.widgets.getValue(label).layout.pivotY)
+        assertNull(r.control.state.value.issue)
+        r.attr(label, 7, flag(false), flag(false))
+        assertEquals(LabUiIssue.INVALID_ATTRIBUTE, r.control.state.value.issue)
+        assertEquals(0f, r.control.state.value.widgets.getValue(label).layout.pivotX)
     }
 
     @Test fun attributesRequireCorrectIngressButAckReceiptEvenOutsideAnOwnedRun() {

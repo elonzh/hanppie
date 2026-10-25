@@ -415,6 +415,10 @@ RoboMaster App 提供手机和 macOS 客户端，Lab 是该应用中的程序功
 
 AppID 是 RoboMaster App 日志中十进制标识按 8 字节小端序解释得到的 ASCII 值；设备实际值属于本地标识，不写入公开仓库。session、tick 以及 direct/control 序列属于每次 UDP `10607` 连接的动态状态，不能固定重放一次抓包的头部。**代码/实测**
 
+可靠接收通道另有独立序号：设备 type `03` 包的 uint16 LE tick 位于偏移 4，偏移 8 为发送参考；本轮连续包步长为 8。Host type `04` 控制表的偏移 16/18 同时报告最高连续接收位置，偏移 24/26 继续维护主机发送通道。2026-10-25 S1 对照中，确认位置不推进时设备恰好停在 100 个可靠包；只推进偏移 18 仍会停住，两处都推进后收到了 809 个可靠包，764,920 字节原图完整下载，后续视觉及音频请求继续返回。缺包时不能确认越过缺口，重复、乱序与 uint16 回绕必须按同一接收序号处理；type `03` 的 tick 回绕为零不表示控制表。Kotlin 与 Python 封包实现使用同一规则，设备报文、对照及验证范围见[实机记录](./s1-live-validation-2026-10-25.md#可靠接收窗口修复)。**S1 实机报文及对照 / 代码**
+
+同日视频捕获另暴露外层头与 DUSS 魔数碰撞：一个 type `03` 包的偏移 7 为 `55`，随后的字节被误读为长度 64 的无效 DUSS 候选，原解析按该长度跳过了偏移 20 的有效文件帧。原始外层 tick 连续，文件分片 4425 实际已到达，不是 UDP 缺包；无效候选改为逐字节重同步后，同一捕获可完整解析 0–6568 的全部分片。此规则不放宽 CRC，也不重扫有效负载；完整性与实机重测结果见[日期化记录](./s1-live-validation-2026-10-25.md)。**S1 报文 / 离线重放**
+
 RoboMaster macOS `1.1.5`（build `239`）没有从 24 字节身份广播中读取型号。未连接时的 S1/EP 选择器写入最近选择，仅服务于连接前界面；连接后选择器禁用，`RoboMasterProductManager::fetchProductInfo()` 发送 `cmdset=0x3F`、`cmdid=0xFE`、payload `00` 的产品信息查询。Hanppie 已有 App 会话抓包中的对应请求路由为 sender `0x02` → receiver `0x28`、attr `0x40`；原厂回调从响应 payload 的第 2 个字节读取产品码，`DJIProductType` 定义 `1` 为 `RoboMaster_S1`、`2` 为 `RoboMaster_S1_EDU`，后者在原厂产品界面显示为 EP。S1 实机返回 attr `0xC0`、payload `00 01`，与 S1 产品码吻合。原厂另监听内部 full-command 键 `0x403F0012` 的系统 working-devices push；该键不能直接当作 DUSS attr，S1 实机线上的帧为 attr `0x00`、`0x3F/0x12`。payload 第 1 字节是设备数，随后每项由 16 位设备 ID、附加值数量和对应数量的 16 位原始值组成；原厂组件列表逻辑只用数量跨过这些字节；完整原生回调进一步确认它们为异常字，解释见[模块健康与电池报告](#模块健康与电池报告)。本次 S1 报告 16 个 working devices，覆盖图传、相机、底盘、电池、4 个 ESC、云台、水弹发射器和 6 块装甲；原厂枚举还包含舵机、机械臂、机械爪、TOF、传感器转接模块和红外发射器。产品型号与在线组件分别发布为 `DJIProductType` 和 `DJIRobomasterSystemWorkingDevices`，因此型号不是组件能力表。**客户端静态分析/S1 实机**
 
 #### 5.3.1 DSP 程序容器
@@ -428,7 +432,9 @@ Lab 程序不是裸 `.py` 文件，而是 `.dsp` XML 容器，主要包含：
 
 恢复的机内解析器为自定义音频保留十个逻辑 ID `0x10010..0x10019`，从 DSP 的 `<audio>` 节点读取名称、类型、MD5、`modify` 和可选 `audio_data`。RoboMaster macOS 1.1.5 客户端上传前先查询 DSP 与音频资源 MD5；已匹配的音频会把 `modify` 置为 false 并省略数据，未匹配资源随 DSP 继续上传。因此内置音效 ID、Host PCM 临时对讲和 Lab 自定义音频是三条不同路径；自定义音频不是 FTP 根目录中可任意播放的普通媒体库，机内转换后的缓存位置和清理策略仍缺少运行时证据。**代码/客户端静态分析**
 
-Hanppie 客户端按同一形状生成该节点：`<audio id="0..9" name="…" type="opus" duration="秒" md5="<base64 正文 MD5 前 8 位>" modify="true"><audio_data><![CDATA[<base64>]]></audio_data></audio>`，`id` 对应机内全局音效 `0x10010+id`；正文使用客户端容器的 48 kHz 单声道、20 ms（960 样本）帧、12 kbps。机内是否按固定采样率解码、是否重新编码以及缓存位置仍无运行时证据；官方客户端查询机内已有资源的键 `0x0500_001C`/`0x0500_001D` 未接入，Hanppie 始终以 `modify="true"` 携带正文，因此该 MD5 目前只描述正文本身。**客户端静态分析/代码**
+完整资源节点形状为 `<audio id="0..9" name="…" type="opus" duration="秒" md5="<base64 正文 MD5 前 8 位>" modify="true"><audio_data><![CDATA[<base64>]]></audio_data></audio>`，`id` 对应机内全局音效 `0x10010+id`；正文使用客户端容器的 48 kHz 单声道、20 ms（960 样本）帧、12 kbps。设备明确匹配时可用 `modify="false"` 并省略正文；主机历史不能证明设备仍持有对应资源。机内是否按固定采样率解码、是否重新编码以及缓存位置仍无运行时证据；Hanppie 当前查询与启动门禁由[实现架构](./architecture.md#136-机载-lab-脚本与增量-dsp-部署)维护，不以旧的完整正文策略描述当前实现。**客户端静态分析/代码**
+
+2026-10-25 S1 自定义槽 9 的三个新 GUID 实验中，上传前 `3f:a3 / 0d` 的匹配应答正文均为 `00 01`：它声明一个条目但缺少 ID/匹配值，不满足完整列表契约，不能据此省略正文。完整 DSP 注册后，启动前同 GUID/摘要查询均返回 `00 01 09 01`，明确匹配槽 9；A、相同 A、不同 B 都通过正常运行与结束。该证据没有证明跨 GUID 的缓存范围，也不要求把不完整列表解释成匹配或零条目；执行和清理范围见[资源实测](./s1-live-validation-2026-10-25.md#lab-自定义音频资源)。**S1 实机报文 / 生产核心**
 
 兼容客户端先发送 GUID、sign 和字节数等 DUSS 元数据，再以匿名 FTP 把文件写到 `/python/python_raw.dsp`。由于 `/ftp -> /data/ftp`，对应机内文件是 `/data/ftp/python/python_raw.dsp`。FTP 成功只证明文件已写入，不能证明程序已经注册或执行。**代码/实测**
 
@@ -458,6 +464,8 @@ stateDiagram-v2
 | 关闭会话 | 结束接收循环和网络 socket | 应在机械归零和停止程序之后执行 |
 
 程序文件位于 `/data`，退出 Lab 不会删除它；注册状态能否跨客户端重连或冷启动复用尚未实测，不能把文件存在、程序已注册和程序正在运行视为同一个状态。
+
+2026-10-25 S1 捕获另确认 `a9 → 02 / attr=00 / 3f:a5` 会在执行开始时，先发布当前 GUID 的 status=0，4 ms 后再发布同 GUID 的 status=2；默认 Stage 0 的创建属性可夹在该转换之前。这个启动前空闲报告不证明新运行已经结束。主机的面板和终端传感器归属须等待本轮见过 RUNNING 后再以空闲退役，失败状态则不需要先出现 RUNNING；显式停止/替换/断连仍立即清理。图传转发来源 `09` 与脚本系统直发来源 `a9` 均属于已接入的 Lab 状态入口，不能让两条服务采用不同的运行终止判断。实际失败、回归及重测见[界面归属记录](./s1-live-validation-2026-10-25.md#界面归属竞态与几何参数)。**S1 实机报文 / 生命周期边界**
 
 #### 5.3.3 机内程序执行
 
@@ -489,9 +497,13 @@ chassis_ctrl.move_with_speed(x, y, z)
 
 S1 Lab 程序受固件内固定的 Python `3.6.6`、标准库和 DJI 注入模块约束。root ADB 直接启动解释器时，默认 `site` 初始化会因 Android 的 root UID 没有 passwd 记录而报 `getpwuid(): uid not found: 0`；使用 `-S` 可完成 `sys`、`socket`、`json`、`select`、`threading` 和 `_thread` 探针。Lab 程序由 `dji_scratch` 提供自己的运行环境，不能用 root shell 直接执行的结果代替 Lab 执行结果。这个约束只属于机内 Lab 实现，不属于 DUSS 协议本身；主机端或其他语言客户端的版本边界见 [Hanppie 技术架构 1.5 节](./architecture.md#15-sdk-打包与-python-边界)。
 
+2026-10-25 的 S1 Lab 实测中，用户脚本显式 `import time` 被拒绝为 `RuntimeError: invalid module, the module is time`；不导入而使用已有上下文中的 `time.sleep(0.6)` 可以运行并正常结束。此结果确认了该运行环境中 `time` 的可用方式，不证明任意标准库可导入或注入实现已经恢复；故障与正常结束的独立证据见[实机记录](./s1-live-validation-2026-10-25.md#lab-完成码的进一步核对)。
+
+同一设备的 Lab 上下文调用 `set()` 会收到 `NameError`；已验证的面板脚本使用列表去重。该结论限定于本轮 Lab 执行上下文，不能仅凭固件 Python 版本推定全部标准内置对象都可用，具体正常运行与错误恢复边界见[程序面板实测](./s1-live-validation-2026-10-25.md#lab-程序面板与异常恢复边界)。
+
 #### 脚本自定义界面
 
-固定 macOS RoboMaster `1.1.5/build 239` 的 `Module.LAB/LABCustomUIManger`、`LABCustomUIDataBase`、`DJIWidget*` 与原生 `RobomasterSystemAbstraction` 共同给出自定义界面契约。以下属于静态恢复，尚无本轮设备报文或真实脚本验收；Hanppie 的开发/交付状态见[实施台账 P03](./official-app-capability-implementation.md#实施清单)。
+固定 macOS RoboMaster `1.1.5/build 239` 的 `Module.LAB/LABCustomUIManger`、`LABCustomUIDataBase`、`DJIWidget*` 与原生 `RobomasterSystemAbstraction` 共同给出自定义界面契约。属性、正常控件和五类输入回传已有 S1 实测；两种异常后的重跑已由当前生产模型和真实桌面确认，其他辅助方法、其他异常及跨运行晚到属性仍须分别验证，具体范围见[日期化记录](./s1-live-validation-2026-10-25.md#lab-异常后的恢复)；Hanppie 的开发/交付状态见[实施台账 P03](./official-app-capability-implementation.md#实施清单)。
 
 | 方向 | 原生线格式与依据 |
 | --- | --- |
@@ -502,7 +514,7 @@ S1 Lab 程序受固件内固定的 Python `3.6.6`、标准库和 DJI 注入模�
 
 `DJIWidgetType` 及工厂实际支持 Stage 0、Button 1、Toggle 2、Slider 3、DropDown 4、Text 5、InputField 6。枚举还声明 JoyStick 7，但工厂没有对应分支，不能仅凭名称承诺脚本摇杆控件可用。
 
-通用函数 0..8 依次为创建、销毁、显隐、名称、位置、尺寸、旋转、枢轴和顺序。位置/枢轴/旋转按浮点解析，尺寸按整数解析，颜色为四个 0..255 整数；文本对齐枚举为 0..8。Stage 负责添加/移除子控件。几何沿 Unity `RectTransform` 的中心坐标、Y 向上和 pivot；预制体尺寸不等于已经确认的运行时画布映射，真实缩放和不同终端坐标仍待验。
+通用函数 0..8 依次为创建、销毁、显隐、名称、位置、尺寸、旋转、枢轴和顺序。固定客户端的位置/枢轴/旋转按浮点解析，尺寸按整数解析，颜色为四个 0..255 整数；文本对齐枚举为 0..8。S1 实测 `set_pivot(0, 0)` 发送类型 1 的两个 int32 零，不能把有类型的整数位模式当作 float32；Hanppie 对枢轴明确接纳整数或有限浮点，其他属性的类型约束不因此放宽。Stage 负责添加/移除子控件。几何沿 Unity `RectTransform` 的中心坐标、Y 向上和 pivot；预制体尺寸不等于已经确认的运行时画布映射，真实缩放和不同终端坐标仍待验。
 
 | 控件 | 特有属性函数 | 用户事件 |
 | --- | --- | --- |
@@ -515,7 +527,9 @@ S1 Lab 程序受固件内固定的 Python `3.6.6`、标准库和 DJI 注入模�
 
 官方按控件类型/索引缓存先到的属性，创建后应用；控件在加入 Stage 后显示，停止和断连销毁全部控件。`RealController.SendCustomUIFunctionEventInfo` 的 action 回调没有处理结果，不能据此认定脚本回调已完成或物理动作已执行。属性与事件头部没有项目 GUID 或执行代次，不能仅靠主机运行标识证明已排除跨运行的晚到属性。
 
-恢复的机内辅助库不等同已验证的可用创作环境：`widget_base.py` 的 `set_active` 构造后遗漏参数，`set_pivot/set_order` 引用未定义变量，`widget.py` 的 Stage.remove 使用 add 选择子；`global_event_client` 的机载运行注入/初始化仍需缺失的 `script_manage` 或设备证据。保持恢复内容不变，不以主机猜测值、另建同地址 EventClient 或未验证示例掩盖这些边界。
+这台 S1 的 Lab 上下文直接提供 `Stage`、`Button`、`Toggle`、`Slider`、`Dropdown`、`Text` 和 `InputField`，构造器具备有效运行上下文；已验证脚本直接使用这些名称，没有导入 `widget` 模块或另建 EventClient。实际脚本运行还创建默认 Stage 0，自建 Stage 为 1；主机按收到的类型和索引组织控件，不假定只有一个 Stage。内部 `script_manage` 注入实现尚未恢复，不能由这台设备的构造/回调结果推出所有固件一致。
+
+恢复源码中，`widget_base.py` 的 `set_active` 构造后遗漏参数，`set_pivot/set_order` 引用未定义变量，`widget.py` 的 Stage.remove 使用 add 选择子。当前 S1 实测的 pivot/order 调用均正常返回，发出整数枢轴及顺序属性；这部分实际固件与恢复源码不同，不能直接把备份中的未定义变量写为当前故障。`set_active(False)` 仍发出 count=0 的显隐属性，Stage.remove 仍发出添加选择子 128，分别不能隐藏或移除控件；显式 `destory()` 则发送销毁属性。主机保留缺参拒绝和有效文字，不猜测参数或改写恢复库。逐项证据见[辅助方法与界面重测](./s1-live-validation-2026-10-25.md#界面归属竞态与几何参数)。
 
 原始来源与指纹保存在忽略目录 `.hanppie/app-analysis/2026-09-08/`，定向反汇编为 `.hanppie/validation/2026-10-22-official-gap/P03-native-Attributes.txt`、`P03-native-Events.txt`；本轮差距、构建结果和源码摘要见[日期化复核](./official-app-gap-review-2026-10-23-cd4287c.md)。
 
@@ -928,7 +942,7 @@ V01 进一步闭合了 `Info` 的来源与消费者：`OnRecvRunningStatusPush 7
 
 `DJIVisionRunningStatus` 仅定义 Exist、Initializing、WaitingConfirm、Running 四项；`VisionFollow.OnVisionTrackingRunningStatus` 在状态变化时检查非零异常码，发送选取失败事件并转搜索。当前材料没有建立异常码逐值含义表，不能将所有非零码命名为“目标丢失”，也不能编造未出现的错误名称。原始报告状态/异常与命令拒绝应答是不同来源。官方自动转搜索与 Hanppie 不自动恢复机械动作的取舍继续由实施台账 C05 记录。新增静态来源摘要保留在忽略目录 `V01-native-contracts.json` 与 `V01-native-rect-json.txt`。**代码 / 未建立逐码含义**
 
-这些字段来自固定版本原生构造函数、推送解码器与客户端消费者的静态分析，尚无本次真实设备抓包或物理跟随证据。Hanppie 当前离线实现与安全边界见[当前实现](./architecture.md#134-遥控操纵镜头坐标系与安全联动)，V01 的来源摘要、验证与设备待验项见[实施台账](./official-app-capability-implementation.md#v01-跟随报告与设备待验)；初次接入的输入指纹与反汇编地址保留在[2026-10-22 离线记录](./object-tracking-validation-2026-10-22.md)。桌面合成验证与平台编译不证明原生报文被设备接受、纵轴选点正确或机器人已物理停止。**静态依据 / 待设备**
+上述字段先由固定版本原生构造、推送解码与客户端消费者恢复；2026-10-25 S1 报文已确认人体 `type=1 / Info=0、1` 与锁定 `type=6 / status=2 / Info=2`，实际桌面入口完成候选选择与锁定。`Info=0` 不能据“检测到人体”便提升为可选候选；取景完整后本机出现 `Info=1`，但不把一次场景归纳为全部固件的识别条件。运行 `Info=3`、完整自主追随、纵轴全范围与物理制动仍未验收。当前实现与边界见[架构](./architecture.md#134-遥控操纵镜头坐标系与安全联动)，本轮报文与动作保护见[实机记录](./s1-live-validation-2026-10-25.md)，历史静态来源见[台账 V01](./official-app-capability-implementation.md#v01-跟随报告与设备待验)和[初次离线记录](./object-tracking-validation-2026-10-22.md)。**静态依据 / 部分 S1 实机**
 
 #### 辅助瞄准、标签与通用视觉 key 的边界
 
@@ -966,13 +980,13 @@ S1 会在 UDP `10607` 数据会话中输出 H.264 视频和 Opus 音频。本机
 
 原生 `RobomasterCameraAbstraction::SetDigitalZoomFactor`（`0x72d630`）构造相机节点 `0x01`、命令 `02:34` 的五字节载荷：`09 00 00` 加 little-endian uint16 倍率，100 表示 1 倍，400 表示 4 倍。现有 Hanppie 遥控初始化的 `0900006400` 与其 1 倍载荷一致。新变焦沿用这条现有发送路径，不替换握手、初始化或退出载荷。**代码**
 
-倍率来自原生相机简化状态 `02:e4`，并非一个已确认的独立 GetZoom 请求。`ObserverPushPack`（`0x72a650`，注册点 `0x72a756`）绑定该命令；`OnCameraSimpleStatusPush`（`0x72a930`）要求 payload 至少 26 字节，在 `0x72b398` 读取偏移 8 的 little-endian uint16，写入 `RMCameraParamDigitalZoomFactor`。Hanppie 当前解释该推送中的倍率、下述时钟同步与存储卡字段，过滤来源相机节点、目的 App 节点和非响应属性。**代码 / 待实机确认**
+倍率来自原生相机简化状态 `02:e4`，并非一个已确认的独立 GetZoom 请求。`ObserverPushPack`（`0x72a650`，注册点 `0x72a756`）绑定该命令；`OnCameraSimpleStatusPush`（`0x72a930`）要求 payload 至少 26 字节，在 `0x72b398` 读取偏移 8 的 little-endian uint16，写入 `RMCameraParamDigitalZoomFactor`。Hanppie 当前解释该推送中的倍率、下述时钟同步与存储卡字段，限定目的 App 节点和非响应属性；相机直发与 HDVT 图传转发分别作为允许的来源。2026-10-25 S1 实机收到的是 `sender=09 / receiver=02 / attr=00 / 02:e4` 的 44 字节转发，原来只接受 `sender=01` 会丢弃全部状态，现已按实机报文修正。字段证据与本轮边界见[实机记录](./s1-live-validation-2026-10-25.md)。**代码 / S1 实机报文**
 
 官方 `ViewSinglePlayer.StateZoom` 在进入/退出时分别请求 400/100，变焦状态关闭跟随入口，跟随状态隐藏变焦入口；`SystemSinglePlayer` 进入和退出单人操控时均以 `isSmooth=false` 恢复 100，并将单人场景目标帧率设为 60。`IControl.SendCameraDigitalZoom` 的平滑参数默认开启，`RealController` 的当前值/目标值初始均为 100；平滑分支逐帧计算 `current = (long)Mathf.Lerp(current, target, Time.deltaTime * 10)`，绝对差严格小于 6 时吸附目标，每步沿同一 DigitalZoomFactor setter 写入。非平滑分支只写目标一次。整数截断使高于名义帧率的某些输入可能停在目标之外；不能改称匀速或固定时长动画。`Mathf.Lerp` 的夹取定义可对照 [Unity 官方参考源码](https://github.com/Unity-Technologies/UnityCsReference/blob/master/Runtime/Export/Math/Mathf.cs)，该在线参考不代表运行了同包 Unity。**固定版代码 / API 参考**
 
 Hanppie 的平滑模式复用同一指令和当前状态生产者，按单调时钟的实际间隔执行上述整数递推，17 毫秒下限限制写入频率；应答串行、报告新鲜度和最终回读是现有客户端的确认约束。真实帧调度、请求时延和设备解码可能改变过渡节奏，不能据算法和 UDP 合成应答宣称逐帧或画面等价。直接端点模式、原有 FPV 初始化/退出报文及准星映射不因平滑模式而替换；连接/任务归属、取消及校准页准入见[当前实现](./architecture.md#134-遥控操纵镜头坐标系与安全联动)。**当前实现 / 待验边界**
 
-本轮未连接设备：`02:e4` 实际发送频率、推送属性、倍率接受范围、录像/识别模式限制、返回时延与图像倍率均待实机确认。局部反汇编保留在 `.hanppie/validation/2026-10-22-official-gap/native-Camera-SetDigitalZoomFactor.txt`、`native-Camera-ObserverCameraStatus.txt` 与 `native-Camera-OnCameraSimpleStatusPush.txt`；原生包编码器对请求字段的映射见同目录 `native-EncodeRequest.txt`。不能把模拟状态推送当成相机已变焦的证据。
+初始静态调查没有连接设备。2026-10-25 S1 已确认 `02:e4` 的 HDVT 转发，以及 400/100 倍率写后报告；图像倍率、平滑时序、录像/识别模式限制和其他固件仍待验。局部反汇编保留在 `.hanppie/validation/2026-10-22-official-gap/native-Camera-SetDigitalZoomFactor.txt`、`native-Camera-ObserverCameraStatus.txt` 与 `native-Camera-OnCameraSimpleStatusPush.txt`；原生包编码器对请求字段的映射见同目录 `native-EncodeRequest.txt`。不能把模拟状态推送当成相机已变焦的证据。
 
 #### 相机抗闪烁与时钟
 
@@ -982,14 +996,14 @@ Hanppie 的平滑模式复用同一指令和当前状态生产者，按单调时
 | --- | --- | --- | --- |
 | 读取抗闪烁 | `02:47` | 空请求；响应 `retcode + int8` | GetAntiFlicker `0x72f550`；转换 `0x73815b` |
 | 设置抗闪烁 | `02:46` | 一字节枚举值 | SetAntiFlicker `0x72edd0` |
-| 读取相机日期 | `02:55` | 空请求；响应前缀为 retcode、年内数、世纪、月、日、时、分、秒 | GetCameraDate `0x72fbe0`；转换 `0x738c70` |
+| 读取相机日期 | `02:55` | 空请求；本机 S1 响应为 retcode、uint16 年份 LE、月、日、时、分、秒；固定版转换器差异见下文 | GetCameraDate `0x72fbe0`；转换 `0x738c70`；S1 实机报文 |
 | 设置相机日期 | `02:54` | 9 字节：uint16 年份 LE、月、日、时、分、秒、两个零字节 | SetCameraDate `0x730270`，构造 `0x7302e3..0x730380` |
 
-读取与写入的年份表示不同：读取转换器在 `0x738ce2..0x738ced` 计算 `response[1] + response[2] * 100`，写入在 `0x730307..0x73030b` 放入完整 uint16 年份。例如 2026 年写入年份字节 `ea 07`，读取年份前缀为 `1a 14`。读取至少需要上述 8 字节前缀；其余未解释字节不参与日期构造。全部日历字段为零在当前应用中显示为未设置，真实固件未初始化值仍待验证。**代码 / 待验证**
+固定版读取转换器在 `0x738ce2..0x738ced` 计算 `response[1] + response[2] * 100`，写入在 `0x730307..0x73030b` 放入 uint16 年份；这是二进制内部转换证据，不能直接当作全部设备的线格式。2026-10-25 的 S1 初始 `02:55` 返回 `00 bc 07 01 01 00 0b 1d`，显式发送 `02:54 / ea 07 ...` 后，`02:55` 返回 `00 ea 07 ...`，其年月日时分秒与写入一致。该会话的读取与写入均为 uint16 年份 LE，Hanppie 按此实际线格式解码，不再把 `ea 07` 拒绝，也不以两种格式猜测年份。全零日历仍显示未设置；其他固件/设备尚未获得同等报文验证。**固定版静态差异 / S1 写后回读**
 
 `02:e4` 的同步状态由原生 `OnCameraSimpleStatusPush` 在 `0x72bdab..0x72bdb1` 读取偏移 5 并测试掩码 `0xc0`；任一位非零即上报已同步。`Module.Setting.System/SystemSetting.OnCameraIsTimeSynced` 仅在设备报告未同步时写入 `DateTime.Now` 的六个本地日期字段，没有时区载荷。Hanppie 因此使用本机本地时间，不把其当作 UTC；状态缺失时也不臆测为未同步。**代码**
 
-本次没有实机证据确认响应长度、年份格式、时钟步进/写入时延、夏令时切换及抗闪烁画面效果。局部反汇编仍放在 `.hanppie/validation/2026-10-22-official-gap/native-Camera-*AntiFlicker.txt`、`*CameraDate.txt` 和 `native-Camera-GetDateReplyValidation.txt`；测试和设备待验项见[实施台账 A03](./official-app-capability-implementation.md#a03-验证入口与设备待验)。
+S1 已确认日期响应的八字节前缀、二进制年份及显式校时写后回读。抗闪烁原值 `0` 可读，但写回 `0` 被本机拒绝 `0xe6`；写入 `2` 和回读成功，本轮留下 50 Hz 配置。时钟长时间步进、夏令时、光学抗闪烁效果及其他固件仍待验。局部反汇编仍放在 `.hanppie/validation/2026-10-22-official-gap/native-Camera-*AntiFlicker.txt`、`*CameraDate.txt` 和 `native-Camera-GetDateReplyValidation.txt`；测试和设备待验项见[实施台账 A03](./official-app-capability-implementation.md#a03-验证入口与设备待验)。
 
 #### 相机 SD 卡状态与格式化
 
@@ -1008,7 +1022,7 @@ Hanppie 的平滑模式复用同一指令和当前状态生产者，按单调时
 
 `ActionFormatSDCard`（`0x7328c0`）构造相机节点 `0x01` 的 `02:72` 请求，payload 为一个零字节：零初始化位于 `0x7328e9`，长度 1 位于 `0x732956`。官方 `ViewSettingSystem.OnSDCardFormat` 检查连接、插卡和未录像，再弹出确认后调用 `SendSDCardFormat`；`OnCameraSDCardIsFormatting` 只按推送开关等待提示，没有把命令应答当作物理格式化完成或删除文件的证明。**代码**
 
-上述内容来自固定版本静态分析，本轮没有 SD 卡实机证据。局部反汇编在 `.hanppie/validation/2026-10-22-official-gap/native-Camera-OnCameraSimpleStatusPush.txt`、`native-Camera-ActionFormatSDCard.txt` 和 `native-Camera-GetIsSDCardError.txt`。真实状态码、容量量纲、格式化应答与推送顺序、失败恢复和文件删除结果见[实施台账 A04 待验](./official-app-capability-implementation.md#a04-验证入口与设备待验)。
+上述位布局来自固定版本静态分析；2026-10-25 S1 已收到插卡/容量/录像状态，拍照、短录及停止后索引新增两项，修正外层可靠接收窗口后完整下载了一份原图。格式化、拔插、故障和删除结果仍未实机验证。局部反汇编在 `.hanppie/validation/2026-10-22-official-gap/native-Camera-OnCameraSimpleStatusPush.txt`、`native-Camera-ActionFormatSDCard.txt` 和 `native-Camera-GetIsSDCardError.txt`。真实状态码、容量量纲、格式化应答与推送顺序、失败恢复和文件删除结果见[实施台账 A04 待验](./official-app-capability-implementation.md#a04-验证入口与设备待验)。
 
 #### 机器人 SD 拍照与录像
 
@@ -1098,7 +1112,7 @@ Hanppie 当前将上述包接入 App 会话请求与接收通道，过滤相机�
 | 写防啸叫 | 相机 `0x01`，`3f:e1`，四字节：开启 `01 0c 01 01`，关闭 `01 0c 01 02` | SetEnableAntiLarsenAlgorithm `0x730a10`，`0x730a90..0x730aff`；InternalSetAudioRecordingConfig `0x730c40`，`0x730c76..0x730d25` |
 | 播放任务推送 | `3f:b4`；uint8 任务号 @ 0、uint8 任务进度 @ 1、原始状态 @ 2、uint32 LE sound ID @ 3；状态低两位为 0 时发布 IsPlaying=true | ObserverPushPack `0x693000`，full-command `0x403f00b4` 在 `0x693106`；OnPlaySoundStatusPush `0x698460`，读取 `0x6984d6..0x6984e9` |
 
-防啸叫 key 为 Write，当前没有其 getter 或状态推送。布尔值在原生内部转换为 1（开启）/2（关闭），不能直接把 false 编码成末字节 0，也不能从 ACK 推定声学效果或“回声消除已生效”。播放任务进度在机载 `event_client.py:task_sync_process` 被命名为 percent；Hanppie 对超出 0–100 的字节保留原值但不显示百分比。状态非零只显示非播放/停止，不将它统一解释为成功完成。**原生/机载代码**
+2026-10-25 S1 的 `3f:1f` 返回四字节 `00 00 59 c6`；当前只解释成功返回码后的布尔字段，保留尾字节不作语义推断，不再以“长度必须恰好两字节”拒绝有效前缀。防啸叫 key 为 Write，当前没有其 getter 或状态推送。布尔值在原生内部转换为 1（开启）/2（关闭），不能直接把 false 编码成末字节 0，也不能从 ACK 推定声学效果或“回声消除已生效”。播放任务进度在机载 `event_client.py:task_sync_process` 被命名为 percent；Hanppie 对超出 0–100 的字节保留原值但不显示百分比。状态非零只显示非播放/停止，不将它统一解释为成功完成。**原生/机载代码**
 
 原生播放回调先比较任务号与当前任务（`0x69848a..0x698492`）；ActionPlaySound 在 `0x6ab870..0x6ab879` 递增任务号，发往节点 `0x09`（`0x6ab8fb`）。Hanppie 当前实机派生的短片播放载荷固定为 `0b040000010001000001`。新增收听仅显示有效来源的最近任务推送，不把它绑定到当前按住对讲的文件，也不据此驱动对讲/Lab 的完成状态；改变任务号和抢占策略的冲突见实施台账 C13。
 
@@ -1196,11 +1210,13 @@ S1 的红外能力至少包含三层，不能把其中任意一层统称为“�
 | 水弹判定 | `WgShootMarker.cs:31–113` 启用时读取机内准星，发射事件选取离准星最近的标签，不要求框内；100 ms 后开始最多 2.5 秒的观察，持续消失超过 300 ms 则产生主机命中事件，重新出现会重置消失计时。未调用的 `CheckSteadyDown` 不作为实际判定步骤 |
 | 发射通知消费者 | `SystemSinglePlayer.cs:131/174/378–380` 监听/取消 `DJIRobomasterWaterGunShootFrequency`，转为 `Event_RobotFire`；不能复用 Hanppie 的“命令已发送”反馈来计分 |
 | 普通准星反馈 | `SystemSinglePlayer.OnGunFire` 及 `LABFPVPanel.OnGunFire` 转发设备频率通知为 `Event_RobotFire`；`Element.S1/Reticle.Awake` 订阅，`OnRobotFire` 将准星变红并缩放到 1.5，随后插值回原状态。这是设备报告驱动的显示，仍不能推定物理发射或命中；与命令发送反馈的取舍见实施台账 C23 |
-| 原生发射报告 | `GunListening` 的 `0x7d06b6` 注册观察键 `0x403f0050`；`OnFireStatusPush`（`0x7d0890`）检查正文至少 6 字节，将偏移 0 的四字节位型写入 ShootSpeed、偏移 4 的 u8 写入 ShootFrequency。`CreateCharacteristics` 的 `0x7cc53b..0x7cc5d3` 为 ShootFrequency 的 key 1 设置 AccessType `0x10`；`GetAccessType`（`0x64b7c0`）读取 key 1，`UpdateParamValue` 的 `0x7d6aaf` 使此类通知绕过值相等过滤。因此不能只按相同频率值去重，也不能将原值乘入分数。观察键前缀不是 wire 属性；偏移 5 的语义、真实来源/属性/周期及物理对应关系仍待验 |
+| 原生发射报告 | `GunListening` 的 `0x7d06b6` 注册观察键 `0x403f0050`；`OnFireStatusPush`（`0x7d0890`）检查正文至少 6 字节，将偏移 0 的四字节位型写入 ShootSpeed、偏移 4 的 u8 写入 ShootFrequency。`CreateCharacteristics` 的 `0x7cc53b..0x7cc5d3` 为 ShootFrequency 的 key 1 设置 AccessType `0x10`；`GetAccessType`（`0x64b7c0`）读取 key 1，`UpdateParamValue` 的 `0x7d6aaf` 使此类通知绕过值相等过滤。因此不能只按相同频率值去重，也不能将原值乘入分数。观察键前缀不是 wire 属性；偏移 5 的语义、其他设备来源/报告周期及物理对应关系仍待验 |
 | 规则配置与恢复 | `ViewChallenger.cs:74–114` 保存并关闭 Armor/BloodCalc，退出恢复，切换 OffControlFunction；`JudgeShoot.cs:350–376` 与 `JudgeRace.cs:191–244` 临时切换 Gun 和 OverheatIncrease，销毁时恢复 Gun 并将热量增长设回 0。必须追原生封包及现有初始化关系，不能照搬 C# 参数名猜报文 |
 | 结束与成绩 | 两个 Judge 的 `StateEnd` 锁控制并停止自定义技能；结果输入姓名，分别按分数降序/用时升序显示前五。记录存在当前组件的 `List<Record>`，未在这两类建立跨组件销毁或应用重启持久化；不能把内存榜单写成官方云榜或持久成绩契约 |
 
 靶场的单次命中和竞速的标签完成均是主机规则；水弹标签消失还可能受遮挡和检测丢失影响。此前红外光学/装甲探测与本节发射通知、主机判定是不同证据层级。自动竞速的用户程序/技能依赖继续纳入 G01，并保留安装槽冲突 C15；不因手动规则可以独立实现而删除该范围。
+
+S1 的实际红外触发报告为 `09 → 02 / attr=00 / 3f:50`，正文 `00 00 80 3f 01 00`；来源是 HDVT 中继，不能只接受枪节点 `17`。当前解析器接受这两条来源，继续限定有效校验、App 目的、非应答属性、命令和至少六字节正文；没有按型号分支或放宽其他节点。只凭发送回调不能驱动完成，实机失败定位、回归及修复后完成流程见[日期化记录](./s1-live-validation-2026-10-25.md#红外竞速发射通知与完成)。
 
 准备资源已沿实际引用关联：`resources.assets` 的 GameObject 12158（ReadyAnima）引用 Animator 26527、脚本组件 46523；脚本 PPtr 指向 `globalgamemanagers.assets` 的 MonoScript 1060，类型为 `Module.Challenger.ReadyAnima`。Animator 引用控制器 3341（ReadyCountDownAC），默认 Init、两个状态速度均为 1、无自动转换，禁用时不保留控制器状态；对应 clip 2932/2933 均为 60 fps。Init 的结束事件在 5/60 秒，Start 的结束事件在 230/60 秒，名义合计 **235/60 秒**。Start 的原始 streamed clip 按子路径 CRC32 和 `m_IsActive` 关联 3/2/1/Start，分别在 Start 的 0/1/2/3 秒激活；前三项另有缩放/透明度曲线，Start 在 3.75 秒关闭，结束事件在其后。本结论来自固定资源和托管消费者，不是 Unity 运行时、实际帧调度或机器人计时测量，也不声称其他 App 版本相同。Hanppie 的毫秒时点及离线验收见[准备时序实施记录](./official-app-capability-implementation.md#g01-固定准备时序与提示同步阶段)。
 
@@ -1764,6 +1780,8 @@ Hanppie 的 `RemoteCommands.remoteSetup` 已含 `a9`/`09` 卸载选择子及 `a8
 原生片段及来源摘要在忽略目录 `.hanppie/validation/2026-10-22-official-gap/P01-native-*` 与 `P01-native-contracts.json`；库 SHA-256 为 `66e5ff67a64931ca492af448216cac3ee34323c3442bc72cd7acdcf19bf96e80`。当前实现未新增安装、卸载或槽位控制入口。
 
 #### 程序与音频资源摘要查询
+
+DSP 注册完成 `a9 / 3f:a2 / 01 00 + MD5(16)` 的终态码为 `d0`，不能复用普通接口的零成功码。固定 macOS `SendCompletePack` 回调在 `1e0ea..1e112` 将 `d0` 映射为上传成功；恢复机载 `duml_cmdset.py` 将其命名为 `DUSS_MB_RET_FINSH`，并将 `d1..d6` 定义为重传、MD5、传输、缺失、非传输中及尺寸错误。2026-10-25 S1 的匹配应答为 `a9 → 02 / attr=80 / payload=d0`。Hanppie 登记解析仅接受完成码，再继续核对 GUID/sign；音频资源查询仍检查其独立的 `00` 返回码，不扩大为通用非零成功。**固定版回调 / 恢复机载定义 / S1 报文**
 
 官方 `SystemUploadDsp.UploadDspWithFTP` 先核对 DSP 的 GUID/sign；不匹配时查询音频摘要，只对设备明确匹配的音频省略正文，查询失败保留完整正文。DSP 匹配时普通运行可跳过重传，安装任务仍需请求指定槽位。主机本地计算 MD5 或 FTP 返回不能替代这两种机内核对。
 

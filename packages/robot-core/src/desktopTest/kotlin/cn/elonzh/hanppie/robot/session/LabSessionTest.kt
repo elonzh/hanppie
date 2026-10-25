@@ -126,8 +126,11 @@ class LabSessionTest {
         Peer().use { peer -> peer.session().use { session ->
             session.connect()
             val matches = AtomicBoolean(false)
-            peer.handler = { frame -> listOf(Reply(if (frame.id == 0xa3 && frame.payload.u8(0) == 1 && !matches.get())
-                byteArrayOf(1) else byteArrayOf(0))) }
+            peer.handler = { frame -> listOf(Reply(when {
+                frame.id == 0xa2 -> byteArrayOf(0xd0.toByte())
+                frame.id == 0xa3 && frame.payload.u8(0) == 1 && !matches.get() -> byteArrayOf(1)
+                else -> byteArrayOf(0)
+            })) }
             val controller = LabController(session, {})
             val upload = controller.upload("def start():\n    pass\n", "fixture")
             assertFailsWith<IllegalStateException> { controller.start() }

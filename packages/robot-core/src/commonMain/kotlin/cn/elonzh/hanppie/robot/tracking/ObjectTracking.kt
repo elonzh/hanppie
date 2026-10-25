@@ -141,6 +141,10 @@ class ObjectTracking(
                 return
             }
             lastCandidatePush = nowMillis()
+            if (state.value.phase == TrackingPhase.SEARCHING) {
+                lastVisionReport = lastCandidatePush
+                deadline = lastCandidatePush + 3_000
+            }
             mutableState.value = state.value.copy(candidates = push.rectangles)
             return
         }

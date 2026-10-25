@@ -117,6 +117,50 @@ class ObjectTrackingTest {
         assertEquals(TrackingPhase.SEARCHING, searching.tracker.state.value.phase)
     }
 
+    @Test fun searchUsesFreshHumanDetectionReportsBeforeAnyTrackingStatusExists() {
+        val rig = Rig(); rig.tracker.start(); rig.ack(); rig.ack()
+        // S1 search emits this empty human report before a target is selected, without type 6.
+        val human = DussFrame(0, 0xf1, 2, 99, 0, 0x0a, 0xa4, "010100000000000000".hexBytes(), true)
+        repeat(10) { rig.now += 500; rig.tracker.receive(human); rig.tracker.tick(true) }
+        assertEquals(TrackingPhase.SEARCHING, rig.tracker.state.value.phase)
+        assertTrue(rig.tracker.state.value.targets.isEmpty())
+        rig.now += 1_501; rig.tracker.tick(true)
+        assertEquals(TrackingPhase.STOPPING, rig.tracker.state.value.phase)
+        rig.ack(); assertEquals(TrackingProblem.TIMED_OUT, rig.tracker.state.value.problem)
+    }
+
+    @Test fun humanDetectionCannotKeepFollowingAliveWithoutTrackingReports() {
+        val rig = Rig(); rig.follow()
+        repeat(4) { rig.now += 400; rig.tracker.receive(push(1, false, type = 1)); rig.tracker.tick(true) }
+        assertEquals(TrackingPhase.STOPPING, rig.tracker.state.value.phase)
+        rig.ack(); assertEquals(TrackingProblem.TIMED_OUT, rig.tracker.state.value.problem)
+    }
+
+    @Test fun realHumanDetectionWithZeroInfoDoesNotPermitTargetSelection() {
+        val rig = Rig(); rig.tracker.start(); rig.ack(); rig.ack()
+        val human = DussFrame(0, 0xf1, 2, 292, 0, 0x0a, 0xa4,
+            "01010000000000000131990a3fa01aaf3e1ea7e83d3e79283f00000000".hexBytes(), true)
+        val raw = TrackingProtocol.push(human)!!.rectangles.single()
+        assertEquals(0, raw.info, "The protocol decoder preserves the original human Info")
+        rig.tracker.receive(human)
+        assertEquals(raw, rig.tracker.state.value.candidates.single())
+        assertNull(rig.tracker.state.value.selectableAt(raw.x, raw.y))
+        assertFailsWith<IllegalStateException> { rig.tracker.select(raw.x, raw.y) }
+    }
+
+    @Test fun realSelectableHumanAndLockedReportsStillRequireExplicitFollowConfirmation() {
+        val rig = Rig(); rig.tracker.start(); rig.ack(); rig.ack()
+        rig.tracker.receive(DussFrame(0, 0xf1, 2, 2, 0, 0x0a, 0xa4,
+            "010100000000000001abcf053f82e2173fe4839e3dc807fd3e01000000".hexBytes(), true))
+        val candidate = rig.tracker.state.value.candidates.single()
+        rig.tracker.select(candidate.x, candidate.y); rig.ack()
+        rig.tracker.receive(DussFrame(0, 0xf1, 2, 4, 0, 0x0a, 0xa4,
+            "0602000000000000010000043f610b163f3333933d1dc7f13e02000000".hexBytes(), true))
+        assertEquals(TrackingPhase.TARGET_READY, rig.tracker.state.value.phase)
+        assertEquals(2, rig.tracker.state.value.rectangles.single().info)
+        assertTrue(rig.sent.none { it.id == TrackingProtocol.CONFIRM })
+    }
+
     @Test fun infoAndUnknownStatusKeepTheirExactWireValues() {
         val raw = 0x87654321.toInt()
         val decoded = TrackingProtocol.push(push(0xfe, info = raw, error = 0xfedc))!!
@@ -146,8 +190,6 @@ class ObjectTrackingTest {
         val rig = Rig(); rig.search()
         val mark = rig.sent.size
         assertFailsWith<IllegalStateException> { rig.tracker.select(.1f, .1f) }
-        rig.tracker.receive(push(0, type = 1, info = 0))
-        assertFailsWith<IllegalStateException> { rig.tracker.select(.5f, .25f) }
         rig.tracker.receive(push(0, type = 1, info = 99))
         assertFailsWith<IllegalStateException> { rig.tracker.select(.5f, .25f) }
         rig.tracker.receive(push(0, type = 1, info = 1))

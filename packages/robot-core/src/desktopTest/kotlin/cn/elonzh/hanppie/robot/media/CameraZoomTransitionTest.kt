@@ -8,7 +8,10 @@ import kotlin.test.*
 class CameraZoomTransitionTest {
     private fun frame(value: Int) = DussFrame(0, 1, 2, 1, 0, 2, 0xe4,
         ByteArray(26).apply { put16(8, value) }, true)
-    private fun now() = System.nanoTime() / 1_000_000
+    private fun clock(): () -> Long {
+        var millis = 0L
+        return { millis += 17; millis }
+    }
 
     @Test fun nativeLerpTruncatesAndSnapsStrictlyBelowSixHundredths() {
         assertEquals(150, nextCameraZoom(100, 400, 1f / 60))
@@ -50,7 +53,7 @@ class CameraZoomTransitionTest {
             camera.receive(frame(value))
             if (value == 400) { finalSent.complete(Unit); ack.await() }
             byteArrayOf(0)
-        }, nowMillis = ::now)
+        }, nowMillis = clock())
         camera.receive(frame(100))
         val task = async { camera.setZoom(400, smooth = true) }
         withTimeout(5_000) { finalSent.await() }
@@ -69,7 +72,7 @@ class CameraZoomTransitionTest {
             val value = body.u16(3); writes += value
             if (value == 100) finalSent.complete(Unit) else camera.receive(frame(100))
             byteArrayOf(0)
-        }, nowMillis = ::now)
+        }, nowMillis = clock())
         camera.receive(frame(400))
         val task = async { camera.setZoom(100, smooth = true) }
         withTimeout(5_000) { finalSent.await() }; yield()
@@ -83,7 +86,7 @@ class CameraZoomTransitionTest {
         val sent = CompletableDeferred<Unit>(); val ack = CompletableDeferred<Unit>(); val writes = mutableListOf<Int>()
         val camera = CameraCommands({ _, _, _, body ->
             writes += body.u16(3); sent.complete(Unit); ack.await(); byteArrayOf(0)
-        }, nowMillis = ::now)
+        }, nowMillis = clock())
         camera.receive(frame(100))
         val task = async { camera.setZoom(400, smooth = true) }
         withTimeout(5_000) { sent.await() }; delay(80)
@@ -94,14 +97,14 @@ class CameraZoomTransitionTest {
 
     @Test fun rejectionStopsTheTransitionWithoutAnEndpointWrite(): Unit = runBlocking {
         var count = 0
-        val camera = CameraCommands({ _, _, _, _ -> count++; throw RobotRequestException(RequestProblem.REJECTED) }, nowMillis = ::now)
+        val camera = CameraCommands({ _, _, _, _ -> count++; throw RobotRequestException(RequestProblem.REJECTED) }, nowMillis = clock())
         camera.receive(frame(100))
         assertEquals(RequestProblem.REJECTED, assertFailsWith<RobotRequestException> { camera.setZoom(400, true) }.problem)
         assertEquals(1, count); assertEquals(100, camera.state.value.zoomHundredths)
     }
 
     @Test fun staleReportsStopBeforeTheNextWrite(): Unit = runBlocking {
-        var offset = 0L; var count = 0
+        var offset = 0L; var count = 0; val now = clock()
         val camera = CameraCommands({ _, _, _, _ -> count++; offset = 1_600; byteArrayOf(0) }, nowMillis = { now() + offset })
         camera.receive(frame(100))
         assertEquals(RequestProblem.INVALID_RESPONSE, assertFailsWith<RobotRequestException> { camera.setZoom(400, true) }.problem)
@@ -110,7 +113,7 @@ class CameraZoomTransitionTest {
 
     @Test fun closingDuringTheTransitionPreventsFurtherWrites(): Unit = runBlocking {
         var count = 0; lateinit var camera: CameraCommands
-        camera = CameraCommands({ _, _, _, _ -> count++; camera.close(); byteArrayOf(0) }, nowMillis = ::now)
+        camera = CameraCommands({ _, _, _, _ -> count++; camera.close(); byteArrayOf(0) }, nowMillis = clock())
         camera.receive(frame(100))
         assertEquals(RequestProblem.DISCONNECTED, assertFailsWith<RobotRequestException> { camera.setZoom(400, true) }.problem)
         assertEquals(1, count)
@@ -120,7 +123,7 @@ class CameraZoomTransitionTest {
         val writes = mutableListOf<Int>(); lateinit var camera: CameraCommands
         camera = CameraCommands({ _, _, _, body ->
             val value = body.u16(3); writes += value; camera.receive(frame(value)); byteArrayOf(0)
-        }, nowMillis = ::now)
+        }, nowMillis = clock())
         camera.receive(frame(100)); camera.setZoom(100, true)
         assertEquals(listOf(100), writes)
         writes.clear(); camera.setZoom(250, true)

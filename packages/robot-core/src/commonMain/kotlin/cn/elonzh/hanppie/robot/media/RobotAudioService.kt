@@ -55,7 +55,7 @@ internal class SpeakerCommands(
 
     override suspend fun readSoundEnabled(): Boolean {
         val response = command(0x1f, receiver = Protocol.HOST_CAMERA)
-        if (response.size != 2) throw RobotRequestException(RequestProblem.INVALID_RESPONSE)
+        if (response.size < 2) throw RobotRequestException(RequestProblem.INVALID_RESPONSE)
         // The native converter tests for nonzero, rather than comparing strictly with 1.
         return response.u8(1) != 0
     }

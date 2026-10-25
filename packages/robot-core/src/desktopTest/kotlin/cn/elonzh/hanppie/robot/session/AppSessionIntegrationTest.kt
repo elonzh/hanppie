@@ -3,6 +3,9 @@ package cn.elonzh.hanppie.robot.session
 import cn.elonzh.hanppie.robot.media.SpeakerAudio
 import cn.elonzh.hanppie.robot.protocol.DussFrame
 import cn.elonzh.hanppie.robot.protocol.Protocol
+import cn.elonzh.hanppie.robot.protocol.AppEnvelope
+import cn.elonzh.hanppie.robot.protocol.u16
+import cn.elonzh.hanppie.robot.protocol.put16
 import cn.elonzh.hanppie.robot.product.RobotComponent
 import cn.elonzh.hanppie.robot.product.RobotModel
 import cn.elonzh.hanppie.robot.remote.RemoteControl
@@ -26,6 +29,58 @@ import kotlin.concurrent.thread
 import kotlin.test.*
 
 class AppSessionIntegrationTest {
+    @Test fun reliableReplyStreamContinuesPastTheNativeOneHundredPacketWindow() = runBlocking {
+        DatagramSocket(0, InetAddress.getLoopbackAddress()).use { robot ->
+            robot.soTimeout = 20
+            val alive = AtomicBoolean(true)
+            val received = AtomicInteger()
+            val acknowledgements = CopyOnWriteArrayList<Int>()
+            val peer = thread(isDaemon = true) {
+                var burstSent = false; var finalSent = false
+                while (alive.get()) try {
+                    val packet = DatagramPacket(ByteArray(65535), 65535); robot.receive(packet)
+                    val bytes = packet.data.copyOf(packet.length)
+                    if (bytes.size < 12) continue
+                    val session = bytes.u16(2)
+                    fun send(data: ByteArray) = robot.send(DatagramPacket(data, data.size, packet.socketAddress))
+                    if (bytes[6].toInt() == 0) {
+                        send(AppEnvelope(session, 8).control(byteArrayOf()).apply {
+                            this[6] = 1; put16(8, 8); put16(10, 8); put16(16, 8); put16(18, 8)
+                            this[7] = take(7).fold(0) { sum, byte -> sum xor (byte.toInt() and 255) }.toByte()
+                        })
+                    } else send(bytes)
+                    if (bytes[6].toInt() == 4 && bytes.size >= 34 && bytes.u16(16) == bytes.u16(18))
+                        acknowledgements += bytes.u16(16)
+                    fun reliable(index: Int) {
+                        val tick = 16 + index * 8
+                        send(AppEnvelope(session, 8).direct(Protocol.duss(9, 2, 0, 0, 0x70,
+                            byteArrayOf(index.toByte()), index)).apply {
+                            put16(4, tick); this[6] = 3; put16(10, tick)
+                            this[7] = take(7).fold(0) { sum, byte -> sum xor (byte.toInt() and 255) }.toByte()
+                        })
+                    }
+                    if (!burstSent && Protocol.frames(bytes).isNotEmpty()) {
+                        burstSent = true
+                        repeat(100, ::reliable)
+                    }
+                    if (burstSent && !finalSent && 808 in acknowledgements) {
+                        finalSent = true; reliable(100)
+                    }
+                } catch (_: SocketTimeoutException) { } catch (_: java.net.SocketException) { break }
+            }
+            val session = AppSession(RobotTarget("127.0.0.1", "12345678", localPort = 0,
+                remotePort = robot.localPort, identityTimeoutMillis = 200), onFrame = { frame ->
+                if (frame.sender == 9 && frame.set == 0 && frame.id == 0x70) received.incrementAndGet()
+            })
+            try {
+                session.connect()
+                withTimeout(3_000) { while (received.get() < 101) delay(5) }
+                assertEquals(101, received.get())
+                assertTrue(808 in acknowledgements)
+            } finally { session.close(); alive.set(false); peer.join(1000) }
+        }
+    }
+
     @Test fun discoveryUsesUdpSourceWhenBroadcastContainsAStaleAddress() = runBlocking {
         val broadcast = robotBroadcast(
             "b6359877",

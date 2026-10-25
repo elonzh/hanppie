@@ -12,13 +12,23 @@ class CameraCommandsTest {
     @Test fun validatesNativeStatusFieldsAndExpiresTheLastReading() {
         var clock = 1L
         val camera = CameraCommands({ _, _, _, _ -> byteArrayOf(0) }) { clock }
-        for (invalid in listOf(frame().copy(valid = false), frame().copy(sender = 9), frame().copy(receiver = 3),
+        for (invalid in listOf(frame().copy(valid = false), frame().copy(sender = 3), frame().copy(receiver = 3),
             frame().copy(attr = 0x80), frame().copy(payload = ByteArray(25)), frame().copy(id = 0x80))) camera.receive(invalid)
         assertNull(camera.state.value.zoomHundredths)
         camera.receive(frame(400)); assertEquals(400, camera.state.value.zoomHundredths)
         clock += 1_499; camera.expire(); assertEquals(400, camera.state.value.zoomHundredths)
         clock++; camera.expire(); assertNull(camera.state.value.zoomHundredths)
         camera.receive(frame(401)); assertNull(camera.state.value.zoomHundredths)
+    }
+
+    @Test fun acceptsTheLiveCameraStatusRelayedByTheVideoNode() {
+        val camera = CameraCommands({ _, _, _, _ -> error("A status push does not send commands") }) { 1 }
+        val payload = "000010000011000064001f1f0000101c0000e0410000340a0000000000000000000000000000000000000000".hexBytes()
+        camera.receive(DussFrame(0, 9, 2, 1, 0, 2, 0xe4, payload, true))
+        assertEquals(100, camera.state.value.zoomHundredths)
+        assertEquals(true, camera.state.value.storage?.inserted)
+        assertEquals(false, camera.state.value.storage?.recording)
+        assertNotNull(camera.state.value.imaging)
     }
 
     @Test fun requiresBothWriteAckAndANewMatchingStatus(): Unit = runBlocking {

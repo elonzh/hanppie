@@ -98,9 +98,9 @@ class ChallengeSessionTest {
                     waitFor { session.challenge.value.phase == ChallengePhase.PLAYING }
                     session.fireInfrared(); delay(150)
                     assertTrue(session.challenge.value.checkpoints.isEmpty(), "A successful send is not a device fire notification")
-                    peer.fire(9); delay(50); assertTrue(session.challenge.value.checkpoints.isEmpty())
+                    peer.fire(0xc3); delay(50); assertTrue(session.challenge.value.checkpoints.isEmpty())
                     peer.dropRestoration.set(true)
-                    peer.fire()
+                    peer.fire(9)
                     waitFor { session.challenge.value.phase == ChallengePhase.RESULT && !session.challenge.value.stopConfirmed }
                     val originalId = session.challenge.value.roundId
                     assertFailsWith<IllegalStateException> { session.dismissChallenge() }

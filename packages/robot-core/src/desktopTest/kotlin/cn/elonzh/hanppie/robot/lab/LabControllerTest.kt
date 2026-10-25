@@ -40,7 +40,7 @@ class LabControllerTest {
                     val slot = payload.u8(offset)
                     listOf(slot.toByte(), if (storedAudio[slot] == payload.copyOfRange(offset + 1, offset + 5).hex()) 1.toByte() else 0.toByte())
                 }.toByteArray()
-            } else byteArrayOf(0)
+            } else byteArrayOf(if (id == 0xa2) 0xd0.toByte() else 0)
         }
     }
 
@@ -232,9 +232,9 @@ class LabControllerTest {
         controller.upload("pass", "fixture")
         val cases: List<suspend (Int, ByteArray) -> ByteArray> = listOf(
             { _, _ -> byteArrayOf(7) },
-            { id, _ -> if (id == 0xa2) byteArrayOf(0) else byteArrayOf(1) },
-            { id, _ -> if (id == 0xa2) byteArrayOf(0) else byteArrayOf(0, 1) },
-            { id, _ -> if (id == 0xa2) byteArrayOf(0) else throw RobotRequestException(RequestProblem.TIMED_OUT) },
+            { id, _ -> if (id == 0xa2) byteArrayOf(0xd0.toByte()) else byteArrayOf(1) },
+            { id, _ -> if (id == 0xa2) byteArrayOf(0xd0.toByte()) else byteArrayOf(0, 1) },
+            { id, _ -> if (id == 0xa2) byteArrayOf(0xd0.toByte()) else throw RobotRequestException(RequestProblem.TIMED_OUT) },
         )
         for ((index, response) in cases.withIndex()) {
             channel.respond = response

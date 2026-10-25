@@ -42,13 +42,14 @@ internal class RobotHealthStore(private val nowMillis: () -> Long = { robotNanoT
     private var closed = false
 
     fun receive(frame: DussFrame) = lock.withLock {
-        if (closed || !frame.valid || frame.receiver != Protocol.HOST_MOBILE || frame.attr != Protocol.ATTR_NO_ACK) return@withLock
-        if (frame.sender == Protocol.HOST_SYSTEM) RobotProductProtocol.capabilities(frame)?.let { capabilities ->
+        if (closed || !frame.valid || frame.receiver != Protocol.HOST_MOBILE) return@withLock
+        if (frame.sender == Protocol.HOST_SYSTEM && frame.attr == Protocol.ATTR_NO_ACK) RobotProductProtocol.capabilities(frame)?.let { capabilities ->
             modulesAt = nowMillis()
             mutable.value = state.value.copy(modules = capabilities.workingDevices,
                 seenDeviceIds = state.value.seenDeviceIds + capabilities.workingDevices.map { it.deviceId }, moduleReportAgeSeconds = 0)
         }
-        if (frame.sender == Protocol.HOST_HDVT_UAV && frame.set == Protocol.CMDSET_VIRTUAL_BUS &&
+        if (frame.sender == Protocol.HOST_HDVT_UAV && frame.attr in listOf(Protocol.ATTR_NO_ACK, Protocol.ATTR_NEED_ACK) &&
+            frame.set == Protocol.CMDSET_VIRTUAL_BUS &&
             frame.id == Protocol.CMD_VBUS_DATA_ANALYSIS && frame.payload.size == 62 && frame.payload.u8(0) == 0 && frame.payload.u8(1) == 1) {
             batteryAt = nowMillis()
             mutable.value = state.value.copy(battery = decodeBattery(frame.payload, 2))

@@ -196,7 +196,8 @@ object Protocol {
                 crc(raw.copyOfRange(0, length - 2), CRC16_INIT, CRC16_POLY) == raw.u16(length - 2)
             add(DussFrame(offset, raw.u8(4), raw.u8(5), raw.u16(6), raw.u8(8), raw.u8(9),
                 raw.u8(10), raw.copyOfRange(11, length - 2), valid))
-            offset += length
+            // An invalid candidate can start in the outer header and overlap the real frame.
+            offset += if (valid) length else 1
         }
     }
 
@@ -228,7 +229,8 @@ class AppEnvelope(var session: Int, private val initialTick: Int) {
     private var directReference = initialTick
     private var latestDirect = initialTick
     private var controlTick = (initialTick + 0xa8) and 65535
-    private var controlReference = initialTick
+    private var receivedDirectTick: Int? = null
+    private val receivedDirectAhead = mutableSetOf<Int>()
     private var packetIndex = 1
 
     fun preconnect(): ByteArray =
@@ -261,7 +263,8 @@ class AppEnvelope(var session: Int, private val initialTick: Int) {
             this[0] = size.toByte(); this[1] = 0x80.toByte()
             put16(2, session); this[6] = 4; checksum(this)
             put16(8, tick); put16(10, tick)
-            put16(16, controlReference); put16(18, controlReference)
+            val received = receivedDirectTick ?: initialTick
+            put16(16, received); put16(18, received)
             put16(24, directReference); put16(26, latestDirect)
             put16(32, duss.size); duss.copyInto(this, 34)
         }
@@ -269,9 +272,21 @@ class AppEnvelope(var session: Int, private val initialTick: Int) {
 
     fun observe(data: ByteArray) {
         if (data.size < 12 || data.u16(2) != session) return
-        if (data.size >= 28 && data.u16(4) == 0) {
+        if (data.u8(6) == 3) {
+            // The robot's reliable receive channel has its own sequence space, independent of our sends.
+            val head = receivedDirectTick ?: data.u16(8)
+            val tick = data.u16(4)
+            val distance = (tick - head) and 65535
+            if (distance in 8..32767 && distance % 8 == 0) receivedDirectAhead += tick
+            var contiguous = head
+            while (receivedDirectAhead.remove((contiguous + 8) and 65535)) contiguous = (contiguous + 8) and 65535
+            receivedDirectTick = contiguous
+            return
+        }
+        if (data.u8(6) == 1 && data.size >= 28 && data.u16(4) == 0) {
             if (data.u16(24) != 0) directReference = data.u16(24)
-            if (data.u16(16) != 0) controlReference = data.u16(16)
+            val reference = data.u16(16)
+            if (receivedDirectTick == null && reference != 0) receivedDirectTick = reference
             if (data.size != 34 && Protocol.frames(data).any { it.valid && it.offset >= 34 } && data.u16(10) != 0)
                 controlTick = data.u16(10)
         }

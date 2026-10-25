@@ -13,6 +13,7 @@ from hanppie.protocol import (
     normalize_appid,
     parse_duss_frames,
     parse_robot_broadcast,
+    xor_header,
 )
 
 __all__: list[str] = []
@@ -49,6 +50,35 @@ def test_duss_frame_matches_captured_crc_vector() -> None:
     assert not parse_duss_frames(bytes(damaged))[0].valid
 
 
+@pytest.mark.parametrize("valid_header", [False, True])
+def test_invalid_outer_header_candidate_does_not_hide_real_frame(valid_header: bool) -> None:
+    # S1 video transfer: an outer checksum of 0x55 falsely claimed a 64-byte frame.
+    frame = build_duss(1, 2, 0, 0, 0x27, bytes(80), 123)
+    prefix = bytearray(20)
+    prefix[7:10] = b"\x55\x40\x04"
+    if valid_header:
+        prefix[10] = crc8(prefix[7:10])
+    decoded = parse_duss_frames(bytes(prefix) + frame)
+    assert any(not item.valid and item.offset == 7 for item in decoded)
+    valid = [item for item in decoded if item.valid]
+    assert len(valid) == 1
+    assert (valid[0].offset, valid[0].cmdid, valid[0].sequence, valid[0].payload) == (
+        20,
+        0x27,
+        123,
+        bytes(80),
+    )
+
+
+def test_valid_frame_payload_is_not_rescanned() -> None:
+    inner = build_duss(9, 2, 0, 0x3F, 0x70, b"", 5)
+    outer = build_duss(1, 2, 0, 0, 0x27, inner, 6)
+    decoded = parse_duss_frames(outer)
+    assert len(decoded) == 1
+    assert decoded[0].valid
+    assert (decoded[0].cmdid, decoded[0].payload) == (0x27, inner)
+
+
 def test_outer_envelope_matches_captured_preconnect_and_direct_packet() -> None:
     frame = build_duss(0x02, 0x09, 0x40, 0x3F, 0x57, b"", 10072)
     envelope = AppEnvelope(session=bytes.fromhex("dc68"), tick=0x46D8)
@@ -68,6 +98,7 @@ def test_outer_envelope_matches_captured_preconnect_and_direct_packet() -> None:
     inbound = bytearray(28)
     inbound[2:4] = envelope.session
     inbound[4:6] = b"\x00\x00"
+    inbound[6] = 1
     inbound[16:18] = (123).to_bytes(2, "little")
     inbound[24:26] = (456).to_bytes(2, "little")
     envelope.observe(bytes(inbound))
@@ -76,9 +107,71 @@ def test_outer_envelope_matches_captured_preconnect_and_direct_packet() -> None:
 
     streamed = bytearray(34) + bytearray(frame)
     streamed[2:4] = envelope.session
+    streamed[6] = 1
     streamed[10:12] = (789).to_bytes(2, "little")
     envelope.observe(bytes(streamed))
     assert envelope.control_tick == 789
+
+
+def _reliable_packet(tick: int, base: int = 8, session: bytes = b"\x34\x12") -> bytes:
+    packet = bytearray(
+        AppEnvelope(session=session, tick=base).wrap_direct(build_duss(9, 2, 0, 0, 0x70, b"", 0))
+    )
+    packet[4:6] = tick.to_bytes(2, "little")
+    packet[6] = 3
+    packet[7] = xor_header(packet[:7])
+    packet[8:10] = base.to_bytes(2, "little")
+    packet[10:12] = tick.to_bytes(2, "little")
+    return bytes(packet)
+
+
+def test_reliable_receive_window_acknowledges_all_one_hundred_native_packets() -> None:
+    envelope = AppEnvelope(session=b"\x34\x12", tick=80)
+    for tick in range(16, 809, 8):
+        envelope.observe(_reliable_packet(tick))
+    control = envelope.wrap_control(b"")
+    assert int.from_bytes(control[16:18], "little") == 808
+    assert int.from_bytes(control[18:20], "little") == 808
+    assert int.from_bytes(control[24:26], "little") == 80
+    assert int.from_bytes(control[26:28], "little") == 80
+    assert int.from_bytes(envelope.wrap_direct(b"")[4:6], "little") == 88
+
+
+def test_reliable_receive_window_waits_for_gaps_and_ignores_duplicates_and_other_sessions() -> None:
+    envelope = AppEnvelope(session=b"\x34\x12", tick=80)
+    envelope.observe(_reliable_packet(16))
+    envelope.observe(_reliable_packet(32))
+    assert envelope.wrap_control(b"")[16:20] == b"\x10\x00" * 2
+    envelope.observe(_reliable_packet(24))
+    assert envelope.wrap_control(b"")[16:20] == b"\x20\x00" * 2
+    envelope.observe(_reliable_packet(16))
+    envelope.observe(_reliable_packet(32))
+    envelope.observe(_reliable_packet(40, session=b"\x78\x56"))
+    assert envelope.wrap_control(b"")[16:20] == b"\x20\x00" * 2
+
+
+def test_reliable_tick_zero_wraps_without_reading_payload_as_control_table() -> None:
+    envelope = AppEnvelope(session=b"\x34\x12", tick=80)
+    packet = bytearray(_reliable_packet(0, base=65528))
+    packet[24:28] = b"\xd2\x04\x2e\x16"
+    envelope.observe(bytes(packet))
+    assert envelope.wrap_control(b"")[16:20] == b"\x00" * 4
+    envelope.observe(_reliable_packet(8, base=65528))
+    assert envelope.wrap_control(b"")[16:20] == b"\x08\x00" * 2
+    assert envelope.direct_reference == 80
+
+
+def test_control_table_does_not_replace_a_contiguous_receive_acknowledgement() -> None:
+    envelope = AppEnvelope(session=b"\x34\x12", tick=80)
+    for tick in range(16, 33, 8):
+        envelope.observe(_reliable_packet(tick))
+    packet = bytearray(34)
+    packet[2:4] = envelope.session
+    packet[6] = 1
+    for reference in (24, 8, 40):
+        packet[16:18] = reference.to_bytes(2, "little")
+        envelope.observe(bytes(packet))
+        assert envelope.wrap_control(b"")[16:20] == b"\x20\x00" * 2
 
 
 def test_session_rollover_and_packet_classification() -> None:

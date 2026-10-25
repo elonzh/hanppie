@@ -6,7 +6,8 @@ import cn.elonzh.hanppie.robot.protocol.*
 internal data class ChallengeFireReport(val speedBits: Int, val frequencyRaw: Int, val detailRaw: Int)
 
 internal fun challengeFireReport(frame: DussFrame): ChallengeFireReport? {
-    if (!frame.valid || frame.sender != Protocol.HOST_GUN || frame.receiver != Protocol.HOST_MOBILE ||
+    // S1 relays this notification through HDVT rather than sending it directly from the gun.
+    if (!frame.valid || frame.sender !in listOf(Protocol.HOST_GUN, Protocol.HOST_HDVT_UAV) || frame.receiver != Protocol.HOST_MOBILE ||
         frame.attr != Protocol.ATTR_NO_ACK || frame.set != Protocol.CMDSET_RM || frame.id != 0x50 || frame.payload.size < 6) return null
     val p = frame.payload
     return ChallengeFireReport((0..3).fold(0) { bits, i -> bits or (p.u8(i) shl (i * 8)) }, p.u8(4), p.u8(5))

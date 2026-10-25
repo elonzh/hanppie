@@ -22,10 +22,11 @@ internal class LabUiControl(
     private var inputDeadline = 0L
     private var fresh = false
     private var closed = false
+    private var started = false
 
     fun reset(runId: String? = null) {
         held.clear(); beforeCreate.clear(); lastSliderEvent.clear()
-        visible = false; inputDeadline = 0
+        visible = false; inputDeadline = 0; started = false
         mutableState.value = LabUiState(runId = runId)
     }
 
@@ -55,7 +56,9 @@ internal class LabUiControl(
             frame.set == Protocol.CMDSET_RM && frame.id == Protocol.CMD_RM_SCRIPT_BLOCK_STATUS_PUSH && frame.attr == Protocol.ATTR_NO_ACK) {
             val status = Telemetry.labScriptStatus(frame) ?: return
             if (state.value.runId == null || !status.guid.equals(state.value.runId, ignoreCase = true)) return
-            if (status.isIdle || status.isFailed) reset() else {
+            // The native runtime can publish this GUID as idle immediately before RUNNING.
+            if (status.isFailed || (status.isIdle && started)) reset() else if (!status.isIdle) {
+                if (status.isRunning) started = true
                 fresh = true
                 mutableState.value = state.value.copy(running = status.isRunning)
                 updateInput()
@@ -111,6 +114,11 @@ internal class LabUiControl(
         fun count(size: Int) { require(p.size == size) }
         fun integer(index: Int) = (p.getOrNull(index) as? LabUiValue.Integer)?.value ?: throw IllegalArgumentException()
         fun decimal(index: Int) = (p.getOrNull(index) as? LabUiValue.Decimal)?.value ?: throw IllegalArgumentException()
+        fun pivot(index: Int) = when (val value = p.getOrNull(index)) {
+            is LabUiValue.Decimal -> value.value
+            is LabUiValue.Integer -> value.value.toFloat()
+            else -> throw IllegalArgumentException()
+        }
         fun text(index: Int) = (p.getOrNull(index) as? LabUiValue.Text)?.value ?: throw IllegalArgumentException()
         fun flag(index: Int) = (p.getOrNull(index) as? LabUiValue.Flag)?.value ?: throw IllegalArgumentException()
         fun color(): LabUiColor {
@@ -128,7 +136,7 @@ internal class LabUiControl(
             5 -> { count(2); val w = integer(0); val h = integer(1); require(w in 0..32768 && h in 0..32768)
                 widget.copy(layout = widget.layout.copy(width = w.toFloat(), height = h.toFloat())) }
             6 -> { one(); widget.copy(layout = widget.layout.copy(rotation = decimal(0) % 360)) }
-            7 -> { count(2); widget.copy(layout = widget.layout.copy(pivotX = decimal(0), pivotY = decimal(1))) }
+            7 -> { count(2); widget.copy(layout = widget.layout.copy(pivotX = pivot(0), pivotY = pivot(1))) }
             8 -> { one(); widget.copy(layout = widget.layout.copy(order = integer(0))) }
             else -> when (key.type) {
                 LabWidgetType.STAGE -> {

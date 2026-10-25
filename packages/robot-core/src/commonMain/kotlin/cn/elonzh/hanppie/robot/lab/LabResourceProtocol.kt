@@ -7,6 +7,12 @@ import cn.elonzh.hanppie.robot.session.RobotRequestException
 
 /** Native scratch_sys queries share 3f:a3, but do not share a response layout. */
 internal object LabResourceProtocol {
+    /** Script download uses DUSS_MB_RET_FINSH, not the ordinary zero success code. */
+    fun registered(payload: ByteArray) {
+        if (payload.isEmpty()) invalid()
+        if (payload.u8(0) != 0xd0) throw RobotRequestException(RequestProblem.REJECTED, payload.u8(0))
+    }
+
     fun programQuery(program: LabProgram): ByteArray = program.metadata(1)
 
     // Native 1e850 maps zero to match=1 and any nonzero byte to match=0.
@@ -39,7 +45,7 @@ internal object LabResourceProtocol {
         return matches
     }
 
-    fun accepted(payload: ByteArray) {
+    private fun accepted(payload: ByteArray) {
         if (payload.isEmpty()) invalid()
         if (payload.u8(0) != 0) throw RobotRequestException(RequestProblem.REJECTED, payload.u8(0))
     }

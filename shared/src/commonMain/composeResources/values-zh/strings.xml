@@ -639,7 +639,7 @@
     <string name="signal_level_unknown">未知</string>
     <string name="signal_quality_raw">Wi-Fi 质量原始值：%1$s（0x07:0x09；不是 dBm 或百分比）</string>
     <string name="object_tracking">对象跟随</string>
-    <string name="tracking_select_target">点击候选框，或按 Tab 聚焦、Enter 选择</string>
+    <string name="tracking_select_target">选点时机器人可能移动。点击候选框，或用 Tab 和 Enter 选择</string>
     <string name="tracking_preparing">正在准备对象跟随…</string>
     <string name="tracking_selecting">正在锁定目标…</string>
     <string name="tracking_ready">目标已锁定，开始后机器人将自动移动</string>
@@ -1481,7 +1481,7 @@
     <string name="extensions_invalid_response">收到的部件应答无法解析，请重试。</string>
     <string name="tracking_target_frames">跟随目标框</string>
     <string name="tracking_candidate_action">选择候选目标 %1$s</string>
-    <string name="tracking_searching">正在搜索可跟随的人体目标…</string>
+    <string name="tracking_searching">搜索中，请让头部和双脚进入画面</string>
     <string name="tracking_device_error">视觉报告异常，检查目标后重试</string>
     <string name="tracking_unknown_report">无法识别跟随报告，请重新尝试</string>
     <string name="tracking_report_error_code">视觉异常码：%1$s（类型 %2$s）</string>

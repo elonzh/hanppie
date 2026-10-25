@@ -10,6 +10,20 @@ class LabResourceProtocolTest {
     private val guid = "0123456789abcdef0123456789abcdef"
     private val guidBytes = "3031323334353637383961626364656630313233343536373839616263646566"
 
+    @Test fun registrationRequiresNativeDownloadCompletionWithoutChangingAudioReturnCodes() {
+        LabResourceProtocol.registered(byteArrayOf(0xd0.toByte()))
+        assertEquals(RequestProblem.INVALID_RESPONSE,
+            assertFailsWith<RobotRequestException> { LabResourceProtocol.registered(byteArrayOf()) }.problem)
+        for (code in listOf(0, 1, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 255)) {
+            val error = assertFailsWith<RobotRequestException> { LabResourceProtocol.registered(byteArrayOf(code.toByte())) }
+            assertEquals(RequestProblem.REJECTED, error.problem)
+            assertEquals(code, error.responseCode)
+        }
+        assertEquals(RequestProblem.REJECTED, assertFailsWith<RobotRequestException> {
+            LabResourceProtocol.audioMatches(byteArrayOf(0xd0.toByte(), 0), emptySet())
+        }.problem)
+    }
+
     @Test fun requestsMatchNativeByteVectorsAndResourceDigestByteOrder() {
         val program = LabProgram("pass", guid, "0123456789abcdef")
         assertEquals("01" + guidBytes + "30313233343536373839616263646566", LabResourceProtocol.programQuery(program).hex())

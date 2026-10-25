@@ -33,6 +33,25 @@ class MobileInfoRelayTest {
         assertEquals("010c0000a03f000000c000004040020c0000a03f000000c000004040030c0000a03f000000c000004040", r.sent.single().hex())
     }
 
+    @Test fun idleBeforeRunningPreservesSubscriptionButNativeTerminalSourcesRetireIt() {
+        for (sender in listOf(9, 0xa9)) {
+            val r = Rig(); r.ready(1)
+            fun status(value: Int) = DussFrame(46, sender, 2, 10, 0, 0x3f, 0xa5,
+                byteArrayOf(value.toByte()) + owner.encodeToByteArray(), true)
+            r.relay.receive(status(0), true)
+            assertEquals(1, r.source.active, "Pending owner survives the native pre-start idle")
+            r.relay.receive(status(2), true)
+            r.relay.receive(status(0), true)
+            assertEquals(0, r.source.active)
+            r.relay.receive(r.frame(1), true)
+            assertEquals(1, r.acks.last().second, "An ended owner cannot subscribe again")
+            r.ready(1); r.relay.receive(status(0), true)
+            assertEquals(1, r.source.active, "New owner does not inherit the old started state")
+            r.relay.receive(status(5), true)
+            assertEquals(0, r.source.active, "Failure before RUNNING still retires the owner")
+        }
+    }
+
     @Test fun onlyExactScriptRequestsCanChangeTheSubscription() {
         val r = Rig(); r.ready(1)
         val bad = listOf(r.frame().copy(sender=9), r.frame().copy(receiver=0x42), r.frame().copy(attr=0x80),

@@ -13,8 +13,9 @@ class AudioSignalProtocolTest {
             response
         }) { 1 }
         assertFalse(audio.readSoundEnabled())
-        for (value in listOf("0001", "0002", "00ff")) { response = value.hexBytes(); assertTrue(audio.readSoundEnabled()) }
-        for (invalid in listOf("", "00", "000100")) {
+        for (value in listOf("0001", "0002", "00ff", "000100")) { response = value.hexBytes(); assertTrue(audio.readSoundEnabled()) }
+        response = "000059c6".hexBytes(); assertFalse(audio.readSoundEnabled())
+        for (invalid in listOf("", "00")) {
             response = invalid.hexBytes()
             assertEquals(RequestProblem.INVALID_RESPONSE, assertFailsWith<RobotRequestException> { audio.readSoundEnabled() }.problem)
         }

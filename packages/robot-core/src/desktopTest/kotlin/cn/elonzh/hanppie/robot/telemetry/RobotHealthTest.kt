@@ -4,6 +4,18 @@ import cn.elonzh.hanppie.robot.protocol.*
 import kotlin.test.*
 
 class RobotHealthTest {
+    @Test fun receivesTheLiveBatteryRequestWithoutTreatingResponsesAsTelemetry() {
+        val payload = "0001062dde00a4fbffff5500140282420000000000000104001106d142bf9932973e0000000061db04396faa323a00000000c2aac8b8c5fc33ba00000000".hexBytes()
+        val frame = DussFrame(0, 9, 2, 1, 0x40, 0x48, 8, payload, true)
+        val store = RobotHealthStore { 0 }
+        for (attr in listOf(0x80, 0xc0)) {
+            store.receive(frame.copy(attr = attr)); assertNull(store.state.value.battery)
+        }
+        store.receive(frame)
+        assertEquals(BatteryTelemetry(11526, 222, -1116, 85), store.state.value.battery)
+        assertEquals(Telemetry.motion(frame)?.batteryPercent, store.state.value.battery?.percent)
+    }
+
     @Test fun combinedBatteryRetainsSignedRawFieldsAndRejectsUnrelatedFrames() {
         val store = RobotHealthStore { 0 }
         val payload = ByteArray(62).apply {

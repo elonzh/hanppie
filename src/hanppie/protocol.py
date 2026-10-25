@@ -1094,7 +1094,8 @@ def parse_duss_frames(data: bytes) -> list[DussFrame]:
                 ),
             )
         )
-        offset += length
+        # A false marker in the outer header must not skip an overlapping valid frame.
+        offset += length if frames[-1].valid else 1
     return frames
 
 
@@ -1142,7 +1143,8 @@ class AppEnvelope:
         self.direct_reference = self.tick
         self.latest_direct = self.tick
         self.control_tick = (self.tick + 0xA8) & 0xFFFF
-        self.control_reference = self.tick
+        self.control_reference: int | None = None
+        self._received_ahead: set[int] = set()
         self.packet_index = 1
 
     def preconnect(self) -> bytes:
@@ -1174,7 +1176,8 @@ class AppEnvelope:
         packet += self.session + b"\x00\x00\x04\x00"
         packet[7] = xor_header(packet[:7])
         packet += struct.pack("<H", tick) * 2 + b"\x00" * 4
-        packet += struct.pack("<H", self.control_reference) * 2 + b"\x00" * 4
+        received = self.tick if self.control_reference is None else self.control_reference
+        packet += struct.pack("<H", received) * 2 + b"\x00" * 4
         packet += struct.pack("<H", self.direct_reference)
         packet += struct.pack("<H", self.latest_direct) + b"\x00" * 4
         packet += struct.pack("<H", len(duss))
@@ -1183,13 +1186,27 @@ class AppEnvelope:
     def observe(self, data: bytes) -> None:
         if len(data) < 12 or data[2:4] != self.session:
             return
-        if len(data) >= 28 and data[4:6] == b"\x00\x00":
-            direct = int.from_bytes(data[24:26], "little")
-            control = int.from_bytes(data[16:18], "little")
-            if direct:
-                self.direct_reference = direct
-            if control:
-                self.control_reference = control
+        if data[6] == 3:
+            head = self.control_reference
+            if head is None:
+                head = int.from_bytes(data[8:10], "little")
+            tick = int.from_bytes(data[4:6], "little")
+            distance = (tick - head) & 0xFFFF
+            if 8 <= distance < 0x8000 and distance % 8 == 0:
+                self._received_ahead.add(tick)
+            while (following := (head + 8) & 0xFFFF) in self._received_ahead:
+                self._received_ahead.remove(following)
+                head = following
+            self.control_reference = head
+            return
+        if data[6] != 1 or len(data) < 28 or data[4:6] != b"\x00\x00":
+            return
+        direct = int.from_bytes(data[24:26], "little")
+        control = int.from_bytes(data[16:18], "little")
+        if direct:
+            self.direct_reference = direct
+        if self.control_reference is None and control:
+            self.control_reference = control
         # Stream packets carry the robot's current control window at bytes
         # 10..12. Following it prevents a long-running media session from
         # drifting outside the window used by subsequent control packets.

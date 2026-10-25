@@ -639,7 +639,7 @@
     <string name="signal_level_unknown">Unknown</string>
     <string name="signal_quality_raw">Wi-Fi quality raw value: %1$s (0x07:0x09; not dBm or a percentage)</string>
     <string name="object_tracking">Object tracking</string>
-    <string name="tracking_select_target">Tap a box or use Tab and Enter to select it</string>
+    <string name="tracking_select_target">Selecting may move the robot. Tap a box or use Tab and Enter.</string>
     <string name="tracking_preparing">Preparing object tracking…</string>
     <string name="tracking_selecting">Locking target…</string>
     <string name="tracking_ready">Target locked. Starting will move the robot.</string>
@@ -1481,7 +1481,7 @@
     <string name="extensions_invalid_response">The module response could not be decoded. Retry the request.</string>
     <string name="tracking_target_frames">Tracking target boxes</string>
     <string name="tracking_candidate_action">Select candidate %1$s</string>
-    <string name="tracking_searching">Searching for a person to follow…</string>
+    <string name="tracking_searching">Searching… Keep your head and feet in view.</string>
     <string name="tracking_device_error">Vision reported an error. Check the target and retry.</string>
     <string name="tracking_unknown_report">Unrecognized tracking report. Please retry.</string>
     <string name="tracking_report_error_code">Vision error: %1$s (type %2$s)</string>

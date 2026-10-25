@@ -77,6 +77,7 @@ class ObjectTrackingUiTest {
                 rule.onAllNodes(hasTestTag("tracking-start") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
             }
             rule.onNodeWithTag("tracking-start").performClick()
+            rule.onNodeWithText("选点时机器人可能移动。点击候选框，或用 Tab 和 Enter 选择").assertIsDisplayed()
             rule.onNodeWithTag("tracking-confirm").assertDoesNotExist()
             rule.onNodeWithTag("tracking-targets").performTouchInput { click(center) }
             assertEquals(.5f to .5f, selected)
@@ -195,6 +196,7 @@ class ObjectTrackingLayoutTest {
                 } }
                 val ready = VisionRect(.5f, .52f, .2f, .4f, 2)
                 val cases = listOf(
+                    "searching" to TrackingState(TrackingPhase.SEARCHING),
                     "candidate" to TrackingState(TrackingPhase.SEARCHING, candidates = listOf(ready.copy(x = .25f, info = 1), ready.copy(x = .75f, info = 1))),
                     "ready" to TrackingState(TrackingPhase.TARGET_READY, listOf(ready), listOf(ready.copy(info = 1), ready.copy(x = .8f, info = 1))),
                     "following" to TrackingState(TrackingPhase.FOLLOWING, listOf(ready.copy(info = 3))),
