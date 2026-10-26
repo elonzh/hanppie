@@ -13,7 +13,7 @@ val VisionRect.kind: TrackingTargetKind get() = when (info) {
     else -> TrackingTargetKind.UNKNOWN
 }
 
-/** RoboMaster 1.1.5 native packet constructors; see docs/architecture-robomaster.md. */
+/** RoboMaster 1.1.5 native packet constructors; see docs/architecture/robomaster.md. */
 object TrackingProtocol {
     const val ENABLE = 0xa3
     const val PUSH = 0xa4

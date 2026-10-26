@@ -1,6 +1,6 @@
 # 更新日志
 
-版本号以 [version.xcconfig](./version.xcconfig) 为准。尚未发布的修改记录在 `Unreleased`，每次正式分发由流水线提取对应版本条目。
+版本号以 [version.xcconfig](version.xcconfig) 为准。尚未发布的修改记录在 `Unreleased`，每次正式分发由流水线提取对应版本条目。
 
 ## [Unreleased]
 
