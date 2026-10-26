@@ -4,7 +4,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
+import cn.elonzh.hanppie.ui.design.WorkbenchGlyph
+import cn.elonzh.hanppie.ui.design.WorkbenchIcon
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.elonzh.hanppie.resources.*
@@ -45,15 +49,17 @@ internal fun SettingsDropdown(
     var expanded by remember { mutableStateOf(false) }
     val selectedLabel = values.firstOrNull { it.first == selected }?.second ?: selected
     Box {
-        Button({
-            if (!expanded) onOpen()
-            expanded = true
-        }, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("$tag-selector"), enabled = enabled) {
-            Text(label, Modifier.weight(1f), fontSize = 15.sp)
-            Text(selectedLabel, fontSize = 14.sp,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-            Spacer(Modifier.width(12.dp))
-            Text("⌄", Modifier.clearAndSetSemantics {})
+        BasicComponent(modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("$tag-selector")
+            .semantics(mergeDescendants = true) { if (!enabled) disabled() },
+            insideMargin = PaddingValues(horizontal = 16.dp, vertical = 12.dp), enabled = enabled,
+            onClick = { if (!expanded) onOpen(); expanded = true }, role = Role.Button,
+            endActions = {
+                Text(selectedLabel, Modifier.widthIn(max = 200.dp), fontSize = 14.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                WorkbenchIcon(WorkbenchGlyph.CHEVRON_RIGHT, MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    Modifier.padding(start = 12.dp).size(18.dp))
+            }) {
+            Text(label, fontSize = 15.sp)
         }
         WindowListPopup(expanded, onDismissRequest = { expanded = false }) {
             ListPopupColumn {

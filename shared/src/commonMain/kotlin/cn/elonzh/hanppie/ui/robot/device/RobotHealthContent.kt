@@ -48,13 +48,12 @@ internal fun robotModuleName(id: Int): String {
 }
 
 @Composable
-internal fun RobotHealthContent(model: ConsoleController) {
+internal fun RobotHealthContent(model: ConsoleController, showTitle: Boolean = true) {
     val connected by remember(model) { model.state.map { it.connected }.distinctUntilChanged() }
         .collectAsState(initial = model.state.value.connected)
     val health by model.robotHealth.state.collectAsState()
-    var modulesExpanded by remember(connected) { mutableStateOf(false) }
     var allMessages by remember(connected) { mutableStateOf(false) }
-    Text(tr(Res.string.health_title), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+    if (showTitle) Text(tr(Res.string.health_title), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
     Column(Modifier.fillMaxWidth().testTag("robot-health"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (!connected) Text(tr(Res.string.health_disconnected), Modifier.testTag("health-status"), fontSize = 15.sp)
         else {
@@ -67,39 +66,22 @@ internal fun RobotHealthContent(model: ConsoleController) {
                 color = if (alerts > 0) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.onSurface)
             health.battery?.let { battery ->
                 Text(tr(Res.string.health_battery_percent, battery.percent?.toString() ?: "—"), Modifier.testTag("health-battery"), fontSize = 15.sp)
-                Text(tr(Res.string.health_battery_voltage, battery.voltageRaw), fontSize = 14.sp)
-                Text(tr(Res.string.health_battery_temperature, battery.temperatureRaw), fontSize = 14.sp)
-                Text(tr(Res.string.health_battery_current_raw, battery.currentRaw), fontSize = 14.sp)
-            } ?: Text(tr(Res.string.health_battery_waiting), Modifier.testTag("health-battery-waiting"), fontSize = 14.sp)
+            }
             if (modules != null) {
-                Text(tr(Res.string.health_report_age, health.moduleReportAgeSeconds), Modifier.testTag("health-report-age"), fontSize = 14.sp)
                 health.issues.filter { allMessages || it.severity >= 2 }.forEach { issue ->
                     Column(Modifier.fillMaxWidth().testTag("health-issue-${issue.hexCode}"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("${robotModuleName(issue.affectedDeviceId)} · ${tr(when (issue.severity) {
                             3 -> Res.string.health_error; 2 -> Res.string.health_warning; 1 -> Res.string.health_prompt; else -> Res.string.health_information
                         })}", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                         Text(tr(robotIssueMessage(issue)), fontSize = 14.sp)
-                        Text(issue.hexCode, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                     }
                 }
                 if (health.issues.any { it.severity < 2 }) Button({ allMessages = !allMessages },
                     Modifier.heightIn(min = 48.dp).testTag("health-message-toggle")) {
                     Text(tr(if (allMessages) Res.string.health_hide_information else Res.string.health_show_information))
                 }
-                Button({ modulesExpanded = !modulesExpanded }, Modifier.heightIn(min = 48.dp).testTag("health-modules-toggle")) {
-                    Text(tr(Res.string.health_modules, modules.size))
-                }
-                if (modulesExpanded) {
-                    val ids = modules.map { it.deviceId }.toSet()
-                    (ids + health.unreportedDeviceIds + health.issues.map { it.affectedDeviceId }).sorted().forEach { id ->
-                        val count = health.issues.count { it.affectedDeviceId == id && it.severity >= 2 }
-                        val availability = tr(if (id in ids) Res.string.health_online else Res.string.health_unreported)
-                        val status = if (count > 0) "$availability · ${tr(Res.string.health_alerts, count)}" else availability
-                        Text("${robotModuleName(id)} · $status",
-                            Modifier.testTag("health-module-$id"), fontSize = 14.sp)
-                    }
-                }
             }
+            RobotInformationContent(model)
         }
     }
 }

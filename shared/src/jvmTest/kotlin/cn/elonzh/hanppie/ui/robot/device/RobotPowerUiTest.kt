@@ -39,6 +39,8 @@ class RobotPowerUiTest {
             rule.setContent { TestWorkbenchTheme { SettingsPage(model, showRobotMaintenance = true) } }
             model.connect("127.0.0.1", "12345678")
             rule.waitUntil(5000) { model.state.value.connected && !model.state.value.busy }
+            rule.onNodeWithTag("settings-back").performClick()
+            rule.onNodeWithTag("settings-maintenance-power").performScrollTo().performClick()
             rule.onNodeWithTag("power-query").performScrollTo().performClick()
             rule.waitUntil(3000) { model.robotPower.state.value.policy != null }
             rule.onNodeWithTag("power-policy").performScrollTo().assertTextEquals("编程节能已开启 · 时限 300 秒")
@@ -88,6 +90,8 @@ class RobotPowerLayoutTest {
                     Box(Modifier.fillMaxSize().testTag("power-layout")) { Console(model, remember { mutableStateOf(EditorDocument()) }) }
                 } } }
                 onNodeWithTag("health-alert-open").performClick()
+                onNodeWithTag("settings-back").performClick()
+                onNodeWithTag("settings-maintenance-power").performScrollTo().performClick()
                 onNodeWithTag("power-delay-300").performScrollTo().assertIsDisplayed()
                 assertTrue(onNodeWithTag("power-delay-300").fetchSemanticsNode().boundsInRoot.height >= 48)
                 save("power-policy-$width-$height-$language-$scale", onNodeWithTag("power-layout"))

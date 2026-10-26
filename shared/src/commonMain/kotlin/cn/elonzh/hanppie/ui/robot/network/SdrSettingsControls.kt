@@ -42,6 +42,9 @@ private fun sdrChangeText(change: SdrChange): String = when (change) {
 internal fun SdrSettingsControls(model: ConsoleController) {
     val controller = model.robotSdr
     val state by controller.state.collectAsState()
+    LaunchedEffect(controller, state.connection, state.visible) {
+        if (state.visible && state.connected && !state.busy && state.recovery == null && !state.verified) controller.refresh()
+    }
     if (!state.visible) return
     val console by model.state.collectAsState()
     val album by model.robotAlbum.state.collectAsState()
@@ -90,7 +93,7 @@ internal fun SdrSettingsControls(model: ConsoleController) {
             Button({ finishing = true }, Modifier.heightIn(min = 48.dp).testTag("sdr-finish")) { Text(tr(Res.string.wifi_finish)) }
         } else state.settings?.let { settings ->
             if (state.verified) Text(tr(Res.string.sdr_verified), Modifier.testTag("sdr-verified"), fontSize = 15.sp)
-            Button(controller::refresh, Modifier.heightIn(min = 48.dp).testTag("sdr-query")) { Text(tr(Res.string.sdr_query)) }
+            Button(controller::refresh, Modifier.heightIn(min = 48.dp).testTag("sdr-query")) { Text(tr(Res.string.refresh)) }
             Text(tr(Res.string.sdr_selection, sdrSelectionText(settings.selectionCode)), fontSize = 15.sp)
             Text(tr(Res.string.sdr_band, sdrBandText(settings.bandCode)), fontSize = 15.sp)
             Text(tr(Res.string.sdr_bandwidth, sdrBandwidthText(settings.bandwidthCode)), fontSize = 15.sp)

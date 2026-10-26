@@ -81,7 +81,10 @@ class DisplaySettingsUiTest {
                 assertEquals(DisplaySettings(ReticleStyle.ROUND,true,false,true,SceneQuality.LOW),runBlocking{store.load()}.display)
                 assertEquals(0,peer.writes)
                 onNodeWithTag("display-quality-selector").performScrollTo();capture("host-options")
-                onNodeWithTag("display-lights-read").performScrollTo().performClick()
+                onNodeWithTag("display-lights-read").assertDoesNotExist()
+                if (width * 1f < 240f * scale + 480f * scale + 16f) onNodeWithTag("settings-back").performClick()
+                onNodeWithTag("settings-category-robot").performScrollTo().performClick()
+                onNodeWithTag("settings-maintenance-lighting").performScrollTo().performClick()
                 waitUntil(timeoutMillis=5000){model.robotDisplay.state.value.headlights!=null}
                 val light = onNodeWithTag("display-lights-slider").performScrollTo().fetchSemanticsNode().config
                 assertEquals(listOf(tr(Res.string.display_headlights)), light[SemanticsProperties.ContentDescription])
@@ -109,6 +112,9 @@ class DisplaySettingsUiTest {
                 onNodeWithTag("display-cancel-read").performScrollTo();capture("reading")
                 onNodeWithTag("display-cancel-read").performClick();gate.complete(Unit);peer.read={};peer.write={it()}
 
+                onNodeWithTag("settings-back").performClick()
+                if (width * 1f < 240f * scale + 480f * scale + 16f) onNodeWithTag("settings-back").performClick()
+                onNodeWithTag("settings-category-display").performScrollTo().performClick()
                 onNodeWithTag("display-calibrate").performScrollTo().performClick()
                 waitUntil(timeoutMillis=5000){model.robotDisplay.state.value.sight!=null && !model.robotDisplay.state.value.busy}
                 onNodeWithTag("display-sight-step-1-0").assertIsEnabled().performClick()

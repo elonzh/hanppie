@@ -18,6 +18,7 @@ internal data class DisplayDeviceState(
     val connection: Long = 0, val connected: Boolean = false,
     val target: DisplayTarget? = null, val writing: Boolean = false,
     val sight: SightCalibration? = null, val headlights: HeadlightBrightness? = null,
+    val headlightsUnavailable: Boolean = false,
     val confirmed: DisplayTarget? = null, val uncertain: DisplayTarget? = null, val error: UiText? = null,
 ) { val busy: Boolean get() = target != null }
 
@@ -45,7 +46,7 @@ internal class RobotDisplayController(private val scope: CoroutineScope,
     }
 
     fun refreshHeadlights() = operate(DisplayTarget.HEADLIGHTS, false) { service, _ ->
-        val value = service.readHeadlights(); { it.copy(headlights = value) }
+        val value = service.readHeadlights(); { it.copy(headlights = value, headlightsUnavailable = false) }
     }
 
     fun setSight(value: SightCalibration) {
@@ -89,9 +90,13 @@ internal class RobotDisplayController(private val scope: CoroutineScope,
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) {
                 val unknown = sent && !(error is RobotRequestException && error.problem == RequestProblem.REJECTED)
+                val lightsUnavailable = target == DisplayTarget.HEADLIGHTS && !writing &&
+                    error is RobotRequestException && error.problem == RequestProblem.REJECTED && error.responseCode == 2
                 update(token) { old ->
                     (if (unknown || !writing) old.without(target) else old).copy(target = null, writing = false,
-                        uncertain = if (unknown) target else null, error = uiText(when {
+                        uncertain = if (unknown) target else null,
+                        headlightsUnavailable = old.headlightsUnavailable || lightsUnavailable,
+                        error = if (lightsUnavailable) null else uiText(when {
                             unknown -> Res.string.display_write_uncertain
                             error is RobotRequestException && error.problem == RequestProblem.REJECTED -> Res.string.display_rejected
                             error is RobotRequestException && error.problem == RequestProblem.NOT_APPLIED -> Res.string.display_not_applied

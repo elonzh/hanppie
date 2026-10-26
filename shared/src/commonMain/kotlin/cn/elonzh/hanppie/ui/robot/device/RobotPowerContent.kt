@@ -14,6 +14,9 @@ import cn.elonzh.hanppie.robot.product.*
 import cn.elonzh.hanppie.ui.app.ConsoleController
 import cn.elonzh.hanppie.ui.design.WorkbenchDialog
 import cn.elonzh.hanppie.ui.i18n.tr
+import cn.elonzh.hanppie.ui.settings.SettingsGroup
+import cn.elonzh.hanppie.ui.settings.SettingsNavigationRow
+import cn.elonzh.hanppie.ui.settings.SettingsNotice
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -27,11 +30,17 @@ internal fun powerActionName(action: RobotPowerAction): String = tr(when (action
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun RobotPowerContent(model: ConsoleController) {
+internal fun RobotPowerContent(model: ConsoleController, showTitle: Boolean = true) {
     val controller = model.robotPower
     val state by controller.state.collectAsState()
     val console by model.state.collectAsState()
-    if ((!console.connected || !state.connected) && state.result == null) return
+    LaunchedEffect(controller, state.connection, console.connected) {
+        if (console.connected && state.connected && !state.busy) controller.refresh()
+    }
+    if ((!console.connected || !state.connected) && state.result == null) {
+        if (!showTitle) SettingsNotice(tr(Res.string.robot_power_connect))
+        return
+    }
     val camera by model.robotCamera.state.collectAsState()
     val album by model.robotAlbum.state.collectAsState()
     val chat by model.chat.state.collectAsState()
@@ -66,7 +75,7 @@ internal fun RobotPowerContent(model: ConsoleController) {
             }
         }
     }
-    Text(tr(Res.string.robot_power_title), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+    if (showTitle) Text(tr(Res.string.robot_power_title), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
     Column(Modifier.fillMaxWidth().testTag("robot-power"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         state.result?.takeIf { state.phase != PowerPhase.ACTION }?.let { result ->
             val resultIntoView = remember { BringIntoViewRequester() }
@@ -83,7 +92,7 @@ internal fun RobotPowerContent(model: ConsoleController) {
                     else Res.string.robot_power_action_ack), Modifier.testTag("power-result"), fontSize = 15.sp)
             }
         }
-        state.error?.let { Text(it.resolve(), Modifier.testTag("power-error"), fontSize = 14.sp, color = MiuixTheme.colorScheme.error) }
+        state.error?.let { SettingsNotice(it.resolve(), Modifier.testTag("power-error"), error = true) }
         if (!console.connected || !state.connected) Text(tr(Res.string.robot_power_connect), Modifier.testTag("power-connect"), fontSize = 15.sp)
         else {
             val report = state.report
@@ -93,7 +102,7 @@ internal fun RobotPowerContent(model: ConsoleController) {
                 Text(tr(if (state.phase == PowerPhase.READING) Res.string.robot_info_reading else Res.string.robot_power_sending), fontSize = 15.sp)
                 if (state.phase == PowerPhase.READING) Button(controller::cancelRead, Modifier.heightIn(min = 48.dp).testTag("power-cancel-read")) { Text(tr(Res.string.cancel)) }
             } else {
-                Button(controller::refresh, Modifier.heightIn(min = 48.dp).testTag("power-query")) { Text(tr(Res.string.robot_power_query)) }
+                Button(controller::refresh, Modifier.heightIn(min = 48.dp).testTag("power-query")) { Text(tr(Res.string.refresh)) }
                 state.policy?.let { policy ->
                     Text(tr(Res.string.robot_power_policy_scope), fontSize = 14.sp)
                     Text(tr(if (policy.enabled) Res.string.robot_power_policy_on else Res.string.robot_power_policy_off, policy.delaySeconds),
@@ -109,9 +118,15 @@ internal fun RobotPowerContent(model: ConsoleController) {
                     }
                 }
                 if (!canChange) Text(tr(Res.string.robot_power_task_active), fontSize = 14.sp)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    RobotPowerAction.entries.forEach { action -> Button({ pendingAction = action },
-                        Modifier.heightIn(min = 48.dp).testTag("power-action-${action.name}"), enabled = canChange) { Text(powerActionName(action)) } }
+                SettingsGroup(tr(Res.string.maintenance_power_actions)) {
+                    RobotPowerAction.entries.forEach { action ->
+                        SettingsNavigationRow(powerActionName(action), tr(when (action) {
+                            RobotPowerAction.ENTER_STANDBY -> Res.string.power_standby_hint
+                            RobotPowerAction.EXIT_STANDBY -> Res.string.power_wake_hint
+                            RobotPowerAction.REBOOT -> Res.string.power_reboot_hint
+                            RobotPowerAction.SHUTDOWN -> Res.string.power_shutdown_hint
+                        }), "power-action-${action.name}", enabled = canChange) { pendingAction = action }
+                    }
                 }
             }
         }

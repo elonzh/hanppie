@@ -17,6 +17,7 @@ import android.view.SurfaceView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
+import cn.elonzh.hanppie.ui.i18n.uiText
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
@@ -139,7 +140,7 @@ internal class RobotDecoder(
                 .setAudioFormat(AudioFormat.Builder().setSampleRate(48000).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
                 .setBufferSizeInBytes(AudioTrack.getMinBufferSize(48000, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT) * 2).build()
             track.play()
-            val info = MediaCodec.BufferInfo(); var stamp = 0L; var decodedBytes = 0L
+            val info = MediaCodec.BufferInfo(); var stamp = 0L
             while (active.get()) {
                 val packet = audioQueue.poll(30, TimeUnit.MILLISECONDS) ?: continue
                 val input = codec.dequeueInputBuffer(10000)
@@ -166,8 +167,6 @@ internal class RobotDecoder(
                         buffer.position(info.offset); buffer.limit(info.offset + info.size)
                         val written = track.write(buffer, info.size, AudioTrack.WRITE_BLOCKING)
                         check(written >= 0) { tr(Res.string.audio_playback_failed_value,written) }
-                        decodedBytes += written
-                        if (decodedBytes == written.toLong() || decodedBytes % 9600 == 0L) report(tr(Res.string.audio_value_decoded_bytes,decodedBytes),true)
                     }
                     codec.releaseOutputBuffer(output, false)
                     output = codec.dequeueOutputBuffer(info, 0)
@@ -179,7 +178,7 @@ internal class RobotDecoder(
     override fun close() {
         active.set(false); videoThread.join(1000); audioThread?.join(1000)
         recorder.getAndSet(null)?.let { runCatching { it.finish() }
-            .onSuccess { path -> report(tr(Res.string.video_saved_to_value, path), false) }
+            .onSuccess { report("", false) }
             .onFailure { error -> report(tr(Res.string.recording_failed_value,
                 error.message ?: error.javaClass.simpleName), false) } }
     }
@@ -450,8 +449,6 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
 @Composable internal actual fun RobotVideo(model: ConsoleController, controls: RemoteMediaController, modifier: Modifier) {
     val preview = LocalVideoPreview.current
     val streamEnabled = LocalVideoStreamEnabled.current
-    val foreground by model.foregroundState.collectAsState()
-    val inputEnabled = LocalVideoInputEnabled.current && foreground
     val mediaState by controls.state.collectAsState()
     val context = LocalContext.current.applicationContext
     val uiScope = rememberCoroutineScope()
@@ -461,30 +458,25 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
     var playing by remember { mutableStateOf(true) }
     var sound by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf(false) }
-    var captureStatus by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf(tr(Res.string.video_off)) }
-    var audioStatus by remember { mutableStateOf("") }
     val state by model.state.collectAsState()
     val cachedFrame = model.videoFrames.image(state.connectedAddress)
     val display by model.displaySettings.collectAsState()
     val mediaSettings by model.mediaSettings.collectAsState()
     val resolution = mediaSettings.videoResolution
-    val requests by controls.requests.collectAsState()
     fun takePhoto() {
         val view = surfaceView ?: return
         if (view.width <= 0 || view.height <= 0 || !state.connected || !playing) return
         val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-        captureStatus = tr(Res.string.saving_photo)
         PixelCopy.request(view, bitmap, { result ->
             if (result != PixelCopy.SUCCESS) {
                 bitmap.recycle()
-                captureStatus = tr(Res.string.photo_failed_value, "PixelCopy $result")
+                controls.notice(uiText(Res.string.media_photo_failed))
             } else uiScope.launch {
                 val saved = withContext(Dispatchers.IO) { runCatching { saveAndroidPhoto(context, bitmap) } }
                 bitmap.recycle()
-                captureStatus = saved.fold(
-                    { tr(Res.string.photo_saved_to_value, it) },
-                    { tr(Res.string.photo_failed_value, it.message ?: it.javaClass.simpleName) })
+                saved.fold(
+                    { controls.notice(uiText(Res.string.media_photo_saved)); "" },
+                    { controls.notice(uiText(Res.string.media_photo_failed)); "" })
             }
         }, Handler(Looper.getMainLooper()))
     }
@@ -495,30 +487,35 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
             activeDecoder.startRecording(context)
             recording = true
             controls.recording(true)
-            captureStatus = tr(Res.string.recording_waiting_for_key_frame)
         } catch (error: Exception) {
             controls.recording(false)
-            captureStatus = tr(Res.string.recording_failed_value, error.message ?: error.javaClass.simpleName)
+            controls.notice(uiText(Res.string.media_record_failed))
         } else {
             recording = false
             controls.recording(false)
-            captureStatus = tr(Res.string.saving_recording)
             uiScope.launch {
                 val saved = withContext(Dispatchers.IO) { runCatching { activeDecoder.stopRecording() } }
-                captureStatus = saved.fold(
-                    { path -> path?.let { tr(Res.string.video_saved_to_value, it) } ?: tr(Res.string.recording_failed_value, tr(Res.string.recording_already_finished)) },
-                    { tr(Res.string.recording_failed_value, it.message ?: it.javaClass.simpleName) })
+                saved.fold(
+                    { controls.notice(uiText(Res.string.media_video_saved)); "" },
+                    { controls.notice(uiText(Res.string.media_record_failed)); "" })
             }
         }
     }
     LaunchedEffect(preview) {
         if (preview) { if (recording) toggleRecording(); sound = false; playing = true }
     }
-    LaunchedEffect(requests.photo) { if (requests.photo > 0) takePhoto() }
-    LaunchedEffect(requests.recording) { if (requests.recording > 0) toggleRecording() }
-    LaunchedEffect(requests.robotMicrophone) {
-        if (requests.robotMicrophone > 0 && !recording) { sound = !sound; if (sound) playing = true }
+    LaunchedEffect(controls) {
+        var previous = controls.requests.value
+        controls.requests.collect { request ->
+            if (request.video != previous.video) playing = !playing
+            if (request.photo != previous.photo) takePhoto()
+            if (request.recording != previous.recording) toggleRecording()
+            if (request.robotMicrophone != previous.robotMicrophone && !recording) { sound = !sound; if (sound) playing = true }
+            previous = request
+        }
     }
+    SideEffect { controls.state.value = controls.state.value.copy(playing = playing, sound = sound) }
+
     fun retainFrame() {
         val view = surfaceView ?: return
         if (view.width <= 0 || view.height <= 0 || !controls.state.value.videoReady) return
@@ -532,10 +529,8 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
     DisposableEffect(surface, playing, streamEnabled, sound, state.connected, resolution) {
         controls.videoReady(false)
         if (!playing) { controls.discardPreview() }
-        status = if (!state.connected || playing) "" else tr(Res.string.video_off)
-        audioStatus = ""
         val activeDecoder = if (surface != null && playing && streamEnabled && state.connected) RobotDecoder(surface!!, sound,
-            report = { message, isAudio -> uiScope.launch { if (isAudio) audioStatus = message else status = message } },
+            report = { message, isAudio -> if (message.isNotBlank()) uiScope.launch { controls.notice(uiText(if (isAudio) Res.string.media_audio_failed else Res.string.media_video_failed)) } },
             onRecordingStopped = { uiScope.launch { recording = false; controls.recording(false) } },
             onVideoFrame = { controls.videoReady(true) },
             resolution = resolution) else null
@@ -563,20 +558,6 @@ private fun saveAndroidPhoto(context: Context, bitmap: Bitmap): String {
             if (!mediaState.videoReady) cachedFrame?.let {
                 Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             }
-        }
-        if (!preview) Column(Modifier.align(Alignment.TopEnd).padding(end = HanppieDesignTokens.RemoteEdgePadding,
-            top = HanppieDesignTokens.RemoteEdgePadding), horizontalAlignment = Alignment.End) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HudIconButton(if(playing) tr(Res.string.stop_video) else tr(Res.string.start_video), if(playing) WorkbenchGlyph.VIDEO else WorkbenchGlyph.VIDEO_OFF, state.connected && inputEnabled) { playing = !playing }
-                HudIconButton(if(sound) tr(Res.string.mute) else tr(Res.string.listen), if(sound) WorkbenchGlyph.SPEAKER else WorkbenchGlyph.MUTED,
-                    state.connected && inputEnabled && !recording) { controls.toggleRobotMicrophone() }
-                HudIconButton(tr(Res.string.take_photo), WorkbenchGlyph.CAMERA, state.connected && inputEnabled && playing && surfaceView != null) { controls.takePhoto() }
-                HudIconButton(if(recording) tr(Res.string.stop_recording) else tr(Res.string.start_recording), if(recording) WorkbenchGlyph.STOP else WorkbenchGlyph.RECORD,
-                    state.connected && inputEnabled && playing && decoder != null) { controls.toggleRecording() }
-            }
-            if (status.isNotBlank()) Text(status, Modifier.widthIn(max = 300.dp), color = Color.White, fontSize = 11.sp, maxLines = 1)
-            if (sound) Text(audioStatus, Modifier.widthIn(max = 300.dp), color = Color.White, fontSize = 11.sp, maxLines = 1)
-            if (captureStatus.isNotBlank()) Text(captureStatus, Modifier.widthIn(max = 300.dp), color = Color.White, fontSize = 11.sp, maxLines = 1)
         }
     }
 }

@@ -10,7 +10,7 @@
     <string name="guide_restart">从头查看</string>
     <string name="guide_open_connection">打开连接引导</string>
     <string name="guide_open_robot">前往机器人首页</string>
-    <string name="guide_open_album">打开机器人相册</string>
+    <string name="guide_open_album">打开媒体库</string>
     <string name="guide_open_scripts">打开脚本库</string>
     <string name="guide_open_health">查看机器人维护</string>
     <string name="guide_open_addressing">打开部件编址</string>
@@ -32,7 +32,7 @@
     <string name="guide_driving_1_title">确认弹种与目标</string>
     <string name="guide_driving_1_body">发射区可切换红外与水弹，按住会重复发射。使用水弹前确认弹种、目标和周围环境，不对人或动物发射，也不把轨迹灯对准眼睛。先松开发射输入，再处理其他任务。</string>
     <string name="guide_driving_2_title">中断后重新操作</string>
-    <string name="guide_driving_2_body">松开摇杆或按键会请求停止；Esc 退出驾驶舱，鼠标云台开启时先释放鼠标。画面失效、失焦或失联会停止控制，恢复后不会重用旧输入。先确认实际静止，再重新进入或操作。</string>
+    <string name="guide_driving_2_body">松开摇杆或按键会请求停止；Esc 先停止已开启的陀螺仪，否则退出驾驶舱。画面失效、失焦或失联会停止控制，恢复后不会重用旧输入。先确认实际静止，再重新进入或操作。</string>
     <string name="guide_tracking_title">对象跟随</string>
     <string name="guide_tracking_summary">选中目标、确认开始，以及停止或接管。</string>
     <string name="guide_tracking_0_title">准备可见的目标</string>
@@ -54,9 +54,9 @@
     <string name="guide_media_0_title">先选择保存位置</string>
     <string name="guide_media_0_body">驾驶舱中的本机拍摄与机器人 SD 卡拍摄分别管理。本机拍摄保存接收到的画面；SD 卡拍摄由机器人相机执行。录像进行时先明确停止，再离开拍摄任务。</string>
     <string name="guide_media_1_title">从机器人相册取回文件</string>
-    <string name="guide_media_1_body">打开机器人相册并刷新索引，选择照片或录像下载。下载完成后再播放或导出；断连或下载失败时保留原文件，重新连接后可重试。</string>
+    <string name="guide_media_1_body">从应用导航打开媒体库，在“本地媒体”查看照片或播放录像；切到“机器人 SD 卡”后自动读取列表，选择文件下载或导出。断连或下载失败不会删除机器人上的文件。</string>
     <string name="guide_media_2_title">先导出，再清理空间</string>
-    <string name="guide_media_2_body">在“设置 → 音视频”查看 SD 卡状态和空间。格式化会删除卡内文件，先完成需要的下载与导出，再按页面确认操作；拍录占用或结果未知时先处理原任务。</string>
+    <string name="guide_media_2_body">在“设置 → 机器人维护 → 机载 SD 卡”查看状态和空间。格式化会删除卡内文件，先完成需要的下载与导出，再按页面确认操作；拍录占用或结果未知时先处理原任务。</string>
     <string name="guide_python_title">使用 Python 脚本</string>
     <string name="guide_python_summary">从本地示例开始，观察运行与停止状态。</string>
     <string name="guide_python_0_title">先读示例再运行</string>

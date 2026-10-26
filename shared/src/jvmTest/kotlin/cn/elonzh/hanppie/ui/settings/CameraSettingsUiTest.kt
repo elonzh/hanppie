@@ -59,6 +59,7 @@ class CameraSettingsUiTest {
         try {
             rule.setContent { TestWorkbenchTheme { SettingsPage(model) } }
             rule.onNodeWithTag("settings-category-media").performScrollTo().performClick()
+            rule.onNodeWithTag("settings-camera-open").performScrollTo().performClick()
             rule.waitUntil(3_000) { rule.onAllNodes(hasTestTag("camera-anti-flicker-selector")).fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithTag("camera-anti-flicker-selector").performScrollTo().performClick()
             rule.onNodeWithTag("camera-anti-flicker-HZ_60").performClick()
@@ -112,6 +113,7 @@ class CameraSettingsLayoutTest {
                     }
                 } }
                 onNodeWithTag("settings-category-media").performScrollTo().performClick()
+                onNodeWithTag("settings-camera-open").performScrollTo().performClick()
                 waitUntil(timeoutMillis = 3_000) {
                     onAllNodes(hasTestTag("camera-anti-flicker-selector")).fetchSemanticsNodes().isNotEmpty()
                 }

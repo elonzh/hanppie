@@ -95,10 +95,11 @@ class RobotAudioUiTest {
         try {
             rule.setContent { TestWorkbenchTheme { SettingsPage(model) } }
             rule.onNodeWithTag("settings-category-media").performScrollTo().performClick()
+            rule.onNodeWithTag("settings-audio-open").performScrollTo().performClick()
             rule.waitUntil(3_000) { model.robotAudio.state.value.soundEnabled is AudioSetting.Value }
             rule.onNodeWithTag("robot-sound-snapshot").performScrollTo().assertTextEquals("上次查询的机器人收音：关闭")
             audio.sound = true
-            rule.onNodeWithTag("robot-sound-refresh").performScrollTo().performClick()
+            rule.onNodeWithTag("robot-audio-refresh").performScrollTo().performClick()
             rule.waitUntil(3_000) { model.robotAudio.state.value.soundEnabled == AudioSetting.Value(true) }
             rule.onNodeWithTag("robot-sound-snapshot").performScrollTo().assertTextEquals("上次查询的机器人收音：开启")
             audio.playback.value = RobotSpeakerPlayback(11, 65536, 35, 0)
@@ -106,14 +107,14 @@ class RobotAudioUiTest {
             rule.onNodeWithTag("robot-anti-feedback-selector").performScrollTo().performClick()
             rule.onNodeWithTag("robot-anti-feedback-true").performClick()
             rule.waitUntil(3_000) { model.robotAudio.state.value.antiFeedback == AudioSetting.Value(true) }
-            rule.onNodeWithTag("robot-feedback-result").performScrollTo().assertTextEquals("已确认防啸叫开启请求")
+            rule.onNodeWithTag("robot-feedback-result").assertDoesNotExist()
             audio.signalFailure = true
-            rule.onNodeWithTag("robot-sound-refresh").performScrollTo().performClick()
+            rule.onNodeWithTag("robot-audio-refresh").performScrollTo().performClick()
             rule.waitUntil(3_000) { model.robotAudio.state.value.soundEnabled is AudioSetting.Failed }
             rule.onNodeWithTag("robot-sound-snapshot").assertDoesNotExist()
             rule.onNodeWithTag("robot-audio-apply-volume").performScrollTo().assertIsEnabled()
             audio.signalFailure = false
-            rule.onNodeWithTag("robot-sound-refresh").performScrollTo().performClick()
+            rule.onNodeWithTag("robot-audio-refresh").performScrollTo().performClick()
             rule.waitUntil(3_000) { model.robotAudio.state.value.soundEnabled is AudioSetting.Value }
             audio.playback.value = RobotSpeakerPlayback(11, 65536, 100, 1)
             rule.onNodeWithTag("robot-playback-status").performScrollTo().assertTextEquals("机器人扬声器：已停止")
@@ -150,6 +151,7 @@ class RobotAudioLayoutTest {
                     }
                 } }
                 onNodeWithTag("settings-category-media").performScrollTo().performClick()
+                onNodeWithTag("settings-audio-open").performScrollTo().performClick()
                 waitUntil(timeoutMillis = 3_000) {
                     onAllNodes(hasTestTag("robot-audio-apply-volume")).fetchSemanticsNodes().isNotEmpty()
                 }
@@ -162,7 +164,7 @@ class RobotAudioLayoutTest {
                 out.setRGB(0, 0, width, height, pixels, 0, width)
                 val file = File("build/reports/ui/audio-$width-$height-$language-$fontScale.png").apply { parentFile.mkdirs() }
                 ImageIO.write(out, "png", file)
-                onNodeWithTag("robot-sound-refresh").performScrollTo().assertIsDisplayed().assertIsEnabled()
+                onNodeWithTag("robot-audio-refresh").performScrollTo().assertIsDisplayed().assertIsEnabled()
                 onNodeWithTag("robot-anti-feedback-selector").performScrollTo().assertIsDisplayed().assertIsEnabled()
                 assertTrue(onNodeWithTag("robot-anti-feedback-selector").fetchSemanticsNode().boundsInRoot.height >= 48)
                 val signalImage = onNodeWithTag("audio-layout").captureToImage()

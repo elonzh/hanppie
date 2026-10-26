@@ -19,7 +19,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
 
 @Composable
-internal fun ControlSettingsContent(model: ConsoleController) {
+internal fun ControlSettingsContent(model: ConsoleController, onMotion: () -> Unit) {
     val control by model.controlSettings.collectAsState()
     val busy by model.settingsBusy.collectAsState()
     var keyboard by remember { mutableStateOf(false) }
@@ -29,22 +29,23 @@ internal fun ControlSettingsContent(model: ConsoleController) {
         model.controlSettings.value = control.copy(inputSensitivities = if (keyboard)
             control.inputSensitivities.copy(keyboard = value) else control.inputSensitivities.copy(screen = value))
     }
+    SettingsGroup(tr(Res.string.settings_group_input)) {
     SettingsDropdown(tr(Res.string.input_profile), "input-profile", keyboard.toString(),
         listOf("false" to tr(Res.string.input_screen), "true" to tr(Res.string.input_keyboard)), !busy) { keyboard = it.toBoolean() }
     SettingsDropdown(tr(Res.string.input_response), "input-response", profile.preset.name,
         SensitivityPreset.entries.map { it.name to tr(if (it == SensitivityPreset.STANDARD) Res.string.input_standard else Res.string.input_custom) },
         !busy) { change(profile.copy(preset = SensitivityPreset.valueOf(it))) }
-    Text(tr(Res.string.input_response_scope), fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+    Text(tr(Res.string.input_response_scope), Modifier.padding(horizontal = 16.dp), fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
     if (profile.preset == SensitivityPreset.CUSTOM) {
         InputAxis.entries.forEach { axis ->
             val changeAxis: (Float) -> Unit = { value -> change(profile.copy(custom = profile.custom.with(axis, value.roundToInt()))) }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(inputAxisLabel(axis), Modifier.weight(1f), fontSize = 14.sp)
                 Text(profile.custom[axis].toString(), fontSize = 14.sp)
             }
             Slider(profile.custom[axis].toFloat(), changeAxis,
-                valueRange = 0f..100f, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("input-axis-${axis.name}")
+                valueRange = 0f..100f, enabled = !busy, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 48.dp).testTag("input-axis-${axis.name}")
                     .adjustableValue(inputAxisLabel(axis), profile.custom[axis].toFloat(), 0f..100f,
                         profile.custom[axis].toString(), !busy, steps = 99,
                         onChange = changeAxis))
@@ -71,15 +72,16 @@ internal fun ControlSettingsContent(model: ConsoleController) {
         Text(tr(Res.string.pressure_fire_help), Modifier.testTag("pressure-fire-help"), fontSize = 13.sp,
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
     }
-    Text(tr(Res.string.input_host_limits), fontSize = 15.sp)
+    }
+    SettingsGroup(tr(Res.string.settings_group_limits)) {
     SettingsDropdown(tr(Res.string.gimbal_sensitivity), "gimbal-sensitivity", control.gimbalSpeed.toString(),
         listOf(15, 30, 45, 60, 90, 120).map { it.toString() to tr(Res.string.degrees_per_second_value, it) }, !busy) { value ->
         model.settingsMessage.value = null
         model.controlSettings.value = control.copy(gimbalSpeed = value.toInt())
     }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         control.translationSpeeds.indices.forEach { index ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("${index + 1}", Modifier.width(24.dp), style = MiuixTheme.textStyles.footnote1)
                 CompactNumberField(control.translationSpeeds[index], tr(Res.string.meters_per_second), Modifier.weight(1f)) { value ->
                     val next = control.translationSpeeds.toMutableList().also { it[index] = value }
@@ -95,22 +97,16 @@ internal fun ControlSettingsContent(model: ConsoleController) {
             runCatching { control.copy(joystickDeadZone = value) }.onSuccess { model.controlSettings.value = it }
         }
     }
-    val connected by model.state.collectAsState()
-    RobotMotionSettingsContent(model.robotMotion, connected.connected)
+    }
+    SettingsGroup(tr(Res.string.maintenance_service_group)) {
+        SettingsNavigationRow(tr(Res.string.motion_device_title), tr(Res.string.motion_device_scope), "settings-motion-open", onClick = onMotion)
+    }
 }
 
 @Composable
 private fun AimInputPreferences(value: AimInputSettings, enabled: Boolean, change: (AimInputSettings) -> Unit) {
-    val pointer = cn.elonzh.hanppie.ui.robot.remote.input.LocalRelativePointer.current
     val factory = cn.elonzh.hanppie.ui.robot.remote.input.LocalAimGyroscope.current
     val gyro = remember(factory) { factory() }
-    if (pointer != null) {
-        AimSensitivity(tr(Res.string.aim_mouse_sensitivity), "aim-mouse-sensitivity", value.mouseSensitivity, enabled) { change(value.copy(mouseSensitivity = it)) }
-        SettingsDropdown(tr(Res.string.aim_vertical_direction), "aim-mouse-direction", value.mouseInvertY.toString(),
-            listOf("false" to tr(Res.string.aim_direction_normal), "true" to tr(Res.string.aim_direction_inverted)), enabled) {
-            change(value.copy(mouseInvertY = it.toBoolean()))
-        }
-    }
     if (gyro.available) {
         AimSensitivity(tr(Res.string.aim_gyro_sensitivity), "aim-gyro-sensitivity", value.gyroSensitivity, enabled) { change(value.copy(gyroSensitivity = it)) }
         SettingsDropdown(tr(Res.string.aim_vertical_direction), "aim-gyro-direction", value.gyroInvertY.toString(),
@@ -118,18 +114,18 @@ private fun AimInputPreferences(value: AimInputSettings, enabled: Boolean, chang
             change(value.copy(gyroInvertY = it.toBoolean()))
         }
     }
-    if (pointer != null || gyro.available) Text(tr(Res.string.aim_preferences_help), fontSize = 13.sp,
+    if (gyro.available) Text(tr(Res.string.aim_preferences_help), Modifier.padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 13.sp,
         color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
 }
 
 @Composable
 private fun AimSensitivity(label: String, tag: String, current: Int, enabled: Boolean, onChange: (Int) -> Unit) {
     val change: (Float) -> Unit = { onChange(it.roundToInt()) }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f), fontSize = 14.sp); Text(current.toString(), fontSize = 14.sp)
     }
     Slider(current.toFloat(), change, valueRange = 0f..100f, enabled = enabled,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag(tag)
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 48.dp).testTag(tag)
             .adjustableValue(label, current.toFloat(), 0f..100f, current.toString(), enabled, steps = 99,
                 onChange = change))
 }
@@ -143,7 +139,7 @@ internal fun RobotMotionSettingsContent(controller: RobotMotionController, conne
     Text(tr(Res.string.motion_device_title), Modifier.testTag("motion-settings-title"), fontSize = 15.sp)
     Column(Modifier.fillMaxWidth().testTag("motion-settings"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(tr(Res.string.motion_device_scope), fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-        state.error?.let { Text(it.resolve(), Modifier.testTag("motion-settings-error"), color = MiuixTheme.colorScheme.error, fontSize = 14.sp) }
+        state.error?.let { SettingsNotice(it.resolve(), Modifier.testTag("motion-settings-error"), error = true) }
         when {
             !connected -> Text(tr(Res.string.motion_connect_first), fontSize = 14.sp)
             state.busy -> {
@@ -153,7 +149,6 @@ internal fun RobotMotionSettingsContent(controller: RobotMotionController, conne
                     Modifier.heightIn(min = 48.dp).testTag("motion-cancel-read")) { Text(tr(Res.string.cancel)) }
             }
             else -> {
-                if (state.confirmed) Text(tr(Res.string.motion_updated), Modifier.testTag("motion-settings-confirmed"), fontSize = 14.sp)
                 val configuration = state.configuration
                 if (configuration != null) {
                     var level by remember(configuration) { mutableStateOf(configuration.speedLevelRaw) }

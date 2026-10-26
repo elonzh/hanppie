@@ -43,6 +43,7 @@ class RobotSdrUiTest {
             rule.onNodeWithTag("sdr-settings").assertDoesNotExist()
             model.connect("127.0.0.1", "12345678")
             rule.waitUntil(5_000) { model.robotSdr.state.value.visible && !model.state.value.busy }
+            rule.onNodeWithTag("settings-maintenance-sdr").performScrollTo().performClick()
             rule.onNodeWithTag("sdr-mode-1").performScrollTo().performClick()
             assertTrue(service.writes.isEmpty())
             rule.onNodeWithTag("sdr-confirm").performClick()
@@ -104,6 +105,7 @@ class RobotSdrLayoutTest {
                     }
                 } }
                 onNodeWithTag("settings-category-robot").performScrollTo().performClick()
+                onNodeWithTag("settings-maintenance-sdr").performScrollTo().performClick()
                 waitUntil(timeoutMillis = 3_000) { model.robotSdr.state.value.settings != null }
                 onNodeWithTag("sdr-point-apply").performScrollTo().assertIsDisplayed()
                 assertTrue(onNodeWithTag("sdr-point-apply").fetchSemanticsNode().boundsInRoot.height >= 48)

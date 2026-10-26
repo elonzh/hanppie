@@ -23,6 +23,7 @@ internal sealed interface InformationValue<out T> {
 }
 
 internal data class RobotInformationState(
+    val connection: Long = 0,
     val connected: Boolean = false,
     val versions: Map<RobotVersionTarget, InformationValue<String>> = emptyMap(),
     val activation: InformationValue<Boolean> = InformationValue.Unread,
@@ -41,13 +42,14 @@ internal class RobotInformationController(private val scope: CoroutineScope) {
     }
     val state = MutableStateFlow(RobotInformationState())
     @Volatile private var binding: Binding? = null
+    private var connection = 0L
 
     fun attach(service: RobotInformationService, health: StateFlow<RobotHealth>) {
         clear()
         if (!scope.isActive) return
         val current = Binding(service, CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job])))
         binding = current
-        state.value = RobotInformationState(connected = true)
+        state.value = RobotInformationState(connection = connection, connected = true)
         current.scope.launch(start = CoroutineStart.UNDISPATCHED) {
             health.collect { report ->
                 val ids = report.modules.orEmpty().map { it.deviceId }.toSet()
@@ -106,7 +108,7 @@ internal class RobotInformationController(private val scope: CoroutineScope) {
     }
     fun clear() {
         val old = binding; binding = null
-        state.value = RobotInformationState()
+        state.value = RobotInformationState(connection = ++connection)
         old?.scope?.cancel()
     }
 }

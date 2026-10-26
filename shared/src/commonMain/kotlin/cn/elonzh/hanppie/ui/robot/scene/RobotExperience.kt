@@ -105,8 +105,7 @@ internal fun RobotExperience(
         }
         if (mediaStarted) key(media) {
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = reveal.value }) {
-                CompositionLocalProvider(LocalVideoHudAlpha provides hud.value, LocalVideoPreview provides !active,
-                    LocalVideoStreamEnabled provides streamEnabled, LocalVideoInputEnabled provides (interactive && foreground && currentReady)) { video(media) }
+                CompositionLocalProvider(LocalVideoPreview provides !active, LocalVideoStreamEnabled provides streamEnabled) { video(media) }
             }
         }
         if (active) {

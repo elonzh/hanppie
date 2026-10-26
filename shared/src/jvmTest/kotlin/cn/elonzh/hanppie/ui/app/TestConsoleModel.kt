@@ -136,5 +136,5 @@ internal fun testConsoleModel(
     prepareNetwork = prepareNetwork,
     autoConnectOnStart = false,
     scriptStartConfirmationTimeoutMillis = scriptStartConfirmationTimeoutMillis,
-    albumDirectory = albumDirectory,
+    albumDirectory = albumDirectory, capturedMedia = { emptyList() },
 )

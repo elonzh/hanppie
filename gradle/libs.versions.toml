@@ -33,7 +33,6 @@ jave-nativebin = "4.2.0"
 [libraries]
 filament-compose = { module = "io.github.erkko68.filament:filament-compose", version.ref = "filament" }
 miuix-ui = { module = "top.yukonga.miuix.kmp:miuix-ui", version = "0.9.4" }
-jna = { module = "net.java.dev.jna:jna", version = "5.19.1" }
 markdown-core = { module = "com.mikepenz:multiplatform-markdown-renderer", version.ref = "markdown" }
 markdown-coil3 = { module = "com.mikepenz:multiplatform-markdown-renderer-coil3", version.ref = "markdown" }
 markdown-code = { module = "com.mikepenz:multiplatform-markdown-renderer-code", version.ref = "markdown" }

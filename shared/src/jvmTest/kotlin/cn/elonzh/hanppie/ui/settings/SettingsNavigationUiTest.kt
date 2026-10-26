@@ -46,6 +46,29 @@ import kotlin.test.assertEquals
 
 @OptIn(ExperimentalTestApi::class)
 class SettingsNavigationUiTest {
+    @Test fun selectedCategoryKeepsTheSameBounds() = stableCategory("zh", 1f)
+    @Test fun selectedCategoryKeepsTheSameBoundsWithLargeText() = stableCategory("en", 1.4f)
+
+    private fun stableCategory(language: String, scale: Float) = runDesktopComposeUiTest(width = 1280, height = 720) {
+        Localization.initialize(language, null)
+        val model = testConsoleModel()
+        try {
+            setContent { WorkbenchTheme { CompositionLocalProvider(LocalDensity provides Density(1f, scale)) {
+                SettingsPage(model, Modifier.fillMaxSize().padding(16.dp))
+            } } }
+            val display = onNodeWithTag("settings-category-display")
+            display.performScrollTo()
+            val before = display.fetchSemanticsNode().boundsInRoot
+            val controlBefore = onNodeWithTag("settings-category-control").fetchSemanticsNode().boundsInRoot
+            display.performClick()
+            assertEquals(before, display.fetchSemanticsNode().boundsInRoot)
+            assertEquals(controlBefore, onNodeWithTag("settings-category-control").fetchSemanticsNode().boundsInRoot)
+            onNodeWithTag("settings-category-general").performClick()
+            assertEquals(before, display.fetchSemanticsNode().boundsInRoot)
+            snapshot("settings-stable-$language-$scale", onRoot())
+        } finally { model.close(); Localization.initialize("zh", null) }
+    }
+
     @Test
     fun dataDirectoryShowsActualPathAndAllowsRetryAfterFailure() =
         runDesktopComposeUiTest(width = 700, height = 390) {

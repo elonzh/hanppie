@@ -1,6 +1,7 @@
 package cn.elonzh.hanppie.robot.media.album
 
 import cn.elonzh.hanppie.robot.media.CameraCommands
+import cn.elonzh.hanppie.robot.media.CameraDate
 import cn.elonzh.hanppie.robot.protocol.*
 import cn.elonzh.hanppie.robot.session.*
 import kotlinx.coroutines.*
@@ -12,6 +13,20 @@ import kotlinx.io.readByteArray
 import kotlin.test.*
 
 class NativeAlbumTest {
+    @Test fun listCreationTimeUsesTheCameraCalendarAndInvalidDatesDoNotHideFiles(): Unit = runBlocking {
+        lateinit var album: NativeAlbum
+        val date = ((2024L - 1980) shl 25) or (2L shl 21) or (29L shl 16) or (12L shl 11) or (34L shl 5) or 28L
+        val records = entry(1).apply { put32(0, date) } + entry(2, format = 3).apply { put32(0, date and (15L shl 21).inv()) }
+        album = NativeAlbum(Mutex(), { true }) { _, _, _, p ->
+            if (p.u8(1) == 0) album.receive(chunk(p.u16(4), 1, 0, listBody(2, records)))
+            byteArrayOf(0)
+        }
+        val files = album.list()
+        assertEquals(CameraDate(2024, 2, 29, 12, 34, 56), files[0].createdAt)
+        assertNull(files[1].createdAt)
+        assertTrue(files[1].isVideo)
+        assertEquals(2, files.size)
+    }
     private fun ByteArray.put32(at: Int, value: Long) { repeat(4) { this[at + it] = (value ushr (it * 8)).toByte() } }
     private fun chunk(id: Int, command: Int, sequence: Long, body: ByteArray, last: Boolean = true) =
         DussFrame(0, 1, 2, 10, 0, 0, 0x27, ByteArray(10 + body.size).apply {

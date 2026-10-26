@@ -133,14 +133,6 @@ internal val WorkbenchGlyph.icon: ImageVector get() = when (this) {
     WorkbenchGlyph.ARROW_DOWN -> Lucide.ArrowDown
 }
 
-internal val navigationIcons = listOf(
-    WorkbenchGlyph.ROBOT.icon,
-    WorkbenchGlyph.CODE.icon,
-    WorkbenchGlyph.ACTIVITY.icon,
-    WorkbenchGlyph.CHAT.icon,
-    WorkbenchGlyph.SETTINGS.icon,
-)
-
 @Composable
 internal fun WorkbenchIconButton(
     label: String,

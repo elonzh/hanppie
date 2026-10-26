@@ -30,13 +30,13 @@ class RobotInformationConnectionTest {
             model.robotInformation.refresh()
             withTimeout(3000) { while (model.robotInformation.state.value.busy) delay(5) }
             assertEquals(InformationValue.Value(true), model.robotInformation.state.value.activation)
-            model.disconnect(); settled(); assertEquals(RobotInformationState(), model.robotInformation.state.value)
+            model.disconnect(); settled(); assertEquals(RobotInformationState(connection = model.robotInformation.state.value.connection), model.robotInformation.state.value)
             model.connect("127.0.0.1", "12345678"); settled()
             services[0].systemStatus.value = RobotSystemStatus(999, 999, false)
             assertNull(model.robotInformation.state.value.usage)
             assertEquals(InformationValue.Unread, model.robotInformation.state.value.activation)
         } finally { model.close() }
-        assertEquals(RobotInformationState(), model.robotInformation.state.value)
+        assertEquals(RobotInformationState(connection = model.robotInformation.state.value.connection), model.robotInformation.state.value)
     }
 
     @Test fun activationCommandFamilyIsRedactedEvenForMalformedFrames() {

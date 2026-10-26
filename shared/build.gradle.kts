@@ -88,7 +88,6 @@ kotlin {
             implementation(compose.desktop.currentOs) { exclude(group = "org.jetbrains.compose.material") }
             implementation(libs.coroutines.swing)
             implementation(libs.ktor.okhttp)
-            implementation(libs.jna)
             runtimeOnly(libs.slf4j.simple)
         } }
         commonTest.dependencies {

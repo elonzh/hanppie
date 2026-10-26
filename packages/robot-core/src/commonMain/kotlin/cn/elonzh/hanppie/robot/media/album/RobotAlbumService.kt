@@ -2,13 +2,15 @@ package cn.elonzh.hanppie.robot.media.album
 
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.io.Sink
+import cn.elonzh.hanppie.robot.media.CameraDate
 
-/** Only fields consumed by the recovered client are named. Extra record bytes are not filenames. */
-data class RobotMediaEntry(val index: Long, val size: Long, val formatCode: Int) {
+/** Calendar time has no timezone. Additional record bytes are not established filenames. */
+data class RobotMediaEntry(val index: Long, val size: Long, val formatCode: Int, val createdAt: CameraDate? = null) {
     init {
         require(index in 1..0xffffffffL && size in 0..0xffffffffL && formatCode in 0..255)
     }
     val isPhoto: Boolean get() = formatCode == 0
+    val isVideo: Boolean get() = formatCode == 3
 }
 
 enum class RobotMediaPart(internal val wireValue: Int) { ORIGINAL(0), THUMBNAIL(1) }

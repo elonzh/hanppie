@@ -4,11 +4,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import cn.elonzh.hanppie.ui.design.HanppieDesignTokens
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
+import cn.elonzh.hanppie.ui.design.WorkbenchToast
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +53,10 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
     var selectedCategory by rememberSaveable(showRobotMaintenance) { mutableStateOf<SettingsCategory?>(if (showRobotMaintenance) SettingsCategory.ROBOT else null) }
     LaunchedEffect(showRobotMaintenance) { if (showRobotMaintenance) selectedCategory = SettingsCategory.ROBOT }
     var calibratingReticle by remember { mutableStateOf(false) }
+    var detail by rememberSaveable(showRobotMaintenance) { mutableStateOf<SettingsDetail?>(null) }
+    LaunchedEffect(showRobotMaintenance) {
+        if (showRobotMaintenance) detail = SettingsDetail.HEALTH
+    }
     var confirmDefaults by remember { mutableStateOf(false) }
     val shortcutFocus = remember { FocusRequester() }
     val buildInfo = remember { cn.elonzh.hanppie.ui.app.getPlatformBuildInfo() }
@@ -100,9 +107,10 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
         val wide = maxWidth >= categoryWidth + 480.dp * LocalDensity.current.fontScale + 16.dp
         val activeCategory = selectedCategory ?: if (wide) SettingsCategory.GENERAL else null
         val shortWindow = maxHeight < 240.dp
-        val backToCategories = { capturing = null; selectedCategory = null }
-        PlatformBackHandler(enabled = !wide && selectedCategory != null && !confirmDefaults && capturing == null,
-            onBack = backToCategories)
+        val backToCategories = { capturing = null; detail = null; selectedCategory = null }
+        val backInSettings = { if (detail != null) detail = null else backToCategories() }
+        PlatformBackHandler(enabled = (detail != null || !wide && selectedCategory != null) && !confirmDefaults && capturing == null,
+            onBack = backInSettings)
         PlatformBackHandler(enabled = capturing != null, onBack = { capturing = null })
         Row(Modifier.fillMaxSize().padding(bottom = if (shortWindow) 4.dp else 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             if (wide || activeCategory == null) {
@@ -124,11 +132,12 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                             }
                             SettingsCategoryRow(category, summary, wide && activeCategory == category) {
                                 capturing = null
+                                detail = null
+                                model.settingsMessage.value = null
                                 selectedCategory = category
                             }
                         }
                     }
-                    if (activeCategory == null) settingsMessage?.let { Text(it.resolve(), fontSize = 13.sp) }
                     Button({ confirmDefaults = true }, enabled = !settingsBusy && !chat.running,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                             .testTag("restore-default-settings")) {
@@ -138,12 +147,12 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
             }
             if (activeCategory != null) {
                 Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(if (shortWindow) 8.dp else 12.dp)) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    Row(Modifier.widthIn(max = HanppieDesignTokens.SettingsFormMaxWidth).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (!wide) WorkbenchIconButton(tr(Res.string.back), WorkbenchGlyph.BACK,
-                            backToCategories, tag = "settings-back")
-                        Text(tr(activeCategory.title), Modifier.weight(1f), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                        if (activeCategory.canSave) {
+                        if (!wide || detail != null) WorkbenchIconButton(tr(Res.string.back), WorkbenchGlyph.BACK,
+                            backInSettings, tag = "settings-back")
+                        Text(tr(detail?.title ?: activeCategory.title), Modifier.weight(1f), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                        if (activeCategory.canSave && detail == null) {
                             Button(model::saveSettings, colors = ButtonDefaults.buttonColorsPrimary(),
                                 enabled = !settingsBusy && !chat.running,
                                 modifier = Modifier.heightIn(min = 48.dp).testTag("settings-save")) {
@@ -151,17 +160,18 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                             }
                         }
                     }
-                    key(activeCategory) {
-                        Column(Modifier.weight(1f).fillMaxWidth().testTag("settings-detail-${activeCategory.id}")
+                    key(activeCategory, detail) {
+                        Column(Modifier.weight(1f).widthIn(max = HanppieDesignTokens.SettingsFormMaxWidth).fillMaxWidth().testTag("settings-detail-${activeCategory.id}")
                             .verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            if (activeCategory != SettingsCategory.ROBOT) settingsMessage?.let { Text(it.resolve(), fontSize = 13.sp) }
-                            when (activeCategory) {
+                            if (settingsMessage?.resource in listOf(Res.string.settings_load_failed, Res.string.settings_save_failed)) settingsMessage?.let { SettingsNotice(it.resolve(),
+                                error = it.resource == Res.string.settings_load_failed || it.resource == Res.string.settings_save_failed) }
+                            if (detail != null) SettingsDetailContent(model, detail!!, onAlbum) else when (activeCategory) {
                                 SettingsCategory.GENERAL -> GeneralSettingsContent(model, onSpeechSettings)
                                 SettingsCategory.MODEL -> ModelSettingsContent(model)
                                 SettingsCategory.DISPLAY -> DisplaySettingsContent(model) { calibratingReticle = true }
-                                SettingsCategory.MEDIA -> MediaSettingsContent(model)
-                                SettingsCategory.ROBOT -> RobotMaintenanceContent(model, onAlbum, onWifi, onAddressing, onCalibration, onFirmware, onArm, onExtensions)
-                                SettingsCategory.CONTROL -> ControlSettingsContent(model)
+                                SettingsCategory.MEDIA -> MediaSettingsContent(model, { detail = SettingsDetail.CAMERA }, { detail = SettingsDetail.AUDIO })
+                                SettingsCategory.ROBOT -> RobotMaintenanceContent(model, { detail = it }, onWifi, onAddressing, onCalibration, onFirmware, onArm, onExtensions)
+                                SettingsCategory.CONTROL -> ControlSettingsContent(model) { detail = SettingsDetail.MOTION }
                                 SettingsCategory.LIGHTS -> LightsSettingsContent(model)
                                 SettingsCategory.SHORTCUTS -> ShortcutsSettingsContent(model, capturing) { capturing = it; shortcutFocus.requestFocus() }
                                 SettingsCategory.ABOUT -> AboutSettingsContent(buildInfo = buildInfo, onGuide = onGuide)
@@ -171,6 +181,9 @@ internal fun SettingsPage(model: ConsoleController, modifier: Modifier = Modifie
                 }
             }
         }
+        if (settingsMessage?.resource !in listOf(Res.string.settings_load_failed, Res.string.settings_save_failed))
+            WorkbenchToast(settingsMessage?.resolve()) { model.settingsMessage.value = null }
+
     }
 }
 
@@ -193,21 +206,20 @@ private enum class SettingsCategory(
 
 @Composable
 private fun SettingsCategoryRow(category: SettingsCategory, summary: String, selected: Boolean, onClick: () -> Unit) {
-    Card(Modifier.fillMaxWidth().testTag("settings-category-${category.id}")
-        .clip(RoundedCornerShape(HanppieDesignTokens.CardRadius))
+    Row(Modifier.fillMaxWidth().testTag("settings-category-${category.id}")
+        .clip(RoundedCornerShape(HanppieDesignTokens.ControlRadius))
+        .background(if (selected) MiuixTheme.colorScheme.secondaryContainer else Color.Transparent)
         .semantics { this.selected = selected }
-        .clickable(role = Role.Button, onClick = onClick),
-        colors = CardDefaults.defaultColors(color = if (selected) MiuixTheme.colorScheme.secondaryContainer
-            else MiuixTheme.colorScheme.surfaceContainer)) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).padding(16.dp),
+        .clickable(role = Role.Button, onClick = onClick).heightIn(min = 64.dp).padding(12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             WorkbenchIcon(category.glyph, MiuixTheme.colorScheme.onSurfaceVariantSummary, Modifier.size(22.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(tr(category.title), fontSize = 16.sp, fontWeight = FontWeight.Medium)
                 Text(summary, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    minLines = 2, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             }
-            WorkbenchIcon(WorkbenchGlyph.CHEVRON_RIGHT, MiuixTheme.colorScheme.onSurfaceVariantSummary, Modifier.size(18.dp))
-        }
+            Box(Modifier.size(18.dp)) {
+                if (!selected) WorkbenchIcon(WorkbenchGlyph.CHEVRON_RIGHT, MiuixTheme.colorScheme.onSurfaceVariantSummary, Modifier.fillMaxSize())
+            }
     }
 }

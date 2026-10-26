@@ -200,6 +200,7 @@ internal class ConsoleModel(
     private val clock: Clock = Clock.System,
     private val autoConnectOnStart: Boolean = true,
     private val scriptStartConfirmationTimeoutMillis: Long = 10_000,
+    private val capturedMedia: () -> List<cn.elonzh.hanppie.ui.robot.album.LocalRobotMedia> = { cn.elonzh.hanppie.ui.robot.album.additionalCapturedMedia() },
     private val albumDirectory: () -> io.github.vinceglb.filekit.PlatformFile = {
         io.github.vinceglb.filekit.PlatformFile(io.github.vinceglb.filekit.FileKit.filesDir, "robot-media")
     },
@@ -234,7 +235,7 @@ internal class ConsoleModel(
     override val robotAudio = cn.elonzh.hanppie.ui.robot.audio.RobotAudioController(scope)
     override val cameraZoom = cn.elonzh.hanppie.ui.robot.remote.CameraZoomController(scope)
     override val robotCamera = cn.elonzh.hanppie.ui.robot.camera.RobotCameraController(scope)
-    override val robotAlbum = cn.elonzh.hanppie.ui.robot.album.RobotAlbumController(scope, albumDirectory)
+    override val robotAlbum = cn.elonzh.hanppie.ui.robot.album.RobotAlbumController(scope, albumDirectory, capturedMedia)
     override val robotPower = cn.elonzh.hanppie.ui.robot.device.RobotPowerController(scope, ::changePower,
         { source -> if (session.load()?.power === source) closeConnection(preserveNetworkRecovery = false) })
     override val robotInformation = cn.elonzh.hanppie.ui.robot.device.RobotInformationController(scope)

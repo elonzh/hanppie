@@ -28,13 +28,15 @@ internal class AlbumFixture : RobotAlbumService {
         ImageIO.write(image, "jpg", out); out.toByteArray()
     }
     override val busy = MutableStateFlow(false)
-    val entries = listOf(RobotMediaEntry(1, photo.size.toLong(), 0), RobotMediaEntry(2, photo.size.toLong(), 3))
+    var thumbnailBytes = photo
+    var entries = listOf(RobotMediaEntry(1, photo.size.toLong(), 0), RobotMediaEntry(2, photo.size.toLong(), 3))
     @Volatile var listCalls = 0
     @Volatile var listError = false
     @Volatile var thumbnailError = false
     @Volatile var originalError = false
     var listGate: CompletableDeferred<Unit>? = null
     var fileGate: CompletableDeferred<Unit>? = null
+    var thumbnailGate: CompletableDeferred<Unit>? = null
     val downloads = CopyOnWriteArrayList<RobotMediaPart>()
     override suspend fun list(): List<RobotMediaEntry> {
         busy.value = true; listCalls++
@@ -48,8 +50,9 @@ internal class AlbumFixture : RobotAlbumService {
         busy.value = true; downloads += part
         try {
             if (part == RobotMediaPart.THUMBNAIL) {
+                thumbnailGate?.await()
                 if (thumbnailError) error("thumbnail failed")
-                destination.write(photo)
+                destination.write(thumbnailBytes)
             } else {
                 destination.write(photo, 0, 10); onProgress(10, photo.size.toLong())
                 withContext(NonCancellable) { fileGate?.await() }
@@ -61,28 +64,60 @@ internal class AlbumFixture : RobotAlbumService {
 }
 
 class RobotAlbumControllerTest {
+    @Test fun visiblePreviewsAreAutomaticSelectionStaysAvailableAndForegroundTransferWaitsSafely(): Unit = runBlocking {
+        val root = Files.createTempDirectory("hanppie-album-prefetch").toFile()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val gate = CompletableDeferred<Unit>()
+        try {
+            val service = AlbumFixture().apply { thumbnailGate = gate }
+            val controller = RobotAlbumController(scope, { PlatformFile(root) }, { emptyList() })
+            controller.attach(service); controller.refresh(); controller.settled()
+            controller.showRemotePreviews(service.entries.map { it.index })
+            withTimeout(3_000) { service.busy.first { it } }
+            assertNull(controller.state.value.selected)
+            assertFalse(controller.state.value.busy)
+            controller.select(service.entries[1])
+            assertEquals(service.entries[1], controller.state.value.selected)
+            controller.download(service.entries[1])
+            assertEquals(listOf(RobotMediaPart.THUMBNAIL), service.downloads.toList())
+            gate.complete(Unit)
+            controller.settled()
+            assertEquals(RobotMediaPart.ORIGINAL, service.downloads[1])
+            assertEquals(2, controller.state.value.thumbnails.size)
+            assertTrue(controller.state.value.thumbnails.values.all { it is MediaThumbnail.Ready })
+            assertNotNull(controller.state.value.downloads[2])
+            controller.showRemotePreviews(emptyList())
+            val count = service.downloads.size
+            controller.showRemotePreviews(service.entries.map { it.index }); controller.settled()
+            assertEquals(count, service.downloads.size)
+        } finally { gate.complete(Unit); scope.cancel(); scope.coroutineContext[Job]?.join(); root.deleteRecursively() }
+    }
+
     @Test fun completedDownloadsPersistIndependentlyAndAreNeverReusedByIndexAcrossConnections(): Unit = runBlocking {
         val root = Files.createTempDirectory("hanppie-album").toFile()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         try {
             val service = AlbumFixture()
-            val controller = RobotAlbumController(scope) { PlatformFile(root) }
+            val controller = RobotAlbumController(scope, { PlatformFile(root) }, { emptyList() })
             controller.attach(service); controller.refresh(); controller.settled()
             controller.download(service.entries[0]); controller.settled()
             val saved = controller.state.value.downloads.getValue(1)
             assertContentEquals(service.photo, saved.file.readBytes())
             assertEquals(MediaContent.JPEG, saved.content); assertEquals(1, saved.sourceIndex)
+            assertEquals(saved.file.createdAt()?.toEpochMilliseconds(), saved.createdAt)
+            assertNotNull(saved.createdAt)
             assertTrue(saved.file.name.endsWith(".jpg")); assertTrue(root.listFiles()!!.none { it.name.endsWith(".part") })
             controller.clear()
             assertEquals(listOf(saved), controller.state.value.local)
             assertTrue(controller.state.value.downloads.isEmpty())
             controller.attach(service); controller.refresh(); controller.settled()
             assertTrue(controller.state.value.downloads.isEmpty())
-            val other = RobotAlbumController(scope) { PlatformFile(root) }
+            val other = RobotAlbumController(scope, { PlatformFile(root) }, { emptyList() })
             other.loadLocal()
             withTimeout(3_000) { other.state.first { !it.localLoading } }
             assertEquals(1, other.state.value.local.size)
             assertEquals(1, other.state.value.local.single().sourceIndex)
+            assertEquals(saved.createdAt, other.state.value.local.single().createdAt)
         } finally { scope.cancel(); scope.coroutineContext[Job]?.join(); root.deleteRecursively() }
     }
 
@@ -92,7 +127,7 @@ class RobotAlbumControllerTest {
         val gate = CompletableDeferred<Unit>()
         try {
             val service = AlbumFixture().apply { originalError = true }
-            val controller = RobotAlbumController(scope) { PlatformFile(root) }
+            val controller = RobotAlbumController(scope, { PlatformFile(root) }, { emptyList() })
             controller.attach(service); controller.refresh(); controller.settled()
             controller.download(service.entries[0]); controller.settled()
             assertNotNull(controller.state.value.error)
@@ -111,14 +146,14 @@ class RobotAlbumControllerTest {
         val gate = CompletableDeferred<Unit>()
         try {
             val service = AlbumFixture().apply { listGate = gate }
-            val controller = RobotAlbumController(scope) { PlatformFile(root) }
+            val controller = RobotAlbumController(scope, { PlatformFile(root) }, { emptyList() })
             controller.attach(service); controller.refresh()
             withTimeout(3_000) { service.busy.first { it } }
             val oldBindings = scope.coroutineContext[Job]!!.children.toList()
             val version = controller.state.value.connection
             controller.invalidateStorage()
             gate.complete(Unit); service.listGate = null
-            oldBindings.forEach { it.join() }
+            oldBindings.filter { it.isCancelled }.forEach { it.join() }
             assertTrue(controller.state.value.connection > version)
             assertTrue(controller.state.value.entries.isEmpty())
             controller.refresh(); controller.settled()
@@ -133,7 +168,7 @@ class RobotAlbumControllerTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         try {
             val service = AlbumFixture().apply { thumbnailError = true }
-            val controller = RobotAlbumController(scope) { PlatformFile(root) }
+            val controller = RobotAlbumController(scope, { PlatformFile(root) }, { emptyList() })
             controller.attach(service); controller.refresh(); controller.settled()
             controller.select(service.entries[0]); controller.settled()
             assertEquals(MediaThumbnail.Failed, controller.state.value.thumbnails[1])
@@ -146,12 +181,49 @@ class RobotAlbumControllerTest {
         } finally { scope.cancel(); scope.coroutineContext[Job]?.join(); root.deleteRecursively() }
     }
 
+    @Test fun videoPreviewIsFetchedOnceAndRefreshKeepsTheCurrentSelection(): Unit = runBlocking {
+        val root = Files.createTempDirectory("hanppie-album-video").toFile()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val service = AlbumFixture()
+            val controller = RobotAlbumController(scope, { PlatformFile(root) }, { emptyList() })
+            controller.attach(service); controller.refresh(); controller.settled()
+            val video = service.entries.first { !it.isPhoto }
+            controller.select(video); controller.settled()
+            assertEquals(listOf(RobotMediaPart.THUMBNAIL), service.downloads.toList())
+            assertIs<MediaThumbnail.Ready>(controller.state.value.thumbnails[video.index])
+            val gate = CompletableDeferred<Unit>(); service.listGate = gate
+            controller.refresh()
+            withTimeout(3_000) { service.busy.first { it } }
+            assertEquals(video, controller.state.value.selected)
+            assertEquals(service.entries, controller.state.value.entries)
+            gate.complete(Unit); controller.settled()
+            assertEquals(video, controller.state.value.selected)
+        } finally { scope.cancel(); scope.coroutineContext[Job]?.join(); root.deleteRecursively() }
+    }
+
+    @Test fun unsupportedPreviewIsCachedAndDoesNotPreventTheOriginalDownload(): Unit = runBlocking {
+        val root = Files.createTempDirectory("hanppie-album-preview-type").toFile()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val service = AlbumFixture().apply { thumbnailBytes = byteArrayOf() }
+            val controller = RobotAlbumController(scope, { PlatformFile(root) }, { emptyList() })
+            controller.attach(service); controller.refresh(); controller.settled()
+            controller.select(service.entries[0]); controller.settled()
+            assertEquals(MediaThumbnail.Unavailable, controller.state.value.thumbnails[1])
+            controller.select(service.entries[0]); controller.settled()
+            assertEquals(listOf(RobotMediaPart.THUMBNAIL), service.downloads.toList())
+            controller.download(service.entries[0]); controller.settled()
+            assertContentEquals(service.photo, controller.state.value.local.single().file.readBytes())
+        } finally { scope.cancel(); scope.coroutineContext[Job]?.join(); root.deleteRecursively() }
+    }
+
     @Test fun localRemovalNeverCallsTheRobotAndIgnoresIncompleteFiles(): Unit = runBlocking {
         val root = Files.createTempDirectory("hanppie-album").toFile()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         try {
             val service = AlbumFixture()
-            val controller = RobotAlbumController(scope) { PlatformFile(root) }
+            val controller = RobotAlbumController(scope, { PlatformFile(root) }, { emptyList() })
             controller.attach(service); controller.refresh(); controller.settled()
             controller.download(service.entries[0]); controller.settled()
             val saved = controller.state.value.local.single()
@@ -187,5 +259,5 @@ class RobotAlbumControllerTest {
 }
 
 internal suspend fun RobotAlbumController.settled() {
-    withTimeout(5_000) { state.first { !it.busy } }
+    withTimeout(5_000) { state.first { !it.busy && it.thumbnails.values.none { preview -> preview == MediaThumbnail.Loading } } }
 }

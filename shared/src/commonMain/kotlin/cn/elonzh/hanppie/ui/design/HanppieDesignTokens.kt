@@ -39,6 +39,7 @@ internal object HanppieDesignTokens {
 
     val CompactBreakpoint = 720.dp
     val PageMaxWidth = 1080.dp
+    val SettingsFormMaxWidth = 760.dp
     val PagePaddingCompact = 20.dp
     val PagePaddingExpanded = 28.dp
     val CardRadius = 20.dp

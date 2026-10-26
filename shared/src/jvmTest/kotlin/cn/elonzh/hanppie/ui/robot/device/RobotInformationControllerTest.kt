@@ -37,7 +37,7 @@ class RobotInformationControllerTest {
             assertNull(controller.state.value.usage); assertEquals(InformationValue.Unread, controller.state.value.activation)
             assertTrue(controller.state.value.versions.values.all { it == InformationValue.Unread })
             controller.clear(); second.systemStatus.value = RobotSystemStatus(1, 2, false)
-            assertEquals(RobotInformationState(), controller.state.value)
+            assertEquals(RobotInformationState(connection = controller.state.value.connection), controller.state.value)
             scope.cancel(); controller.attach(first, health); assertFalse(controller.state.value.connected)
         } finally { scope.cancel() }
     }

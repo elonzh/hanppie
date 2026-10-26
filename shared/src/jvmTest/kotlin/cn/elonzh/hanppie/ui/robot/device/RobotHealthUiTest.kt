@@ -67,23 +67,25 @@ class RobotHealthUiTest {
         try {
             rule.setContent { TestWorkbenchTheme { SettingsPage(model) } }
             rule.onNodeWithTag("settings-category-robot").performScrollTo().performClick()
+            rule.onNodeWithTag("settings-maintenance-health").performScrollTo().performClick()
             rule.onNodeWithTag("health-status").assertTextEquals("连接机器人后可查看状态")
             model.connect("127.0.0.1", "12345678")
             rule.waitUntil(5_000) { model.state.value.connected && !model.state.value.busy }
             rule.onNodeWithTag("health-status").performScrollTo().assertTextEquals("报告了 3 条警告或错误")
-            rule.onNodeWithText("电流原始值：-1600").performScrollTo().assertIsDisplayed()
+            rule.onNodeWithText("电流原始值：-1600").assertDoesNotExist()
+            rule.onNodeWithTag("health-battery-details").assertDoesNotExist()
             rule.onNodeWithTag("health-issue-0x04008007").performScrollTo().assertIsDisplayed()
-            rule.onNodeWithTag("health-modules-toggle").performScrollTo().performClick()
-            rule.onNodeWithTag("health-module-4660").performScrollTo().assertTextContains("未知模块 0x1234", substring = true)
-            rule.onNodeWithTag("health-module-788").performScrollTo().assertTextContains("本次未报告在线", substring = true)
+            rule.onNodeWithTag("robot-info-components").performScrollTo().performClick()
+            rule.onNodeWithTag("health-module-4660").performScrollTo().assertIsDisplayed()
+            rule.onNodeWithTag("health-module-788").performScrollTo().assertIsDisplayed()
             sessions[0].health.value = healthFixture().copy(modules = listOf(WorkingRobotDevice(0x300, emptyList())))
             rule.waitUntil(3_000) { model.robotHealth.state.value.modules?.size == 1 }
-            rule.onNodeWithTag("health-status").performScrollTo().assertTextEquals("本次状态未报告警告或错误")
+            rule.onNodeWithTag("health-status").performScrollTo().assertTextEquals("未发现警告或错误")
             rule.onNodeWithTag("health-issue-0x04008007").assertDoesNotExist()
             sessions[0].health.value = RobotHealth()
             rule.waitUntil(3_000) { model.robotHealth.state.value.modules == null }
             rule.onNodeWithTag("health-status").performScrollTo().assertTextEquals("等待当前模块状态…")
-            rule.onNodeWithTag("health-battery-waiting").performScrollTo().assertIsDisplayed()
+            rule.onNodeWithTag("health-battery-waiting").assertDoesNotExist()
             model.disconnect(); rule.waitUntil(3_000) { !model.state.value.connected && !model.state.value.busy }
             assertTrue(sessions[0].closed)
             model.connect("127.0.0.1", "12345678"); rule.waitUntil(5_000) { model.state.value.connected && !model.state.value.busy }
@@ -102,7 +104,9 @@ class RobotHealthUiTest {
         try {
             rule.setContent { TestWorkbenchTheme { SettingsPage(model) } }
             rule.onNodeWithTag("settings-category-robot").performScrollTo().performClick()
-            rule.onNodeWithText("0xABCDFFFF").performScrollTo().assertIsDisplayed()
+            rule.onNodeWithTag("settings-maintenance-health").performScrollTo().performClick()
+            rule.onNodeWithTag("health-issue-0xABCDFFFF").performScrollTo().assertIsDisplayed()
+            rule.onNodeWithText("0xABCDFFFF").assertDoesNotExist()
             rule.onNodeWithTag("health-issue-0x01000014").assertDoesNotExist()
             rule.onNodeWithTag("health-message-toggle").performScrollTo().performClick()
             rule.onNodeWithTag("health-issue-0x01000014").performScrollTo().assertIsDisplayed()
@@ -110,7 +114,7 @@ class RobotHealthUiTest {
             rule.onNodeWithTag("health-issue-0x01000014").assertDoesNotExist()
             rule.runOnIdle { model.robotHealth.state.value = RobotHealth(modules = emptyList(), moduleReportAgeSeconds = 123) }
             rule.onNodeWithTag("health-status").performScrollTo().assertTextEquals("本次未报告在线模块")
-            rule.onNodeWithTag("health-report-age").performScrollTo().assertTextEquals("模块报告：123 秒前")
+            rule.onNodeWithTag("health-report-age").assertDoesNotExist()
         } finally { model.close() }
     }
 }
@@ -138,12 +142,13 @@ class RobotHealthLayoutTest {
                     }
                 } } }
                 onNodeWithTag("settings-category-robot").performScrollTo().performClick()
+                onNodeWithTag("settings-maintenance-health").performScrollTo().performClick()
                 onNodeWithTag("health-status").performScrollTo().assertIsDisplayed()
                 save("health-$width-$height-$language-$scale", onNodeWithTag("health-layout"))
                 onNodeWithTag("health-issue-0x04008007").performScrollTo().assertIsDisplayed()
                 save("health-alerts-$width-$height-$language-$scale", onNodeWithTag("health-layout"))
-                onNodeWithTag("health-modules-toggle").performScrollTo().performClick()
-                assertTrue(onNodeWithTag("health-modules-toggle").fetchSemanticsNode().boundsInRoot.height >= 48)
+                onNodeWithTag("robot-info-components").performScrollTo().performClick()
+                assertTrue(onNodeWithTag("robot-info-components").fetchSemanticsNode().boundsInRoot.height >= 48)
                 onNodeWithTag("health-module-4660").performScrollTo().assertIsDisplayed()
                 save("health-modules-$width-$height-$language-$scale", onNodeWithTag("health-layout"))
                 runOnIdle { cockpit = true }

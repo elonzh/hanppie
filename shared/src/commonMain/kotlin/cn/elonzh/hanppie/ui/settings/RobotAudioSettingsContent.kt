@@ -26,8 +26,7 @@ internal fun RobotAudioSettingsContent(controller: RobotAudioController, connect
                 !connected -> Text(tr(Res.string.robot_audio_connect_first), fontSize = 14.sp)
                 state.busy -> Text(tr(Res.string.robot_audio_reading), Modifier.testTag("robot-audio-busy"), fontSize = 14.sp)
                 else -> {
-                    state.error?.let { Text(it.resolve(), Modifier.testTag("robot-audio-error"),
-                        color = MiuixTheme.colorScheme.error, fontSize = 14.sp) }
+                    state.error?.let { SettingsNotice(it.resolve(), Modifier.testTag("robot-audio-error"), error = true) }
                     val current = state.settings
                     if (current != null) {
                         Text(tr(Res.string.robot_audio_current_volume, current.volume), fontSize = 14.sp)
@@ -56,13 +55,10 @@ internal fun RobotAudioSettingsContent(controller: RobotAudioController, connect
                 when (val sound = state.soundEnabled) {
                     is AudioSetting.Value -> Text(tr(if (sound.value) Res.string.native_audio_snapshot_on else Res.string.native_audio_snapshot_off),
                         Modifier.testTag("robot-sound-snapshot"), fontSize = 14.sp)
-                    is AudioSetting.Failed -> Text(sound.message.resolve(), Modifier.testTag("robot-sound-error"), fontSize = 14.sp,
-                        color = MiuixTheme.colorScheme.error)
+                    is AudioSetting.Failed -> SettingsNotice(sound.message.resolve(), Modifier.testTag("robot-sound-error"), error = true)
                     else -> Text(tr(if (sound == AudioSetting.Loading) Res.string.native_audio_reading else Res.string.native_audio_unknown), fontSize = 14.sp)
                 }
                 Text(tr(Res.string.native_audio_scope), fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                Button(controller::refreshSound, Modifier.heightIn(min = 48.dp).testTag("robot-sound-refresh"),
-                    enabled && state.soundEnabled != AudioSetting.Loading) { Text(tr(Res.string.native_audio_refresh)) }
                 val playback = state.playback
                 Text(when {
                     playback == null -> tr(Res.string.robot_playback_wait)
@@ -77,10 +73,8 @@ internal fun RobotAudioSettingsContent(controller: RobotAudioController, connect
                     enabled && feedback != AudioSetting.Loading) { controller.setAntiFeedback(it == "true") }
                 when (feedback) {
                     AudioSetting.Loading -> Text(tr(Res.string.anti_feedback_applying), Modifier.testTag("robot-feedback-result"), fontSize = 14.sp)
-                    is AudioSetting.Value -> Text(tr(if (feedback.value) Res.string.anti_feedback_on_ack else Res.string.anti_feedback_off_ack),
-                        Modifier.testTag("robot-feedback-result"), fontSize = 14.sp)
-                    is AudioSetting.Failed -> Text(feedback.message.resolve(), Modifier.testTag("robot-feedback-result"),
-                        fontSize = 14.sp, color = MiuixTheme.colorScheme.error)
+                    is AudioSetting.Value -> Unit
+                    is AudioSetting.Failed -> SettingsNotice(feedback.message.resolve(), Modifier.testTag("robot-feedback-result"), error = true)
                     AudioSetting.Unread -> Unit
                 }
             }

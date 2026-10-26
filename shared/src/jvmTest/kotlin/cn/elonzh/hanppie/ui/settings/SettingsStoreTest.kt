@@ -45,14 +45,17 @@ class SettingsStoreTest {
         assertEquals(80, restored.media.speakerVolume)
     }
 
-    @Test fun retiredAccessoryPreferencesDoNotDiscardOtherSavedSettings() {
+    @Test fun retiredInputPreferencesDoNotDiscardOtherSavedSettings() {
         val restored = settingsJson.decodeFromString<SavedSettings>("""{
-            "control":{"gimbalSpeed":45,"gamepadInput":{"lateralGain":1.5,"yaw":{"gain":0.5}}},
+            "control":{"gimbalSpeed":45,"gamepadInput":{"lateralGain":1.5,"yaw":{"gain":0.5}},
+                "aimInput":{"mouseSensitivity":73,"mouseInvertY":true,"gyroSensitivity":25,"gyroInvertY":true}},
             "media":{"speakerVolume":80}
         }""")
-        assertEquals(ControlSettings(gimbalSpeed = 45), restored.control)
+        assertEquals(ControlSettings(gimbalSpeed = 45, aimInput = AimInputSettings(25, true)), restored.control)
         assertEquals(80, restored.media.speakerVolume)
-        assertFalse(settingsJson.encodeToString(restored).contains("gamepadInput"))
+        val saved = settingsJson.encodeToString(restored)
+        assertFalse(saved.contains("gamepadInput"))
+        assertFalse(saved.contains("mouseSensitivity")); assertFalse(saved.contains("mouseInvertY"))
     }
 
     @Test fun customMotionAndShortcutSettingsRoundTrip() {
@@ -62,7 +65,7 @@ class SettingsStoreTest {
             joystickDeadZone = .2,
             shortcuts = ControlShortcuts().bind(ControlAction.Fire, KeyBinding(ControlKey.F)),
             remoteLeds = RemoteLedSettings(active = RobotLedColor(1, 2, 3)),
-            aimInput = AimInputSettings(73, true, 25, true),
+            aimInput = AimInputSettings(gyroSensitivity = 25, gyroInvertY = true),
         )
         val restored = settingsJson.decodeFromString<SavedSettings>(settingsJson.encodeToString(SavedSettings(control = control)))
         assertEquals(control, restored.control)

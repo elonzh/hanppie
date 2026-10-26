@@ -1,113 +1,54 @@
 package cn.elonzh.hanppie.ui.settings
 
-import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.elonzh.hanppie.resources.*
 import cn.elonzh.hanppie.ui.app.ConsoleController
-import cn.elonzh.hanppie.ui.design.WorkbenchDialog
 import cn.elonzh.hanppie.ui.i18n.tr
-import cn.elonzh.hanppie.ui.robot.camera.CameraRequest
-import cn.elonzh.hanppie.ui.robot.camera.cameraStorageStatusText
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
+/** The index selects a task; telemetry, forms and destructive actions live in its detail. */
 @Composable
-internal fun RobotMaintenanceContent(model: ConsoleController, onAlbum: (() -> Unit)? = null, onWifi: (() -> Unit)? = null,
-    onAddressing: (() -> Unit)? = null, onCalibration: (() -> Unit)? = null, onFirmware: (() -> Unit)? = null, onArm: (() -> Unit)? = null, onExtensions: (() -> Unit)? = null) {
+internal fun RobotMaintenanceContent(model: ConsoleController, select: (SettingsDetail) -> Unit,
+    onWifi: (() -> Unit)? = null,
+    onAddressing: (() -> Unit)? = null, onCalibration: (() -> Unit)? = null, onFirmware: (() -> Unit)? = null,
+    onArm: (() -> Unit)? = null, onExtensions: (() -> Unit)? = null) {
     val console by model.state.collectAsState()
-    val state by model.robotCamera.state.collectAsState()
-    val album by model.robotAlbum.state.collectAsState()
-    val storage = state.storage.takeIf { console.connected }
-    val canFormat = storage?.canFormat == true && !state.storageBusy && !album.nativeBusy
-    var confirmConnection by remember { mutableStateOf<Long?>(null) }
-    LaunchedEffect(state.connection, canFormat) {
-        if (!canFormat || confirmConnection != state.connection) confirmConnection = null
+    val health by model.robotHealth.state.collectAsState()
+    val sdr by model.robotSdr.state.collectAsState()
+    if (!console.connected) SettingsNotice(tr(Res.string.maintenance_connect), Modifier.testTag("maintenance-connect"))
+    SettingsGroup(tr(Res.string.maintenance_status_group)) {
+        val alerts = health.issues.count { it.severity >= 2 }
+        SettingsNavigationRow(tr(Res.string.health_title),
+            tr(if (console.connected && alerts > 0) Res.string.health_alerts else Res.string.maintenance_health_summary, alerts),
+            "settings-maintenance-health") { select(SettingsDetail.HEALTH) }
     }
-    WorkbenchDialog(show = confirmConnection == state.connection && canFormat,
-        onDismissRequest = { confirmConnection = null },
-        title = tr(Res.string.camera_storage_format_question),
-        summary = tr(Res.string.camera_storage_format_summary)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button({ confirmConnection = null }, Modifier.weight(1f).heightIn(min = 48.dp)
-                .testTag("camera-storage-format-cancel")) { Text(tr(Res.string.cancel)) }
-            Button({
-                confirmConnection = null
-                model.robotCamera.formatStorage()
-            }, Modifier.weight(1f).heightIn(min = 48.dp).testTag("camera-storage-format-confirm"),
-                colors = ButtonDefaults.buttonColors(color = MiuixTheme.colorScheme.errorContainer,
-                    contentColor = MiuixTheme.colorScheme.onErrorContainer)) {
-                Text(tr(Res.string.camera_storage_format))
-            }
-        }
+    SettingsGroup(tr(Res.string.maintenance_files_network)) {
+        SettingsNavigationRow(tr(Res.string.camera_storage), tr(Res.string.maintenance_storage_summary),
+            "settings-maintenance-storage") { select(SettingsDetail.STORAGE) }
+        onWifi?.let { SettingsNavigationRow(tr(Res.string.robot_wifi), tr(Res.string.maintenance_wifi_summary), "settings-wifi-open", onClick = it) }
+        if (sdr.visible) SettingsNavigationRow(tr(Res.string.sdr_title), tr(Res.string.maintenance_sdr_summary),
+            "settings-maintenance-sdr") { select(SettingsDetail.SDR) }
     }
-    cn.elonzh.hanppie.ui.robot.device.RobotHealthContent(model)
-    cn.elonzh.hanppie.ui.robot.device.RobotInformationContent(model)
-    cn.elonzh.hanppie.ui.robot.device.RobotPowerContent(model)
-    if (onAddressing != null) {
+    if (onAddressing != null || onCalibration != null || onFirmware != null) SettingsGroup(tr(Res.string.maintenance_service_group)) {
         val addressing by model.robotAddressing.state.collectAsState()
-        Button(onAddressing, Modifier.heightIn(min = 48.dp).testTag("settings-addressing-open")) {
-            Text(tr(if (addressing.blocksControl) Res.string.addressing_continue else Res.string.addressing_title))
-        }
-    }
-    if (onCalibration != null) {
         val calibration by model.robotCalibration.state.collectAsState()
-        Button(onCalibration, Modifier.heightIn(min = 48.dp).testTag("settings-calibration-open")) {
-            Text(tr(if (calibration.blocksControl) Res.string.calibration_continue else Res.string.calibration_title))
-        }
-    }
-    if (onFirmware != null) {
         val firmware by model.robotFirmware.state.collectAsState()
-        Button(onFirmware, Modifier.heightIn(min = 48.dp).testTag("settings-firmware-open")) {
-            Text(tr(if (firmware.blocksControl) Res.string.firmware_continue else Res.string.firmware_title))
-        }
+        onAddressing?.let { SettingsNavigationRow(tr(if (addressing.blocksControl) Res.string.addressing_continue else Res.string.addressing_title),
+            tr(Res.string.maintenance_addressing_summary), "settings-addressing-open", onClick = it) }
+        onCalibration?.let { SettingsNavigationRow(tr(if (calibration.blocksControl) Res.string.calibration_continue else Res.string.calibration_title),
+            tr(Res.string.maintenance_calibration_summary), "settings-calibration-open", onClick = it) }
+        onFirmware?.let { SettingsNavigationRow(tr(if (firmware.blocksControl) Res.string.firmware_continue else Res.string.firmware_title),
+            tr(Res.string.maintenance_firmware_summary), "settings-firmware-open", onClick = it) }
     }
-    if (onArm != null) Button(onArm, Modifier.heightIn(min = 48.dp).testTag("settings-arm-open")) {
-        Text(tr(Res.string.arm_title))
+    SettingsGroup(tr(Res.string.maintenance_accessories_group)) {
+        onArm?.let { SettingsNavigationRow(tr(Res.string.arm_title), tr(Res.string.maintenance_arm_summary), "settings-arm-open", onClick = it) }
+        onExtensions?.let { SettingsNavigationRow(tr(Res.string.extensions_title), tr(Res.string.maintenance_extensions_summary), "settings-extensions-open", onClick = it) }
+        SettingsNavigationRow(tr(Res.string.display_external_lights), tr(Res.string.display_external_lights_summary),
+            "settings-maintenance-lighting") { select(SettingsDetail.LIGHTING) }
     }
-    if (onExtensions != null) Button(onExtensions, Modifier.heightIn(min = 48.dp).testTag("settings-extensions-open")) {
-        Text(tr(Res.string.extensions_title))
-    }
-    Text(tr(Res.string.camera_storage), fontSize = 15.sp)
-    Card(Modifier.fillMaxWidth().testTag("camera-storage"),
-        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer)) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(tr(cameraStorageStatusText(console.connected, storage)), Modifier.testTag("camera-storage-status"), fontSize = 15.sp,
-                color = if (storage?.inserted == true && storage.hasError) MiuixTheme.colorScheme.error
-                    else MiuixTheme.colorScheme.onSurface)
-            if (storage?.inserted == true) {
-                Text(tr(Res.string.camera_storage_space, storage.remainingSpaceMb?.toString() ?: "—",
-                    storage.totalSpaceMb?.toString() ?: "—"), Modifier.testTag("camera-storage-space"), fontSize = 14.sp)
-                Text(tr(Res.string.camera_storage_photos, storage.availablePhotos?.toString() ?: "—"), fontSize = 14.sp)
-                Text(tr(Res.string.camera_storage_recording_left, storage.remainingRecordingSeconds?.toString() ?: "—"), fontSize = 14.sp)
-                if (storage.recording) Text(tr(Res.string.camera_storage_recording_elapsed, storage.recordingSeconds), fontSize = 14.sp)
-            }
-            if (console.connected) {
-                if (album.nativeBusy) Text(tr(Res.string.album_transfer_active), fontSize = 14.sp)
-                Button({ confirmConnection = state.connection }, enabled = canFormat,
-                    modifier = Modifier.heightIn(min = 48.dp).testTag("camera-storage-format")) {
-                    Text(tr(Res.string.camera_storage_format))
-                }
-                when (val request = state.formatRequest) {
-                    CameraRequest.Loading -> Text(tr(Res.string.camera_storage_format_sending),
-                        Modifier.testTag("camera-storage-format-result"), fontSize = 14.sp)
-                    is CameraRequest.Value -> Text(tr(Res.string.camera_storage_format_accepted),
-                        Modifier.testTag("camera-storage-format-result"), fontSize = 14.sp)
-                    is CameraRequest.Failed -> Text(request.message.resolve(),
-                        Modifier.testTag("camera-storage-format-result"), fontSize = 14.sp, color = MiuixTheme.colorScheme.error)
-                    CameraRequest.Idle -> Unit
-                }
-            }
-            if (onAlbum != null) Button(onAlbum, Modifier.heightIn(min = 48.dp).testTag("settings-album-open")) {
-                Text(tr(Res.string.album_browse))
-            }
-        }
-    }
-    cn.elonzh.hanppie.ui.robot.network.SdrSettingsControls(model)
-    if (onWifi != null) Button(onWifi, Modifier.heightIn(min = 48.dp).testTag("settings-wifi-open")) {
-        Text(tr(Res.string.robot_wifi))
+    SettingsGroup(tr(Res.string.robot_power_title)) {
+        SettingsNavigationRow(tr(Res.string.maintenance_power_actions), tr(Res.string.maintenance_power_summary),
+            "settings-maintenance-power") { select(SettingsDetail.POWER) }
     }
 }

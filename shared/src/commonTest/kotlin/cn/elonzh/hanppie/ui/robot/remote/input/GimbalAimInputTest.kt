@@ -5,22 +5,6 @@ import kotlin.math.PI
 import kotlin.test.*
 
 class GimbalAimInputTest {
-    private class Pointer : RelativePointer {
-        lateinit var ready: () -> Unit
-        lateinit var motion: (Double, Double) -> Unit
-        lateinit var button: (Boolean, Boolean) -> Unit
-        lateinit var lost: () -> Unit
-        var closed = 0
-        var failure: Exception? = null
-        var attempts = 0
-        override fun capture(onReady: () -> Unit, onMotion: (Double, Double) -> Unit,
-            onButton: (Boolean, Boolean) -> Unit, onLost: () -> Unit): AutoCloseable {
-            attempts++
-            failure?.let { throw it }
-            ready = onReady; motion = onMotion; button = onButton; lost = onLost
-            return AutoCloseable { closed++ }
-        }
-    }
     private class Gyro : AimGyroscope {
         override var available = true
         var reading: GyroscopeReading? = null
@@ -30,78 +14,8 @@ class GimbalAimInputTest {
         override fun stop() { running = false }
     }
 
-    @Test fun mouseNeedsNativeAcknowledgementAndConsumesEachDeltaOnce() {
-        var now = 0L; val pointer = Pointer()
-        val input = GimbalAimInput(pointer, NoAimGyroscope, { now }, { 0 })
-        input.startMouse(); pointer.motion(10.0, -5.0)
-        now = 50; assertEquals(AimVelocity(), input.frame(AimInputSettings(), 90))
-        pointer.ready(); pointer.motion(10.0, -5.0)
-        now = 100; assertEquals(AimVelocity(20.0, 40.0), input.frame(AimInputSettings(), 90))
-        now = 150; assertEquals(AimVelocity(), input.frame(AimInputSettings(), 90))
-        pointer.motion(10.0, -5.0)
-        now = 200; assertEquals(AimVelocity(-10.0, 20.0), input.frame(AimInputSettings(mouseSensitivity = 25, mouseInvertY = true), 90))
-    }
-
-    @Test fun stalledFramesDiscardMotionAndLimitLargeDeltasWithoutAQueue() {
-        var now = 0L; val pointer = Pointer(); val input = GimbalAimInput(pointer, NoAimGyroscope, { now }, { 0 })
-        input.startMouse(); pointer.ready(); pointer.motion(9999.0, -9999.0)
-        now = 50; assertEquals(AimVelocity(30.0, 30.0), input.frame(AimInputSettings(), 30))
-        pointer.motion(9999.0, -9999.0); now = 500
-        assertEquals(AimVelocity(), input.frame(AimInputSettings(), 30))
-        now = 550; assertEquals(AimVelocity(), input.frame(AimInputSettings(), 30))
-        pointer.motion(Double.NaN, 1.0); now = 600
-        assertEquals(AimVelocity(), input.frame(AimInputSettings(), 30))
-    }
-
-    @Test fun stopRetiresCallbacksButtonsAndAcquisitionWithoutAutomaticRestart() {
-        var now = 0L; var fired = 0; var zoomed = 0; val pointer = Pointer()
-        val input = GimbalAimInput(pointer, NoAimGyroscope, { now }, { 0 }, { fired++ }, { zoomed++ })
-        input.startMouse(); pointer.ready(); pointer.button(true, true); pointer.button(true, false)
-        assertEquals(1, fired); assertFalse(input.state.value.repeatPrimary)
-        pointer.button(false, true); pointer.button(false, true); assertEquals(1, zoomed)
-        pointer.button(true, true); now = 300; input.frame(AimInputSettings(), 90)
-        assertTrue(input.state.value.repeatPrimary)
-        val oldMotion = pointer.motion; val oldReady = pointer.ready; val oldButton = pointer.button
-        input.stop(); assertEquals(1, pointer.closed)
-        oldReady(); oldMotion(99.0, 99.0); oldButton(true, true)
-        now = 350; assertEquals(AimVelocity(), input.frame(AimInputSettings(), 90))
-        assertEquals(AimInputMode.OFF, input.state.value.mode); assertEquals(2, fired)
-    }
-
-    @Test fun pointerFailureAndTimeoutReleaseTheHandle() {
-        var now = 0L; val pointer = Pointer(); val input = GimbalAimInput(pointer, NoAimGyroscope, { now }, { 0 })
-        input.startMouse(); now = 3000; input.frame(AimInputSettings(), 90)
-        assertEquals(AimInputProblem.POINTER_UNAVAILABLE, input.state.value.problem)
-        assertEquals(1, pointer.closed)
-        input.startMouse(); pointer.ready(); pointer.lost()
-        assertEquals(2, pointer.closed); assertEquals(AimInputMode.OFF, input.state.value.mode)
-    }
-
-    @Test fun permissionDenialRetiresHeldInputAndWaitsForAnExplicitRetry() {
-        var now = 0L; var fired = 0; val pointer = Pointer()
-        val input = GimbalAimInput(pointer, NoAimGyroscope, { now }, { 0 }, { fired++ })
-        input.startMouse(); pointer.ready(); pointer.button(true, true)
-        val oldMotion = pointer.motion; val oldReady = pointer.ready; val oldButton = pointer.button
-        pointer.failure = PointerAccessDenied()
-        input.startMouse()
-        assertEquals(AimInputProblem.POINTER_ACCESS_DENIED, input.state.value.problem)
-        assertEquals(AimInputMode.OFF, input.state.value.mode)
-        assertFalse(input.state.value.ready); assertFalse(input.state.value.primaryHeld)
-        assertEquals(1, pointer.closed)
-        oldReady(); oldMotion(100.0, 100.0); oldButton(true, true)
-        now = 50; assertEquals(AimVelocity(), input.frame(AimInputSettings(), 90))
-        assertEquals(1, fired)
-        pointer.failure = null
-        now = 100; assertEquals(AimVelocity(), input.frame(AimInputSettings(), 90))
-        assertEquals(2, pointer.attempts, "Permission changes alone must not restart acquisition")
-        input.startMouse(); pointer.ready(); pointer.motion(5.0, -5.0)
-        now = 150; assertEquals(AimVelocity(20.0, 20.0), input.frame(AimInputSettings(), 90))
-        assertNull(input.state.value.problem)
-        input.close(); assertEquals(2, pointer.closed)
-    }
-
     @Test fun gyroscopeUsesScreenAxesQuantizationSensitivityAndLimits() {
-        var now = 0L; val gyro = Gyro(); val input = GimbalAimInput(null, gyro, { now }, { 0 })
+        var now = 0L; val gyro = Gyro(); val input = GimbalAimInput(gyro, { now }, { 0 })
         input.startGyroscope(); assertTrue(gyro.running)
         gyro.reading = GyroscopeReading(.5, .25, 0.0, 10, 0, 1); now = 50
         val result = input.frame(AimInputSettings(), 90)
@@ -114,7 +28,7 @@ class GimbalAimInputTest {
     }
 
     @Test fun staleNonFiniteAndOrientationChangesStopSamplingUntilExplicitStart() {
-        var now = 0L; val gyro = Gyro(); val input = GimbalAimInput(null, gyro, { now }, { 0 })
+        var now = 0L; val gyro = Gyro(); val input = GimbalAimInput(gyro, { now }, { 0 })
         input.startGyroscope(); gyro.reading = GyroscopeReading(.1, .2, 0.0, 10, 0, 3)
         now = 50; input.frame(AimInputSettings(), 90)
         gyro.reading = gyro.reading!!.copy(ageMillis = 251); now = 100
@@ -129,27 +43,29 @@ class GimbalAimInputTest {
         assertEquals(AimVelocity(), input.frame(AimInputSettings(), 90)); assertFalse(gyro.running)
     }
 
-    @Test fun changingInputModesReleasesThePreviousPlatformResource() {
-        val pointer = Pointer(); val gyro = Gyro(); val input = GimbalAimInput(pointer, gyro, { 0 }, { 0 })
-        input.startMouse(); pointer.ready(); input.startGyroscope()
-        assertEquals(1, pointer.closed); assertTrue(gyro.running)
-        input.startMouse(); assertFalse(gyro.running)
-        input.close(); input.startMouse(); input.startGyroscope()
-        assertEquals(2, pointer.closed); assertFalse(gyro.running)
+    @Test fun stoppedOrClosedInputNeverRestartsSamplingByItself() {
+        val gyro = Gyro(); val input = GimbalAimInput(gyro, { 0 }, { 0 })
+        input.startGyroscope(); assertTrue(gyro.running)
+        input.stop(); assertFalse(gyro.running)
+        gyro.reading = GyroscopeReading(.2, .3, 0.0, 1, 0, 1)
+        assertEquals(AimVelocity(), input.frame(AimInputSettings(), 90))
+        input.startGyroscope(); assertTrue(gyro.running)
+        input.close(); input.startGyroscope()
+        assertFalse(gyro.running); assertFalse(input.state.value.active)
+        assertEquals(AimVelocity(), input.frame(AimInputSettings(), 90))
     }
 
     @Test fun unsupportedDevicesNeverManufactureReadinessOrInput() {
-        val input = GimbalAimInput(null, NoAimGyroscope, { 0 }, { 0 })
-        assertFalse(input.mouseAvailable); assertFalse(input.gyroAvailable)
+        val input = GimbalAimInput(NoAimGyroscope, { 0 }, { 0 })
+        assertFalse(input.gyroAvailable)
         input.startGyroscope(); assertEquals(AimInputProblem.SENSOR_UNAVAILABLE, input.state.value.problem)
-        input.startMouse(); assertEquals(AimInputProblem.POINTER_UNAVAILABLE, input.state.value.problem)
         assertFalse(input.state.value.ready); assertEquals(AimVelocity(), input.frame(AimInputSettings(), 90))
     }
 
     @Test fun naturalLandscapeAndBothRotatedScreensUseTheCurrentDisplayAxes() {
         val expected = listOf(.2 to -.3, .3 to .2, -.2 to .3, -.3 to -.2)
         expected.forEachIndexed { rotation, axes ->
-            val gyro = Gyro(); val input = GimbalAimInput(null, gyro, { 50 }, { 0 })
+            val gyro = Gyro(); val input = GimbalAimInput(gyro, { 50 }, { 0 })
             input.startGyroscope(); gyro.reading = GyroscopeReading(.2, .3, 0.0, 1, 0, rotation)
             val result = input.frame(AimInputSettings(), 90)
             assertEquals(axes.first * 180 / PI, result.pitch, 1e-6)
@@ -158,17 +74,13 @@ class GimbalAimInputTest {
         }
     }
 
-    @Test fun clearedControlOwnershipRejectsNativeCallbacksAndFramesBeforeUiRecomposition() {
-        var revision = 1L; var fired = 0
-        val pointer = Pointer(); val gyro = Gyro()
-        val input = GimbalAimInput(pointer, gyro, { 50 }, { revision }, { fired++ })
-        input.startMouse(); pointer.ready(); pointer.motion(10.0, 10.0)
-        revision++
-        pointer.button(true, true)
-        assertEquals(0, fired); assertEquals(1, pointer.closed)
-        assertEquals(AimVelocity(), input.frame(AimInputSettings(), 90))
+    @Test fun clearedControlOwnershipRejectsSamplesBeforeUiRecomposition() {
+        var revision = 1L
+        val gyro = Gyro()
+        val input = GimbalAimInput(gyro, { 50 }, { revision })
         input.startGyroscope(); gyro.reading = GyroscopeReading(.2, .3, 0.0, 1, 0, 1)
         revision++
-        assertEquals(AimVelocity(), input.frame(AimInputSettings(), 90)); assertFalse(gyro.running)
+        assertEquals(AimVelocity(), input.frame(AimInputSettings(), 90))
+        assertFalse(gyro.running); assertFalse(input.state.value.active)
     }
 }

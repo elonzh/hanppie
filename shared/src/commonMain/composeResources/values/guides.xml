@@ -10,7 +10,7 @@
     <string name="guide_restart">Start again</string>
     <string name="guide_open_connection">Open connection guide</string>
     <string name="guide_open_robot">Open robot home</string>
-    <string name="guide_open_album">Open robot album</string>
+    <string name="guide_open_album">Open media library</string>
     <string name="guide_open_scripts">Open script library</string>
     <string name="guide_open_health">Open robot maintenance</string>
     <string name="guide_open_addressing">Open module addressing</string>
@@ -32,7 +32,7 @@
     <string name="guide_driving_1_title">Check firing mode and target</string>
     <string name="guide_driving_1_body">Switch infrared or gel beads in the firing area. Holding fire repeats shots. Before gel-bead use, check the selected mode, target and surroundings. Never fire at people or animals or aim the trajectory light at eyes. Release fire before other tasks.</string>
     <string name="guide_driving_2_title">Resume with fresh input</string>
-    <string name="guide_driving_2_body">Release sticks or keys to request a stop. Esc leaves the cockpit; with mouse aiming active it releases the mouse first. Stale video, focus loss or disconnection stops control. After recovery, check the robot is still before entering or using fresh input.</string>
+    <string name="guide_driving_2_body">Release sticks or keys to request a stop. Esc stops active gyroscope aiming; otherwise it leaves the cockpit. Stale video, focus loss or disconnection stops control. After recovery, check the robot is still before entering or using fresh input.</string>
     <string name="guide_tracking_title">Object following</string>
     <string name="guide_tracking_summary">Select, confirm, then stop or take control.</string>
     <string name="guide_tracking_0_title">Keep the target visible</string>
@@ -54,9 +54,9 @@
     <string name="guide_media_0_title">Choose where to save</string>
     <string name="guide_media_0_body">Local capture and robot SD capture are separate cockpit tasks. Local capture saves the received picture; SD capture is performed by the robot camera. Explicitly stop an active recording before leaving the capture task.</string>
     <string name="guide_media_1_title">Retrieve robot media</string>
-    <string name="guide_media_1_body">Refresh the robot album and choose a photo or recording to download. Play or export after the download finishes. A failed download or disconnection leaves the original file on the robot; reconnect and retry.</string>
+    <string name="guide_media_1_body">Open Media library from the app navigation. View photos and play recordings in Local media, or switch to Onboard SD card to browse and download robot files. Files on the robot remain if a connection or download fails.</string>
     <string name="guide_media_2_title">Export before clearing space</string>
-    <string name="guide_media_2_body">Check SD status and space in Settings → Media. Formatting deletes files on the card. Download and export anything needed before confirming it. Resolve an active capture or unknown result before clearing space.</string>
+    <string name="guide_media_2_body">View storage status in Settings → Robot maintenance → Onboard SD card. Formatting deletes card files. Download and export what you need before confirming. Finish any recording or unresolved task first.</string>
     <string name="guide_python_title">Python programs</string>
     <string name="guide_python_summary">Start from a local example and observe its lifecycle.</string>
     <string name="guide_python_0_title">Read the example first</string>

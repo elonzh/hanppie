@@ -23,6 +23,35 @@ internal class DisplayFixture : RobotDisplayService {
 }
 
 class RobotDisplayControllerTest {
+    @Test fun rejectedLightingIsScopedToTheConnectionAndDoesNotHideOtherDisplaySettings(): Unit = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val peer = DisplayFixture()
+        val controller = RobotDisplayController(scope) { _, action -> action() }
+        try {
+            controller.attach(peer)
+            peer.read = { if (it == DisplayTarget.HEADLIGHTS) throw RobotRequestException(RequestProblem.REJECTED, 2) }
+            controller.refreshHeadlights()
+            assertTrue(controller.state.value.headlightsUnavailable)
+            assertNull(controller.state.value.error)
+            assertNotNull(controller.state.value.sight)
+            controller.setHeadlights(50)
+            assertEquals(0, peer.writes)
+            controller.refreshSight()
+            assertTrue(controller.state.value.headlightsUnavailable)
+            controller.clear()
+            assertFalse(controller.state.value.headlightsUnavailable)
+            peer.read = {}
+            controller.attach(peer)
+            controller.refreshHeadlights()
+            assertFalse(controller.state.value.headlightsUnavailable)
+            assertEquals(peer.lights, controller.state.value.headlights)
+            peer.read = { if (it == DisplayTarget.HEADLIGHTS) throw RobotRequestException(RequestProblem.REJECTED, 7) }
+            controller.refreshHeadlights()
+            assertFalse(controller.state.value.headlightsUnavailable)
+            assertNotNull(controller.state.value.error, "Other rejections must retain their existing retry path")
+        } finally { scope.cancel() }
+    }
+
     @Test fun readsDoNotTakeActuatorOwnershipAndWritesNeedTheCorrespondingSnapshot(): Unit = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         var ownership = 0; val peer = DisplayFixture()

@@ -35,6 +35,9 @@ internal fun RobotFirmwarePage(model: ConsoleController, modifier: Modifier = Mo
     onExitComplete: () -> Unit = onBack) {
     val controller = model.robotFirmware
     val ui by controller.state.collectAsState()
+    LaunchedEffect(controller, ui.connection, ui.connected) {
+        if (ui.connected && !ui.busy && ui.recovery == null && ui.task.phase == FirmwarePhase.IDLE) controller.refresh()
+    }
     val console by model.state.collectAsState()
     val health by model.robotHealth.state.collectAsState()
     val camera by model.robotCamera.state.collectAsState()

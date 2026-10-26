@@ -22,39 +22,24 @@ import top.yukonga.miuix.kmp.basic.Text
 
 @Composable
 internal fun AimInputControls(input: GimbalAimInput, state: AimInputState, enabled: Boolean,
-    modifier: Modifier = Modifier, start: (AimInputMode) -> Unit) {
-    if (!input.mouseAvailable && !input.gyroAvailable) return
+    modifier: Modifier = Modifier, onToggle: () -> Unit) {
+    if (!input.gyroAvailable) return
     Column(modifier.widthIn(max = 330.dp * LocalDensity.current.fontScale), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (state.mode == AimInputMode.MOUSE) {
-            Text(tr(Res.string.aim_mouse_active), Modifier.background(HanppieDesignTokens.RemoteHudSurface)
-                .padding(horizontal = 12.dp, vertical = 10.dp), fontSize = 14.sp,
-                color = HanppieDesignTokens.RemoteHudContent)
-        } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (input.mouseAvailable) Button({ start(AimInputMode.MOUSE) },
-                Modifier.heightIn(min = 48.dp).testTag("aim-mouse-toggle"),
-                enabled = enabled, colors = ButtonDefaults.buttonColors(color = HanppieDesignTokens.RemoteHudSurface,
-                    contentColor = HanppieDesignTokens.RemoteHudContent)) {
-                Text(tr(Res.string.aim_mouse_start), fontSize = 14.sp)
-            }
-            if (input.gyroAvailable) Button({ start(if (state.mode == AimInputMode.GYROSCOPE) AimInputMode.OFF else AimInputMode.GYROSCOPE) },
-                Modifier.heightIn(min = 48.dp).testTag("aim-gyro-toggle").semantics { selected = state.mode == AimInputMode.GYROSCOPE },
-                enabled = enabled, colors = if (state.mode == AimInputMode.GYROSCOPE) ButtonDefaults.buttonColorsPrimary()
-                else ButtonDefaults.buttonColors(color = HanppieDesignTokens.RemoteHudSurface, contentColor = HanppieDesignTokens.RemoteHudContent)) {
-                Text(tr(if (state.mode == AimInputMode.GYROSCOPE) Res.string.aim_gyro_stop else Res.string.aim_gyro_start), fontSize = 14.sp)
-            }
+        Button(onToggle,
+            Modifier.heightIn(min = 48.dp).testTag("aim-gyro-toggle").semantics { selected = state.active },
+            enabled = enabled, colors = if (state.active) ButtonDefaults.buttonColorsPrimary()
+            else ButtonDefaults.buttonColors(color = HanppieDesignTokens.RemoteHudSurface, contentColor = HanppieDesignTokens.RemoteHudContent)) {
+            Text(tr(if (state.active) Res.string.aim_gyro_stop else Res.string.aim_gyro_start), fontSize = 14.sp)
         }
         val label = when {
             state.problem != null -> when (state.problem) {
-                AimInputProblem.POINTER_UNAVAILABLE -> Res.string.aim_pointer_failed
-                AimInputProblem.POINTER_ACCESS_DENIED -> Res.string.aim_pointer_access_denied
                 AimInputProblem.SENSOR_UNAVAILABLE -> Res.string.aim_sensor_failed
                 AimInputProblem.SENSOR_STALE -> Res.string.aim_sensor_stale
                 AimInputProblem.ORIENTATION_CHANGED -> Res.string.aim_orientation_changed
             }
-            state.mode != AimInputMode.OFF && !state.ready -> Res.string.aim_preparing
-            state.mode == AimInputMode.MOUSE -> Res.string.aim_mouse_hint
-            state.mode == AimInputMode.GYROSCOPE -> Res.string.aim_gyro_hint
+            state.active && !state.ready -> Res.string.aim_preparing
+            state.active -> Res.string.aim_gyro_hint
             else -> null
         }
         label?.let { Text(tr(it), Modifier.heightIn(max = 80.dp).verticalScroll(rememberScrollState())

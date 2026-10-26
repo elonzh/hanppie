@@ -32,7 +32,7 @@ import cn.elonzh.hanppie.ui.design.HanppieDesignTokens
 import cn.elonzh.hanppie.ui.design.WorkbenchDialog
 import cn.elonzh.hanppie.ui.design.WorkbenchGlyph
 import cn.elonzh.hanppie.ui.design.WorkbenchIconButton
-import cn.elonzh.hanppie.ui.design.navigationIcons
+import cn.elonzh.hanppie.ui.design.icon
 import cn.elonzh.hanppie.ui.i18n.tr
 import cn.elonzh.hanppie.ui.robot.device.ConnectionDetail
 import cn.elonzh.hanppie.ui.robot.device.ConnectionGuideMode
@@ -59,8 +59,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 private val Ink: Color @Composable get() = MiuixTheme.colorScheme.onSurface
 private val CanvasColor: Color @Composable get() = MiuixTheme.colorScheme.background
-private val navigationOrder = listOf(0, 1, 3, 2, 4)
-private val labels get() = listOf(tr(Res.string.robot), tr(Res.string.script), tr(Res.string.debug), tr(Res.string.chat), tr(Res.string.settings))
 private val workbenchNavigationConfiguration = SavedStateConfiguration {
     serializersModule = SerializersModule {
         polymorphic(NavKey::class) {
@@ -344,14 +342,15 @@ internal fun Console(
                                 defaultWindowInsetsPadding = false,
                                 header = { if (!shortWindow) Image(painterResource(HanppieBrandAssets.avatar), null,
                                     Modifier.padding(vertical = 18.dp).size(36.dp)) }) {
-                                navigationOrder.forEach { index ->
-                                    val label = labels[index]
+                                workbenchDestinations.forEach { destination ->
+                                    val index = destination.route.topLevelIndex
+                                    val label = tr(destination.title)
                                     IconButton(onClick = { navigate(index) },
                                         modifier = Modifier.testTag("navigate-$index").padding(vertical = 4.dp).size(48.dp)
                                             .background(if (routeTab == index) MiuixTheme.colorScheme.primary.copy(alpha = .14f)
                                                 else Color.Transparent, RoundedCornerShape(16.dp))
                                             .semantics { contentDescription = label; selected = routeTab == index }) {
-                                        Icon(navigationIcons[index], null, Modifier.size(24.dp), tint = Ink)
+                                        Icon(destination.glyph.icon, null, Modifier.size(24.dp), tint = Ink)
                                     }
                                 }
                             }
@@ -366,7 +365,7 @@ internal fun Console(
                                     if (routeTab != 1 && route != RobotRoute && route != RobotAlbumRoute && route != RobotWifiRoute && route != RobotAddressingRoute && route != RobotCalibrationRoute && route != RobotFirmwareRoute && route != RobotArmRoute && route != RobotExtensionRoute && route !is UsageGuideRoute && !isConnectionGuide && !compressedSettings) {
                                         Row(Modifier.fillMaxWidth().height(if (compressedChat) 48.dp else 72.dp), verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.SpaceBetween) {
-                                            Text(if (routeTab == 0) tr(Res.string.my_robot) else labels[routeTab],
+                                            Text(if (routeTab == 0) tr(Res.string.my_robot) else tr(workbenchDestinations.first { it.route.topLevelIndex == routeTab }.title),
                                                 modifier = Modifier.weight(1f), fontSize = 26.sp, fontWeight = FontWeight.Bold,
                                                 color = Ink, maxLines = 1,
                                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
@@ -441,7 +440,7 @@ internal fun Console(
                                         RobotWifiRoute -> cn.elonzh.hanppie.ui.robot.network.RobotWifiPage(model, Modifier.weight(1f),
                                             ::goBack, onOpenWifiSettings)
                                         RobotAlbumRoute -> cn.elonzh.hanppie.ui.robot.album.RobotAlbumPage(model, Modifier.weight(1f),
-                                            ::goBack, onRobotMediaOpen, onRobotMediaExport)
+                                            ::goBack, onRobotMediaOpen, onRobotMediaExport, showBack = backStack.size > 1)
                                         RobotRoute -> cn.elonzh.hanppie.ui.robot.scene.RobotExperience(
                                             model, state, compact, Modifier.weight(1f),
                                             { connectionDetails = true }, ::navigate, { active -> cockpitActive = active; onCockpitChanged(active) },
@@ -489,10 +488,11 @@ internal fun Console(
                                 if (route != RobotRoute && route != RobotAddressingRoute && route != RobotCalibrationRoute && route != RobotFirmwareRoute && route != RobotArmRoute && route != RobotExtensionRoute && !useNavigationRail) NavigationBar(Modifier.testTag("bottom-navigation"),
                                     mode = NavigationBarDisplayMode.IconOnly,
                                     color = MiuixTheme.colorScheme.surfaceVariant, defaultWindowInsetsPadding = false) {
-                                    navigationOrder.forEach { index ->
-                                        val label = labels[index]
+                                    workbenchDestinations.forEach { destination ->
+                                        val index = destination.route.topLevelIndex
+                                        val label = tr(destination.title)
                                         NavigationBarItem(selected = routeTab == index, onClick = { navigate(index) },
-                                            icon = navigationIcons[index], label = label)
+                                            icon = destination.glyph.icon, label = label)
                                     }
                                 }
                             }

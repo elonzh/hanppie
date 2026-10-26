@@ -35,7 +35,7 @@ internal fun CameraImagingContent(controller: RobotCameraController, connected: 
                         imaging.photo?.name ?: tr(Res.string.unknown), CameraPhotoSize.entries.map { it.name to it.label }, enabled && idle) {
                         controller.setPhotoSize(CameraPhotoSize.valueOf(it))
                     }
-                    ImagingRequestStatus(state.photoSize, tr(Res.string.camera_imaging_confirmed), "camera-photo-result")
+                    ImagingRequestStatus(state.photoSize, "camera-photo-result")
                     val names = listOf(tr(Res.string.camera_main), tr(Res.string.camera_secondary))
                     if (imaging.availableCameras.size > 1) {
                         SettingsDropdown(tr(Res.string.camera_source), "camera-source",
@@ -47,7 +47,7 @@ internal fun CameraImagingContent(controller: RobotCameraController, connected: 
                         else if (!idle || storageReading) Text(tr(Res.string.camera_switch_busy), fontSize = 13.sp)
                     } else Text(tr(Res.string.camera_source_value, names.getOrNull(imaging.cameraIndex) ?: tr(Res.string.unknown)),
                         Modifier.testTag("camera-source-value"), fontSize = 14.sp)
-                    ImagingRequestStatus(state.cameraSwitch, tr(Res.string.camera_imaging_confirmed), "camera-switch-result")
+                    ImagingRequestStatus(state.cameraSwitch, "camera-switch-result")
                 }
                 val videoBusy = state.transmissionRate == CameraRequest.Loading || state.keyFrame == CameraRequest.Loading
                 SettingsDropdown(tr(Res.string.camera_transmission_rate), "camera-transmission-rate",
@@ -55,23 +55,22 @@ internal fun CameraImagingContent(controller: RobotCameraController, connected: 
                     VideoTransmissionRate.entries.map { it.name to it.label }, enabled && !videoBusy) {
                     controller.setTransmissionRate(VideoTransmissionRate.valueOf(it))
                 }
-                ImagingRequestStatus(state.transmissionRate, tr(Res.string.camera_rate_confirmed,
-                    (state.transmissionRate as? CameraRequest.Value)?.value?.label.orEmpty()), "camera-rate-result")
+                ImagingRequestStatus(state.transmissionRate, "camera-rate-result")
                 Button(controller::requestKeyFrame, Modifier.heightIn(min = 48.dp).testTag("camera-request-keyframe"), enabled && !videoBusy) {
                     Text(tr(Res.string.camera_keyframe))
                 }
-                ImagingRequestStatus(state.keyFrame, tr(Res.string.camera_keyframe_requested), "camera-keyframe-result")
+                ImagingRequestStatus(state.keyFrame, "camera-keyframe-result")
             }
         }
     }
 }
 
 @Composable
-private fun ImagingRequestStatus(request: CameraRequest<*>, success: String, tag: String) {
+private fun ImagingRequestStatus(request: CameraRequest<*>, tag: String) {
     when (request) {
         CameraRequest.Loading -> Text(tr(Res.string.camera_imaging_applying), Modifier.testTag(tag), fontSize = 14.sp)
         is CameraRequest.Failed -> Text(request.message.resolve(), Modifier.testTag(tag), fontSize = 14.sp, color = MiuixTheme.colorScheme.error)
-        is CameraRequest.Value -> Text(success, Modifier.testTag(tag), fontSize = 14.sp)
+        is CameraRequest.Value -> Unit
         CameraRequest.Idle -> Unit
     }
 }

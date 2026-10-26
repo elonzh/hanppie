@@ -1,5 +1,6 @@
 package cn.elonzh.hanppie.ui.robot.remote
 
+import cn.elonzh.hanppie.ui.design.WorkbenchToast
 import cn.elonzh.hanppie.robot.challenge.*
 
 import cn.elonzh.hanppie.resources.camera_zoom_tracking_unavailable
@@ -181,17 +182,11 @@ internal fun RemotePage(
     val gelSelected = challenge.firing?.let { it == ChallengeFiring.GEL } ?: preferredGelSelected
     val gear by model.driveGear.collectAsState()
     val control by model.controlSettings.collectAsState()
-    val relativePointer = LocalRelativePointer.current
     val gyroFactory = LocalAimGyroscope.current
     val gyroSource = remember(gyroFactory) { gyroFactory() }
     val aimClock = remember { TimeSource.Monotonic.markNow() }
-    val aimInput = remember(model, relativePointer, gyroSource) { GimbalAimInput(relativePointer, gyroSource,
-        nowMillis = { aimClock.elapsedNow().inWholeMilliseconds }, controlRevision = { model.remoteInputRevision }, onPrimaryPress = model::fireSelected,
-        onSecondaryPress = {
-            val current = model.cameraZoom.state.value
-            if (model.remoteEnabled.value && model.isForeground && !model.state.value.busy && !current.busy)
-                model.cameraZoom.setZoom(if ((current.hundredths ?: 100) > 100) 100 else 400)
-        }) }
+    val aimInput = remember(model, gyroSource) { GimbalAimInput(gyroSource,
+        nowMillis = { aimClock.elapsedNow().inWholeMilliseconds }, controlRevision = { model.remoteInputRevision }) }
     val aimState by aimInput.state.collectAsState()
     val inputLifecycle = LocalLifecycleOwner.current.lifecycle
     val inputLifecycleState by inputLifecycle.currentStateAsState()
@@ -250,7 +245,7 @@ internal fun RemotePage(
     DisposableEffect(aimInput, inputLifecycle, pressureInput, pressureMode) {
         val observer = LifecycleEventObserver { _, event ->
             if (event in listOf(Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP)) model.cameraZoom.cancelTransition()
-            if (event in listOf(Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP) && (pressureMode || aimInput.state.value.mode != AimInputMode.OFF || model.challenge.value.ownsRound)) {
+            if (event in listOf(Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP) && (pressureMode || aimInput.state.value.active || model.challenge.value.ownsRound)) {
                 aimInput.stop()
                 suppressedKeys = suppressedKeys + physicalKeys
                 keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire()
@@ -367,7 +362,7 @@ internal fun RemotePage(
     val currentShiftHeld = Key.ShiftLeft in currentKeys || Key.ShiftRight in currentKeys
     val fireKeyHeld = currentControl.shortcuts.isHeld(ControlAction.Fire, currentKeys, currentShiftHeld)
     val shouldFire = enabled && manualActionsEnabled && !gunCooling.ownsCooling &&
-        (fireKeyHeld || firePointerHeld || aimState.repeatPrimary || (pressureAllowed && pressureInput.isHeld(model.remoteInputRevision)))
+        (fireKeyHeld || firePointerHeld || (pressureAllowed && pressureInput.isHeld(model.remoteInputRevision)))
     LaunchedEffect(shouldFire) {
         if (shouldFire) model.startFiring() else model.stopFiring()
     }
@@ -411,7 +406,7 @@ internal fun RemotePage(
         else if (it.type == KeyEventType.KeyDown) physicalKeys = physicalKeys + it.key
         if (awaitingRelease) return@onPreviewKeyEvent true
         if (!inputEnabled || !foreground) return@onPreviewKeyEvent false
-        if (it.key == Key.Escape && aimState.mode != AimInputMode.OFF) {
+        if (it.key == Key.Escape && aimState.active) {
             if (it.type == KeyEventType.KeyDown) {
                 aimInput.stop(); suppressedKeys = suppressedKeys + physicalKeys
                 keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire()
@@ -526,6 +521,8 @@ internal fun RemotePage(
                 Text(tr(Res.string.arm_control_label), fontSize = 14.sp)
             }
         }
+        RemoteMediaHud(mediaControls, connected.connected && foreground && navigationEnabled,
+            Modifier.align(Alignment.TopEnd).padding(HanppieDesignTokens.RemoteEdgePadding))
         val leftHudWidth = (if (onBack != null) 48 else 0) + (if (connected.canStop) 56 else 0) +
             (if (connected.connected && onHealth != null && navigationEnabled && foreground && health.issues.any { it.severity >= 2 }) 80 else 0)
         val armHudWidth = if (hasArmControls) 164 else 0
@@ -702,24 +699,17 @@ internal fun RemotePage(
                 })
             AimInputControls(aimInput, aimState,
                 enabled && manualActionsEnabled && !gunCooling.ownsCooling && !vision.ownsGimbal && !connected.busy && inputLifecycleState.isAtLeast(Lifecycle.State.RESUMED),
-                Modifier.weight(1f, fill = false)) inputStart@ { mode ->
+                Modifier.weight(1f, fill = false)) inputStart@ {
                 if (!inputLifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@inputStart
                 model.clearRemoteInputs(); keys = emptySet(); left = Offset.Zero; right = Offset.Zero; firePointerHeld = false; pressureInput.retire()
                 suppressedKeys = suppressedKeys + physicalKeys
                 // Transfer focus before acquisition: the button-to-cockpit transition retires old input.
                 focus.requestFocus()
-                when (mode) {
-                    AimInputMode.OFF -> aimInput.stop()
-                    AimInputMode.MOUSE -> { keyboardHints = true; aimInput.startMouse() }
-                    AimInputMode.GYROSCOPE -> aimInput.startGyroscope()
-                }
+                if (aimState.active) aimInput.stop() else aimInput.startGyroscope()
             }
             }
         }
-        // Captured clicks belong to the native relative input, never to a control behind the cursor.
-        if (aimState.mode == AimInputMode.MOUSE) Box(Modifier.fillMaxSize().pointerInput(aimInput) {
-            awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
-        })
+        WorkbenchToast(mediaState.notice?.resolve()) { mediaControls.notice(null) }
 
     }
 }

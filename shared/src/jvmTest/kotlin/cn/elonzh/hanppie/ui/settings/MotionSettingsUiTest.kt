@@ -57,7 +57,7 @@ class MotionSettingsUiTest {
                     }
                 }
                 onNodeWithTag("settings-category-control").performScrollTo().performClick()
-                waitUntil(timeoutMillis = 5_000) { model.robotMotion.state.value.configuration != null && !model.state.value.busy }
+
                 onNodeWithTag("input-profile-selector").performScrollTo().performClick()
                 onNodeWithTag("input-profile-${language == "en"}").performClick()
                 onNodeWithTag("input-response-selector").performClick()
@@ -74,6 +74,8 @@ class MotionSettingsUiTest {
                 waitUntil(timeoutMillis = 5_000) { !model.settingsBusy.value }
                 assertEquals(0, peer.writes, "Saving terminal preferences must not write robot settings")
 
+                onNodeWithTag("settings-motion-open").performScrollTo().performClick()
+                waitUntil(timeoutMillis = 5_000) { model.robotMotion.state.value.configuration != null && !model.state.value.busy }
                 onNodeWithTag("motion-write-level").performScrollTo().assertIsNotEnabled()
                 capture("device-preset")
                 onNodeWithTag("motion-level-selector").performScrollTo().performClick()

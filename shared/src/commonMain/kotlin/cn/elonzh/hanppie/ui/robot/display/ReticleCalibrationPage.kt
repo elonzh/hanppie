@@ -86,7 +86,7 @@ internal fun ReticleCalibrationPage(model: ConsoleController, modifier: Modifier
                 else -> false
             }
         }.focusable()) {
-        CompositionLocalProvider(LocalVideoPreview provides true, LocalVideoInputEnabled provides false,
+        CompositionLocalProvider(LocalVideoPreview provides true,
             LocalVideoStreamEnabled provides foreground) { RobotVideo(model, controls, Modifier.fillMaxSize()) }
         val density = LocalDensity.current
         val viewport = VideoViewport.forImage(with(density) { maxWidth.toPx() }, with(density) { maxHeight.toPx() },

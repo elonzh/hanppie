@@ -5,6 +5,7 @@ import cn.elonzh.hanppie.robot.protocol.Protocol
 import cn.elonzh.hanppie.robot.protocol.put16
 import cn.elonzh.hanppie.robot.protocol.u16
 import cn.elonzh.hanppie.robot.protocol.u8
+import cn.elonzh.hanppie.robot.media.CameraDate
 import cn.elonzh.hanppie.robot.session.RequestProblem
 import cn.elonzh.hanppie.robot.session.RobotLock
 import cn.elonzh.hanppie.robot.session.RobotRequestException
@@ -84,7 +85,10 @@ internal class NativeAlbum(
             if (cursor > data.size - 18) invalid()
             val index = data.u32(cursor + 8)
             if (index == 0L || !indices.add(index)) invalid()
-            result += RobotMediaEntry(index, data.u32(cursor + 4), data.u8(cursor + 16))
+            val date = data.u32(cursor)
+            val createdAt = runCatching { CameraDate(1980 + (date ushr 25).toInt(), ((date ushr 21) and 15).toInt(),
+                ((date ushr 16) and 31).toInt(), ((date ushr 11) and 31).toInt(), ((date ushr 5) and 63).toInt(), ((date and 31) * 2).toInt()) }.getOrNull()
+            result += RobotMediaEntry(index, data.u32(cursor + 4), data.u8(cursor + 16), createdAt)
             cursor += 18 + data.u8(cursor + 17)
             if (cursor > data.size) invalid()
         }

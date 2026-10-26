@@ -57,6 +57,7 @@ class CameraStorageUiTest {
         try {
             rule.setContent { TestWorkbenchTheme { SettingsPage(model) } }
             rule.onNodeWithTag("settings-category-robot").performScrollTo().performClick()
+            rule.onNodeWithTag("settings-maintenance-storage").performScrollTo().performClick()
             rule.onNodeWithTag("settings-save").assertDoesNotExist()
             rule.onNodeWithTag("camera-storage-space").assertTextEquals("可用 16384 MB / 共 32768 MB")
             rule.onNodeWithTag("camera-storage-format").performScrollTo().performClick()
@@ -66,7 +67,8 @@ class CameraStorageUiTest {
             rule.onNodeWithTag("camera-storage-format").performClick()
             rule.onNodeWithTag("camera-storage-format-confirm").performClick()
             rule.waitUntil(3_000) { camera.formats == 1 }
-            rule.onNodeWithTag("camera-storage-format-result").performScrollTo().assertTextEquals("格式化请求已确认")
+            rule.onNodeWithTag("workbench-toast").assertTextEquals("格式化请求已确认")
+            rule.onNodeWithTag("camera-storage-format-result").assertDoesNotExist()
             rule.onNodeWithTag("camera-storage-status").performScrollTo().assertTextEquals("存储卡可用")
             rule.runOnIdle { camera.state.value = camera.state.value.copy(storage = camera.card.copy(stateCode = 5)) }
             waitForStatus("正在格式化存储卡…")
@@ -91,6 +93,7 @@ class CameraStorageUiTest {
         try {
             rule.setContent { TestWorkbenchTheme { SettingsPage(model) } }
             rule.onNodeWithTag("settings-category-robot").performScrollTo().performClick()
+            rule.onNodeWithTag("settings-maintenance-storage").performScrollTo().performClick()
             for (invalid in listOf(camera.card.copy(recording = true), camera.card.copy(shooting = true),
                 camera.card.copy(inserted = false), null)) {
                 rule.runOnIdle { camera.state.value = camera.state.value.copy(storage = camera.card) }
@@ -155,6 +158,7 @@ class CameraStorageLayoutTest {
                     }
                 } }
                 onNodeWithTag("settings-category-robot").performScrollTo().performClick()
+                onNodeWithTag("settings-maintenance-storage").performScrollTo().performClick()
                 waitUntil(timeoutMillis = 3_000) { onAllNodes(hasTestTag("camera-storage-space")).fetchSemanticsNodes().isNotEmpty() }
                 onNodeWithTag("camera-storage-format").performScrollTo().assertIsDisplayed().assertIsEnabled()
                 assertTrue(onNodeWithTag("camera-storage-format").fetchSemanticsNode().boundsInRoot.height >= 48)

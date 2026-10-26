@@ -34,10 +34,6 @@ class AdjustableControlsUiTest {
             Localization.initialize("en", "en")
             val model = testConsoleModel()
             val appearance = AppearanceController(AppearanceSettings(if (dark) NightMode.DARK else NightMode.LIGHT))
-            val pointer = object : RelativePointer {
-                override fun capture(onReady: () -> Unit, onMotion: (Double, Double) -> Unit,
-                    onButton: (Boolean, Boolean) -> Unit, onLost: () -> Unit): AutoCloseable = error("No native pointer in settings")
-            }
             val gyro = object : AimGyroscope {
                 override val available = true
                 override fun start(): Unit = error("No native sensor in settings")
@@ -76,7 +72,7 @@ class AdjustableControlsUiTest {
                 model.controlSettings.value = model.controlSettings.value.copy(inputSensitivities = InputSensitivities(
                     screen = InputSensitivity(SensitivityPreset.CUSTOM)))
                 setContent { TestWorkbenchTheme(appearance) {
-                    CompositionLocalProvider(LocalDensity provides Density(1f, scale), LocalRelativePointer provides pointer,
+                    CompositionLocalProvider(LocalDensity provides Density(1f, scale),
                         LocalAimGyroscope provides { gyro }) {
                         SettingsPage(model, Modifier.fillMaxSize().padding(20.dp))
                     }
@@ -119,11 +115,8 @@ class AdjustableControlsUiTest {
                     adjust(tag, 73f)
                     assertEquals(73, model.controlSettings.value.inputSensitivities.screen.custom[axis])
                 }
-                for ((tag, label) in listOf("aim-mouse-sensitivity" to Res.string.aim_mouse_sensitivity,
-                    "aim-gyro-sensitivity" to Res.string.aim_gyro_sensitivity)) {
-                    onNodeWithTag(tag).performScrollTo(); adjust(tag, 64f)
-                    slider(tag, tr(label), 64f, 0f..100f, "64")
-                }
+                onNodeWithTag("aim-gyro-sensitivity").performScrollTo(); adjust("aim-gyro-sensitivity", 64f)
+                slider("aim-gyro-sensitivity", tr(Res.string.aim_gyro_sensitivity), 64f, 0f..100f, "64")
                 onNodeWithTag("input-axis-FORWARD").performScrollTo().requestFocus()
                 onNodeWithTag("input-axis-FORWARD").performKeyInput { pressKey(Key.Tab) }
                 onNodeWithTag("input-axis-LATERAL").assertIsFocused()
@@ -133,11 +126,10 @@ class AdjustableControlsUiTest {
                 onNodeWithTag("aim-gyro-sensitivity").performScrollTo().requestFocus()
                 onNodeWithTag("aim-gyro-sensitivity").performKeyInput { pressKey(Key.DirectionDown) }
                 assertEquals(63, model.controlSettings.value.aimInput.gyroSensitivity)
-                assertEquals(64, model.controlSettings.value.aimInput.mouseSensitivity)
                 picture("control", "settings-page")
                 val kept = model.controlSettings.value
                 runOnIdle { model.settingsBusy.value = true }
-                for (tag in listOf("input-axis-FORWARD", "aim-mouse-sensitivity", "aim-gyro-sensitivity")) {
+                for (tag in listOf("input-axis-FORWARD", "aim-gyro-sensitivity")) {
                     onNodeWithTag(tag).performScrollTo().assertIsNotEnabled(); adjust(tag, 10f, false)
                 }
                 assertEquals(kept, model.controlSettings.value)

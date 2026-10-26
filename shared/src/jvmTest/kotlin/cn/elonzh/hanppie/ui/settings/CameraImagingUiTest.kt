@@ -35,6 +35,7 @@ class CameraImagingUiTest {
         try {
             rule.setContent { TestWorkbenchTheme { SettingsPage(model) } }
             rule.onNodeWithTag("settings-category-media").performScrollTo().performClick()
+            rule.onNodeWithTag("settings-camera-open").performScrollTo().performClick()
             rule.onNodeWithTag("camera-video-format").performScrollTo().assertTextEquals("当前视频：1080p · 30 fps")
             rule.onNodeWithTag("camera-photo-size-selector").performScrollTo().performClick()
             rule.onNodeWithTag("camera-photo-size-R1440P").performClick()
@@ -44,7 +45,8 @@ class CameraImagingUiTest {
             rule.waitUntil(3_000) { camera.state.value.imaging?.cameraIndex == 1 }
             rule.onNodeWithTag("camera-transmission-rate-selector").performScrollTo().performClick()
             rule.onNodeWithTag("camera-transmission-rate-BEST").performClick()
-            rule.onNodeWithTag("camera-rate-result").performScrollTo().assertTextEquals("码率请求已确认：6 Mbps")
+            rule.waitUntil(3_000) { model.robotCamera.state.value.transmissionRate is CameraRequest.Value }
+            rule.onNodeWithTag("camera-rate-result").assertDoesNotExist()
             camera.failure = RequestProblem.TIMED_OUT
             rule.onNodeWithTag("camera-request-keyframe").performScrollTo().performClick()
             rule.waitUntil(3_000) { model.robotCamera.state.value.keyFrame is CameraRequest.Failed }
@@ -53,7 +55,7 @@ class CameraImagingUiTest {
             rule.onNodeWithTag("camera-request-keyframe").performClick()
             rule.waitUntil(3_000) { model.robotCamera.state.value.keyFrame is CameraRequest.Value }
             assertEquals(2, camera.requests.count { it == "keyframe" })
-            rule.onNodeWithTag("camera-keyframe-result").performScrollTo().assertTextEquals("刷新请求已确认，请查看视频画面。")
+            rule.onNodeWithTag("camera-keyframe-result").assertDoesNotExist()
             rule.runOnIdle { model.robotAlbum.state.value = model.robotAlbum.state.value.copy(nativeBusy = true) }
             rule.onNodeWithTag("camera-source-selector").performScrollTo().assertIsNotEnabled()
             rule.runOnIdle {
@@ -88,6 +90,7 @@ class CameraImagingLayoutTest {
                     Box(Modifier.fillMaxSize().padding(16.dp).testTag("imaging-layout")) { SettingsPage(model) }
                 } } }
                 onNodeWithTag("settings-category-media").performScrollTo().performClick()
+                onNodeWithTag("settings-camera-open").performScrollTo().performClick()
                 for (tag in listOf("camera-photo-size-selector", "camera-source-selector", "camera-transmission-rate-selector", "camera-request-keyframe")) {
                     onNodeWithTag(tag).performScrollTo().assertIsDisplayed().assertIsEnabled()
                     assertTrue(onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot.height >= 48)

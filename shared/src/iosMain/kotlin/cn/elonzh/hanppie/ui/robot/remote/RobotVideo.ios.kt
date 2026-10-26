@@ -30,35 +30,41 @@ import top.yukonga.miuix.kmp.basic.Text
     val scope = rememberCoroutineScope()
     val preview = LocalVideoPreview.current
     val streamEnabled = LocalVideoStreamEnabled.current
-    val foreground by model.foregroundState.collectAsState()
-    val inputEnabled = LocalVideoInputEnabled.current && foreground
     val state by model.state.collectAsState()
     val media by controls.state.collectAsState()
-    val requests by controls.requests.collectAsState()
     val display by model.displaySettings.collectAsState()
     val settings by model.mediaSettings.collectAsState()
     var playing by remember { mutableStateOf(true) }
     var sound by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf("") }
-    fun report(message: String?, error: String?) { status = error ?: message.orEmpty() }
+    fun takePhoto() {
+        if (!media.videoReady) return
+        platform.takePhoto { _, error -> scope.launch {
+            controls.notice(cn.elonzh.hanppie.ui.i18n.uiText(if (error == null) Res.string.media_photo_saved else Res.string.media_photo_failed))
+        } }
+    }
     fun toggleRecording() {
         if (!state.connected || !media.videoReady) return
         val enabled = !recording
         platform.setRecording(enabled) { path, error -> scope.launch {
             recording = enabled && error == null
             controls.recording(recording)
-            report(path?.let { tr(Res.string.video_saved_to_value, it) }, error)
+            if (!enabled || error != null) controls.notice(cn.elonzh.hanppie.ui.i18n.uiText(if (error == null) Res.string.media_video_saved else Res.string.media_record_failed))
         } }
     }
     LaunchedEffect(preview) { if (preview) { if (recording) toggleRecording(); sound = false; playing = true } }
-    LaunchedEffect(requests.photo) {
-        if (requests.photo > 0 && media.videoReady) platform.takePhoto { path, error -> scope.launch {
-            report(path?.let { tr(Res.string.photo_saved_to_value, it) }, error)
-        } }
+    LaunchedEffect(controls) {
+        var previous = controls.requests.value
+        controls.requests.collect { request ->
+            if (request.video != previous.video) playing = !playing
+            if (request.photo != previous.photo) takePhoto()
+            if (request.recording != previous.recording) toggleRecording()
+            if (request.robotMicrophone != previous.robotMicrophone && !recording) { sound = !sound; if (sound) playing = true }
+            previous = request
+        }
     }
-    LaunchedEffect(requests.recording) { if (requests.recording > 0) toggleRecording() }
-    LaunchedEffect(requests.robotMicrophone) { if (requests.robotMicrophone > 0 && !recording) sound = !sound }
+    SideEffect { controls.state.value = controls.state.value.copy(playing = playing, sound = sound) }
+
     DisposableEffect(state.connected, playing, streamEnabled, sound, settings.videoResolution) {
         controls.videoReady(false)
         var active = true
@@ -71,7 +77,7 @@ import top.yukonga.miuix.kmp.basic.Text
                         Image.makeFromEncoded(png).toComposeImageBitmap())
                     controls.videoReady(true)
                 }
-            } }, { error -> scope.launch { if (active) { status = error; controls.videoReady(false) } } })
+            } }, { error -> scope.launch { if (active) { playing = false; controls.notice(cn.elonzh.hanppie.ui.i18n.uiText(Res.string.media_video_failed)); controls.videoReady(false) } } })
             val parser = cn.elonzh.hanppie.robot.media.AnnexB()
             val units = cn.elonzh.hanppie.robot.media.H264AccessUnits()
             model.videoSink = { bytes -> parser.accept(bytes).forEach { nal -> units.accept(nal)?.let { platform.videoPacket(it.toPlatformData()) } } }
@@ -90,18 +96,6 @@ import top.yukonga.miuix.kmp.basic.Text
             if (!media.videoReady) model.videoFrames.image(state.connectedAddress)?.let {
                 Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             }
-        }
-        if (!preview) Column(Modifier.align(Alignment.TopEnd).padding(HanppieDesignTokens.RemoteEdgePadding), horizontalAlignment = Alignment.End) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HudIconButton(if (playing) tr(Res.string.stop_video) else tr(Res.string.start_video), if (playing) WorkbenchGlyph.VIDEO else WorkbenchGlyph.VIDEO_OFF,
-                    state.connected && inputEnabled) { playing = !playing }
-                HudIconButton(if (sound) tr(Res.string.mute) else tr(Res.string.listen), if (sound) WorkbenchGlyph.SPEAKER else WorkbenchGlyph.MUTED,
-                    state.connected && inputEnabled && !recording) { controls.toggleRobotMicrophone() }
-                HudIconButton(tr(Res.string.take_photo), WorkbenchGlyph.CAMERA, media.videoReady && inputEnabled) { controls.takePhoto() }
-                HudIconButton(if (recording) tr(Res.string.stop_recording) else tr(Res.string.start_recording), if (recording) WorkbenchGlyph.STOP else WorkbenchGlyph.RECORD,
-                    media.videoReady && inputEnabled) { controls.toggleRecording() }
-            }
-            if (status.isNotBlank()) Text(status, Modifier.widthIn(max = 300.dp), color = Color.White, fontSize = 11.sp)
         }
     }
 }

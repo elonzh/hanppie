@@ -85,14 +85,13 @@ internal class DesktopMedia(
                             val output = AudioSystem.getSourceDataLine(format)
                             line = output; output.open(format, 9600); output.start()
                         }
-                        val bytes = ByteArray(3840); var count = 0L
+                        val bytes = ByteArray(3840)
                         while (active.get()) {
                             val n = audio.inputStream.readNBytes(bytes, 0, bytes.size)
                             if (n == 0 || n % 2 != 0) throw EOFException(tr(Res.string.audio_decoder_exited))
                             pcmSink?.invoke(bytes,n)
                             if (playAudio) line?.write(bytes,0,n)
-                            count += n
-                            if (count == n.toLong() || count % 19200 == 0L) onStatus(tr(Res.string.audio_value_decoded_bytes,count))
+
                         }
                     } catch (e: Exception) { if (active.get()) fail(e.message ?: tr(Res.string.audio_playback_failed)) }
                 }
@@ -135,9 +134,8 @@ internal class DesktopMedia(
     }
 }
 
-internal fun saveDesktopPhoto(frame: ByteArray, resolution: VideoResolution = VideoResolution.R720P): String {
+internal fun saveDesktopPhoto(frame: ByteArray, resolution: VideoResolution = VideoResolution.R720P, output: Path = desktopMediaPath("Pictures", "jpg")): String {
     require(frame.size == resolution.width * resolution.height * 4)
-    val output = desktopMediaPath("Pictures", "jpg")
     val image = org.jetbrains.skia.Image.makeRaster(
         org.jetbrains.skia.ImageInfo(resolution.width, resolution.height, org.jetbrains.skia.ColorType.BGRA_8888,
             org.jetbrains.skia.ColorAlphaType.OPAQUE), frame, resolution.width * 4)

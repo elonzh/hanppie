@@ -2,6 +2,9 @@ package cn.elonzh.hanppie.ui.app
 
 import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
+import cn.elonzh.hanppie.resources.*
+import cn.elonzh.hanppie.ui.design.WorkbenchGlyph
+import org.jetbrains.compose.resources.StringResource
 
 @Serializable
 internal sealed interface WorkbenchRoute : NavKey {
@@ -29,7 +32,7 @@ internal data class UsageGuideRoute(val topic: cn.elonzh.hanppie.ui.guide.GuideT
 }
 
 @Serializable
-internal data object RobotAlbumRoute : WorkbenchRoute { override val topLevelIndex = 0 }
+internal data object RobotAlbumRoute : WorkbenchRoute { override val topLevelIndex = 5 }
 
 @Serializable
 internal data object RobotWifiRoute : WorkbenchRoute { override val topLevelIndex = 4 }
@@ -59,11 +62,15 @@ internal data object DirectConnectionGuideRoute : WorkbenchRoute { override val 
 @Serializable
 internal data object RouterConnectionGuideRoute : WorkbenchRoute { override val topLevelIndex = 0 }
 
-internal fun workbenchRoute(index: Int): WorkbenchRoute = when (index) {
-    0 -> RobotRoute
-    1 -> ScriptRoute
-    2 -> DebugRoute
-    3 -> ChatRoute
-    4 -> SettingsRoute
-    else -> error("Unknown top-level destination: $index")
-}
+internal data class WorkbenchDestination(val route: WorkbenchRoute, val title: StringResource, val glyph: WorkbenchGlyph)
+
+internal val workbenchDestinations = listOf(
+    WorkbenchDestination(RobotRoute, Res.string.robot, WorkbenchGlyph.ROBOT),
+    WorkbenchDestination(ScriptRoute, Res.string.script, WorkbenchGlyph.CODE),
+    WorkbenchDestination(ChatRoute, Res.string.chat, WorkbenchGlyph.CHAT),
+    WorkbenchDestination(RobotAlbumRoute, Res.string.robot_album, WorkbenchGlyph.FOLDER),
+    WorkbenchDestination(DebugRoute, Res.string.debug, WorkbenchGlyph.ACTIVITY),
+    WorkbenchDestination(SettingsRoute, Res.string.settings, WorkbenchGlyph.SETTINGS),
+)
+
+internal fun workbenchRoute(index: Int): WorkbenchRoute = workbenchDestinations.first { it.route.topLevelIndex == index }.route

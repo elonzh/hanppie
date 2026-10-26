@@ -42,6 +42,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.elonzh.hanppie.ui.design.adjustableValue
 import cn.elonzh.hanppie.resources.Res
+import cn.elonzh.hanppie.resources.maintenance_service_group
+import cn.elonzh.hanppie.resources.robot_camera_settings
+import cn.elonzh.hanppie.resources.robot_audio_settings
+import cn.elonzh.hanppie.resources.settings_camera_summary
+import cn.elonzh.hanppie.resources.settings_audio_summary
 import cn.elonzh.hanppie.resources.action_backward
 import cn.elonzh.hanppie.resources.action_fire
 import cn.elonzh.hanppie.resources.action_forward
@@ -256,9 +261,8 @@ internal fun ModelSettingsContent(model: ConsoleController) {
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
-internal fun MediaSettingsContent(model: ConsoleController) {
+internal fun MediaSettingsContent(model: ConsoleController, onCamera: () -> Unit, onAudio: () -> Unit) {
     val media by model.mediaSettings.collectAsState()
-    val robot by model.state.collectAsState()
     val chat by model.chat.state.collectAsState()
     val settingsBusy by model.settingsBusy.collectAsState()
     val enabled = !chat.running && !settingsBusy
@@ -277,11 +281,6 @@ internal fun MediaSettingsContent(model: ConsoleController) {
         model.mediaSettings.value = media.copy(videoResolution = VideoResolution.valueOf(id))
     }
 
-    val album by model.robotAlbum.state.collectAsState()
-    val tracking by model.tracking.collectAsState()
-    CameraImagingContent(model.robotCamera, robot.connected, enabled, album.nativeBusy,
-        !tracking.blocksManualControl && !robot.scriptRunPhase.mayBeExecuting)
-    CameraSettingsContent(model.robotCamera, robot.connected, enabled)
     Text(tr(Res.string.speaker_volume), fontSize = 15.sp)
     Card(
         modifier = Modifier.fillMaxWidth().testTag("speaker-volume-card"),
@@ -310,7 +309,10 @@ internal fun MediaSettingsContent(model: ConsoleController) {
             )
         }
     }
-    RobotAudioSettingsContent(model.robotAudio, robot.connected, media.speakerVolume, enabled)
+    SettingsGroup(tr(Res.string.maintenance_service_group)) {
+        SettingsNavigationRow(tr(Res.string.robot_camera_settings), tr(Res.string.settings_camera_summary), "settings-camera-open", onClick = onCamera)
+        SettingsNavigationRow(tr(Res.string.robot_audio_settings), tr(Res.string.settings_audio_summary), "settings-audio-open", onClick = onAudio)
+    }
 }
 
 @Composable

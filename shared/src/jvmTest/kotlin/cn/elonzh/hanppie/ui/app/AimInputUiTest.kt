@@ -17,10 +17,6 @@ import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import cn.elonzh.hanppie.ui.design.WorkbenchTheme
 import cn.elonzh.hanppie.ui.i18n.Localization
-import cn.elonzh.hanppie.ui.i18n.AppLanguage
-import cn.elonzh.hanppie.ui.i18n.tr
-import cn.elonzh.hanppie.resources.Res
-import cn.elonzh.hanppie.resources.aim_pointer_access_denied
 import cn.elonzh.hanppie.ui.robot.display.displayFixtureVideo
 import cn.elonzh.hanppie.ui.robot.remote.RemotePage
 import cn.elonzh.hanppie.ui.robot.remote.input.*
@@ -38,21 +34,8 @@ class AimInputUiTest {
     @Test fun desktopLandscape() = scenario(1280, 720, "zh", 1f, false)
     @Test fun largeEnglishLandscape() = scenario(844, 390, "en", 1.4f, false)
 
-    private class Pointer : RelativePointer {
-        var closes = 0
-        var failure: Exception? = null
-        lateinit var motion: (Double, Double) -> Unit
-        lateinit var button: (Boolean, Boolean) -> Unit
-        lateinit var lost: () -> Unit
-        override fun capture(onReady: () -> Unit, onMotion: (Double, Double) -> Unit,
-            onButton: (Boolean, Boolean) -> Unit, onLost: () -> Unit): AutoCloseable {
-            failure?.let { throw it }
-            motion = onMotion; button = onButton; lost = onLost; onReady()
-            return AutoCloseable { closes++ }
-        }
-    }
     private class Gyro : AimGyroscope {
-        override val available = true
+        override var available by mutableStateOf(true)
         var running = false
         var age = 0L
         var stamp = 0L
@@ -68,7 +51,7 @@ class AimInputUiTest {
     private fun scenario(width: Int, height: Int, language: String, scale: Float, dark: Boolean) =
         runDesktopComposeUiTest(width = width, height = height) {
             Localization.initialize(language, language)
-            val pointer = Pointer(); val gyro = Gyro(); val factory: () -> AimGyroscope = { gyro }
+            val gyro = Gyro(); val factory: () -> AimGyroscope = { gyro }
             val session = RobotSessionFixture(); val store = MemorySettingsStore()
             session.cameraState.value = session.cameraState.value.copy(zoomHundredths = 100)
             session.zoomRequest = { value -> session.cameraState.value = session.cameraState.value.copy(zoomHundredths = value) }
@@ -94,7 +77,7 @@ class AimInputUiTest {
                         val owner = remember { InputLifecycle() }
                         SideEffect { inputLifecycle = owner }
                         val density = LocalDensity.current
-                        CompositionLocalProvider(LocalRelativePointer provides pointer, LocalAimGyroscope provides factory,
+                        CompositionLocalProvider(LocalAimGyroscope provides factory,
                             LocalLifecycleOwner provides owner,
                             LocalDensity provides Density(density.density, scale)) {
                             if (settings) Box(Modifier.fillMaxSize().padding(16.dp)) { SettingsPage(model) }
@@ -105,58 +88,23 @@ class AimInputUiTest {
                 runOnIdle { inputLifecycle.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME) }
                 model.enableRemote()
                 waitUntil(timeoutMillis = 5000) { model.remoteEnabled.value }
-                onNodeWithTag("aim-mouse-toggle").assertIsEnabled().assertIsDisplayed()
-                onNodeWithTag("aim-gyro-toggle").assertIsEnabled().assertIsDisplayed()
-                capture("idle")
-                runOnIdle { pointer.failure = PointerAccessDenied() }
-                onNodeWithTag("aim-mouse-toggle").performClick()
-                val languages = if (scale > 1f) AppLanguage.entries else listOf(AppLanguage.entries.single { it.preference == language })
-                for (selected in languages) {
-                    runOnIdle { Localization.select(selected.preference) }
-                    onNodeWithTag("aim-input-status").assertIsDisplayed()
-                        .assertTextEquals(tr(Res.string.aim_pointer_access_denied))
-                    val statusBounds = onNodeWithTag("aim-input-status").getBoundsInRoot()
-                    assertTrue(statusBounds.bottom - statusBounds.top <= 80.dp)
-                    onNodeWithTag("aim-mouse-toggle").assertIsEnabled().assertHeightIsAtLeast(48.dp)
-                    capture("permission-${selected.preference}")
-                    if (selected == AppLanguage.SIMPLIFIED_CHINESE) {
-                        onNodeWithTag("aim-input-status").performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 500f) }
-                        capture("permission-zh-scrolled")
-                    }
-                }
-                runOnIdle {
-                    assertEquals(0, pointer.closes)
-                    assertEquals(0, session.infraredCount.get())
-                    assertTrue(model.remoteInput.value.all { it == 0.0 })
-                    pointer.failure = null
-                    Localization.select(language)
-                }
-                onNodeWithTag("aim-mouse-toggle").performClick()
-                runOnIdle { assertEquals(0, pointer.closes) }
-                onNodeWithTag("aim-input-status").assertIsDisplayed()
                 onNodeWithTag("aim-mouse-toggle").assertDoesNotExist()
-                onNodeWithTag("aim-gyro-toggle").assertDoesNotExist()
-                runOnIdle { pointer.motion(10.0, -5.0) }
-                waitUntil(timeoutMillis = 5000) { model.remoteInput.value[3] > 0 && model.remoteInput.value[4] > 0 }
+                onNodeWithTag("aim-gyro-toggle").assertIsEnabled().assertIsDisplayed()
+                onNodeWithTag("remote-touch-left").assertIsDisplayed()
+                onNodeWithTag("remote-touch-right").assertIsDisplayed()
+                capture("idle")
+                onNodeWithTag("remote-surface").performKeyInput { keyDown(Key.DirectionUp) }
+                waitUntil(timeoutMillis = 5000) { model.remoteInput.value[3] > 0 }
+                onNodeWithTag("remote-surface").performKeyInput { keyUp(Key.DirectionUp) }
                 waitUntil(timeoutMillis = 5000) { model.remoteInput.value.all { it == 0.0 } }
-                val before = session.infraredCount.get()
-                runOnIdle { pointer.button(true, true); pointer.button(true, false) }
-                waitUntil(timeoutMillis = 5000) { session.infraredCount.get() == before + 1 }
-                runOnIdle { pointer.button(false, true); pointer.button(false, false) }
-                waitUntil(timeoutMillis = 5000) { model.cameraZoom.state.value.hundredths == 400 && !model.cameraZoom.state.value.busy }
-                runOnIdle { pointer.button(true, true) }
-                waitUntil(timeoutMillis = 5000) { model.firing.value && session.infraredCount.get() > before + 2 }
-                capture("mouse")
-                onNodeWithTag("remote-surface").performKeyInput { keyDown(Key.Escape); keyUp(Key.Escape) }
-                waitUntil(timeoutMillis = 5000) { pointer.closes == 1 }
-                waitUntil(timeoutMillis = 5000) { !model.firing.value }
-                assertTrue(model.remoteEnabled.value)
-                val stoppedShots = session.infraredCount.get()
-                runOnIdle { pointer.motion(99.0, 99.0); pointer.button(true, true) }
-                waitForIdle(); assertTrue(model.remoteInput.value.all { it == 0.0 })
-                assertEquals(stoppedShots, session.infraredCount.get())
                 onNodeWithTag("aim-gyro-toggle").performClick()
                 waitUntil(timeoutMillis = 5000) { gyro.running && model.remoteInput.value[3] > 0 && model.remoteInput.value[4] > 0 }
+                capture("gyro")
+                onNodeWithTag("remote-surface").performKeyInput { keyDown(Key.Escape); keyUp(Key.Escape) }
+                waitUntil(timeoutMillis = 5000) { !gyro.running && model.remoteInput.value.all { it == 0.0 } }
+                assertTrue(model.remoteEnabled.value)
+                onNodeWithTag("aim-gyro-toggle").performClick()
+                waitUntil(timeoutMillis = 5000) { gyro.running }
                 runOnIdle { gyro.age = 251 }
                 waitUntil(timeoutMillis = 5000) { !gyro.running && model.remoteInput.value.all { it == 0.0 } }
                 capture("stale")
@@ -186,20 +134,30 @@ class AimInputUiTest {
                 waitForIdle(); assertFalse(gyro.running)
                 runOnIdle { settings = true }
                 onNodeWithTag("settings-category-control").performScrollTo().performClick()
-                onNodeWithTag("aim-mouse-sensitivity").performScrollTo()
-                onNodeWithTag("aim-mouse-sensitivity").performSemanticsAction(SemanticsActions.SetProgress) { it(75f) }
-                onNodeWithTag("aim-mouse-direction-selector").performScrollTo().performClick()
-                onNodeWithTag("aim-mouse-direction-true").performClick()
-                capture("settings-mouse")
+                onNodeWithTag("aim-mouse-sensitivity").assertDoesNotExist()
+                onNodeWithTag("aim-mouse-direction-selector").assertDoesNotExist()
                 onNodeWithTag("aim-gyro-sensitivity").performScrollTo()
                 onNodeWithTag("aim-gyro-sensitivity").performSemanticsAction(SemanticsActions.SetProgress) { it(25f) }
                 onNodeWithTag("aim-gyro-direction-selector").performScrollTo().performClick()
                 onNodeWithTag("aim-gyro-direction-true").performClick()
                 onNodeWithTag("settings-save").performClick()
                 waitUntil(timeoutMillis = 5000) { !model.settingsBusy.value }
-                assertEquals(AimInputSettings(75, true, 25, true), runBlocking { store.load() }.control.aimInput)
+                assertEquals(AimInputSettings(gyroSensitivity = 25, gyroInvertY = true), runBlocking { store.load() }.control.aimInput)
                 onNodeWithTag("aim-gyro-direction-selector").performScrollTo()
                 capture("settings-gyro")
+                runOnIdle { gyro.available = false }
+                onNodeWithTag("aim-gyro-sensitivity").assertDoesNotExist()
+                onNodeWithTag("aim-mouse-sensitivity").assertDoesNotExist()
+                capture("settings-no-sensor")
+                runOnIdle { settings = false }
+                model.enableRemote()
+                waitUntil(timeoutMillis = 5000) { model.remoteEnabled.value }
+                onNodeWithTag("aim-mouse-toggle").assertDoesNotExist()
+                onNodeWithTag("aim-gyro-toggle").assertDoesNotExist()
+                onNodeWithTag("remote-touch-left").assertIsDisplayed()
+                onNodeWithTag("remote-touch-right").assertIsDisplayed()
+                capture("no-sensor")
+
             } finally { model.close() }
         }
 }
